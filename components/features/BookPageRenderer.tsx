@@ -1,8 +1,17 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { attachPlaybackTrim } from '../../utils/playbackTrim';
 import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
-import { Music } from 'lucide-react';
+import MissingWordHuntOverlay from '../bibleMapBook/MissingWordHuntOverlay';
+import {
+    blankSlotUnits,
+    collectPageInteractiveTargets,
+    pageInteractiveTapKey,
+    sanitizeInteractiveWordIndices,
+    splitInteractiveWords,
+    wordForSpeech,
+} from '../../utils/interactiveWords';
+import { ChevronLeft, ChevronRight, Music } from 'lucide-react';
 
 interface TextBox {
     id: string;
@@ -17,6 +26,11 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     startTime?: number;
     endTime?: number;
+    /** Bible Map: word indices kids must tap before advancing */
+    interactiveWordIndices?: number[];
+    showBackground?: boolean;
+    backgroundColor?: string;
+    shadowColor?: string;
 }
 
 /** First playback position inside authored trim (defaults to start of file). */
@@ -124,6 +138,34 @@ interface BookPageRendererProps {
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
+    /** Bible Map tap-words: indices already tapped for the current page (boxIndex:wordIndex keys). */
+    tappedInteractiveKeys?: Set<string>;
+    /** Next blank that must be found (sequential hunt). */
+    nextInteractiveKey?: string | null;
+    onInteractiveWordTap?: (boxIndex: number, wordIndex: number) => void;
+    /** Wrong hunt chip (out of order) — for Bible Map star scoring. */
+    onWrongHuntTap?: () => void;
+    /** Speak a single visible word (hunt practice / parchment taps). */
+    onSpeakWord?: (word: string) => void;
+    /**
+     * Bible Map layout: crop page art to the upper region above the parchment/scroll
+     * so characters are not covered by text (3:4 art above, scroll+text below).
+     * When scroll is hidden, art expands toward fullscreen.
+     */
+    bibleMapLayout?: boolean;
+    /**
+     * Page Back/Next chrome — rendered above the parchment (same band as word-hunt progress).
+     * Parent owns gating (e.g. Next locked until hunt complete).
+     */
+    pageNav?: {
+        onPrev: (e: React.MouseEvent) => void;
+        onNext: (e: React.MouseEvent) => void;
+        canGoPrev: boolean;
+        canGoNext: boolean;
+        /** When true, Next stays visible but disabled (hunt incomplete). */
+        nextLocked?: boolean;
+        disabled?: boolean;
+    };
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
@@ -140,12 +182,55 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     ambientVideoSoundEnabled,
     sequentialMultiBoxTts = false,
     characterPoses,
-    showCharacterOverlay = false
+    showCharacterOverlay = false,
+    tappedInteractiveKeys,
+    nextInteractiveKey = null,
+    onInteractiveWordTap,
+    onWrongHuntTap,
+    onSpeakWord,
+    bibleMapLayout = false,
+    pageNav,
 }) => {
     const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
     const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
     const scrollOffset = page.scrollOffsetY || 0;
     const motionEnabled = scrollState !== 'hidden';
+
+    /** Bible Map: art fills band above parchment; expands to fullscreen when scroll is hidden. */
+    const bibleMapArtHeightPct = useMemo(() => {
+        if (!bibleMapLayout) return 100;
+        if (scrollState === 'hidden') return 100;
+        return Math.max(58, 100 - currentScrollHeightNum - scrollOffset);
+    }, [bibleMapLayout, scrollState, currentScrollHeightNum, scrollOffset]);
+
+    const pageInteractiveTargets = useMemo(
+        () => collectPageInteractiveTargets(page.textBoxes),
+        [page.textBoxes],
+    );
+
+    const huntChips = useMemo(() => {
+        return pageInteractiveTargets.map((t) => {
+            const box = page.textBoxes?.[t.boxIndex];
+            const words = splitInteractiveWords(box?.text || '');
+            const word = words[t.wordIndex] || '';
+            return {
+                id: pageInteractiveTapKey(t.boxIndex, t.wordIndex),
+                label: wordForSpeech(word) || word || '?',
+            };
+        });
+    }, [pageInteractiveTargets, page.textBoxes]);
+
+    const pageHasBackgroundArt = Boolean(
+        page.backgroundUrl ||
+            (page.useImageSequence && (page.imageSequence?.length ?? 0) > 0) ||
+            (page.useVideoSequence && (page.videoSequence?.length ?? 0) > 0),
+    );
+
+    const showWordHunt =
+        bibleMapLayout &&
+        pageInteractiveTargets.length > 0 &&
+        !!onInteractiveWordTap &&
+        nextInteractiveKey != null;
 
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
@@ -235,6 +320,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const audio = backgroundAudioRef.current;
         if (!audio) return;
 
+        let cancelled = false;
         let detachTrim: (() => void) | undefined;
 
         let audioUrl: string | undefined;
@@ -278,11 +364,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             detachTrim = attachPlaybackTrim(audio, {
                 trimStartSec,
                 trimEndSec,
-                segmentLoop: () => !!shouldSegmentLoopNative,
+                segmentLoop: () => !cancelled && !!shouldSegmentLoopNative,
             });
 
             const playAudio = () => {
+                if (cancelled) return;
                 audio.play().catch(err => {
+                    if (cancelled) return;
                     console.warn('🔊 Background audio autoplay prevented:', err);
                 });
             };
@@ -299,6 +387,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
 
         return () => {
+            cancelled = true;
             detachTrim?.();
             audio.pause();
             audio.currentTime = 0;
@@ -596,11 +685,24 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Background Layer - warm parchment gradient as fallback instead of black */}
             {/* Fixed position prevents movement during touch/swipe gestures */}
             <div 
-                className="absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden"
+                className={
+                    bibleMapLayout
+                        ? 'absolute top-0 left-0 right-0 bg-gradient-to-b from-[#2d5a3d] to-[#1e3d28] overflow-hidden'
+                        : 'absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden'
+                }
                 style={{
                     // Ensure background stays locked in place
                     touchAction: 'none',
                     pointerEvents: 'none',
+                    ...(bibleMapLayout
+                        ? {
+                              // Mid/max: art in upper band; hidden: expand toward fullscreen
+                              height: `${bibleMapArtHeightPct}%`,
+                              transition: layoutReady
+                                  ? 'height 0.5s ease-in-out'
+                                  : 'none',
+                          }
+                        : {}),
                 }}
             >
                 {/* Video Sequence Mode - double buffered for seamless transitions */}
@@ -804,10 +906,19 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     <TrimmedPlaybackVideo
                         ref={videoRef}
                         src={page.backgroundUrl}
-                        className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
+                        className={
+                            bibleMapLayout
+                                ? 'absolute inset-0 w-full h-full object-cover object-top min-w-full min-h-full'
+                                : 'absolute inset-0 w-full h-full object-cover min-w-full min-h-full'
+                        }
                         autoPlay
                         loop
-                        muted // Always muted - use separate sound effects MP3 instead
+                        muted={
+                            // Prefer separate extracted audio when present; otherwise allow native video audio
+                            !!page.backgroundAudioUrl ||
+                            ambientVideoSoundEnabled === false ||
+                            !!isTTSPlaying
+                        }
                         playsInline
                         preload="auto"
                         trimStartSec={page.backgroundTrimStartSec}
@@ -861,7 +972,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 <img
                                     src={page.backgroundUrl}
                                     alt={`Page ${page.pageNumber}`}
-                                    className="w-full h-full object-cover"
+                                    className={bibleMapLayout ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                     loading="eager"
                                     style={{
                                         position: 'absolute',
@@ -909,6 +1020,62 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     })()
                 ) : null}
             </div>
+
+            {/* Missing-word hunt — chips over art band (sibling so taps aren't blocked by art pointer-events) */}
+            {showWordHunt && pageHasBackgroundArt && (
+                <div
+                    className="absolute left-0 right-0 top-0 z-[25] pointer-events-none"
+                    style={{
+                        height: `${bibleMapArtHeightPct}%`,
+                        transition: layoutReady ? 'height 0.5s ease-in-out' : 'none',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <MissingWordHuntOverlay
+                        pageSeed={page.id || page.pageNumber || 'page'}
+                        chips={huntChips}
+                        foundIds={tappedInteractiveKeys || new Set()}
+                        nextId={nextInteractiveKey}
+                        onCorrect={(id) => {
+                            const [boxStr, wordStr] = id.split(':');
+                            const boxIndex = Number(boxStr);
+                            const wordIndex = Number(wordStr);
+                            if (!Number.isInteger(boxIndex) || !Number.isInteger(wordIndex)) return;
+                            onInteractiveWordTap?.(boxIndex, wordIndex);
+                        }}
+                        onWrong={() => onWrongHuntTap?.()}
+                        placement="image"
+                    />
+                </div>
+            )}
+
+            {/* Hunt chips along scroll top when there is no page art */}
+            {showWordHunt && !pageHasBackgroundArt && scrollState !== 'hidden' && (
+                <div
+                    className="absolute left-0 right-0 z-[25] pointer-events-none"
+                    style={{
+                        top: `${Math.max(bibleMapArtHeightPct - 8, 50)}%`,
+                        height: '10%',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <MissingWordHuntOverlay
+                        pageSeed={page.id || page.pageNumber || 'page'}
+                        chips={huntChips}
+                        foundIds={tappedInteractiveKeys || new Set()}
+                        nextId={nextInteractiveKey}
+                        onCorrect={(id) => {
+                            const [boxStr, wordStr] = id.split(':');
+                            const boxIndex = Number(boxStr);
+                            const wordIndex = Number(wordStr);
+                            if (!Number.isInteger(boxIndex) || !Number.isInteger(wordIndex)) return;
+                            onInteractiveWordTap?.(boxIndex, wordIndex);
+                        }}
+                        onWrong={() => onWrongHuntTap?.()}
+                        placement="scroll-top"
+                    />
+                </div>
+            )}
 
             {/* Gradient Overlay for depth (spine shadow) */}
             <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none z-10" />
@@ -983,6 +1150,95 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
             
+            {/* Page nav — just above parchment top edge */}
+            {bibleMapLayout &&
+                pageNav &&
+                (() => {
+                    const navDisabled = !!pageNav?.disabled;
+                    const prevDisabled = navDisabled || !pageNav?.canGoPrev;
+                    const nextDisabled =
+                        navDisabled || !pageNav?.canGoNext || !!pageNav?.nextLocked;
+                    const chromeBottom =
+                        scrollState !== 'hidden'
+                            ? `calc(${currentScrollHeightNum}% + ${scrollOffset}% + 6px)`
+                            : '12%';
+
+                    return (
+                        <div
+                            className="absolute inset-x-0 z-[28] pointer-events-none flex items-center gap-2 px-2 sm:px-3"
+                            style={{
+                                bottom: chromeBottom,
+                                transition: layoutReady && motionEnabled ? 'bottom 0.5s ease-in-out' : 'none',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {pageNav ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (prevDisabled) return;
+                                        pageNav.onPrev(e);
+                                    }}
+                                    disabled={prevDisabled}
+                                    className={`pointer-events-auto shrink-0 min-w-[52px] h-12 sm:min-w-[56px] sm:h-14 px-2 rounded-full flex flex-col items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
+                                        prevDisabled
+                                            ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
+                                            : 'opacity-100 border-white/30 bg-black/40 text-white hover:bg-black/55'
+                                    }`}
+                                    aria-label="Previous page"
+                                    title="Previous page"
+                                >
+                                    <ChevronLeft className="w-7 h-7 sm:w-8 sm:h-8 -mb-0.5" strokeWidth={2.5} />
+                                    <span className="text-[10px] sm:text-[11px] font-bold leading-none tracking-wide">
+                                        Back
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="shrink-0 min-w-[52px] sm:min-w-[56px]" aria-hidden />
+                            )}
+
+                            <div className="flex-1 min-w-0" />
+
+                            {pageNav ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (nextDisabled) return;
+                                        pageNav.onNext(e);
+                                    }}
+                                    disabled={nextDisabled}
+                                    className={`pointer-events-auto shrink-0 min-w-[52px] h-12 sm:min-w-[56px] sm:h-14 px-2 rounded-full flex flex-col items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
+                                        navDisabled || !pageNav.canGoNext
+                                            ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
+                                            : pageNav.nextLocked
+                                              ? 'opacity-45 cursor-not-allowed border-white/20 bg-black/30 text-white'
+                                              : 'opacity-100 border-emerald-300/50 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                                    }`}
+                                    aria-label={
+                                        pageNav.nextLocked
+                                            ? 'Find all missing words to continue'
+                                            : 'Next page'
+                                    }
+                                    title={
+                                        pageNav.nextLocked
+                                            ? 'Find all missing words to continue'
+                                            : 'Next page'
+                                    }
+                                >
+                                    <ChevronRight className="w-7 h-7 sm:w-8 sm:h-8 -mb-0.5" strokeWidth={2.5} />
+                                    <span className="text-[10px] sm:text-[11px] font-bold leading-none tracking-wide">
+                                        Next
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="shrink-0 min-w-[52px] sm:min-w-[56px]" aria-hidden />
+                            )}
+                        </div>
+                    );
+                })()}
+
             {/* Swipe Indicator - Inside the scroll, at the top */}
             {page.scrollUrl && scrollState !== 'hidden' && (
                 <div 
@@ -1134,6 +1390,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
+                                // Don't start page TTS when tapping a single speakable / hunt word
+                                if (
+                                    (e.target as HTMLElement)?.closest?.(
+                                        '[data-interactive-word], [data-speak-word]',
+                                    )
+                                ) {
+                                    return;
+                                }
                                 onPlayText && onPlayText(box.text, idx, e);
                             }}
                         >
@@ -1149,7 +1413,166 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);
                                         const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
-                                        
+                                        const tapWords = splitInteractiveWords(box.text || '');
+                                        const tapIndices = new Set(
+                                            sanitizeInteractiveWordIndices(
+                                                box.text || '',
+                                                box.interactiveWordIndices,
+                                            ),
+                                        );
+                                        const hasTapWords = tapIndices.size > 0 && !!onInteractiveWordTap;
+                                        const renderWords = hasTapWords && tapWords.length > 0 ? tapWords : words;
+                                        const canSpeakWords = !!onSpeakWord;
+
+                                        const speakWordClick = (
+                                            e: React.MouseEvent,
+                                            word: string,
+                                        ) => {
+                                            if (!onSpeakWord) return;
+                                            e.stopPropagation();
+                                            onSpeakWord(word);
+                                        };
+
+                                        const renderSpeakableWord = (
+                                            word: string,
+                                            wIdx: number,
+                                            extraClass = '',
+                                        ) => (
+                                            <span
+                                                key={wIdx}
+                                                data-word-index={wIdx}
+                                                data-speak-word={canSpeakWords ? '1' : undefined}
+                                                role={canSpeakWords ? 'button' : undefined}
+                                                tabIndex={canSpeakWords ? 0 : undefined}
+                                                className={`rounded px-0.5 ${
+                                                    canSpeakWords
+                                                        ? 'cursor-pointer active:bg-amber-200/70 hover:bg-amber-100/50'
+                                                        : ''
+                                                } ${extraClass}`}
+                                                onClick={
+                                                    canSpeakWords
+                                                        ? (e) => speakWordClick(e, word)
+                                                        : undefined
+                                                }
+                                                aria-label={
+                                                    canSpeakWords ? `Say ${wordForSpeech(word) || word}` : undefined
+                                                }
+                                            >
+                                                {word}{' '}
+                                            </span>
+                                        );
+
+                                        const renderBlankOrWord = (word: string, wIdx: number) => {
+                                            const isTapTarget = tapIndices.has(wIdx);
+                                            const key = pageInteractiveTapKey(idx, wIdx);
+                                            const tapped = tappedInteractiveKeys?.has(key);
+                                            if (!isTapTarget) {
+                                                return renderSpeakableWord(word, wIdx);
+                                            }
+                                            if (!tapped) {
+                                                const units = blankSlotUnits(word);
+                                                const isNext = key === nextInteractiveKey;
+                                                return (
+                                                    <span
+                                                        key={wIdx}
+                                                        data-interactive-word="1"
+                                                        data-hunt-blank={key}
+                                                        className={`inline-flex items-center justify-center mx-0.5 px-2 py-0.5 rounded-md border-2 border-dashed align-baseline transition ${
+                                                            isNext
+                                                                ? 'border-amber-500 bg-amber-50/95 ring-1 ring-amber-300/70'
+                                                                : 'border-emerald-600/80 bg-white/90'
+                                                        }`}
+                                                        style={{
+                                                            font: 'inherit',
+                                                            color: 'transparent',
+                                                            minWidth: `${Math.max(units * 0.55, 1.8)}em`,
+                                                        }}
+                                                        aria-label={
+                                                            isNext
+                                                                ? 'Find this word on the picture next'
+                                                                : 'Missing word blank'
+                                                        }
+                                                    >
+                                                        <span
+                                                            className={`block w-full border-b-2 leading-none ${
+                                                                isNext
+                                                                    ? 'border-amber-600'
+                                                                    : 'border-emerald-700/80'
+                                                            }`}
+                                                        >
+                                                            {'\u00A0'.repeat(units)}
+                                                        </span>
+                                                    </span>
+                                                );
+                                            }
+                                            // Revealed hunt word — speak anytime when voice path is wired
+                                            return (
+                                                <span
+                                                    key={wIdx}
+                                                    data-interactive-word="1"
+                                                    data-speak-word={canSpeakWords ? '1' : undefined}
+                                                    role={canSpeakWords ? 'button' : undefined}
+                                                    tabIndex={canSpeakWords ? 0 : undefined}
+                                                    className={`rounded px-0.5 bg-emerald-200/70 ${
+                                                        canSpeakWords
+                                                            ? 'cursor-pointer active:bg-emerald-300/80'
+                                                            : ''
+                                                    }`}
+                                                    onClick={
+                                                        canSpeakWords
+                                                            ? (e) => speakWordClick(e, word)
+                                                            : undefined
+                                                    }
+                                                    aria-label={
+                                                        canSpeakWords
+                                                            ? `Say ${wordForSpeech(word) || word}`
+                                                            : undefined
+                                                    }
+                                                >
+                                                    {word}{' '}
+                                                </span>
+                                            );
+                                        };
+
+                                        // Hunt mode: blanks in scroll until chips are found (skip read-along on blanks)
+                                        if (hasTapWords) {
+                                            // During TTS after hunt complete, allow read-along highlight
+                                            if (
+                                                isActive &&
+                                                wordAlignment &&
+                                                highlightedWordIndex >= 0 &&
+                                                pageInteractiveTargets.every((t) =>
+                                                    tappedInteractiveKeys?.has(
+                                                        pageInteractiveTapKey(t.boxIndex, t.wordIndex),
+                                                    ),
+                                                )
+                                            ) {
+                                                return renderWords.map((word, wIdx) => {
+                                                    const isHighlighted = wIdx === highlightedWordIndex;
+                                                    const isUpcoming =
+                                                        highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
+                                                    const isPast =
+                                                        highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
+                                                    return renderSpeakableWord(
+                                                        word,
+                                                        wIdx,
+                                                        `
+                                                                gk-readalong-word
+                                                                ${isHighlighted
+                                                                    ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
+                                                                    : isUpcoming
+                                                                        ? 'opacity-42'
+                                                                        : isPast
+                                                                            ? 'opacity-78'
+                                                                            : ''
+                                                                }
+                                                            `,
+                                                    );
+                                                });
+                                            }
+                                            return renderWords.map((word, wIdx) => renderBlankOrWord(word, wIdx));
+                                        }
+
                                         // If active with word alignment, show with highlighting
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
@@ -1158,12 +1581,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                     highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
                                                 const isPast =
                                                     highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
-                                                return (
-                                                    <span
-                                                        key={wIdx}
-                                                        data-word-index={wIdx}
-                                                        className={`
-                                                            gk-readalong-word rounded px-0.5
+                                                return renderSpeakableWord(
+                                                    word,
+                                                    wIdx,
+                                                    `
+                                                            gk-readalong-word
                                                             ${isHighlighted
                                                                 ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
                                                                 : isUpcoming
@@ -1172,12 +1594,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                                         ? 'opacity-78'
                                                                         : ''
                                                             }
-                                                        `}
-                                                    >
-                                                        {word}{' '}
-                                                    </span>
+                                                        `,
                                                 );
                                             });
+                                        }
+
+                                        // Bible Map: split into tappable word spans for practice
+                                        if (canSpeakWords && words.length > 0) {
+                                            return words.map((word, wIdx) =>
+                                                renderSpeakableWord(word, wIdx),
+                                            );
                                         }
                                         
                                         // Standard rendering - preserve line breaks

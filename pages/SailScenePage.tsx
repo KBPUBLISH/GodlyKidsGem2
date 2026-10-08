@@ -1,0 +1,1201 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Lock } from 'lucide-react';
+import {
+  getBibleMapApiRoot,
+  resolveBibleMapMediaUrl,
+} from '../utils/bibleMapApi';
+/** Looping ocean background video (portrait; shown full-bleed cover). */
+const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
+/** Static ocean poster / fallback if the video fails to load. */
+const SAIL_SCENE_BG_STILL = '/assets/images/sail-scene-bg.png';
+/** First-person boat bow interior (1024×829) — black keyed to alpha. */
+const SAIL_SHIP_DECK = '/assets/images/sail-ship-deck.png';
+const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
+/** Sail-scene bottom overlay — crew roster (three characters on wood plaque). */
+const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
+/** Sail-scene bottom overlay — games (gamepad on wood plaque). */
+const SAIL_BTN_GAMES = '/assets/images/rewards-gamepad-icon.png';
+/** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
+const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
+/** Shared wood texture for Travel Here CTA (matches IslandScene chrome). */
+const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+/** One-time steering-wheel turn hint — hide after first drag. */
+const WHEEL_HINT_STORAGE_KEY = 'godlykids_sail_wheel_hint_seen';
+
+const travelHereBtnStyle: React.CSSProperties = {
+  backgroundImage: `url(${WOOD_TEX})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  boxShadow:
+    '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
+  border: '2px solid #6B4423',
+};
+
+/** Sky cloud A — wide bank (970×453; alpha already keyed). */
+const SAIL_BG_CLOUD_A = '/assets/images/sail-bg-cloud-a.png';
+/** Sky cloud B — compact cluster (769×306; alpha already keyed). */
+const SAIL_BG_CLOUD_B = '/assets/images/sail-bg-cloud-b.png';
+/** Distant left island (black keyed to alpha). */
+const SAIL_BG_ISLAND_A = '/assets/images/sail-bg-island-a.png';
+/** Distant right island (black keyed to alpha). */
+const SAIL_BG_ISLAND_B = '/assets/images/sail-bg-island-b.png';
+
+/**
+ * Layered sky clouds for the seamless marquee strip (same pattern as Map).
+ * Track is duplicated side-by-side; animates translateX(-50% → 0) linear infinite.
+ */
+type SailSkyCloudSpec = {
+  id: string;
+  src: string;
+  widthPct: number;
+  leftPct?: number;
+  rightPct?: number;
+  topPct?: number;
+  opacity: number;
+};
+
+const SAIL_SKY_CLOUDS: SailSkyCloudSpec[] = [
+  {
+    id: 'a-left',
+    src: SAIL_BG_CLOUD_A,
+    widthPct: 48,
+    leftPct: -14,
+    topPct: 4,
+    opacity: 0.92,
+  },
+  {
+    id: 'b-right',
+    src: SAIL_BG_CLOUD_B,
+    widthPct: 38,
+    rightPct: -10,
+    topPct: 10,
+    opacity: 0.88,
+  },
+  {
+    id: 'a-mid',
+    src: SAIL_BG_CLOUD_A,
+    widthPct: 32,
+    leftPct: 34,
+    topPct: 0,
+    opacity: 0.78,
+  },
+  {
+    id: 'b-high',
+    src: SAIL_BG_CLOUD_B,
+    widthPct: 24,
+    leftPct: 58,
+    topPct: 6,
+    opacity: 0.7,
+  },
+];
+
+/** Full loop duration for the duplicated cloud track (linear infinite). */
+const SAIL_SKY_CLOUD_LOOP_SEC = 95;
+
+/**
+ * Distant horizon islands — behind the carousel focal island.
+ * Viewport-fixed (not ocean-frame %) so they stay visible on the water
+ * left/right of the focal island despite the wide letterboxed ocean frame.
+ * Kept small / high so they read as scenery, not competing focal points.
+ */
+const SAIL_BG_ISLANDS = [
+  {
+    id: 'bg-left',
+    src: SAIL_BG_ISLAND_A,
+    /** Far background: much smaller than carousel (~28% / max 235). */
+    width: 'min(14vw, 96px)',
+    left: '10%',
+    top: '28%',
+    opacity: 0.94,
+  },
+  {
+    id: 'bg-right',
+    src: SAIL_BG_ISLAND_B,
+    width: 'min(11vw, 76px)',
+    left: '90%',
+    top: '30%',
+    opacity: 0.9,
+  },
+] as const;
+
+/**
+ * Wheel-driven island carousel overlays (ocean keyed out; island art remains).
+ * Order = look stops left → right (clockwise wheel advances index).
+ */
+const CAROUSEL_ISLANDS = [
+  {
+    id: 'genesis',
+    title: 'Genesis',
+    src: '/assets/images/sail-carousel-genesis.png',
+  },
+  {
+    id: 'exodus',
+    title: 'Exodus',
+    src: '/assets/images/sail-carousel-exodus.png',
+  },
+  {
+    id: 'daniel',
+    title: 'Daniel',
+    src: '/assets/images/sail-carousel-daniel.png',
+  },
+  {
+    id: 'joshua',
+    title: 'Joshua',
+    src: '/assets/images/sail-carousel-joshua.png',
+  },
+  {
+    id: '1-samuel',
+    title: '1 Samuel',
+    src: '/assets/images/sail-carousel-1-samuel.png',
+  },
+] as const;
+
+/**
+ * Per-island adventure completion (mock for now — wire to real progress later).
+ * Total matches IslandScene activities (read / quiz / puzzle / coloring / game).
+ * Swap this map (or `getIslandProgress`) for live progress when available.
+ */
+const ISLAND_ADVENTURE_PROGRESS: Record<
+  (typeof CAROUSEL_ISLANDS)[number]['id'],
+  { completed: number; total: number }
+> = {
+  genesis: { completed: 4, total: 5 },
+  exodus: { completed: 1, total: 5 },
+  daniel: { completed: 0, total: 5 },
+  joshua: { completed: 2, total: 5 },
+  '1-samuel': { completed: 0, total: 5 },
+};
+
+/** First carousel level — always unlocked; completing it unlocks the rest. */
+const FIRST_ISLAND_ID: (typeof CAROUSEL_ISLANDS)[number]['id'] = 'genesis';
+
+const getIslandProgress = (islandId: string) =>
+  ISLAND_ADVENTURE_PROGRESS[islandId as keyof typeof ISLAND_ADVENTURE_PROGRESS] ?? {
+    completed: 0,
+    total: 5,
+  };
+
+/** Island is complete when all adventures are done (completed === total). */
+const isIslandComplete = (islandId: string): boolean => {
+  const { completed, total } = getIslandProgress(islandId);
+  return total > 0 && completed >= total;
+};
+
+/**
+ * Unlock rule (easy to swap later):
+ * - Genesis (FIRST_ISLAND_ID) is always available.
+ * - Every other carousel island unlocks only after Genesis is fully complete.
+ */
+const isIslandUnlocked = (islandId: string): boolean => {
+  if (islandId === FIRST_ISLAND_ID) return true;
+  return isIslandComplete(FIRST_ISLAND_ID);
+};
+
+const LOOK_COUNT = CAROUSEL_ISLANDS.length;
+/** Wheel rest angle center (Daniel) when starting mid-voyage; start index may differ. */
+const CENTER_INDEX = Math.floor((LOOK_COUNT - 1) / 2);
+
+/** Deck art aspect (h/w) for matching wheel bottom to pedestal. */
+const DECK_ASPECT_H_OVER_W = 829 / 1024;
+/**
+ * Scale above full-bleed width so the bow feels closer to camera.
+ * (maxHeight alone often doesn't bite — natural height is already under 56vh.)
+ */
+const DECK_SCALE = 1.28;
+/** Cap deck height so ocean / island stay visible above the bow. */
+const DECK_MAX_HEIGHT = '72vh';
+/**
+ * Sink the deck below the viewport so more of the bow is cropped.
+ * Fraction of scaled deck height (negative bottom offset).
+ */
+const DECK_SINK = 0.28;
+/**
+ * Pedestal top sits ~72% up from the bottom of the deck image.
+ * Wheel hub is centered on that line.
+ */
+const PEDESTAL_FROM_BOTTOM = 0.72;
+/** Resolved deck height used for bottom / pedestal calc. */
+const DECK_HEIGHT_EXPR = `min(${DECK_MAX_HEIGHT}, ${DECK_SCALE * 100}vw * ${DECK_ASPECT_H_OVER_W})`;
+
+/**
+ * Island carousel framing uses the legacy landscape horizon aspect so island
+ * overlays stay aligned while the ocean video fills the viewport with cover.
+ */
+const BG_ASPECT = 1024 / 703;
+/** Fraction of height-fit scale — lower = more zoomed out (letterboxed). */
+const BG_COVER_ZOOM = 0.65;
+
+/** Soft sky fallback behind the ocean video (visible while loading / letterbox). */
+const SKY_GRADIENT =
+  'linear-gradient(180deg, #7ec8f8 0%, #a6dffc 32%, #d4f2ff 55%, #eef9ff 72%, #c8eef6 100%)';
+
+/** Degrees between carousel stops — matches bottom-nav ITEM_ANGLE. */
+const STEP_ANGLE = 36;
+/** Degrees of movement below which we treat as a tap (same as bottom nav). */
+const TAP_THRESHOLD = 22;
+/** Settle easing after release — matches bottom-nav wheel. */
+const SNAP_EASING = 'transform 1.2s cubic-bezier(0.22, 0.61, 0.36, 1)';
+const ISLAND_FADE_MS = 420;
+/** Boat sails toward the tapped island — kid-friendly ease-in-out. */
+const SAIL_DURATION_MS = 2100;
+const SAIL_EASING = 'cubic-bezier(0.45, 0.05, 0.25, 1)';
+/** Short hop when prefers-reduced-motion is on, then navigate. */
+const SAIL_REDUCED_MS = 120;
+
+const clampIndex = (i: number) => Math.max(0, Math.min(LOOK_COUNT - 1, i));
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const normalizeIslandId = (value: string) =>
+  value.toLowerCase().trim().replace(/_/g, '-').replace(/\s+/g, '-');
+
+const resolveStartIndex = (islandId?: string): number => {
+  if (!islandId) return 0;
+  const id = normalizeIslandId(islandId);
+  const exact = CAROUSEL_ISLANDS.findIndex((island) => island.id === id);
+  if (exact >= 0) return exact;
+  if (id === '1samuel' || id === 'samuel') {
+    return CAROUSEL_ISLANDS.findIndex((island) => island.id === '1-samuel');
+  }
+  return 0; // Genesis default
+};
+
+type SailNavState = {
+  title?: string;
+  hasMainMap?: boolean;
+  mainMapUrl?: string;
+  mainMapVideoUrl?: string;
+} | null;
+
+const mediaIndicatesMainMap = (
+  mainMapUrl?: string | null,
+  mainMapVideoUrl?: string | null,
+): boolean =>
+  Boolean(
+    (mainMapUrl && mainMapUrl.trim()) ||
+      (mainMapVideoUrl && mainMapVideoUrl.trim()),
+  );
+
+/** Fetch whether a CMS island has a main-map PNG/video (legacy if unknown/fail). */
+const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
+  try {
+    const res = await fetch(
+      `${getBibleMapApiRoot()}/bible-map/islands/${encodeURIComponent(id)}`,
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      island?: { mainMapUrl?: string; mainMapVideoUrl?: string };
+    };
+    return mediaIndicatesMainMap(
+      resolveBibleMapMediaUrl(data.island?.mainMapUrl),
+      resolveBibleMapMediaUrl(data.island?.mainMapVideoUrl),
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * First-person sail scene — opened when tapping an island on the Map.
+ * Turn the wheel like the app nav: release and it snaps to the next island.
+ */
+const SailScenePage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { islandId } = useParams<{ islandId?: string }>();
+  const startIndex = resolveStartIndex(islandId);
+  const navState = location.state as SailNavState;
+
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const oceanVideoRef = useRef<HTMLVideoElement>(null);
+  /** When true, show static ocean still instead of (failed) video. */
+  const [oceanStill, setOceanStill] = useState(false);
+  const draggingRef = useRef(false);
+  const startAngleRef = useRef(0);
+  const startRotationRef = useRef(0);
+  const totalMoveRef = useRef(0);
+  const lastTouchEndRef = useRef(0);
+  const dragRotationRef = useRef<number | null>(null);
+  const lookIndexRef = useRef(startIndex);
+  const isSailingRef = useRef(false);
+  const sailTimerRef = useRef<number | null>(null);
+  /** Cache: island id → has CMS main map (PNG/video). */
+  const mainMapCacheRef = useRef<Record<string, boolean>>({});
+  const navStateRef = useRef(navState);
+  const routeIslandIdRef = useRef(islandId);
+
+  const [lookIndex, setLookIndex] = useState(startIndex);
+  const [dragRotation, setDragRotation] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  /** True while the boat is sailing toward the tapped island. */
+  const [isSailing, setIsSailing] = useState(false);
+  /** Brief shake when tapping a locked island (no sail / navigate). */
+  const [lockShakeId, setLockShakeId] = useState<string | null>(null);
+  const lockShakeTimerRef = useRef<number | null>(null);
+  /** First-time (or until first turn) animated arrow around the wheel. */
+  const [showWheelHint, setShowWheelHint] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(WHEEL_HINT_STORAGE_KEY) !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  lookIndexRef.current = lookIndex;
+  dragRotationRef.current = dragRotation;
+  isSailingRef.current = isSailing;
+  navStateRef.current = navState;
+  routeIslandIdRef.current = islandId;
+
+  // Seed main-map cache from Map → Sail navigation state.
+  useEffect(() => {
+    if (!islandId) return;
+    const key = normalizeIslandId(islandId);
+    if (typeof navState?.hasMainMap === 'boolean') {
+      mainMapCacheRef.current[key] = navState.hasMainMap;
+      return;
+    }
+    if (
+      mediaIndicatesMainMap(navState?.mainMapUrl, navState?.mainMapVideoUrl)
+    ) {
+      mainMapCacheRef.current[key] = true;
+    }
+  }, [islandId, navState?.hasMainMap, navState?.mainMapUrl, navState?.mainMapVideoUrl]);
+
+  // Prefetch main-map flag for the route island (and common carousel ids).
+  useEffect(() => {
+    if (!islandId) return;
+    const key = normalizeIslandId(islandId);
+    if (typeof mainMapCacheRef.current[key] === 'boolean') return;
+    let cancelled = false;
+    void fetchIslandHasMainMap(key).then((has) => {
+      if (!cancelled) mainMapCacheRef.current[key] = has;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [islandId]);
+
+  // Sync start when route island changes (e.g. map → sail).
+  useEffect(() => {
+    const next = resolveStartIndex(islandId);
+    setLookIndex(next);
+    lookIndexRef.current = next;
+  }, [islandId]);
+
+  useEffect(
+    () => () => {
+      if (sailTimerRef.current != null) {
+        window.clearTimeout(sailTimerRef.current);
+        sailTimerRef.current = null;
+      }
+      if (lockShakeTimerRef.current != null) {
+        window.clearTimeout(lockShakeTimerRef.current);
+        lockShakeTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const activeIsland = CAROUSEL_ISLANDS[lookIndex] ?? CAROUSEL_ISLANDS[0];
+
+  const restingRotation = (lookIndex - CENTER_INDEX) * STEP_ANGLE;
+  const visualRotation =
+    isDragging && dragRotation !== null ? dragRotation : restingRotation;
+
+  const sailDurationMs = prefersReducedMotion() ? SAIL_REDUCED_MS : SAIL_DURATION_MS;
+  const sailTransition = isSailing
+    ? `transform ${sailDurationMs}ms ${SAIL_EASING}, opacity ${sailDurationMs}ms ${SAIL_EASING}`
+    : undefined;
+
+  /**
+   * After ship sail animation: MainMap if island has mainMapUrl/video, else legacy lesson.
+   * When sailing the island we arrived for from Map, prefer the route slug (CMS id).
+   */
+  const continueAfterSail = useCallback(
+    (carouselIsland: (typeof CAROUSEL_ISLANDS)[number]) => {
+      const routeId = routeIslandIdRef.current;
+      const arrivedForThis =
+        !!routeId &&
+        resolveStartIndex(routeId) ===
+          CAROUSEL_ISLANDS.findIndex((i) => i.id === carouselIsland.id);
+      const destId = arrivedForThis
+        ? normalizeIslandId(routeId!)
+        : carouselIsland.id;
+      const state = navStateRef.current;
+      const title =
+        (arrivedForThis && state?.title) ||
+        carouselIsland.title;
+
+      const go = (hasMainMap: boolean) => {
+        if (hasMainMap) {
+          navigate(`/map/${encodeURIComponent(destId)}/main`, {
+            state: { title, fromSail: true },
+          });
+          return;
+        }
+        navigate(`/sail/${encodeURIComponent(destId)}/lesson`, {
+          state: { fromSail: true, title },
+        });
+      };
+
+      const cached = mainMapCacheRef.current[destId];
+      if (typeof cached === 'boolean') {
+        go(cached);
+        return;
+      }
+      if (
+        arrivedForThis &&
+        (typeof state?.hasMainMap === 'boolean' ||
+          mediaIndicatesMainMap(state?.mainMapUrl, state?.mainMapVideoUrl))
+      ) {
+        const has =
+          typeof state?.hasMainMap === 'boolean'
+            ? state.hasMainMap
+            : mediaIndicatesMainMap(state?.mainMapUrl, state?.mainMapVideoUrl);
+        mainMapCacheRef.current[destId] = has;
+        go(has);
+        return;
+      }
+
+      void fetchIslandHasMainMap(destId).then((has) => {
+        mainMapCacheRef.current[destId] = has;
+        go(has);
+      });
+    },
+    [navigate],
+  );
+
+  const pulseLockedFeedback = useCallback((islandId: string) => {
+    if (prefersReducedMotion()) return;
+    setLockShakeId(islandId);
+    if (lockShakeTimerRef.current != null) {
+      window.clearTimeout(lockShakeTimerRef.current);
+    }
+    lockShakeTimerRef.current = window.setTimeout(() => {
+      lockShakeTimerRef.current = null;
+      setLockShakeId(null);
+    }, 420);
+  }, []);
+
+  const dismissWheelHint = useCallback(() => {
+    setShowWheelHint((prev) => {
+      if (!prev) return prev;
+      try {
+        localStorage.setItem(WHEEL_HINT_STORAGE_KEY, 'true');
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return false;
+    });
+  }, []);
+
+  const startSailToIsland = useCallback(
+    (island: (typeof CAROUSEL_ISLANDS)[number]) => {
+      if (isSailingRef.current) return;
+
+      // Locked islands: shake only — no sail-forward / lesson navigation.
+      if (!isIslandUnlocked(island.id)) {
+        pulseLockedFeedback(island.id);
+        return;
+      }
+
+      // Cancel any in-progress wheel drag so carousel state stays clean.
+      draggingRef.current = false;
+      setIsDragging(false);
+      setDragRotation(null);
+
+      if (prefersReducedMotion()) {
+        continueAfterSail(island);
+        return;
+      }
+
+      isSailingRef.current = true;
+      setIsSailing(true);
+
+      if (sailTimerRef.current != null) {
+        window.clearTimeout(sailTimerRef.current);
+      }
+      sailTimerRef.current = window.setTimeout(() => {
+        sailTimerRef.current = null;
+        continueAfterSail(island);
+      }, SAIL_DURATION_MS);
+    },
+    [continueAfterSail, pulseLockedFeedback],
+  );
+
+  // Ocean visual width as % of viewport (height-fit × cover zoom).
+  const [oceanWidthVw, setOceanWidthVw] = useState(() => {
+    if (typeof window === 'undefined') return 100;
+    const { innerWidth: w, innerHeight: h } = window;
+    if (w <= 0) return 100;
+    return ((BG_ASPECT * h) / w) * BG_COVER_ZOOM * 100;
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const { innerWidth: w, innerHeight: h } = window;
+      if (w <= 0) return;
+      setOceanWidthVw(((BG_ASPECT * h) / w) * BG_COVER_ZOOM * 100);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Autoplay policies require muted + playsInline; nudge play() after mount/load.
+  useEffect(() => {
+    const video = oceanVideoRef.current;
+    if (!video) return;
+    video.muted = true;
+    const tryPlay = () => {
+      if (video.paused) {
+        void video.play().catch(() => {
+          /* Autoplay may still be blocked; muted + playsInline is the main fix. */
+        });
+      }
+    };
+    tryPlay();
+    video.addEventListener('loadeddata', tryPlay);
+    return () => video.removeEventListener('loadeddata', tryPlay);
+  }, []);
+
+  const getAngle = useCallback((clientX: number, clientY: number) => {
+    const el = wheelRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
+  }, []);
+
+  const onStart = useCallback(
+    (clientX: number, clientY: number) => {
+      if (isSailingRef.current) return;
+      dismissWheelHint();
+      draggingRef.current = true;
+      startAngleRef.current = getAngle(clientX, clientY);
+      // Rest angle for current island (center index at 0°, like nav index * STEP)
+      startRotationRef.current =
+        (lookIndexRef.current - CENTER_INDEX) * STEP_ANGLE;
+      totalMoveRef.current = 0;
+      setDragRotation(startRotationRef.current);
+      setIsDragging(true);
+    },
+    [dismissWheelHint, getAngle],
+  );
+
+  const onMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!draggingRef.current) return;
+
+      const currentAngle = getAngle(clientX, clientY);
+      // Standard physics (bottom nav): CW drag increases rotation
+      let delta = currentAngle - startAngleRef.current;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+
+      totalMoveRef.current += Math.abs(delta);
+      // Continuous follow — no clamp while dragging (snap clamps on release)
+      setDragRotation(startRotationRef.current + delta);
+    },
+    [getAngle],
+  );
+
+  const snapToIndex = useCallback((index: number) => {
+    draggingRef.current = false;
+    setLookIndex(clampIndex(index));
+    setDragRotation(null);
+    setIsDragging(false);
+  }, []);
+
+  const onEnd = useCallback(() => {
+    if (!draggingRef.current || isSailingRef.current) return;
+
+    const currentDrag = dragRotationRef.current;
+    if (currentDrag === null) {
+      draggingRef.current = false;
+      setIsDragging(false);
+      setDragRotation(null);
+      return;
+    }
+
+    if (totalMoveRef.current < TAP_THRESHOLD) {
+      // Tap / tiny move: settle back to the current island stop
+      snapToIndex(lookIndexRef.current);
+      return;
+    }
+
+    // Swipe: snap to nearest carousel stop (same Math.round pattern as bottom nav)
+    const rawIndex = Math.round(currentDrag / STEP_ANGLE) + CENTER_INDEX;
+    snapToIndex(rawIndex);
+  }, [snapToIndex]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    onStart(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    onMove(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    lastTouchEndRef.current = Date.now();
+    onEnd();
+  };
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (Date.now() - lastTouchEndRef.current < 400) return;
+    e.preventDefault();
+    onStart(e.clientX, e.clientY);
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => onMove(e.clientX, e.clientY);
+    const onMouseUp = () => onEnd();
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [onMove, onEnd]);
+
+  // Non-passive touchmove so preventDefault stops scroll from stealing the gesture
+  // (same pattern as bottom-nav hit area).
+  useEffect(() => {
+    const el = wheelRef.current;
+    if (!el) return;
+    const preventDefault = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener('touchmove', preventDefault, { passive: false });
+    return () => el.removeEventListener('touchmove', preventDefault);
+  }, []);
+
+  const lookLabel = `Island: ${activeIsland.title}`;
+
+  return (
+    <div
+      className="relative w-full h-screen overflow-hidden"
+      style={{ background: SKY_GRADIENT }}
+    >
+      {/* Fixed ocean video — full-bleed cover; islands keep legacy framing */}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{ background: SKY_GRADIENT }}
+      >
+        <div
+          className="absolute inset-0 will-change-transform"
+          style={{
+            transform: isSailing ? 'scale(1.12)' : 'scale(1)',
+            transition: sailTransition,
+            transformOrigin: '50% 42%',
+          }}
+        >
+          {/* Static still always under video — avoids empty sky if mp4 404s / fails */}
+          <img
+            src={SAIL_SCENE_BG_STILL}
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+          />
+          {!oceanStill && (
+            <video
+              ref={oceanVideoRef}
+              src={SAIL_SCENE_BG}
+              poster={SAIL_SCENE_BG_STILL}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+              aria-hidden
+              onError={() => setOceanStill(true)}
+            />
+          )}
+        </div>
+
+        {/* Viewport-fixed sky clouds — above video sky, behind carousel islands.
+            Not inside sail zoom so they don’t drift with the approach.
+            Taller band now that the wood plank header is gone. */}
+        <div
+          className="absolute left-0 right-0 top-0 z-[1] pointer-events-none overflow-hidden"
+          style={{ height: '40%' }}
+          aria-hidden
+        >
+          <div
+            className="sail-sky-cloud-track"
+            style={
+              {
+                '--sail-cloud-loop-duration': `${SAIL_SKY_CLOUD_LOOP_SEC}s`,
+              } as React.CSSProperties
+            }
+          >
+            {[0, 1].map((copy) => (
+              <div
+                key={copy}
+                className="sail-sky-cloud-strip"
+                aria-hidden={copy === 1 ? true : undefined}
+              >
+                {SAIL_SKY_CLOUDS.map((cloud) => (
+                  <img
+                    key={`${copy}-${cloud.id}`}
+                    src={cloud.src}
+                    alt=""
+                    aria-hidden
+                    draggable={false}
+                    className="sail-sky-cloud pointer-events-none select-none absolute max-w-none h-auto"
+                    style={{
+                      width: `${cloud.widthPct}%`,
+                      left: cloud.leftPct != null ? `${cloud.leftPct}%` : undefined,
+                      right:
+                        cloud.rightPct != null ? `${cloud.rightPct}%` : undefined,
+                      top: cloud.topPct != null ? `${cloud.topPct}%` : undefined,
+                      opacity: cloud.opacity,
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Distant bg islands — horizon L/R, behind carousel (z < frame). */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none overflow-hidden"
+          aria-hidden
+        >
+          {SAIL_BG_ISLANDS.map((island) => (
+            <img
+              key={island.id}
+              src={island.src}
+              alt=""
+              aria-hidden
+              draggable={false}
+              className="absolute pointer-events-none select-none max-w-none h-auto"
+              style={{
+                left: island.left,
+                top: island.top,
+                width: island.width,
+                opacity: island.opacity,
+                transform: 'translate(-50%, -40%)',
+              }}
+            />
+          ))}
+        </div>
+
+        <div
+          className="absolute left-1/2 top-1/2 z-[2] max-w-none select-none"
+          style={{
+            width: `${oceanWidthVw}vw`,
+            aspectRatio: `${BG_ASPECT}`,
+            // Ocean frame zooms with the sail so islands stay locked to the water
+            transform: isSailing
+              ? 'translate(-50%, -50%) scale(1.18)'
+              : 'translate(-50%, -50%) scale(1)',
+            transition: sailTransition,
+            transformOrigin: '50% 40%',
+            pointerEvents: isSailing ? 'none' : 'auto',
+          }}
+        >
+          {/* Island carousel — one overlay at a time, high on the water */}
+          {CAROUSEL_ISLANDS.map((island, i) => {
+            const offset = i - lookIndex;
+            const active = i === lookIndex;
+            const unlocked = isIslandUnlocked(island.id);
+            const baseTransform = `translate(calc(-50% + ${offset * 14}%), -42%)`;
+            const sailTransform = `${baseTransform} scale(1.55) translateY(-6%)`;
+            const progress = getIslandProgress(island.id);
+            const shaking = lockShakeId === island.id;
+            return (
+              <button
+                key={island.id}
+                type="button"
+                disabled={!active || isSailing}
+                onClick={() => {
+                  if (!active || isSailing) return;
+                  startSailToIsland(island);
+                }}
+                aria-label={
+                  active
+                    ? unlocked
+                      ? `Visit ${island.title}, ${progress.completed} of ${progress.total} adventures complete`
+                      : `${island.title} locked — complete Genesis to unlock`
+                    : undefined
+                }
+                aria-disabled={active && !unlocked ? true : undefined}
+                tabIndex={active && !isSailing ? 0 : -1}
+                className={`absolute p-0 m-0 border-0 bg-transparent appearance-none drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] will-change-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-lg${
+                  shaking ? ' sail-island-lock-shake' : ''
+                }`}
+                style={{
+                  left: '50%',
+                  top: '18%',
+                  width: '28%',
+                  maxWidth: 235,
+                  opacity: active ? 1 : 0,
+                  transform: isSailing && active ? sailTransform : baseTransform,
+                  transition: isSailing
+                    ? sailTransition
+                    : `opacity ${ISLAND_FADE_MS}ms ease, transform ${ISLAND_FADE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
+                  zIndex: active ? 2 : 1,
+                  pointerEvents: active && !isSailing ? 'auto' : 'none',
+                  cursor:
+                    active && !isSailing
+                      ? unlocked
+                        ? 'pointer'
+                        : 'not-allowed'
+                      : 'default',
+                }}
+              >
+                <span className="relative block w-full">
+                  <img
+                    src={island.src}
+                    alt=""
+                    draggable={false}
+                    className="block w-full h-auto pointer-events-none select-none"
+                    style={
+                      unlocked
+                        ? undefined
+                        : {
+                            filter: 'grayscale(100%) brightness(0.88)',
+                          }
+                    }
+                  />
+                    {/* Gold padlock — same badge pattern as IslandScene activity locks.
+                      Sized as % of island so it scales with carousel framing. */}
+                  {!unlocked && (
+                    <span
+                      className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
+                      style={{ width: '30%' }}
+                      aria-hidden
+                    >
+                      <span
+                        className="flex items-center justify-center w-full aspect-square rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(180deg, #D4A574 0%, #8B6914 100%)',
+                          boxShadow:
+                            '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.4)',
+                          border: '1.5px solid #E8C060',
+                        }}
+                      >
+                        <Lock
+                          className="w-[48%] h-[48%] text-white"
+                          strokeWidth={2.8}
+                        />
+                      </span>
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Travel Here — kid CTA over the focused island; same sail path as tapping it */}
+          {!isSailing && (
+            <button
+              type="button"
+              onClick={() => startSailToIsland(activeIsland)}
+              aria-label={
+                isIslandUnlocked(activeIsland.id)
+                  ? `Travel here to ${activeIsland.title}`
+                  : `${activeIsland.title} locked — complete Genesis to unlock`
+              }
+              className="absolute z-[3] px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl appearance-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[0.7rem] sm:text-[0.8rem] leading-none text-[#F5E6C8] active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              style={{
+                ...travelHereBtnStyle,
+                left: '50%',
+                /* Sit over the canopy of the focused island (same anchor as carousel). */
+                top: '2%',
+                transform: 'translate(-50%, -50%)',
+                textShadow:
+                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+                pointerEvents: 'auto',
+                cursor: isIslandUnlocked(activeIsland.id)
+                  ? 'pointer'
+                  : 'not-allowed',
+                opacity: isIslandUnlocked(activeIsland.id) ? 1 : 0.85,
+              }}
+            >
+              Travel Here
+            </button>
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        /* Sky clouds — seamless L→R marquee (no alternate / reverse).
+           Track is 200% wide with two identical strips; animating -50% → 0
+           moves content right so twins enter from the left as copies exit right. */
+        .sail-sky-cloud-track {
+          --sail-cloud-loop-duration: 95s;
+          display: flex;
+          width: 200%;
+          height: 100%;
+          will-change: transform;
+          backface-visibility: hidden;
+          animation: sail-sky-cloud-scroll var(--sail-cloud-loop-duration) linear infinite;
+        }
+        .sail-sky-cloud-strip {
+          position: relative;
+          flex: 0 0 50%;
+          width: 50%;
+          height: 100%;
+        }
+        .sail-sky-cloud {
+          filter: drop-shadow(0 2px 6px rgba(40, 80, 120, 0.16));
+        }
+        @keyframes sail-sky-cloud-scroll {
+          from { transform: translate3d(-50%, 0, 0); }
+          to { transform: translate3d(0, 0, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sail-sky-cloud-track {
+            animation: none;
+            transform: translate3d(-25%, 0, 0);
+          }
+        }
+        /* Locked-island tap feedback — brief horizontal shake; no sail. */
+        @keyframes sail-island-lock-shake {
+          0%, 100% { translate: 0 0; }
+          20% { translate: -7px 0; }
+          40% { translate: 7px 0; }
+          60% { translate: -5px 0; }
+          80% { translate: 5px 0; }
+        }
+        .sail-island-lock-shake {
+          animation: sail-island-lock-shake 0.42s ease-in-out;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sail-island-lock-shake {
+            animation: none;
+          }
+        }
+        /* First-time wheel hint — curved arrow rocks to suggest turn/drag. */
+        @keyframes sail-wheel-hint-rock {
+          0%, 100% { transform: rotate(-18deg); }
+          50% { transform: rotate(18deg); }
+        }
+        @keyframes sail-wheel-hint-fade {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+        .sail-wheel-hint {
+          animation:
+            sail-wheel-hint-rock 1.6s ease-in-out infinite,
+            sail-wheel-hint-fade 1.6s ease-in-out infinite;
+          transform-origin: 50% 50%;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sail-wheel-hint {
+            animation: none;
+            opacity: 0.9;
+            transform: rotate(0deg);
+          }
+        }
+      `}</style>
+
+      {/* Ship bow / deck — sunk below viewport so bow crops and wheel sits lower */}
+      <div
+        className="absolute left-0 right-0 z-10 pointer-events-none overflow-visible will-change-transform"
+        style={{
+          bottom: `calc(${DECK_HEIGHT_EXPR} * ${-DECK_SINK})`,
+          // Sail forward: deck rises toward camera and grows
+          transform: isSailing
+            ? 'translateY(-18%) scale(1.22)'
+            : 'translateY(0) scale(1)',
+          transition: sailTransition,
+          transformOrigin: '50% 100%',
+        }}
+        aria-hidden
+      >
+        <img
+          src={SAIL_SHIP_DECK}
+          alt=""
+          draggable={false}
+          decoding="async"
+          className="block h-auto select-none"
+          style={{
+            width: `${DECK_SCALE * 100}%`,
+            maxWidth: 'none',
+            maxHeight: DECK_MAX_HEIGHT,
+            marginLeft: '50%',
+            transform: 'translateX(-50%)',
+            objectFit: 'contain',
+            objectPosition: 'bottom center',
+            filter: 'drop-shadow(0 -4px 16px rgba(0,0,0,0.35))',
+          }}
+          onError={(e) => {
+            /* Last-resort: keep layout, hide broken-icon wireframe */
+            (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+          }}
+        />
+      </div>
+
+      {/* Interactive steering wheel — hub sits on the deck pedestal */}
+      <div
+        className="absolute left-0 right-0 z-20 flex justify-center pointer-events-none will-change-transform"
+        style={{
+          // Pedestal line = sunk deck bottom + fraction of scaled deck height
+          bottom: `calc(${DECK_HEIGHT_EXPR} * ${PEDESTAL_FROM_BOTTOM - DECK_SINK})`,
+          transform: isSailing
+            ? 'translateY(-28%) scale(1.18)'
+            : 'translateY(0) scale(1)',
+          transition: sailTransition,
+          transformOrigin: '50% 100%',
+        }}
+      >
+        <div
+          ref={wheelRef}
+          className="relative touch-none select-none"
+          style={{
+            width: 'min(62vw, 300px)',
+            aspectRatio: '1',
+            // Center hub on the pedestal line (bottom edge → hub)
+            transform: 'translateY(50%)',
+            cursor: isSailing ? 'default' : isDragging ? 'grabbing' : 'grab',
+            touchAction: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+            filter: 'drop-shadow(0 8px 18px rgba(0,0,0,0.45))',
+            pointerEvents: isSailing ? 'none' : 'auto',
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          role="slider"
+          aria-label="Steer to change island"
+          aria-valuemin={0}
+          aria-valuemax={LOOK_COUNT - 1}
+          aria-valuenow={lookIndex}
+          aria-valuetext={lookLabel}
+          aria-disabled={isSailing}
+        >
+          <img
+            src={SAIL_STEERING_WHEEL}
+            alt=""
+            draggable={false}
+            className="w-full h-full object-contain pointer-events-none select-none will-change-transform"
+            style={{
+              transform: `rotate(${visualRotation}deg)`,
+              transition: isDragging || isSailing ? 'none' : SNAP_EASING,
+            }}
+          />
+          {/* One-time turn hint — hide on first wheel interaction (localStorage). */}
+          {showWheelHint && !isSailing && (
+            <div
+              className="absolute inset-0 pointer-events-none sail-wheel-hint"
+              aria-hidden
+            >
+              <svg
+                viewBox="0 0 100 100"
+                className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
+              >
+                {/* Curved arrow along the upper-right rim */}
+                <path
+                  d="M 72 22 A 36 36 0 0 1 88 55"
+                  fill="none"
+                  stroke="#F5E6C8"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 82 50 L 90 56 L 80 62"
+                  fill="none"
+                  stroke="#F5E6C8"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M 72 22 A 36 36 0 0 1 88 55"
+                  fill="none"
+                  stroke="#8B5A2B"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity="0.55"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom overlay — Crew | Games | Explore on the ship deck. */}
+      <div
+        className="absolute left-0 right-0 z-[25] flex items-end justify-between pointer-events-none"
+        style={{
+          // Raised a bit above the home indicator / deck edge
+          bottom: `max(calc(var(--safe-area-bottom, 0px) + 20px), calc(${DECK_HEIGHT_EXPR} * 0.07))`,
+          paddingLeft: 'min(4vw, 14px)',
+          paddingRight: 'min(4vw, 14px)',
+        }}
+      >
+        {(
+          [
+            {
+              id: 'crew',
+              src: SAIL_BTN_CREW,
+              label: 'CREW',
+              ariaLabel: 'Crew',
+              to: '/crew' as string | null,
+            },
+            {
+              id: 'games',
+              src: SAIL_BTN_GAMES,
+              label: 'GAMES',
+              ariaLabel: 'Games',
+              to: '/games/library' as string | null,
+            },
+            {
+              id: 'explore',
+              src: SAIL_BTN_EXPLORE,
+              label: 'EXPLORE',
+              ariaLabel: 'Explore',
+              to: '/world' as string | null,
+            },
+          ] as const
+        ).map((btn) => (
+          <button
+            key={btn.id}
+            type="button"
+            disabled={isSailing}
+            onClick={() => {
+              if (btn.to) navigate(btn.to);
+            }}
+            className="pointer-events-auto flex flex-col items-center gap-0 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
+            style={{
+              width: 'min(18vw, 80px)',
+              filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.4))',
+            }}
+            aria-label={btn.ariaLabel}
+          >
+            <img
+              src={btn.src}
+              alt=""
+              draggable={false}
+              className="block w-full h-auto select-none pointer-events-none"
+            />
+            <span
+              className="font-display font-black uppercase tracking-[0.1em] text-[0.5rem] sm:text-[0.55rem] leading-none text-[#F5E6C8]"
+              style={{
+                textShadow:
+                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+              }}
+            >
+              {btn.label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default SailScenePage;

@@ -5,7 +5,9 @@ const pageSchema = new mongoose.Schema({
     bookId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Book',
-        required: true,
+        // Optional: bible-map tap-fill coloring pages can exist without a Book
+        // and attach to MapStory via coloringPageIds.
+        required: false,
         index: true, // Index for efficient queries by book
     },
     pageNumber: {
@@ -40,6 +42,22 @@ const pageSchema = new mongoose.Schema({
     coloringEndModalOnly: {
         type: Boolean,
         default: true // Default to end modal only
+    },
+
+    /**
+     * Tap-to-fill coloring (hybrid region map).
+     * When enabled + regionMapUrl present, kids tap regions instead of freehand.
+     * Region map PNG: regionId = R + (G<<8), A=255 fillable / A=0 ink.
+     */
+    tapFill: {
+        enabled: { type: Boolean, default: false },
+        regionMapUrl: { type: String },
+        regionPreviewUrl: { type: String },
+        regionCount: { type: Number, default: 0 },
+        width: { type: Number },
+        height: { type: Number },
+        palette: { type: [String], default: undefined },
+        minRegionArea: { type: Number },
     },
     
     // Web View page - embeds external URL or game as interactive content
@@ -79,6 +97,8 @@ const pageSchema = new mongoose.Schema({
             showBackground: { type: Boolean, default: false }, // Show semi-transparent background behind text
             backgroundColor: { type: String, default: 'rgba(255,255,255,0.85)' }, // Background color when showBackground is true
             shadowColor: { type: String, default: 'white' }, // Text shadow color: 'white', 'black', or custom
+            // Bible Map: whitespace-separated word indices the reader must tap before advancing
+            interactiveWordIndices: { type: [Number], default: [] },
         }],
     },
 
@@ -206,7 +226,31 @@ const pageSchema = new mongoose.Schema({
         fontFamily: { type: String, default: 'Patrick Hand' }, // Google Font - works on iOS
         fontSize: { type: Number, default: 24 },
         color: { type: String, default: '#4a3b2a' },
+        showBackground: { type: Boolean, default: false },
+        backgroundColor: { type: String, default: 'rgba(255,255,255,0.85)' },
+        shadowColor: { type: String, default: 'white' },
+        // Bible Map: whitespace-separated word indices the reader must tap before advancing
+        interactiveWordIndices: { type: [Number], default: [] },
     }],
+
+    /**
+     * Bible Map age-leveled text (shared page media; text differs per age).
+     * When present, readers prefer these over textBoxes for the active readingLevel.
+     */
+    readingLevels: {
+        ages_3_5: {
+            text: { type: String, default: '' },
+            interactiveWordIndices: { type: [Number], default: [] },
+        },
+        ages_6_7: {
+            text: { type: String, default: '' },
+            interactiveWordIndices: { type: [Number], default: [] },
+        },
+        ages_8_plus: {
+            text: { type: String, default: '' },
+            interactiveWordIndices: { type: [Number], default: [] },
+        },
+    },
 
     createdAt: {
         type: Date,
@@ -226,7 +270,10 @@ pageSchema.pre('save', function (next) {
     }
 });
 
-// Compound index to ensure unique page numbers per book
-pageSchema.index({ bookId: 1, pageNumber: 1 }, { unique: true });
+// Unique page numbers per book (standalone coloring pages omit bookId)
+pageSchema.index(
+    { bookId: 1, pageNumber: 1 },
+    { unique: true, partialFilterExpression: { bookId: { $type: 'objectId' } } },
+);
 
 module.exports = mongoose.model('Page', pageSchema);

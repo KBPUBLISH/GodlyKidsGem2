@@ -14,7 +14,7 @@ import { getApiBaseUrl, getMonthlyBookBaseUrl } from '../services/apiService';
 import { userPlaylistService, UserPlaylist } from '../services/userPlaylistService';
 import { authService } from '../services/authService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
-import { getCoverThumb } from '../utils/coverImage';
+import CoverImage from '../components/ui/CoverImage';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -366,11 +366,10 @@ const LibraryPage: React.FC = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 active:scale-95 transition-transform">
               <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-600 relative overflow-hidden">
                 {playlist.coverImage ? (
-                  <img
-                    src={getCoverThumb(playlist.coverImage)}
+                  <CoverImage
+                    src={playlist.coverImage}
                     alt={playlist.name}
                     className="w-full h-full object-cover"
-                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -404,11 +403,10 @@ const LibraryPage: React.FC = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all group">
               <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
                 {playlist.coverImage ? (
-                  <img
-                    src={getCoverThumb(playlist.coverImage)}
+                  <CoverImage
+                    src={playlist.coverImage}
                     alt={playlist.title}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

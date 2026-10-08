@@ -64,8 +64,13 @@ export const getApiBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   const baseUrl = envUrl || API_BASE_URL;
 
-  // Ensure URL ends with a slash
-  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  // Auth and most routes mount under /api (e.g. /api/authentication/sign-in).
+  // Accept host-only VITE_API_BASE_URL values like http://127.0.0.1:5001.
+  let base = (baseUrl || '').replace(/\/$/, '');
+  if (!base.endsWith('/api')) {
+    base = `${base}/api`;
+  }
+  return `${base}/`;
 };
 
 /** Base URL for monthly-book routes; always includes /api so path is .../api/monthly-book/... */

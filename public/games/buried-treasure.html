@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Buried Treasure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sky-1:#8fe3ff; --sky-2:#d7f5ff;
+  --sea-1:#12a3c9; --sea-2:#0b7fa6;
+  --sand-1:#f4dba4; --sand-2:#e6c584; --sand-3:#d4ae6a;
+  --damp-1:#dcb47f; --damp-2:#c69a62;
+  --palm-1:#2fa163; --palm-2:#1d7a48; --bark:#a5713e;
+  --gold:#ffc94a; --gold-d:#d99413;
+  --ink:#4a2c14;
+  --display:'Baloo 2','Trebuchet MS',system-ui,-apple-system,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;background:#0b7fa6}
+body{font-family:var(--display);color:var(--ink);touch-action:none;user-select:none;-webkit-user-select:none}
+
+#app{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* ---------- sky ---------- */
+#sky{position:relative;flex:0 0 26%;min-height:150px;background:linear-gradient(180deg,var(--sky-1),var(--sky-2))}
+#sun{position:absolute;top:27%;right:17%;width:70px;height:70px;border-radius:50%;
+  background:radial-gradient(circle at 40% 38%,#fff6cf,#ffd85e 58%,#ffc22e);
+  box-shadow:0 0 26px 16px rgba(255,240,170,.45),0 0 54px 34px rgba(255,240,170,.20)}
+.cloud{position:absolute;background:#fff;border-radius:50px;opacity:.92;filter:blur(.2px)}
+.cloud:before,.cloud:after{content:'';position:absolute;background:#fff;border-radius:50%}
+#c1{width:86px;height:24px;top:22%;left:-90px;animation:drift 46s linear infinite}
+#c1:before{width:38px;height:38px;top:-18px;left:14px}
+#c1:after{width:26px;height:26px;top:-12px;left:48px}
+#c2{width:64px;height:18px;top:52%;left:-70px;animation:drift 68s linear infinite 8s;opacity:.75}
+#c2:before{width:28px;height:28px;top:-14px;left:12px}
+@keyframes drift{to{transform:translateX(calc(100vw + 140px))}}
+#isle{position:absolute;bottom:0;left:12%;width:84px;opacity:.5}
+
+/* ---------- sea ---------- */
+#sea{position:relative;flex:0 0 78px;background:linear-gradient(180deg,#0a6f9c,#1aa8c8 55%,#63dbdb);}
+#sea .glint{position:absolute;inset:0;background:
+  repeating-linear-gradient(180deg,rgba(255,255,255,.16) 0 1.5px,transparent 1.5px 15px);
+  opacity:.45;animation:glide 6s ease-in-out infinite alternate}
+@keyframes glide{to{transform:translateX(11px)}}
+.wave{position:absolute;left:-50%;width:200%;height:26px;bottom:-2px}
+#w1{animation:sway 7s ease-in-out infinite alternate}
+#w2{animation:sway 5s ease-in-out infinite alternate-reverse;opacity:.8}
+@keyframes sway{to{transform:translateX(4%)}}
+
+/* ---------- beach ---------- */
+#beach{position:relative;flex:1 1 auto;
+  background:
+    radial-gradient(ellipse 60% 40% at 30% 20%,rgba(255,255,255,.10),transparent 60%),
+    radial-gradient(ellipse 50% 35% at 78% 62%,rgba(0,0,0,.06),transparent 60%),
+    linear-gradient(180deg,var(--damp-1),var(--damp-2));
+  overflow:visible}
+#beach:before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(90,58,26,.16) 1px,transparent 1px);
+  background-size:5px 5px;opacity:.34}
+
+#pit{position:absolute;pointer-events:none;opacity:0;transition:opacity .5s ease;
+  background:radial-gradient(ellipse at 50% 58%,rgba(70,40,14,.34),rgba(70,40,14,.14) 46%,transparent 70%);
+  filter:blur(4px)}
+#pit.show{opacity:1}
+
+#chest{position:absolute;pointer-events:none;z-index:2}
+#chest.found{z-index:7}
+#chest .lift,#chest .rock{position:absolute;inset:0}
+#chest .lift{transition:transform .6s cubic-bezier(.2,1.5,.45,1)}
+#chest.rise .lift{transform:translateY(-19%)}
+#chest.shake .rock{animation:rumble .62s ease-in-out}
+#chest svg{width:100%;height:100%;display:block;overflow:visible}
+#chest .lid{transform-box:fill-box;transform-origin:50% 97%;
+  transition:transform .62s cubic-bezier(.32,1.5,.6,1)}
+#chest.open .lid{transform:perspective(380px) translateY(-17%) rotateX(-76deg)}
+#chest .inside{opacity:0;transition:opacity .3s ease .12s}
+#chest.open .inside{opacity:1}
+#chest .beam{position:absolute;left:50%;top:30%;width:150%;height:150%;
+  transform:translate(-50%,-50%) scale(.2);opacity:0;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,248,205,.62),rgba(255,214,90,.26) 28%,rgba(255,200,60,0) 60%);
+  transition:opacity .4s ease,transform .6s ease}
+#chest.open .beam{opacity:1;transform:translate(-50%,-50%) scale(1)}
+@keyframes rumble{
+  0%,100%{transform:translate(0,0) rotate(0)}
+  12%{transform:translate(-3px,1px) rotate(-2.2deg)}
+  26%{transform:translate(3px,-1px) rotate(2.2deg)}
+  40%{transform:translate(-4px,0) rotate(-2.6deg)}
+  55%{transform:translate(4px,-2px) rotate(2.6deg)}
+  70%{transform:translate(-3px,0) rotate(-1.6deg)}
+  86%{transform:translate(2px,-1px) rotate(1deg)}
+}
+
+#sparkle{position:absolute;z-index:4;pointer-events:none;opacity:0;transition:opacity .6s ease;
+  font-size:26px;color:#fff6c4;text-shadow:0 0 14px rgba(255,220,120,.9)}
+#sparkle.show{opacity:.95;animation:twinkle 1.5s ease-in-out infinite}
+@keyframes twinkle{0%,100%{transform:scale(.75) rotate(0);opacity:.35}50%{transform:scale(1.15) rotate(25deg);opacity:1}}
+
+#shovel{position:absolute;z-index:9;pointer-events:none;
+  /* pivot on the blade tip: 43.5% / 90.5% of the 433x577 shovel.png */
+  transform-origin:43.5% 90.5%;filter:drop-shadow(2px 5px 4px rgba(90,55,20,.35));
+  transition:opacity .25s ease;animation:rest 3s ease-in-out infinite}
+#shovel.dig{animation:scoop .34s ease-in-out infinite}
+#shovel.hide{opacity:0}
+@keyframes rest{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-3deg) translateY(-6px)}}
+@keyframes scoop{0%,100%{transform:rotate(-13deg)}50%{transform:rotate(7deg) translateY(2px)}}
+
+#sand,#spoil,#fx{position:absolute;inset:0;width:100%;height:100%;display:block}
+#sand{z-index:5;transition:opacity .45s ease}
+#spoil{z-index:6;pointer-events:none}
+#fx{z-index:8;pointer-events:none}
+
+/* ---------- palms ---------- */
+.palm{position:absolute;top:-64px;pointer-events:none;z-index:7;transform-origin:50% 92%}
+#palmL{left:-16px;width:152px;animation:breeze 6.5s ease-in-out infinite}
+#palmR{right:-22px;width:118px;opacity:.96;animation:breeze 8s ease-in-out infinite reverse}
+@keyframes breeze{0%,100%{transform:rotate(-1.1deg)}50%{transform:rotate(1.4deg)}}
+
+/* ---------- hud ---------- */
+#hud{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;justify-content:flex-end;
+  align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 10px) 12px 0}
+.pill{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.82);
+  border:2px solid rgba(255,255,255,.95);border-radius:999px;padding:6px 13px;
+  box-shadow:0 3px 0 rgba(28,80,100,.18);font-weight:800;font-size:16px;letter-spacing:.2px}
+#mute{cursor:pointer;padding:7px 10px}
+#hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);
+  z-index:10;background:rgba(74,44,20,.72);color:#ffeec4;border-radius:999px;padding:8px 18px;
+  font-weight:700;font-size:15px;white-space:nowrap;transition:opacity .4s ease;
+  animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-5px)}}
+#hint.gone{opacity:0}
+
+/* ---------- win card ---------- */
+#win{position:absolute;inset:0;z-index:11;display:flex;align-items:flex-end;justify-content:center;
+  padding:0 14px calc(env(safe-area-inset-bottom) + 16px);pointer-events:none;opacity:0;transition:opacity .35s ease}
+#win.show{opacity:1;pointer-events:auto}
+#card{width:100%;max-width:420px;background:linear-gradient(180deg,#fff9ec,#ffeec7);border:4px solid #fff;
+  border-radius:26px;padding:18px 22px 20px;text-align:center;
+  box-shadow:0 14px 0 rgba(120,70,20,.28),0 22px 44px rgba(0,0,0,.25);
+  transform:translateY(28px) scale(.96);transition:transform .45s cubic-bezier(.3,1.6,.6,1)}
+#win.show #card{transform:translateY(0) scale(1)}
+#win.show ~ #hint{opacity:0}
+#card h1{font-size:30px;line-height:1.1;color:#c07a10;letter-spacing:.5px}
+#card p{margin-top:6px;font-size:16px;font-weight:600;opacity:.75}
+#card .cue{margin-top:10px;font-size:14px;font-weight:700;letter-spacing:.3px;
+  color:#a8792c;opacity:.9;animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+
+/* Go to Game Shelf — shown only when the app sent reward cards */
+#shelfBtn{display:none;margin:14px auto 2px;padding:12px 28px;border:0;border-radius:999px;
+  font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.4px;color:#5a3708;
+  background:linear-gradient(180deg,#ffe08a,var(--gold) 55%,var(--gold-d));
+  box-shadow:0 5px 0 #a86e0d,0 8px 16px rgba(120,70,20,.35),inset 0 2px 0 rgba(255,250,220,.8);
+  cursor:pointer;touch-action:manipulation}
+#shelfBtn.show{display:inline-block}
+#shelfBtn:active{transform:translateY(3px);
+  box-shadow:0 2px 0 #a86e0d,0 4px 10px rgba(120,70,20,.3),inset 0 2px 0 rgba(255,250,220,.8)}
+#shelfBtn:focus-visible{outline:3px solid #0b3d4d;outline-offset:3px}
+
+/* ---------- reward cards (sent by the app when a story pack reward opens) ---------- */
+#rw{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:12px}
+#rw:empty{display:none}
+.rcard{position:relative;overflow:hidden;width:106px;background:linear-gradient(180deg,#fff,#ffe9b8);
+  border:3px solid #ffd45e;border-radius:16px;padding:10px 8px 8px;
+  box-shadow:0 4px 0 rgba(192,122,16,.35);transform:scale(0);
+  animation:rpop .55s cubic-bezier(.3,1.6,.55,1) forwards}
+.rimg{width:64px;height:64px;margin:0 auto;border-radius:12px;overflow:hidden;background:#fff6dd;
+  display:flex;align-items:center;justify-content:center;font-size:36px;line-height:1}
+.rimg img{width:100%;height:100%;object-fit:cover;display:block}
+.rname{margin-top:6px;font-size:13px;font-weight:800;color:#8a5a12;line-height:1.15;word-break:break-word}
+.rcard:after{content:'';position:absolute;top:-60%;left:-80%;width:50%;height:220%;transform:rotate(25deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);
+  animation:rshine 1.5s ease-out .55s 2}
+@keyframes rpop{0%{transform:scale(0) rotate(-8deg)}70%{transform:scale(1.12) rotate(3deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes rshine{0%{left:-80%}100%{left:130%}}
+#mute:focus-visible{outline:3px solid #0b3d4d;outline-offset:3px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important}
+  #chest .lid,#chest .beam,#chest .inside,#chest .lift{transition-duration:.25s}
+}
+@media (max-height:700px){
+  #sky{flex-basis:19%;min-height:104px}#sun{width:56px;height:56px;top:22%}
+  #card{padding:14px 20px 16px}#card h1{font-size:26px}#card p{font-size:15px}
+  #card .cue{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="sky">
+    <div id="sun"></div>
+    <div class="cloud" id="c1"></div>
+    <div class="cloud" id="c2"></div>
+    <svg id="isle" viewBox="0 0 120 44" fill="none"><path d="M4 44 C14 26 44 20 60 20 C78 20 106 27 116 44Z" fill="#7ec9a4" opacity=".75"/><path d="M62 22 V6" stroke="#4f9c78" stroke-width="3" stroke-linecap="round" opacity=".8"/><path d="M62 7 C54 1 46 4 44 9 C50 6 57 6 62 10Z M62 7 C70 1 78 4 80 9 C74 6 67 6 62 10Z" fill="#4f9c78" opacity=".8"/></svg>
+  </div>
+
+  <div id="sea">
+    <div class="glint"></div>
+    <svg class="wave" id="w1" viewBox="0 0 400 26" preserveAspectRatio="none">
+      <path d="M0 16 Q25 6 50 16 T100 16 T150 16 T200 16 T250 16 T300 16 T350 16 T400 16 V26 H0 Z" fill="#f4dba4"/>
+    </svg>
+    <svg class="wave" id="w2" viewBox="0 0 400 26" preserveAspectRatio="none">
+      <path d="M0 12 Q25 3 50 12 T100 12 T150 12 T200 12 T250 12 T300 12 T350 12 T400 12" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+    </svg>
+  </div>
+
+  <div id="beach">
+    <div id="pit"></div>
+    <div id="chest">
+      <div class="lift"><div class="rock">
+        <div class="beam"></div>
+        <svg viewBox="0 0 200 170" aria-label="treasure chest">
+          <defs>
+            <linearGradient id="wLid" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e0813c"/><stop offset=".55" stop-color="#c1611f"/><stop offset="1" stop-color="#9c4715"/>
+            </linearGradient>
+            <linearGradient id="wBody" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#c9682a"/><stop offset=".7" stop-color="#a34d18"/><stop offset="1" stop-color="#833b11"/>
+            </linearGradient>
+            <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ffe8a8"/><stop offset=".38" stop-color="#f5c94f"/><stop offset="1" stop-color="#c88a17"/>
+            </linearGradient>
+            <linearGradient id="goldH" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#d59a24"/><stop offset=".3" stop-color="#ffe9ad"/><stop offset="1" stop-color="#d08f1c"/>
+            </linearGradient>
+            <radialGradient id="hoard" cx=".5" cy=".82" r=".95">
+              <stop offset="0" stop-color="#fffbe6"/><stop offset=".45" stop-color="#ffdc63"/><stop offset="1" stop-color="#f0b323"/>
+            </radialGradient>
+          </defs>
+
+          <clipPath id="lidClip"><path d="M20 84 C20 12 180 12 180 84 Z"/></clipPath>
+
+          <!-- lid: drawn first so it swings behind the body when open -->
+          <g class="lid">
+            <g clip-path="url(#lidClip)">
+              <path d="M20 84 C20 12 180 12 180 84 Z" fill="url(#wLid)"/>
+              <path d="M20 44 C60 30 140 30 180 44" fill="none" stroke="#8d3f11" stroke-width="2.2" opacity=".38"/>
+              <path d="M20 62 C60 52 140 52 180 62" fill="none" stroke="#8d3f11" stroke-width="2.2" opacity=".34"/>
+              <path d="M52 24 C80 16 120 16 148 24" fill="none" stroke="#ffc184" stroke-width="7" opacity=".28" stroke-linecap="round"/>
+              <rect x="35" y="10" width="14" height="76" fill="url(#goldH)"/>
+              <rect x="151" y="10" width="14" height="76" fill="url(#goldH)"/>
+            </g>
+            <path d="M20 84 C20 12 180 12 180 84" fill="none" stroke="#8a3d11" stroke-width="2" opacity=".3"/>
+            <circle cx="42" cy="50" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <circle cx="158" cy="50" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <rect x="16" y="72" width="168" height="15" rx="7" fill="url(#goldH)"/>
+            <rect x="89" y="62" width="22" height="28" rx="5" fill="url(#gold)" stroke="#b97f12" stroke-width="1.4"/>
+          </g>
+
+          <!-- what is inside, revealed as the lid lifts -->
+          <g class="inside">
+            <path d="M24 90 L176 90 L176 60 C138 48 62 48 24 60 Z" fill="#3d1d09"/>
+            <ellipse cx="100" cy="90" rx="70" ry="32" fill="url(#hoard)"/>
+            <circle cx="62" cy="72" r="7" fill="#ffe9a6"/><circle cx="86" cy="64" r="8.5" fill="#fff3c8"/>
+            <circle cx="112" cy="66" r="7" fill="#ffe08a"/><circle cx="136" cy="73" r="6" fill="#fff0bd"/>
+            <circle cx="100" cy="55" r="5.5" fill="#fff6d6"/>
+            <circle cx="74" cy="60" r="4" fill="#8ce0ff"/><circle cx="126" cy="58" r="4" fill="#ff9ec4"/>
+          </g>
+
+          <!-- body -->
+          <g class="body">
+            <rect x="18" y="84" width="164" height="72" rx="8" fill="url(#wBody)"/>
+            <path d="M22 104 H178 M22 122 H178 M22 140 H178" stroke="#7d3810" stroke-width="2.2" opacity=".36"/>
+            <rect x="18" y="143" width="164" height="13" rx="6" fill="url(#goldH)"/>
+            <rect x="35" y="86" width="14" height="62" fill="url(#goldH)"/>
+            <rect x="151" y="86" width="14" height="62" fill="url(#goldH)"/>
+            <circle cx="42" cy="100" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <circle cx="42" cy="134" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <circle cx="158" cy="100" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <circle cx="158" cy="134" r="2.6" fill="#fff1c0" opacity=".85"/>
+            <rect x="86" y="90" width="28" height="34" rx="6" fill="url(#gold)" stroke="#b97f12" stroke-width="1.6"/>
+            <circle cx="100" cy="103" r="4.6" fill="#4a2a08"/>
+            <path d="M97.6 105 L102.4 105 L104 116 L96 116 Z" fill="#4a2a08"/>
+          </g>
+        </svg>
+      </div></div>
+    </div>
+    <div id="sparkle">✦</div>
+    <canvas id="sand"></canvas>
+    <canvas id="spoil"></canvas>
+    <canvas id="fx"></canvas>
+    <img id="shovel" alt="" src="assets/shovel.png">
+
+    <svg class="palm" id="palmL" viewBox="0 0 170 240" fill="none">
+      <ellipse cx="86" cy="236" rx="40" ry="9" fill="#7a4f22" opacity=".18"/>
+      <path d="M84 240 C80 190 74 150 58 118 C50 102 44 92 38 84" stroke="var(--bark)" stroke-width="13" stroke-linecap="round"/>
+      <path d="M84 240 C80 190 74 150 58 118 C50 102 44 92 38 84" stroke="#c68f56" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+      <g fill="var(--palm-1)">
+        <path d="M38 84 C8 66 -4 84 2 100 C16 84 28 82 38 88Z"/>
+        <path d="M38 84 C22 44 40 28 58 32 C42 46 40 66 44 84Z"/>
+        <path d="M38 84 C64 44 92 52 96 72 C74 62 56 70 44 86Z"/>
+        <path d="M38 86 C76 82 100 100 96 118 C78 100 58 94 40 94Z"/>
+      </g>
+      <g fill="var(--palm-2)" opacity=".55">
+        <path d="M38 84 C22 44 40 28 58 32 C46 48 42 64 40 82Z"/>
+        <path d="M38 86 C76 82 100 100 96 118 C82 106 62 98 40 94Z"/>
+      </g>
+      <circle cx="47" cy="96" r="7" fill="#8a5a2c"/><circle cx="34" cy="99" r="6" fill="#7d5127"/>
+    </svg>
+
+    <svg class="palm" id="palmR" viewBox="0 0 140 210" fill="none">
+      <ellipse cx="56" cy="206" rx="32" ry="8" fill="#7a4f22" opacity=".18"/>
+      <path d="M56 210 C62 166 70 128 88 100 C96 88 102 80 108 74" stroke="var(--bark)" stroke-width="11" stroke-linecap="round"/>
+      <g fill="var(--palm-1)">
+        <path d="M108 74 C136 58 146 76 140 92 C128 76 118 74 108 78Z"/>
+        <path d="M108 74 C122 38 106 24 90 28 C104 42 106 58 104 74Z"/>
+        <path d="M108 74 C84 38 58 46 54 64 C74 54 92 62 102 76Z"/>
+        <path d="M108 76 C74 74 52 90 56 106 C72 90 90 84 106 84Z"/>
+      </g>
+      <g fill="var(--palm-2)" opacity=".5">
+        <path d="M108 74 C122 38 106 24 90 28 C102 44 106 58 106 74Z"/>
+      </g>
+      <circle cx="99" cy="86" r="6" fill="#8a5a2c"/>
+    </svg>
+  </div>
+
+  <div id="hud">
+    <div class="pill" id="mute" role="button" tabindex="0" aria-label="Turn sound off">
+      <svg id="spk" width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#4a2c14" stroke-width="1.9" stroke-linecap="round">
+        <path d="M4 7.5h3L11 4v12L7 12.5H4z" fill="#4a2c14"/>
+        <path class="sw" d="M13.5 7.2a4 4 0 0 1 0 5.6M15.8 5a7 7 0 0 1 0 10"/>
+        <path class="sx" d="M13.6 7.6l4.4 4.8M18 7.6l-4.4 4.8" style="display:none"/>
+      </svg>
+    </div>
+  </div>
+
+  <div id="hint">Drag your finger to dig</div>
+
+  <div id="win">
+    <div id="card">
+      <h1 id="wtitle">Treasure!</h1>
+      <p id="wsub">You uncovered chest 1</p>
+      <div id="rw"></div>
+      <button id="shelfBtn" type="button">Go to Game Shelf</button>
+      <p class="cue">Tap anywhere to bury another</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const beach=document.getElementById('beach'), sand=document.getElementById('sand'),
+        spoil=document.getElementById('spoil'),
+        fx=document.getElementById('fx'), chest=document.getElementById('chest'),
+        pit=document.getElementById('pit'), win=document.getElementById('win'),
+        hint=document.getElementById('hint'),
+        sparkle=document.getElementById('sparkle'), wsub=document.getElementById('wsub'),
+        shovel=document.getElementById('shovel');
+  const sc=sand.getContext('2d',{willReadFrequently:true}), fc=fx.getContext('2d'),
+        pc=spoil.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let W=0,H=0,DPR=1,found=0,busy=false,digging=false,dug=false,
+      pos={x:0,y:0,w:0,h:0}, ratio={x:.5,y:.5}, last=null, hintTimer=null, checkAt=0;
+
+  /* ---------- app reward bridge ----------
+     When embedded in the app, the parent replies to `gk-chest-opened` with
+     `gk-treasure-rewards` {rewards:[{name,imageUrl}]}. Standalone, no reply
+     ever arrives and the generic treasure card is shown instead. */
+  let rewards=null;
+  addEventListener('message',e=>{
+    const d=e.data;
+    if(d&&d.type==='gk-treasure-rewards'&&Array.isArray(d.rewards)) rewards=d.rewards;
+  });
+  function tellChestOpened(){
+    try{ if(parent&&parent!==window) parent.postMessage({type:'gk-chest-opened',chest:found},'*'); }catch(e){}
+  }
+  const shelfBtn=document.getElementById('shelfBtn');
+  shelfBtn.addEventListener('pointerdown',e=>e.stopPropagation()); // don't trigger "bury another"
+  shelfBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    try{ if(parent&&parent!==window) parent.postMessage({type:'gk-go-game-shelf'},'*'); }catch(err){}
+  });
+  function showRewards(){
+    const box=document.getElementById('rw');
+    box.innerHTML='';
+    if(!rewards||!rewards.length) return;
+    shelfBtn.classList.add('show');
+    document.getElementById('wtitle').textContent='Treasure found!';
+    wsub.textContent='Look what you got!';
+    rewards.forEach((r,i)=>{
+      const el=document.createElement('div'); el.className='rcard';
+      el.style.animationDelay=(.12+i*.14)+'s';
+      const img=document.createElement('div'); img.className='rimg';
+      if(r&&r.imageUrl){const im=document.createElement('img'); im.src=r.imageUrl; im.alt='';
+        im.onerror=()=>{im.remove(); img.textContent='🪙';}; img.appendChild(im);}
+      else img.textContent='🪙';
+      const nm=document.createElement('div'); nm.className='rname';
+      nm.textContent=(r&&r.name)||'Reward';
+      el.appendChild(img); el.appendChild(nm); box.appendChild(el);
+    });
+  }
+
+  /* ---------- layout ---------- */
+  function place(preserve){
+    let snap=null, psnap=null;
+    if(preserve&&dug&&sand.width){
+      snap=document.createElement('canvas'); snap.width=sand.width; snap.height=sand.height;
+      snap.getContext('2d').drawImage(sand,0,0);
+      psnap=document.createElement('canvas'); psnap.width=spoil.width; psnap.height=spoil.height;
+      psnap.getContext('2d').drawImage(spoil,0,0);
+    }
+    const r=beach.getBoundingClientRect();
+    W=Math.round(r.width); H=Math.round(r.height);
+    DPR=Math.min(devicePixelRatio||1,2);
+    [sand,spoil,fx].forEach(c=>{c.width=W*DPR;c.height=H*DPR;
+      c.getContext('2d').setTransform(DPR,0,0,DPR,0,0);});
+    const cw=Math.min(W*.30,128), ch=cw*(170/200);
+    pos={w:cw,h:ch,x:ratio.x*(W-cw),y:ratio.y*(H-ch)};
+    chest.style.cssText=`left:${pos.x}px;top:${pos.y}px;width:${cw}px;height:${ch}px`;
+    pit.style.cssText=`left:${pos.x-cw*.22}px;top:${pos.y+ch*.30}px;width:${cw*1.44}px;height:${ch*.92}px`
+      +(pit.classList.contains('show')?'':'');
+    sparkle.style.cssText=`left:${pos.x+cw*.5-13}px;top:${pos.y+ch*.2}px`;
+    // shovel.png is 433x577; the artwork fills ~55% of the frame width, so the
+    // element is sized a bit larger than the old sprite to look the same on screen
+    let sw=Math.max(64,Math.min(W*.26,110));
+    // never let the shovel be taller than roughly half the beach, or it can't fit on screen
+    sw=Math.max(40,Math.min(sw,(H*.5)*433/577));
+    shovel.style.width=sw+'px';
+    shovel.style.height=(sw*577/433)+'px';
+    holdShovel(shovel._x==null?W*.5:shovel._x, shovel._y==null?H*.62:shovel._y);
+    if(snap){ sc.clearRect(0,0,W,H); sc.drawImage(snap,0,0,W,H); }
+    else paintSand();
+    if(psnap){ pc.clearRect(0,0,W,H); pc.drawImage(psnap,0,0,W,H); }
+  }
+
+  function holdShovel(x,y){            // blade tip lands on the dig point
+    shovel._x=x; shovel._y=y;
+    const w=shovel.offsetWidth||80, h=shovel.offsetHeight||107;
+    // blade tip sits at 43.5% / 90.5% of shovel.png; the opaque artwork spans
+    // x 27.5%-83%, y 5%-90.5% (the rest is transparent padding). Clamp so the
+    // visible artwork stays inside the beach with an 8px margin (covers the
+    // idle bob/tilt animations) no matter where the finger digs.
+    const left=Math.max(8-w*.275,Math.min(W-8-w*.829,x-w*.435));
+    const top=Math.max(8-h*.049,Math.min(H-8-h*.905,y-h*.905));
+    shovel.style.left=left+'px';
+    shovel.style.top=top+'px';
+  }
+
+  /* ---------- sand ---------- */
+  function paintSand(){
+    sc.globalCompositeOperation='source-over';
+    sc.clearRect(0,0,W,H);
+    const g=sc.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#f6dfab'); g.addColorStop(.45,'#eccd8d'); g.addColorStop(1,'#dfbc78');
+    sc.fillStyle=g; sc.fillRect(0,0,W,H);
+    for(let i=0;i<14;i++){
+      const x=Math.random()*W,y=Math.random()*H,r=40+Math.random()*90;
+      const rg=sc.createRadialGradient(x,y,0,x,y,r);
+      rg.addColorStop(0,'rgba(255,246,214,.34)'); rg.addColorStop(1,'rgba(255,246,214,0)');
+      sc.fillStyle=rg; sc.beginPath(); sc.arc(x,y,r,0,7); sc.fill();
+    }
+    const n=Math.floor(W*H/210);
+    for(let i=0;i<n;i++){
+      const x=Math.random()*W,y=Math.random()*H,s=Math.random();
+      sc.fillStyle=s>.55?'rgba(255,255,255,.5)':'rgba(150,105,50,.24)';
+      sc.fillRect(x,y,1.2,1.2);
+    }
+    sc.fillStyle='rgba(160,112,55,.22)';
+    for(let i=0;i<70;i++){
+      const x=Math.random()*W,y=Math.random()*H;
+      sc.beginPath(); sc.ellipse(x,y,2+Math.random()*4,1+Math.random()*2,Math.random()*3,0,7); sc.fill();
+    }
+    sand.style.opacity='1'; dug=false;
+  }
+
+  function dig(x,y,r,bite){
+    sc.globalCompositeOperation='destination-out';
+    sc.globalAlpha=bite==null?.26:bite;
+    const g=sc.createRadialGradient(x,y,r*.28,x,y,r);
+    g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(.7,'rgba(0,0,0,.8)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    sc.fillStyle=g; sc.beginPath(); sc.arc(x,y,r,0,7); sc.fill();
+    sc.globalAlpha=1;
+    sc.globalCompositeOperation='source-over';
+  }
+
+  function stampMound(x,y,r){          // a load of sand lands beside the hole
+    const w=r*(1.1+Math.random()*.5), h=w*(.36+Math.random()*.12);
+    pc.fillStyle='rgba(150,104,50,.07)';
+    pc.beginPath(); pc.ellipse(x,y+h*.45,w*.92,h*.55,0,0,7); pc.fill();
+    const g=pc.createRadialGradient(x,y-h*.5,w*.08,x,y,w);
+    g.addColorStop(0,'rgba(252,238,205,.60)'); g.addColorStop(.45,'rgba(238,209,157,.42)');
+    g.addColorStop(1,'rgba(228,194,138,0)');
+    pc.fillStyle=g; pc.beginPath(); pc.ellipse(x,y,w,h,0,0,7); pc.fill();
+    pc.fillStyle='rgba(255,252,238,.30)';
+    for(let i=0;i<7;i++){
+      const a=Math.random()*6.28, d=Math.random()*w*.75;
+      pc.fillRect(x+Math.cos(a)*d,y+Math.sin(a)*d*.42,1.2,1.2);
+    }
+  }
+
+  function stroke(x,y){
+    const R=Math.max(18,Math.min(W,H)*.055);
+    if(last){
+      const dx=x-last.x, dy=y-last.y, d=Math.hypot(dx,dy), steps=Math.ceil(d/(R*.5));
+      for(let i=1;i<=steps;i++) dig(last.x+dx*i/steps, last.y+dy*i/steps, R);
+      travel+=d;
+    } else dig(x,y,R);
+    last={x,y};
+    holdShovel(x,y);
+    // the pit centre drifts toward wherever the digging is happening
+    holeC = holeC ? {x:holeC.x+(x-holeC.x)*.05, y:holeC.y+(y-holeC.y)*.05} : {x,y};
+    if(travel>R*1.15){ travel=0; toss(x,y,R); }
+    grains(x,y,2);
+    if(!dug){dug=true; hint.classList.add('gone'); sfx('dig');}
+    else if(Math.random()<.22) sfx('dig');
+    const now=performance.now();
+    if(now-checkAt>120){checkAt=now; if(cleared()>.6) reveal();}
+  }
+
+  function cleared(){
+    const x=Math.max(0,Math.round(pos.x*DPR)), y=Math.max(0,Math.round((pos.y+pos.h*.18)*DPR)),
+          w=Math.min(sand.width-x,Math.round(pos.w*DPR)), h=Math.min(sand.height-y,Math.round(pos.h*.72*DPR));
+    if(w<=0||h<=0) return 0;
+    const d=sc.getImageData(x,y,w,h).data;
+    let open=0,tot=0;
+    for(let i=3;i<d.length;i+=4*7){tot++; if(d[i]<90) open++;}
+    return tot?open/tot:0;
+  }
+
+  function clearSpoil(x,y,r){        // nothing left lying inside the finished pit
+    pc.globalCompositeOperation='destination-out';
+    const g=pc.createRadialGradient(x,y,r*.5,x,y,r*1.05);
+    g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    pc.fillStyle=g; pc.beginPath(); pc.arc(x,y,r*1.05,0,7); pc.fill();
+    pc.globalCompositeOperation='source-over';
+  }
+
+  function rim(x,y,r){
+    sc.globalCompositeOperation='source-atop';
+    const g=sc.createRadialGradient(x,y,r*.92,x,y,r*1.5);
+    g.addColorStop(0,'rgba(255,247,220,.62)');
+    g.addColorStop(.45,'rgba(236,205,141,.30)');
+    g.addColorStop(1,'rgba(236,205,141,0)');
+    sc.fillStyle=g; sc.beginPath(); sc.arc(x,y,r*1.5,0,7); sc.fill();
+    sc.globalCompositeOperation='source-over';
+  }
+
+  /* ---------- particles ---------- */
+  const P=[]; let raf=null, travel=0, holeC=null;
+
+  function toss(x,y,R){                // fling the shovel-load out past the rim
+    let ax=x-holeC.x, ay=y-holeC.y, m=Math.hypot(ax,ay);
+    if(m<6){ const a=Math.random()*6.28; ax=Math.cos(a); ay=Math.sin(a); m=1; }
+    ax/=m; ay/=m;
+    const d=R*2.1+Math.random()*R*1.1;
+    const tx=Math.max(14,Math.min(W-14,x+ax*d)), ty=Math.max(14,Math.min(H-14,y+ay*d));
+    P.push({clump:true,t:0,step:1/24,sx:x,sy:y-6,tx,ty,arc:26+Math.random()*16,
+            r:R*.34+Math.random()*3,life:1,g:0,c:'#eccd8d'});
+    for(let i=0;i<4;i++) P.push({x,y,vx:ax*1.6+(Math.random()-.5)*2.2,vy:-2-Math.random()*2.4,
+      r:1+Math.random()*2,life:1,c:Math.random()>.5?'#f7e0aa':'#d8b271',g:.16});
+    run(); sfx('dig');
+  }
+
+  function grains(x,y,n){
+    for(let i=0;i<n;i++) P.push({x,y,vx:(Math.random()-.5)*3.4,vy:-1.6-Math.random()*2.6,
+      r:1+Math.random()*2.2,life:1,c:Math.random()>.5?'#f7e0aa':'#d8b271',g:.16});
+    run();
+  }
+  function coins(){
+    const cx=pos.x+pos.w/2, cy=pos.y+pos.h*.24;
+    for(let i=0;i<34;i++) P.push({x:cx+(Math.random()-.5)*pos.w*.5,y:cy,
+      vx:(Math.random()-.5)*7,vy:-4-Math.random()*8,r:3.5+Math.random()*3.5,
+      life:1,c:Math.random()>.4?'#ffd45e':'#fff0b4',g:.30,coin:true,sp:Math.random()*6});
+    run();
+  }
+  function run(){ if(!raf) raf=requestAnimationFrame(tick); }
+  function tick(){
+    fc.clearRect(0,0,W,H);
+    for(let i=P.length-1;i>=0;i--){
+      const p=P[i];
+      if(p.clump){                       // a scoop of sand arcing out of the hole
+        p.t+=p.step;
+        if(p.t>=1){ stampMound(p.tx,p.ty,p.r*2.1); P.splice(i,1); continue; }
+        p.x=p.sx+(p.tx-p.sx)*p.t;
+        p.y=p.sy+(p.ty-p.sy)*p.t-Math.sin(p.t*Math.PI)*p.arc;
+        fc.globalAlpha=1; fc.fillStyle='#e9c98a';
+        fc.beginPath(); fc.ellipse(p.x,p.y,p.r,p.r*.8,p.t*2,0,7); fc.fill();
+        fc.fillStyle='#f8e6bb';
+        fc.beginPath(); fc.arc(p.x-p.r*.3,p.y-p.r*.35,p.r*.42,0,7); fc.fill();
+        continue;
+      }
+      p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.life-=p.coin?.012:.022;
+      if(p.life<=0||p.y>H+30){P.splice(i,1);continue;}
+      fc.globalAlpha=Math.max(0,Math.min(1,p.life));
+      fc.fillStyle=p.c;
+      if(p.coin){
+        p.sp+=.22;
+        fc.beginPath(); fc.ellipse(p.x,p.y,p.r*Math.abs(Math.cos(p.sp))+.9,p.r,0,0,7); fc.fill();
+        fc.globalAlpha*=.5; fc.fillStyle='#fff8d6';
+        fc.beginPath(); fc.ellipse(p.x,p.y-p.r*.25,p.r*.3,p.r*.4,0,0,7); fc.fill();
+      } else { fc.beginPath(); fc.arc(p.x,p.y,p.r,0,7); fc.fill(); }
+    }
+    fc.globalAlpha=1;
+    raf=P.length?requestAnimationFrame(tick):null;
+  }
+
+  /* ---------- audio ---------- */
+  let AC=null, muted=false;
+  function ac(){ if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}} 
+    if(AC&&AC.state==='suspended')AC.resume(); return AC; }
+  function sfx(kind){
+    if(muted) return; const a=ac(); if(!a) return; const t=a.currentTime;
+    if(kind==='dig'){
+      const n=a.createBuffer(1,1600,a.sampleRate), d=n.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+      const s=a.createBufferSource(); s.buffer=n;
+      const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=760+Math.random()*500; f.Q.value=.8;
+      const g=a.createGain(); g.gain.setValueAtTime(.14,t); g.gain.exponentialRampToValueAtTime(.001,t+.16);
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t); s.stop(t+.2);
+    }
+    if(kind==='rumble'){
+      const o=a.createOscillator(), g=a.createGain();
+      o.type='sawtooth'; o.frequency.setValueAtTime(55,t); o.frequency.linearRampToValueAtTime(80,t+.55);
+      g.gain.setValueAtTime(.001,t); g.gain.linearRampToValueAtTime(.10,t+.1);
+      g.gain.exponentialRampToValueAtTime(.001,t+.62);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+.65);
+    }
+    if(kind==='win'){
+      [0,.09,.18,.28,.40].forEach((dt,i)=>{
+        const o=a.createOscillator(), g=a.createGain();
+        o.type='triangle'; o.frequency.value=[523,659,784,1047,1319][i];
+        g.gain.setValueAtTime(.001,t+dt); g.gain.linearRampToValueAtTime(.16,t+dt+.02);
+        g.gain.exponentialRampToValueAtTime(.001,t+dt+.42);
+        o.connect(g); g.connect(a.destination); o.start(t+dt); o.stop(t+dt+.45);
+      });
+    }
+  }
+  const muteBtn=document.getElementById('mute');
+  function toggleMute(){
+    muted=!muted;
+    muteBtn.querySelector('.sw').style.display=muted?'none':'';
+    muteBtn.querySelector('.sx').style.display=muted?'':'none';
+    muteBtn.setAttribute('aria-label',muted?'Turn sound on':'Turn sound off');
+  }
+  muteBtn.addEventListener('click',toggleMute);
+  muteBtn.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMute();}});
+
+  /* ---------- reveal ---------- */
+  function reveal(){
+    if(busy) return; busy=true; digging=false;
+    clearTimeout(hintTimer); sparkle.classList.remove('show');
+    shovel.classList.remove('dig'); shovel.classList.add('hide');
+    const cx=pos.x+pos.w/2, cy=pos.y+pos.h*.55, max=Math.max(pos.w,pos.h)*.66;
+    let r=10;
+    (function sweep(){
+      r+=max/9; dig(cx,cy,r,1);
+      grains(cx+(Math.random()-.5)*pos.w, cy-pos.h*.3, 4);
+      if(r<max) requestAnimationFrame(sweep); else {rim(cx,cy,max); clearSpoil(cx,cy,max); after();}
+    })();
+    function after(){
+      pit.classList.add('show');
+      chest.classList.add('found');
+      requestAnimationFrame(()=>chest.classList.add('rise'));
+      setTimeout(()=>{
+        sfx('rumble');
+        chest.classList.add('shake');
+      }, reduce?60:420);
+      setTimeout(()=>{
+        chest.classList.remove('shake');
+        chest.classList.add('open');
+        coins(); sfx('win');
+        found++;
+        wsub.textContent='You uncovered chest '+found;
+        tellChestOpened();
+        setTimeout(()=>{
+          showRewards();
+          win.classList.add('show');
+          goNext=setTimeout(nextRound,rewards&&rewards.length?9000:5000);
+        },620);
+      }, reduce?200:1060);
+    }
+  }
+
+  function reset(){
+    clearTimeout(goNext);
+    win.classList.remove('show');
+    chest.classList.remove('open','rise','found','shake');
+    pit.classList.remove('show');
+    P.length=0; fc.clearRect(0,0,W,H); pc.clearRect(0,0,W,H);
+    travel=0; holeC=null;
+    ratio=spawn();
+    last=null; busy=false;
+    shovel._x=null; shovel._y=null;
+    shovel.classList.remove('hide');
+    place();
+    hint.classList.remove('gone');
+    hint.textContent='Dig somewhere new';
+    clearTimeout(hintTimer);
+    hintTimer=setTimeout(()=>{if(!busy)sparkle.classList.add('show')},16000);
+  }
+  let goNext=null;
+  function nextRound(){ if(!win.classList.contains('show')) return; clearTimeout(goNext); ac(); reset(); }
+  win.addEventListener('pointerdown',nextRound);
+  addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')nextRound();});
+
+  function spawn(){
+    let best=null, bestScore=-1;
+    for(let i=0;i<40;i++){
+      const y=.10+Math.random()*.44;
+      let x=.06+Math.random()*.88;
+      if(y<.28) x=.26+Math.random()*.48;        // palms own the shoreline corners
+      // push away from the middle of the beach, and away from the last chest
+      const mid=Math.hypot((x-.5)*1.15,(y-.32)*.85);
+      const prev=ratio?Math.hypot(x-ratio.x,(y-ratio.y)*.8):1;
+      if(mid<.24||prev<.34) continue;
+      const score=mid+prev*.5;
+      if(score>bestScore){bestScore=score;best={x,y};}
+    }
+    return best||{x:Math.random()<.5?.10:.86, y:.12+Math.random()*.40};
+  }
+
+  /* ---------- input ---------- */
+  function local(e){const r=beach.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+  sand.addEventListener('pointerdown',e=>{
+    if(busy) return; ac(); digging=true; last=null; shovel.classList.add('dig');
+    sand.setPointerCapture&&sand.setPointerCapture(e.pointerId);
+    const p=local(e); stroke(p.x,p.y); e.preventDefault();
+  });
+  sand.addEventListener('pointermove',e=>{
+    if(!digging||busy) return;
+    const p=local(e); stroke(p.x,p.y); e.preventDefault();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(k=>
+    sand.addEventListener(k,()=>{digging=false;last=null;shovel.classList.remove('dig');}));
+  document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('gesturestart',e=>e.preventDefault());
+
+  let rt=null, lastW=0, lastH=0;
+  addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{
+    const r=beach.getBoundingClientRect();
+    if(Math.abs(r.width-lastW)<2 && Math.abs(r.height-lastH)<80) return;
+    lastW=r.width; lastH=r.height;
+    place(true);
+    if(busy){                       // chest already open: re-open the pit at the new size
+      const cx=pos.x+pos.w/2, cy=pos.y+pos.h*.55, max=Math.max(pos.w,pos.h)*.66;
+      dig(cx,cy,max,1); rim(cx,cy,max); clearSpoil(cx,cy,max);
+    }
+  },200)});
+
+  ratio=null; ratio=spawn();
+  place();
+  hintTimer=setTimeout(()=>{if(!busy)sparkle.classList.add('show')},16000);
+})();
+</script>
+</body>
+</html>

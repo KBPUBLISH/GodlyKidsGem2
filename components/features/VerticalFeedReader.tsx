@@ -1,11 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronUp, Pause, Play, Speaker, Volume2, VolumeX, X } from 'lucide-react';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { authService } from '../../services/authService';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { analyticsService } from '../../services/analyticsService';
 import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
+import {
+    buildIslandSceneNavState,
+    buildIslandScenePath,
+    resolveIslandSceneReturn,
+    type IslandSceneReaderState,
+} from '../../utils/islandSceneReturn';
 
 interface TextBox {
     text?: string;
@@ -58,7 +64,8 @@ interface Props {
     shareToken?: string | null;
 }
 
-const FALLBACK_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+// Match portal BookReader default (Aria)
+const FALLBACK_VOICE_ID = '9BWtsMINqrJLrRacOk9x';
 
 /** Match BookReader / apiService: relative /uploads paths need API origin on mobile WebView. */
 const resolveMediaUrl = (url: string | undefined | null): string => {
@@ -512,6 +519,12 @@ const FeedMediaLayer: React.FC<{
 
 const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shareToken }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const islandSceneReturn = resolveIslandSceneReturn(
+        location.state as IslandSceneReaderState | null,
+        searchParams,
+    );
     const containerRef = useRef<HTMLDivElement>(null);
     const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -799,6 +812,13 @@ const VerticalFeedReader: React.FC<Props> = ({ bookId, book: preLoadedBook, shar
 
     const handleClose = () => {
         stopTts();
+        if (islandSceneReturn) {
+            const path = buildIslandScenePath(islandSceneReturn);
+            if (path) {
+                navigate(path, { state: buildIslandSceneNavState(islandSceneReturn) });
+                return;
+            }
+        }
         const dest = bookId ? `/book/${bookId}${shareToken ? `?share=${encodeURIComponent(shareToken)}` : ''}` : '/';
         navigate(dest);
     };

@@ -78,7 +78,7 @@ const BookEdit: React.FC = () => {
     const [goalTags, setGoalTags] = useState<string[]>([]);
     
     // Book type and featured character (Kids Monthly Book)
-    const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly' | 'bible_map'>('standard');
     const [featuredCharacterId, setFeaturedCharacterId] = useState<string>('');
     const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
     const [characters, setCharacters] = useState<Array<{ _id: string; internalTag: string; displayName: string }>>([]);
@@ -745,12 +745,18 @@ const BookEdit: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Book type</label>
                         <select
                             value={bookType}
-                            onChange={e => setBookType(e.target.value as 'standard' | 'kids_monthly')}
+                            onChange={e => setBookType(e.target.value as 'standard' | 'kids_monthly' | 'bible_map')}
                             className="w-full max-w-xs rounded-md border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent px-4 py-3 transition cursor-pointer min-h-[44px]"
                         >
                             <option value="standard">Standard Book</option>
                             <option value="kids_monthly">Kids Monthly Book</option>
+                            <option value="bible_map">Bible Map Book</option>
                         </select>
+                        {bookType === 'bible_map' && (
+                            <p className="text-xs text-emerald-700 mt-2">
+                                Mark tappable words in the page editor. Preview requires tapping them before the next page.
+                            </p>
+                        )}
                         {bookType === 'kids_monthly' && (
                             <div className="mt-3">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Featured character (optional)</label>

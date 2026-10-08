@@ -59,16 +59,20 @@ interface AudioContextType {
     playTab: () => void;
     setGameMode: (active: boolean, type?: 'default' | 'workout') => void;
     setMusicPaused: (paused: boolean) => void;
+    /** Pages that want the app-background loop call this on mount; cleanup on unmount. */
+    acquireAppAmbient: () => () => void;
 
     // Playlist Player
     currentPlaylist: Playlist | null;
     currentTrackIndex: number;
     isPlaying: boolean;
+    isShuffle: boolean;
     progress: number;
     currentTime: number;
     duration: number;
-    playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean) => void;
+    playPlaylist: (playlist: Playlist, startIndex?: number, isSubscribed?: boolean, resumeFromSeconds?: number) => void;
     togglePlayPause: () => void;
+    toggleShuffle: () => void;
     nextTrack: () => void;
     prevTrack: () => void;
     seek: (time: number) => void;
@@ -94,15 +98,18 @@ const AudioContext = createContext<AudioContextType>({
     playTab: () => { },
     setGameMode: () => { },
     setMusicPaused: () => { },
+    acquireAppAmbient: () => () => { },
 
     currentPlaylist: null,
     currentTrackIndex: 0,
     isPlaying: false,
+    isShuffle: false,
     progress: 0,
     currentTime: 0,
     duration: 0,
     playPlaylist: () => { },
     togglePlayPause: () => { },
+    toggleShuffle: () => { },
     nextTrack: () => { },
     prevTrack: () => { },
     seek: () => { },
@@ -113,6 +120,23 @@ const AudioContext = createContext<AudioContextType>({
     previewTimeRemaining: AUDIO_PREVIEW_SECONDS,
     dismissPreviewLimit: () => { },
 });
+
+/** Fisher-Yates shuffle; keeps `startIndex` first so current track continues. */
+function buildShuffleOrder(length: number, startIndex: number): number[] {
+    const order = Array.from({ length }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = order[i];
+        order[i] = order[j];
+        order[j] = tmp;
+    }
+    const startPos = order.indexOf(startIndex);
+    if (startPos > 0) {
+        order.splice(startPos, 1);
+        order.unshift(startIndex);
+    }
+    return order;
+}
 
 export const useAudio = () => useContext(AudioContext);
 
@@ -143,11 +167,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [contentMusicPaused, setContentMusicPaused] = useState(false);
     /** Reserved for mini-games that need to own the mix (strength, etc.) */
     const [gameModeActive, setGameModeActive] = useState(false);
+    /** Count of pages currently requesting the app-background ambient loop (e.g. Explore). */
+    const [ambientHolders, setAmbientHolders] = useState(0);
 
     // --- Playlist Player State ---
     const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
     const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isShuffle, setIsShuffle] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -158,6 +185,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isPreviewMode, setIsPreviewMode] = useState(false); // True if playing premium content without subscription
     const previewTimeAccumulator = useRef(0);
     const isPreviewModeRef = useRef(false); // Ref for use in event listeners
+    const isShuffleRef = useRef(false);
+    /** Shuffled permutation of playlist item indices; position tracked separately. */
+    const shuffleOrderRef = useRef<number[]>([]);
+    const shufflePosRef = useRef(0);
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -225,10 +256,45 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
 
+    useEffect(() => {
+        isShuffleRef.current = isShuffle;
+    }, [isShuffle]);
+
+    // --- Playback position persistence (for "Continue Listening" resume) ---
+    // The track currently loaded in the audio element. Updated only by the
+    // load-track effect, so saved positions are always attributed to the track
+    // the element is actually playing (never to an in-flight track change).
+    const activeTrackRef = useRef<{ playlistId: string; itemId?: string } | null>(null);
+    // Throttle marker for timeupdate saves (seconds of currentTime)
+    const lastPositionSaveRef = useRef(0);
+    // Seek to apply once the next loaded track has metadata (set by playPlaylist)
+    const pendingSeekRef = useRef<number | null>(null);
+
+    // Save (or clear) the active track's position in play history. Positions in
+    // the last 15s of a track are treated as finished and cleared, so completed
+    // episodes restart from the beginning next time.
+    const persistPlaybackPosition = useCallback(() => {
+        const audio = audioRef.current;
+        const active = activeTrackRef.current;
+        if (!audio || !active) return;
+        const pos = audio.currentTime;
+        const dur = audio.duration;
+        if (isNaN(pos) || pos <= 0) return;
+        if (!isNaN(dur) && dur > 0 && pos >= dur - 15) {
+            playHistoryService.clearPosition(active.playlistId);
+            return;
+        }
+        playHistoryService.savePosition(active.playlistId, active.itemId, pos, !isNaN(dur) ? dur : 0);
+    }, []);
+
     // Create audio element once on mount
     useEffect(() => {
         const audio = document.createElement('audio');
         audio.preload = 'auto';
+        audio.setAttribute('data-gk-role', 'playlist');
+        // Attached (invisible) so other features (e.g. dance-music ducking)
+        // can discover playing audio via the DOM
+        document.body.appendChild(audio);
         audioRef.current = audio;
 
         // Basic event listeners
@@ -269,6 +335,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
             lastListeningTimeRef.current = now;
             
+            // Persist playback position for resume, throttled to every ~5s
+            // (abs() so seeking backwards also refreshes the save)
+            if (Math.abs(audio.currentTime - lastPositionSaveRef.current) >= 5) {
+                lastPositionSaveRef.current = audio.currentTime;
+                persistPlaybackPosition();
+            }
+
             // Update engagement for trending algorithm (every 30 seconds)
             if (!isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
                 const shouldUpdate = audio.currentTime - lastEngagementUpdateRef.current >= ENGAGEMENT_UPDATE_INTERVAL;
@@ -300,6 +373,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
 
         audio.addEventListener('ended', () => {
+            // Track completed — drop the saved position so it restarts from 0
+            if (activeTrackRef.current) {
+                playHistoryService.clearPosition(activeTrackRef.current.playlistId);
+            }
+            lastPositionSaveRef.current = 0;
+
             // Send final engagement update for completed track (100%)
             setCurrentPlaylist(playlist => {
                 if (playlist) {
@@ -315,31 +394,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                 );
                             }).catch(() => {});
                         }
-                        
-                        const nextIndex = prev + 1;
-                        if (nextIndex < playlist.items.length) {
-                            // There's a next track - keep playing
+
+                        let nextIndex: number | null = null;
+                        if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                            const nextPos = shufflePosRef.current + 1;
+                            if (nextPos < shuffleOrderRef.current.length) {
+                                shufflePosRef.current = nextPos;
+                                nextIndex = shuffleOrderRef.current[nextPos];
+                            }
+                        } else {
+                            const sequential = prev + 1;
+                            if (sequential < playlist.items.length) {
+                                nextIndex = sequential;
+                            }
+                        }
+
+                        if (nextIndex != null) {
                             console.log('🎵 Track ended, auto-playing next track:', nextIndex + 1, '/', playlist.items.length);
-                            setIsPlaying(true); // Keep playing state true for next track
-                            
-                            // Reset engagement tracking for new track
+                            setIsPlaying(true);
                             lastEngagementUpdateRef.current = 0;
-                            
-                            // Record play event for the next track (real-time trending)
+
                             const track = playlist.items[nextIndex];
                             const trackId = (track as any)?._id;
                             const trackDuration = track?.duration || 0;
                             import('../services/playEventService').then(({ playEventService }) => {
-                                playEventService.recordEpisodePlay(playlist._id, nextIndex, trackId, undefined, trackDuration);
+                                playEventService.recordEpisodePlay(playlist._id, nextIndex!, trackId, undefined, trackDuration);
                             }).catch(() => {});
-                            
+
                             return nextIndex;
-                        } else {
-                            // No more tracks - stop playing
-                            console.log('🎵 Playlist ended');
-                            setIsPlaying(false);
-                            return prev; // Stay at last track
                         }
+
+                        console.log('🎵 Playlist ended');
+                        setIsPlaying(false);
+                        return prev;
                     });
                 }
                 return playlist;
@@ -353,6 +440,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         audio.addEventListener('pause', () => {
             setIsPlaying(false);
+            // Save playback position on pause (the near-end guard inside turns
+            // a pause-at-completion into a clear instead of a save)
+            persistPlaybackPosition();
             // Save any accumulated listening time when paused
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
@@ -361,13 +451,25 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             lastListeningTimeRef.current = 0;
         });
 
+        // Save position when the app is backgrounded or the page is unloading —
+        // on mobile webviews this is often the only shutdown signal we get
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') persistPlaybackPosition();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', persistPlaybackPosition);
+
         return () => {
+            persistPlaybackPosition();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', persistPlaybackPosition);
             // Save remaining listening time on unmount
             if (listeningTimeAccumulatorRef.current > 0) {
                 activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
             }
             audio.pause();
             audio.src = '';
+            audio.remove();
         };
     }, []);
 
@@ -392,6 +494,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const el = document.createElement('audio');
         el.setAttribute('data-gk-role', 'app-background');
         el.preload = 'auto';
+        // Attached (invisible) so dance-music ducking can discover it
+        document.body.appendChild(el);
         appBgAudioRef.current = el;
         const detachReliableLoop = attachReliableLoop(el, () => appBgLoopEnabledRef.current);
 
@@ -415,6 +519,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             detachReliableLoop();
             el.pause();
             el.removeAttribute('src');
+            el.remove();
             appBgAudioRef.current = null;
         };
     }, []);
@@ -447,6 +552,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const shouldPlay =
             musicEnabled &&
+            ambientHolders > 0 &&
             !contentMusicPaused &&
             !gameModeActive &&
             currentPlaylist == null;
@@ -466,6 +572,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         gameModeActive,
         currentPlaylist,
         appBackgroundTrack,
+        ambientHolders,
     ]);
 
     // Load track when playlist or index changes
@@ -476,9 +583,40 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const track = currentPlaylist.items[currentTrackIndex];
         if (!track?.audioUrl) return;
 
+        // Save the outgoing track's position before switching away from it.
+        // Skipped when the "new" track is the same one (a resume re-trigger),
+        // so a stale currentTime can't overwrite the saved resume point.
+        const nextActive = { playlistId: currentPlaylist._id, itemId: (track as any)?._id as string | undefined };
+        const prevActive = activeTrackRef.current;
+        if (prevActive && (prevActive.playlistId !== nextActive.playlistId || prevActive.itemId !== nextActive.itemId)) {
+            persistPlaybackPosition();
+        }
+        activeTrackRef.current = nextActive;
+        lastPositionSaveRef.current = 0;
+
         // Set source and load
         audio.src = track.audioUrl;
         audio.load();
+
+        // Apply a pending resume seek once the media has metadata — seeking
+        // before loadedmetadata is ignored/throws on some browsers (iOS Safari)
+        const resumeAt = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+        if (resumeAt != null && resumeAt > 0) {
+            const applySeek = () => {
+                audio.removeEventListener('loadedmetadata', applySeek);
+                try {
+                    // Guard against a saved position past the real duration
+                    const dur = audio.duration;
+                    audio.currentTime = !isNaN(dur) && dur > 0 ? Math.min(resumeAt, Math.max(0, dur - 1)) : resumeAt;
+                } catch { /* start from 0 if the seek fails */ }
+            };
+            if (audio.readyState >= 1) {
+                applySeek();
+            } else {
+                audio.addEventListener('loadedmetadata', applySeek);
+            }
+        }
 
         // Auto-play if isPlaying is true
         if (isPlaying) {
@@ -613,12 +751,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
 
             safeMediaSessionAction('nexttrack', () => {
-                if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+                if (!currentPlaylist) return;
+                if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                    const nextPos = shufflePosRef.current + 1;
+                    if (nextPos < shuffleOrderRef.current.length) {
+                        shufflePosRef.current = nextPos;
+                        setCurrentTrackIndex(shuffleOrderRef.current[nextPos]);
+                    }
+                    return;
+                }
+                if (currentTrackIndex < currentPlaylist.items.length - 1) {
                     setCurrentTrackIndex(prev => prev + 1);
                 }
             });
 
             safeMediaSessionAction('previoustrack', () => {
+                if (isShuffleRef.current && shuffleOrderRef.current.length > 0) {
+                    const prevPos = shufflePosRef.current - 1;
+                    if (prevPos >= 0) {
+                        shufflePosRef.current = prevPos;
+                        setCurrentTrackIndex(shuffleOrderRef.current[prevPos]);
+                    }
+                    return;
+                }
                 if (currentTrackIndex > 0) {
                     setCurrentTrackIndex(prev => prev - 1);
                 }
@@ -689,17 +844,33 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [playTone]);
 
     // --- Playlist Player Methods ---
-    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true) => {
+    // resumeFromSeconds: optional position to seek to once the track loads —
+    // used by the Continue Listening affordances; other entry points omit it
+    // and start from the beginning as before.
+    const playPlaylist = useCallback((playlist: Playlist, startIndex: number = 0, isSubscribed: boolean = true, resumeFromSeconds?: number) => {
         console.log('🎵 playPlaylist called:', {
             title: playlist.title,
             isMembersOnly: playlist.isMembersOnly,
             isSubscribed: isSubscribed,
             willBePreviewMode: !isSubscribed
         });
-        
+
+        const safeStart = Math.max(0, Math.min(startIndex, Math.max(0, playlist.items.length - 1)));
+
+        // Stash (or clear) the resume seek for the load-track effect to apply
+        pendingSeekRef.current = resumeFromSeconds && resumeFromSeconds > 0 ? resumeFromSeconds : null;
+
         setCurrentPlaylist(playlist);
-        setCurrentTrackIndex(startIndex);
+        setCurrentTrackIndex(safeStart);
         setIsPlaying(true);
+
+        if (isShuffleRef.current && playlist.items.length > 0) {
+            shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, safeStart);
+            shufflePosRef.current = 0;
+        } else {
+            shuffleOrderRef.current = [];
+            shufflePosRef.current = 0;
+        }
         
         // Enable preview mode for ALL non-subscribed users (2 min limit on all audio)
         const isPremiumPreview = !isSubscribed;
@@ -722,7 +893,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Track analytics
         const playlistId = playlist._id;
-        const track = playlist.items[startIndex];
+        const track = playlist.items[safeStart];
         const trackId = (track as any)?._id;
         const trackDuration = track?.duration || 0; // Get track duration in seconds
 
@@ -730,7 +901,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             playHistoryService.recordPlay(playlistId, trackId);
             analyticsService.playlistPlay(playlistId, playlist.title);
             if (track) {
-                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${startIndex}`, track.title);
+                activityTrackingService.trackSongPlayed(trackId || `${playlistId}_${safeStart}`, track.title);
                 incrementActivityCounter('song');
             }
             if (trackId) {
@@ -741,7 +912,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             
             // Record play event for real-time trending (with total duration for engagement tracking)
             import('../services/playEventService').then(({ playEventService }) => {
-                playEventService.recordEpisodePlay(playlistId, startIndex, trackId, undefined, trackDuration);
+                playEventService.recordEpisodePlay(playlistId, safeStart, trackId, undefined, trackDuration);
             }).catch(() => {});
         }
     }, []);
@@ -750,19 +921,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsPlaying(prev => !prev);
     }, []);
 
+    const toggleShuffle = useCallback(() => {
+        const next = !isShuffleRef.current;
+        isShuffleRef.current = next;
+        setIsShuffle(next);
+        if (next) {
+            setCurrentPlaylist(playlist => {
+                if (playlist && playlist.items.length > 0) {
+                    setCurrentTrackIndex(idx => {
+                        shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, idx);
+                        shufflePosRef.current = 0;
+                        return idx;
+                    });
+                }
+                return playlist;
+            });
+        } else {
+            shuffleOrderRef.current = [];
+            shufflePosRef.current = 0;
+        }
+    }, []);
+
     const nextTrack = useCallback(() => {
-        if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
+        if (!currentPlaylist) return;
+        if (isShuffle && shuffleOrderRef.current.length > 0) {
+            const nextPos = shufflePosRef.current + 1;
+            if (nextPos < shuffleOrderRef.current.length) {
+                shufflePosRef.current = nextPos;
+                setCurrentTrackIndex(shuffleOrderRef.current[nextPos]);
+                setIsPlaying(true);
+            }
+            return;
+        }
+        if (currentTrackIndex < currentPlaylist.items.length - 1) {
             setCurrentTrackIndex(prev => prev + 1);
             setIsPlaying(true);
         }
-    }, [currentPlaylist, currentTrackIndex]);
+    }, [currentPlaylist, currentTrackIndex, isShuffle]);
 
     const prevTrack = useCallback(() => {
+        if (isShuffle && shuffleOrderRef.current.length > 0) {
+            const prevPos = shufflePosRef.current - 1;
+            if (prevPos >= 0) {
+                shufflePosRef.current = prevPos;
+                setCurrentTrackIndex(shuffleOrderRef.current[prevPos]);
+                setIsPlaying(true);
+            }
+            return;
+        }
         if (currentTrackIndex > 0) {
             setCurrentTrackIndex(prev => prev - 1);
             setIsPlaying(true);
         }
-    }, [currentTrackIndex]);
+    }, [currentTrackIndex, isShuffle]);
 
     const seek = useCallback((time: number) => {
         if (audioRef.current) {
@@ -772,12 +983,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const closePlayer = useCallback(() => {
+        // Keep the resume point when the kid dismisses the player mid-episode
+        persistPlaybackPosition();
+        activeTrackRef.current = null;
+        pendingSeekRef.current = null;
+
         setIsPlaying(false);
         setCurrentPlaylist(null);
         setCurrentTrackIndex(0);
         setProgress(0);
         setCurrentTime(0);
         setDuration(0);
+        shuffleOrderRef.current = [];
+        shufflePosRef.current = 0;
 
         if (audioRef.current) {
             audioRef.current.pause();
@@ -816,16 +1034,38 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const setGameMode = useCallback((active: boolean, _type?: 'default' | 'workout') => {
         setGameModeActive(active);
     }, []);
+    const acquireAppAmbient = useCallback(() => {
+        setAmbientHolders((n) => n + 1);
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            setAmbientHolders((n) => Math.max(0, n - 1));
+        };
+    }, []);
 
     return (
         <AudioContext.Provider value={{
             musicEnabled, sfxEnabled, musicVolume, toggleMusic, toggleSfx, setMusicVolume,
-            playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused,
-            currentPlaylist, currentTrackIndex, isPlaying, progress, currentTime, duration,
-            playPlaylist, togglePlayPause, nextTrack, prevTrack, seek, closePlayer,
+            playClick, playBack, playSuccess, playTab, setGameMode, setMusicPaused, acquireAppAmbient,
+            currentPlaylist, currentTrackIndex, isPlaying, isShuffle, progress, currentTime, duration,
+            playPlaylist, togglePlayPause, toggleShuffle, nextTrack, prevTrack, seek, closePlayer,
             isPreviewMode, previewLimitReached, previewTimeRemaining, dismissPreviewLimit
         }}>
             {children}
         </AudioContext.Provider>
     );
 };
+
+/**
+ * Request the shared app-background ambient loop while a page is mounted.
+ * Respects Settings → Background Music (`musicEnabled`), content pause, game mode,
+ * and the global playlist player (won't fight MiniPlayer).
+ */
+export function useAppAmbientMusic(active = true) {
+    const { acquireAppAmbient } = useAudio();
+    useEffect(() => {
+        if (!active) return;
+        return acquireAppAmbient();
+    }, [active, acquireAppAmbient]);
+}

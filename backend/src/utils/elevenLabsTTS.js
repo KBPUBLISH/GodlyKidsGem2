@@ -95,8 +95,8 @@ async function generateElevenLabsTTS(text, options = {}) {
     console.log(`🎙️ Generating ElevenLabs TTS (voice: ${voiceId}, text length: ${cleanText.length})`);
     
     try {
-        // Use eleven_multilingual_v2 for better quality
-        const modelId = 'eleven_multilingual_v2';
+        // eleven_v3 is ElevenLabs' newest and most expressive TTS model
+        const modelId = 'eleven_v3';
         
         const response = await axios.post(
             `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,

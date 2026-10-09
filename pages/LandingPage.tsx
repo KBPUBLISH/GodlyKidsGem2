@@ -172,8 +172,6 @@ const LandingPage: React.FC = () => {
 
   const handleStartExplore = () => {
     activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-
-    // Bring user to onboarding flow
     navigate('/onboarding');
   };
 

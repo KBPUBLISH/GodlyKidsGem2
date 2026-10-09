@@ -27,6 +27,8 @@ interface SubscriptionContextType {
   /** Check premium via backend only (no localStorage). Use for Create Your Story gate so stale cache cannot bypass paywall. */
   getPremiumStatusStrict: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
+  /** Native RevenueCat dashboard paywall (Despia). Web returns WEB_FALLBACK. */
+  presentPaywall: () => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
   startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
@@ -393,6 +395,22 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     }
   }, []);
 
+  const presentPaywall = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const result = await RevenueCatService.presentDashboardPaywall();
+      if (result.success) {
+        const hasPremium = await RevenueCatService.checkPremiumAccess();
+        setIsPremium(hasPremium);
+      }
+      return result;
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Paywall failed' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Restore purchases (triggered by user action, so trigger native restore)
   const restorePurchases = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
@@ -570,6 +588,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     getPremiumStatus,
     getPremiumStatusStrict,
     purchase,
+    presentPaywall,
     restorePurchases,
     startReverseTrial,
     checkReverseTrialStatus,

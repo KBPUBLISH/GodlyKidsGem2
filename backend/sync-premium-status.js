@@ -16,7 +16,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 // Force Production database (env var might not specify database name)
-const MONGO_URI = 'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://USER:PASSWORD@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
 
 const isDryRun = process.argv.includes('--dry-run');
 

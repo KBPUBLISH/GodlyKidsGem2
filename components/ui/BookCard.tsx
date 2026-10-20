@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Book } from '../../types';
-import { BookOpen, Headphones, Heart, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import PremiumBadge from './PremiumBadge';
+import OptimizedImage from './OptimizedImage';
 import { useUser } from '../../context/UserContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -10,11 +11,7 @@ interface BookCardProps {
   onClick: (id: string) => void;
 }
 
-// Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
-
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
-  const [imageError, setImageError] = useState(false);
   const { isSubscribed } = useUser();
   const { currentLanguage, translateText } = useLanguage();
   const [translatedTitle, setTranslatedTitle] = useState(book.title);
@@ -34,26 +31,6 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   // Check if this content is locked (members only and user not subscribed)
   const isMembersOnly = book.isMembersOnly === true;
   const isLocked = isMembersOnly && !isSubscribed;
-
-  // Reset error state when book cover URL changes
-  useEffect(() => {
-    setImageError(false);
-  }, [book.coverUrl]);
-
-  // Determine the image source - use direct URL, no blob conversion needed
-  const getImageSrc = useCallback(() => {
-    if (imageError) return DEFAULT_COVER;
-    if (!book.coverUrl || book.coverUrl.trim() === '') return DEFAULT_COVER;
-    return book.coverUrl;
-  }, [book.coverUrl, imageError]);
-
-  const handleImageError = () => {
-    if (!imageError) {
-      console.error(`❌ Image failed to load for "${book.title}":`, book.coverUrl);
-      setImageError(true);
-    }
-  };
-
   return (
     <div 
       onClick={() => {
@@ -62,14 +39,15 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
       }}
       className={`bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 hover:shadow-2xl hover:scale-105 transition-all cursor-pointer group ${isLocked ? 'opacity-80' : ''}`}
     >
-      {/* Cover Image - Same structure as AudioPage */}
-      <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
-        <img 
-          src={getImageSrc()} 
-          alt={book.title} 
-          className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${isLocked ? 'filter brightness-75' : ''}`}
-          loading="lazy"
-          onError={handleImageError}
+      <div className={`relative aspect-square rounded-xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:border-white/40 group-hover:scale-105 transition-all ${isLocked ? 'opacity-80' : ''}`}>
+        <OptimizedImage
+          src={book.coverUrl}
+          alt={book.title}
+          size="thumb"
+          type="book"
+          className={`w-full h-full ${isLocked ? 'brightness-75' : ''}`}
+          objectFit="cover"
+        />
         />
         
         {/* Lock Overlay for Members Only Content */}

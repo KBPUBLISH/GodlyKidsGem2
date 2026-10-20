@@ -1205,6 +1205,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
   const isDespia = DespiaService.isNative();
+  
+  // Register image cache service worker for better performance
+  useEffect(() => {
+    if ('serviceWorker' in navigator && !isDespia) {
+      navigator.serviceWorker
+        .register('/sw-image-cache.js')
+        .then((registration) => {
+          console.log('✅ Image cache service worker registered:', registration.scope);
+        })
+        .catch((error) => {
+          console.warn('⚠️ Image cache service worker registration failed:', error);
+        });
+    }
+  }, [isDespia]);
 
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
   // When the app regains focus after being in background, we need to ensure React

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { ApiService } from '../services/apiService';
+import OptimizedImage from '../components/ui/OptimizedImage';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
 
@@ -84,15 +85,14 @@ const CarouselScroller: React.FC<{ covers: string[]; scrollRef: React.RefObject<
             key={i}
             className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden shadow-md bg-white/80"
           >
-            <img 
-              src={cover} 
+            <OptimizedImage
+              src={cover}
               alt=""
-              className="w-full h-full object-cover"
-              loading="eager"
-              onError={(e) => {
-                // Hide broken image container entirely
-                (e.target as HTMLImageElement).parentElement!.style.display = 'none';
-              }}
+              size="thumb"
+              type="book"
+              className="w-full h-full"
+              objectFit="cover"
+              eager
             />
           </div>
         ))}

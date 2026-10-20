@@ -18,6 +18,7 @@ import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown 
 import { useTutorial } from '../context/TutorialContext';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import { ApiService } from '../services/apiService';
+import { preloadFeaturedContent, preloadBookGrid } from '../utils/imagePreloading';
 import { DespiaService } from '../services/despiaService';
 import { authService } from '../services/authService';
 import { 
@@ -757,6 +758,9 @@ const HomePage: React.FC = () => {
       console.log('⭐ Featured content loaded:', data.length, 'items');
       setFeaturedContent(data);
       cacheData('featured', data);
+      
+      // Preload featured images for faster display
+      preloadFeaturedContent(data);
     } catch (error) {
       console.error('❌ Error fetching featured content:', error);
     } finally {

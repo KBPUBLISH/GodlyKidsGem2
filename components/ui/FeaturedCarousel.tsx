@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Book } from '../../types';
 import { BookOpen, Music, ShoppingCart } from 'lucide-react';
 import { ApiService } from '../../services/apiService';
+import OptimizedImage from './OptimizedImage';
 
 // Simple localStorage cache for page images (survives app restarts - 24hr TTL)
 const getPageFromCache = (bookId: string): string | null => {
@@ -116,12 +117,14 @@ const SimplePagePreview: React.FC<{
   return (
     <div className="w-full h-full relative rounded-lg overflow-hidden">
       {/* Cover image (always visible as base) */}
-      <img
+      <OptimizedImage
         src={coverUrl}
         alt="Book cover"
-        className="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-        decoding="async"
+        size="medium"
+        type="book"
+        className="absolute inset-0 w-full h-full"
+        objectFit="cover"
+        eager={isActive}
       />
       
       {/* Page image or video (fades in on top) */}
@@ -147,14 +150,18 @@ const SimplePagePreview: React.FC<{
             }`}
           />
         ) : (
-          <img
+          <OptimizedImage
             src={pageUrl}
             alt="Book page"
-            loading="eager"
-            decoding="async"
+            size="medium"
+            type="book"
+            className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${
+              showPage ? 'opacity-100' : 'opacity-0'
+            }`}
+            objectFit="cover"
+            eager
             onLoad={() => setPageLoaded(true)}
             onError={() => {
-              // Recover: drop bad cache + fall back to cover
               try {
                 localStorage.removeItem(`gk_page_${bookId}`);
               } catch {}
@@ -162,9 +169,6 @@ const SimplePagePreview: React.FC<{
               setPageLoaded(false);
               setPageUrl(null);
             }}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-              showPage ? 'opacity-100' : 'opacity-0'
-            }`}
           />
         )
       )}
@@ -278,12 +282,16 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
               <div className="relative z-10 transform transition-transform active:scale-95 duration-200 px-6 py-4 w-full h-full flex items-center justify-center">
                 <div className="w-full max-w-[85%] sm:max-w-[75%] md:max-w-[70%] aspect-square rounded-lg shadow-2xl relative overflow-visible">
                   
-                  {/* Use SimplePagePreview for books, static image for playlists, episodes, and Amazon books */}
+                  {/* Use SimplePagePreview for books, optimized image for playlists, episodes, and Amazon books */}
                   {(itemIsPlaylist || itemIsEpisode || itemIsAmazonBook) ? (
-                    <img
+                    <OptimizedImage
                       src={coverUrl || '/assets/images/placeholder-book.png'}
                       alt={item.title}
-                      className="w-full h-full object-cover rounded-lg border-2 border-white/10"
+                      size="medium"
+                      type={itemIsAmazonBook ? 'book' : 'audio'}
+                      className="w-full h-full rounded-lg border-2 border-white/10"
+                      objectFit="cover"
+                      eager={isActive}
                     />
                   ) : (
                     isActive ? (
@@ -293,12 +301,13 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
                         isActive={isActive}
                       />
                     ) : (
-                      <img
+                      <OptimizedImage
                         src={coverUrl || '/assets/images/placeholder-book.png'}
                         alt={item.title}
-                        className="w-full h-full object-cover rounded-lg border-2 border-white/10"
-                        loading="lazy"
-                        decoding="async"
+                        size="medium"
+                        type="book"
+                        className="w-full h-full rounded-lg border-2 border-white/10"
+                        objectFit="cover"
                       />
                     )
                   )}

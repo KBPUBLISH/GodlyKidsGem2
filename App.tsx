@@ -608,6 +608,7 @@ import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
 import MapPage from './pages/MapPage';
+import { startAssetCache } from './utils/assetCache';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
 import IslandScenePage from './pages/IslandScenePage';
@@ -1061,6 +1062,7 @@ const AssetPreloader: React.FC = () => {
       const img = new Image();
       img.src = src;
     });
+    startAssetCache();
   }, []);
   return null;
 };

@@ -25,6 +25,7 @@ import {
   type OceanMapIsland,
   type OceanMapStoryRow,
 } from '../utils/oceanMapIslands';
+import { cacheAssetUrls } from '../utils/assetCache';
 
 /** Native size of map-footer-frame.png (846×295) — used for --map-footer-h scroll clearance. */
 const MAP_FOOTER_ASPECT = 295 / 846;
@@ -810,6 +811,12 @@ const MapPage: React.FC = () => {
         if (mapped) {
           setIslands(mapped);
           setIslandsError(false);
+          const backgrounds = mapped.flatMap((island) =>
+            [getOceanIslandArtSrc(island), island.sailArtUrl, island.mainMapUrl, island.mainMapVideoUrl].filter(
+              (url): url is string => Boolean(url),
+            ),
+          );
+          void cacheAssetUrls([MAP_OCEAN_SCROLL, MAP_SKY_CLOUD_A, MAP_SKY_CLOUD_B, ...backgrounds]);
           // Tripwire: shout in dev if the hardcoded free island is gone.
           assertFreeTierIslandExists(mapped);
         } else {

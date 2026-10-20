@@ -1,13 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
-import { rewardsService, type RewardDefinition } from '../services/rewardsService';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import {
+  ensureOnboardingAdam,
+  rewardsService,
+  type RewardDefinition,
+} from '../services/rewardsService';
 import { useUser } from '../context/UserContext';
 import WoodBackButton from '../components/WoodBackButton';
+import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
+import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import {
+  safeAppReturnPath,
+  type GameShelfFromTreasureState,
+} from '../utils/treasureNav';
 
-const FALLBACK_PATH = '/sail';
-const GAME_SHELF_PATH = '/games/library';
+const ARCADE_PATH = '/sail/basement/arcade';
 const WHITE_FADE_MS = 480;
 // Local, ad-free digging game bundled with the app — no external site.
 const TREASURE_GAME_URL = '/games/buried-treasure.html';
@@ -18,11 +28,14 @@ const prefersReducedMotion = () =>
 
 /** Nav state passed from the story pack (IslandScenePage rewards activity). */
 type TreasureNavState = {
+  islandId?: string;
   storyId?: string;
   storyTitle?: string;
   pool?: RewardDefinition[];
   /** Story pack path to return to when history is empty. */
   returnTo?: string;
+  /** First-time path: after the dig, HS invites them to meet the unlocked crew. */
+  onboardingJourney?: boolean;
 };
 
 /** Card shape sent into the game iframe (shown when the chest opens). */
@@ -35,12 +48,25 @@ type RewardCard = { name: string; imageUrl?: string };
  * the unlocked rewards (persist + grant coins) and post `gk-treasure-rewards`
  * cards back so the game can show them. Opened directly (no nav state), the
  * game plays standalone with its generic treasure card.
+ *
+ * After the chest is claimed, "Go to Arcade" *replaces* this route so Back
+ * from the arcade cannot remount a fresh dig. If this page is reached again
+ * for an already-claimed story, bounce to the story pack immediately.
  */
 const BuriedTreasurePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { addCoins } = useUser();
   const navState = (location.state || {}) as TreasureNavState;
+  const onboardingJourney =
+    Boolean(navState.onboardingJourney) || isOnboardingJourneyActive();
+  // Snapshot on first mount only — collectCards() writes claimedKeys during
+  // this visit, and that must not bounce the kid off the win screen.
+  const [arrivedAlreadyClaimed] = useState(() => {
+    const sid = (navState.storyId || '').trim();
+    return Boolean(sid && rewardsService.hasCollectedStoryRewards(sid));
+  });
+  const [meetCrewGuide, setMeetCrewGuide] = useState(false);
   const [whiteFade, setWhiteFade] = useState(true);
   const [loading, setLoading] = useState(true);
   const [leaving, setLeaving] = useState(false);
@@ -91,15 +117,30 @@ const BuriedTreasurePage: React.FC = () => {
         cards.push({
           name,
           imageUrl:
-            def.type === 'book_template'
-              ? def.bookCoverUrl || def.imageUrl
-              : def.imageUrl,
+            def.type === 'coins'
+              ? '/assets/ui/coin.png'
+              : def.type === 'book_template'
+                ? def.bookCoverUrl || def.imageUrl
+                : def.imageUrl,
         });
       }
+      const islandId =
+        (navStateRef.current.islandId || '').trim() ||
+        (/\/sail\/([^/?]+)/.exec(navStateRef.current.returnTo || '')?.[1] || '').trim();
+      if (islandId) {
+        islandStoryProgressService.markLootActivities(
+          islandId,
+          storyId,
+          pool.map((d) => d?.type).filter(Boolean) as string[],
+        );
+      }
+    }
+    if (onboardingJourney) {
+      ensureOnboardingAdam(storyId || 'onboarding-genesis', pool);
     }
     cardsRef.current = cards;
     return cards;
-  }, [addCoins]);
+  }, [addCoins, onboardingJourney]);
 
   /** Fade to white, then run the navigation. */
   const leaveWithFade = useCallback(
@@ -114,28 +155,52 @@ const BuriedTreasurePage: React.FC = () => {
     [clearTimers, leaving, reduceMotion],
   );
 
+  const goMeetCrew = useCallback(() => {
+    navigate('/crew', { replace: true, state: { onboardingJourney: true } });
+  }, [navigate]);
+
   // Reward bridge: game says the chest opened → send back what was inside.
-  // The win card's "Go to Game Shelf" button posts gk-go-game-shelf.
+  // The win card's "Go to Arcade" button posts gk-go-game-shelf.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const frame = iframeRef.current;
       if (!frame || event.source !== frame.contentWindow) return;
       if (event.data?.type === 'gk-go-game-shelf') {
-        leaveWithFade(() => navigate(GAME_SHELF_PATH));
+        if (onboardingJourney) {
+          setMeetCrewGuide(true);
+          return;
+        }
+        // Replace so the completed dig is not sitting under the shelf.
+        const arcadeState: GameShelfFromTreasureState = {
+          fromCompletedTreasure: Boolean((navStateRef.current.storyId || '').trim()),
+          returnTo: safeAppReturnPath(navStateRef.current.returnTo),
+        };
+        leaveWithFade(() => navigate(ARCADE_PATH, { replace: true, state: arcadeState }));
         return;
       }
       if (event.data?.type !== 'gk-chest-opened') return;
       const cards = collectCards();
       if (cards.length > 0) {
         frame.contentWindow?.postMessage(
-          { type: 'gk-treasure-rewards', rewards: cards },
+          {
+            type: 'gk-treasure-rewards',
+            rewards: cards,
+            hideShelf: onboardingJourney,
+          },
           window.location.origin,
         );
+      }
+      if (onboardingJourney) {
+        const id = window.setTimeout(
+          () => setMeetCrewGuide(true),
+          reduceMotion ? 400 : 1600,
+        );
+        timersRef.current.push(id);
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [collectCards, leaveWithFade, navigate]);
+  }, [collectCards, leaveWithFade, navigate, onboardingJourney, reduceMotion]);
 
   const goBackToStoryPack = useCallback(() => {
     if (leaving) return;
@@ -143,10 +208,11 @@ const BuriedTreasurePage: React.FC = () => {
     clearTimers();
 
     const leave = () => {
+      const returnTo = safeAppReturnPath(navStateRef.current.returnTo);
       if (window.history.length > 1) {
         navigate(-1);
       } else {
-        navigate(navStateRef.current.returnTo || FALLBACK_PATH, { replace: true });
+        navigate(returnTo, { replace: true });
       }
     };
 
@@ -162,21 +228,27 @@ const BuriedTreasurePage: React.FC = () => {
     timersRef.current = [navId];
   }, [clearTimers, leaving, navigate, reduceMotion]);
 
+  if (arrivedAlreadyClaimed && !onboardingJourney) {
+    return <Navigate to={safeAppReturnPath(navState.returnTo)} replace />;
+  }
+
   return (
     <div
       className="relative h-[100dvh] min-h-0 bg-[#0b7fa6] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
-      <WoodBackButton
-        onClick={goBackToStoryPack}
-        disabled={leaving}
-        className="fixed z-[60] w-12 h-12"
-        style={{
-          bottom: 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))',
-          left: 'max(10px, env(safe-area-inset-left, 0px))',
-        }}
-        aria-label="Back to story pack"
-      />
+      {!onboardingJourney && (
+        <WoodBackButton
+          onClick={goBackToStoryPack}
+          disabled={leaving}
+          className="fixed z-[60] w-12 h-12"
+          style={{
+            bottom: 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))',
+            left: 'max(10px, env(safe-area-inset-left, 0px))',
+          }}
+          aria-label="Back to story pack"
+        />
+      )}
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0b7fa6] z-10">
@@ -205,6 +277,15 @@ const BuriedTreasurePage: React.FC = () => {
           }}
         />
       </div>
+
+      {meetCrewGuide && (
+        <div className="fixed inset-0 z-[80] bg-black/25" aria-hidden />
+      )}
+      <OnboardingGuideCard
+        variant="quizComplete"
+        active={meetCrewGuide}
+        onContinue={goMeetCrew}
+      />
 
       <div
         className="fixed inset-0 pointer-events-none"

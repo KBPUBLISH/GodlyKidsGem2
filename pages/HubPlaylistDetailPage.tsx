@@ -104,7 +104,7 @@ const HubPlaylistDetailPage: React.FC = () => {
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 px-4">
         <p className="text-gray-500 mb-4">Content not found</p>
         <button
-          onClick={() => navigate('/hub')}
+          onClick={() => navigate('/listen', { state: { libraryMode: 'creators' } })}
           className="text-indigo-600"
         >
           Back to Hub

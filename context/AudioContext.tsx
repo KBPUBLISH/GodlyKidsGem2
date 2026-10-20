@@ -406,6 +406,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         const audio = document.createElement('audio');
         audio.preload = 'auto';
+        audio.volume = 1;
         audio.setAttribute('data-gk-role', 'playlist');
         // Attached (invisible) so other features (e.g. dance-music ducking)
         // can discover playing audio via the DOM
@@ -763,6 +764,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Auto-play if isPlaying is true
         if (isPlaying) {
+            audio.volume = 1;
             audio.play().catch(e => console.log('Autoplay blocked:', e.name));
         }
 
@@ -778,6 +780,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!audio || !audio.src) return;
 
         if (isPlaying) {
+            audio.volume = 1;
             const playPromise = audio.play();
             if (playPromise) {
                 playPromise.then(() => {
@@ -1260,11 +1263,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const playClick = useCallback(() => playTone(400, 0.1), [playTone]);
     const playBack = useCallback(() => playTone(200, 0.15), [playTone]);
     const playTab = useCallback(() => playTone(600, 0.05), [playTone]);
+    /** Bright two-note ding (C6 → E6) — Duolingo-style correct chime. */
     const playSuccess = useCallback(() => {
-        playTone(440, 0.2);
-        setTimeout(() => playTone(660, 0.2), 100);
-        setTimeout(() => playTone(880, 0.3), 200);
-    }, [playTone]);
+        if (!sfxEnabled) return;
+        try {
+            const ctx = getSfxContext();
+            const now = ctx.currentTime;
+            const notes: Array<{ freq: number; start: number; dur: number; vol: number }> = [
+                { freq: 1046.5, start: 0, dur: 0.16, vol: 0.2 },
+                { freq: 1318.51, start: 0.08, dur: 0.34, vol: 0.24 },
+            ];
+            for (const n of notes) {
+                const osc = ctx.createOscillator();
+                const sparkle = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                sparkle.type = 'sine';
+                osc.frequency.setValueAtTime(n.freq, now + n.start);
+                sparkle.frequency.setValueAtTime(n.freq * 2, now + n.start);
+                gain.gain.setValueAtTime(0.0001, now + n.start);
+                gain.gain.exponentialRampToValueAtTime(n.vol, now + n.start + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + n.start + n.dur);
+                osc.connect(gain);
+                sparkle.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + n.start);
+                sparkle.start(now + n.start);
+                osc.stop(now + n.start + n.dur + 0.02);
+                sparkle.stop(now + n.start + n.dur + 0.02);
+            }
+        } catch (e) {
+            console.log('SFX error:', e);
+        }
+    }, [sfxEnabled, getSfxContext]);
 
     // --- Playlist Player Methods ---
     // resumeFromSeconds: optional position to seek to once the track loads —
@@ -1286,6 +1317,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setCurrentPlaylist(playlist);
         setCurrentTrackIndex(safeStart);
         setIsPlaying(true);
+        if (audioRef.current) audioRef.current.volume = 1;
 
         if (isShuffleRef.current && playlist.items.length > 0) {
             shuffleOrderRef.current = buildShuffleOrder(playlist.items.length, safeStart);

@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Crown, FileText, Clock, Settings } from 'lucide-react';
 const ShopModal = lazy(() => import('../features/ShopModal'));
-import AvatarDetailModal from '../features/AvatarDetailModal';
 import CoinHistoryModal from '../features/CoinHistoryModal';
 import ReportCardModal from '../features/ReportCardModal';
 import { useUser } from '../../context/UserContext';
 import { useTutorial } from '../../context/TutorialContext';
 import { useSubscription } from '../../context/SubscriptionContext';
 import PortholeAvatar from '../common/PortholeAvatar';
+import SevenDayChallengeBadge from './SevenDayChallengeBadge';
 
 /** Recessed circular well carved into the wood plank */
 const PLANK_RECESS_CIRCLE =
@@ -26,28 +26,22 @@ const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 
 const EXPLORE_TOP_HEADER_WOOD = '/assets/images/explore-top-header-wood.png';
 /**
- * Pull plank PNG up so wood sits nearer flush with screen top (keeps side/bottom live edges).
- * Phone: full-bleed width, modest lift.
- * Tablet/iPad (md / ≥768px): plank height capped (see PLANK_HEIGHT_TABLET) with width auto,
- * so a stronger lift tucks the top without leaving a huge wood band.
- * Applied via `-mt-[1.5rem] md:-mt-[4.5rem]`. WorldPage featured/clearance padding must match.
+ * Pull the full plank PNG up so the wood sits higher, without cropping it.
+ * Phone: full-bleed width, modest lift (`-mt-[1.5rem]`).
+ * Tablet/iPad (≥520px, including iPad mini portrait under Tailwind’s 768px md):
+ * same full image (live edge included). A larger negative margin slides the top
+ * off-screen so the bottom edge lands at `PLANK_VISIBLE_TABLET`.
+ * WorldPage / ReadPagePanorama clearance must match that visible bottom.
  */
 export const PLANK_TOP_LIFT_PHONE = '-1.5rem';
-export const PLANK_TOP_LIFT_TABLET = '-4.5rem';
+/** Where the tablet plank’s bottom (live edge) sits below the screen top. */
+export const PLANK_VISIBLE_TABLET = '6.25rem';
 /**
- * Tablet/iPad plank size — `w-full` + natural aspect makes the 1021×284 PNG enormous on
- * md+ widths. Cap height at 9rem (144px) with `w-auto` + `object-contain` centered so
- * live edges stay visible (~50–70% of full-bleed height on typical iPad widths).
- */
-export const PLANK_HEIGHT_TABLET = '9rem';
-/**
- * Extra top inset below safe-area so controls sit in the visible wood band.
- * Compensates for PLANK_TOP_LIFT (items-center uses the full PNG box, including the
- * portion pulled above the viewport).
- * Applied via `pt-[…+1.75rem] md:pt-[…+2.5rem]` (static Tailwind classes).
+ * Extra inset so controls sit in the visible wood.
+ * Phone pads from the top. Tablet pins controls above the live edge.
  */
 export const PLANK_CONTROLS_TOP_EXTRA_PHONE = '1.75rem';
-export const PLANK_CONTROLS_TOP_EXTRA_TABLET = '2.5rem';
+export const PLANK_CONTROLS_BOTTOM_EXTRA_TABLET = '1.75rem';
 
 interface HeaderProps {
   isVisible: boolean;
@@ -64,7 +58,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
   const { isPremium } = useSubscription();
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [shopBuilderMode, setShopBuilderMode] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCoinHistoryOpen, setIsCoinHistoryOpen] = useState(false);
   const [isReportCardOpen, setIsReportCardOpen] = useState(false);
   
@@ -240,28 +233,28 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
         )}
 
         {isPlank ? (
-          /* Plank PNG — phone full-bleed; tablet/iPad height-capped + width auto (centered).
-             Phone −1.5rem / tablet −4.5rem (md ≥768px). WorldPage clearance must match. */
-          <div className="relative w-full -mt-[1.5rem] md:-mt-[4.5rem] flex justify-center">
-            <div className="relative w-full md:w-auto">
+          /* Full plank PNG. Phone −1.5rem. Tablet slides the whole image up so the
+             live edge sits at 6.25rem — do not height-cap or object-cover it. */
+          <div className="relative w-full -mt-[1.5rem] min-[520px]:-mt-[calc(100vw*284/1021-6.25rem)] flex justify-center">
+            <div className="relative w-full">
             <img
               src={EXPLORE_TOP_HEADER_WOOD}
               alt=""
               aria-hidden
-              className="pointer-events-none select-none relative block w-full h-auto md:w-auto md:h-[9rem] md:max-w-full md:object-contain"
+              className="pointer-events-none select-none relative block w-full h-auto"
               draggable={false}
             />
             <div
               className={
-                'absolute inset-0 flex items-center justify-between gap-2 sm:gap-2.5 px-3 sm:px-4 ' +
-                'pt-[calc(var(--safe-area-top,0px)+1.75rem)] md:pt-[calc(var(--safe-area-top,0px)+2.5rem)]'
+                'absolute inset-0 flex items-center min-[520px]:items-end justify-between gap-2 sm:gap-2.5 px-3 sm:px-4 ' +
+                'pt-[calc(var(--safe-area-top,0px)+1.75rem)] min-[520px]:pt-0 min-[520px]:pb-[1.75rem]'
               }
             >
                 <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
                   {/* Porthole avatar */}
                   <button
                     type="button"
-                    onClick={() => setIsDetailOpen(true)}
+                    onClick={() => navigate('/profile')}
                     className="relative flex-shrink-0 active:scale-95 transition-transform"
                     aria-label="Profile"
                   >
@@ -283,6 +276,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                       />
                     </div>
                   </button>
+
+                  <SevenDayChallengeBadge />
 
                   {dealTimeRemaining && !isSubscribed && (
                     <button
@@ -390,7 +385,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
 
               <div className="flex justify-between items-center relative z-10 mb-1">
                 <div
-                  onClick={() => setIsDetailOpen(true)}
+                  onClick={() => navigate('/profile')}
                   className="relative group cursor-pointer active:scale-95 transition-transform"
                 >
                   <PortholeAvatar
@@ -408,6 +403,8 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                     />
                   </div>
                 </div>
+
+                <SevenDayChallengeBadge />
 
                 {dealTimeRemaining && !isSubscribed && (
                   <button
@@ -530,7 +527,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
         onOpenShop={handleShopClick}
         hideCloseButton={isTutorialActive}
       />
-      <AvatarDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} onEdit={handleShopClick} />
       <ReportCardModal isOpen={isReportCardOpen} onClose={handleReportCardClose} hideCloseButton={isTutorialActive} />
     </>
   );

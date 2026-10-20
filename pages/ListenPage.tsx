@@ -60,6 +60,7 @@ interface CategoryData {
   gradientTo?: string;
   image?: string;
   icon?: string;
+  iconImage?: string;
 }
 
 const HEADPHONE_ISLAND = '/assets/images/headphone-island.webp';
@@ -254,11 +255,8 @@ const ListenPage: React.FC = () => {
               gradientTo: c.gradientTo,
               image: c.image,
               icon: c.icon,
+              iconImage: c.iconImage,
             };
-            // Debug: Log categories with images
-            if (c.image) {
-              console.log(`📸 Category "${c.name}" has image:`, c.image);
-            }
           }
         });
         console.log('📚 Category data loaded:', Object.keys(dataMap).length, 'categories');

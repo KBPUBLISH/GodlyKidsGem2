@@ -636,134 +636,25 @@ const CreatorStoryDetailPage: React.FC = () => {
           </section>
         )}
 
-        {/* Family ratings — separate from the team safety check below */}
+        {/* Family ratings — list first; compact write form below */}
         <section className="mt-6 rounded-[1.35rem] bg-white px-4 py-4 shadow-[0_2px_8px_rgba(23,58,94,0.06)]">
           <h2 className="font-display font-black text-base" style={{ color: NAVY }}>
             Family reviews
           </h2>
-          <p className="mt-1 font-display text-[12px]" style={{ color: MUTED }}>
-            Parents can leave a kind star rating. A note is optional — if you add one, make it
-            specific, kid-friendly, and free of slang or swearing.
-          </p>
           {reviewSummary.count > 0 && (
-            <div className="mt-2">
+            <div className="mt-1.5">
               <StarRating rating={reviewSummary.average} reviews={reviewSummary.count} />
             </div>
           )}
-          <div className="mt-3 flex items-center gap-1">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`${i + 1} stars`}
-                onClick={() => setMyRating(i + 1)}
-              >
-                <Star
-                  size={22}
-                  className={i < myRating ? 'fill-[#E8B923] text-[#E8B923]' : 'text-[#D4C4B0]'}
-                />
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={myComment}
-            onChange={(event) => setMyComment(event.target.value.slice(0, 280))}
-            placeholder="What did your child like or learn? (optional)"
-            className="mt-3 w-full rounded-[1rem] px-3 py-2 font-display text-[13px] outline-none"
-            style={{ background: '#F8EBDA', color: NAVY, minHeight: '4.5rem' }}
-          />
-          <label className="mt-3 flex items-center gap-2 font-display text-[13px]" style={{ color: NAVY }}>
-            <input
-              type="checkbox"
-              checked={postAnonymous}
-              onChange={(event) => setPostAnonymous(event.target.checked)}
-              className="h-4 w-4 accent-[#173A5E]"
-            />
-            Post anonymously
-          </label>
-          {postAnonymous ? (
-            <p className="mt-1 font-display text-[11px]" style={{ color: MUTED }}>
-              Your review will show as “A family”.
-            </p>
-          ) : (
-            <>
-              <input
-                type="text"
-                value={myDisplayName}
-                onChange={(event) => setMyDisplayName(event.target.value.slice(0, 24))}
-                placeholder="Display name (2–24 letters or numbers)"
-                maxLength={24}
-                autoComplete="nickname"
-                className="mt-2 w-full rounded-[1rem] px-3 py-2 font-display text-[13px] outline-none"
-                style={{ background: '#F8EBDA', color: NAVY }}
-              />
-              <p className="mt-1 font-display text-[11px]" style={{ color: MUTED }}>
-                This name is shown on your review — not your email.
-              </p>
-            </>
-          )}
-          <button
-            type="button"
-            disabled={reviewBusy || myRating < 1}
-            onClick={() => {
-              if (myRating < 1) return;
-              const trimmedName = myDisplayName.replace(/\s+/g, ' ').trim();
-              if (!postAnonymous) {
-                const nameError = validateReviewDisplayName(trimmedName);
-                if (nameError) {
-                  setReviewTone('err');
-                  setReviewMessage(nameError);
-                  return;
-                }
-              }
-              setReviewBusy(true);
-              setReviewMessage(null);
-              setReviewTone(null);
-              void hubService
-                .saveReview(story.id, myRating, myComment, {
-                  anonymous: postAnonymous,
-                  displayName: postAnonymous ? undefined : trimmedName,
-                })
-                .then((data) => {
-                  setReviews(data.reviews);
-                  setReviewSummary({ average: data.averageRating, count: data.ratingCount });
-                  const pending = data.status === 'pending' || data.myReview?.status === 'pending';
-                  setMyReviewPending(pending);
-                  if (!postAnonymous) {
-                    setMyDisplayName(trimmedName);
-                    rememberReviewName(trimmedName);
-                  }
-                  setReviewTone('ok');
-                  setReviewMessage(data.message || 'Saved — thank you!');
-                })
-                .catch((error: Error) => {
-                  setReviewTone('err');
-                  setReviewMessage(error.message);
-                })
-                .finally(() => setReviewBusy(false));
-            }}
-            className="mt-3 w-full rounded-full py-2.5 font-display font-black text-sm text-white disabled:opacity-50"
-            style={{ background: NAVY }}
-          >
-            {reviewBusy ? 'Saving…' : 'Save my review'}
-          </button>
-          {reviewMessage && (
-            <p
-              className="mt-2 font-display text-[12px] leading-snug"
-              style={{ color: reviewTone === 'err' ? '#b45309' : MUTED }}
-            >
-              {reviewMessage}
-            </p>
-          )}
-          {myReviewPending && !reviewMessage && (
-            <p className="mt-1 font-display text-[12px] leading-snug" style={{ color: MUTED }}>
-              Your note is waiting for a quick look before families can see it.
-            </p>
-          )}
-          {reviews.length > 0 && (
-            <ul className="mt-4 space-y-3">
+
+          {reviews.length > 0 ? (
+            <ul className="mt-3 space-y-2.5">
               {reviews.slice(0, 8).map((review) => (
-                <li key={review.id} className="border-t border-[#ead9c4] pt-3">
+                <li
+                  key={review.id}
+                  className="rounded-[1.1rem] px-3 py-2.5"
+                  style={{ background: '#F8EBDA' }}
+                >
                   <p className="font-display font-bold text-[12px]" style={{ color: NAVY }}>
                     {review.displayName || 'A family'}
                     {review.mine ? ' (you)' : ''}
@@ -777,7 +668,129 @@ const CreatorStoryDetailPage: React.FC = () => {
                 </li>
               ))}
             </ul>
+          ) : (
+            <p className="mt-2 font-display text-[12px] leading-snug" style={{ color: MUTED }}>
+              No family notes yet
+            </p>
           )}
+
+          <div
+            className="mt-3 rounded-[1.1rem] px-3 py-2.5"
+            style={{ background: '#F8EBDA' }}
+          >
+            <h3 className="font-display font-black text-[12px]" style={{ color: NAVY }}>
+              Leave a note
+            </h3>
+            <div className="mt-1.5 flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`${i + 1} stars`}
+                  onClick={() => setMyRating(i + 1)}
+                >
+                  <Star
+                    size={18}
+                    className={i < myRating ? 'fill-[#E8B923] text-[#E8B923]' : 'text-[#D4C4B0]'}
+                  />
+                </button>
+              ))}
+            </div>
+            <label
+              className="mt-2 flex items-center gap-1.5 font-display text-[11px]"
+              style={{ color: NAVY }}
+            >
+              <input
+                type="checkbox"
+                checked={postAnonymous}
+                onChange={(event) => setPostAnonymous(event.target.checked)}
+                className="h-3.5 w-3.5 accent-[#173A5E]"
+              />
+              Post anonymously
+            </label>
+            {postAnonymous ? (
+              <p className="mt-0.5 font-display text-[10px]" style={{ color: MUTED }}>
+                Shown as “A family”.
+              </p>
+            ) : (
+              <input
+                type="text"
+                value={myDisplayName}
+                onChange={(event) => setMyDisplayName(event.target.value.slice(0, 24))}
+                placeholder="Username (2–24 letters or numbers)"
+                maxLength={24}
+                autoComplete="nickname"
+                className="mt-1.5 w-full rounded-[0.85rem] px-2.5 py-1.5 font-display text-[12px] outline-none bg-white"
+                style={{ color: NAVY }}
+              />
+            )}
+            <textarea
+              value={myComment}
+              onChange={(event) => setMyComment(event.target.value.slice(0, 280))}
+              placeholder="Optional note — keep it kind and kid-safe"
+              rows={3}
+              className="mt-2 w-full rounded-[0.85rem] px-2.5 py-1.5 font-display text-[12px] outline-none resize-none bg-white"
+              style={{ color: NAVY }}
+            />
+            <button
+              type="button"
+              disabled={reviewBusy || myRating < 1}
+              onClick={() => {
+                if (myRating < 1) return;
+                const trimmedName = myDisplayName.replace(/\s+/g, ' ').trim();
+                if (!postAnonymous) {
+                  const nameError = validateReviewDisplayName(trimmedName);
+                  if (nameError) {
+                    setReviewTone('err');
+                    setReviewMessage(nameError);
+                    return;
+                  }
+                }
+                setReviewBusy(true);
+                setReviewMessage(null);
+                setReviewTone(null);
+                void hubService
+                  .saveReview(story.id, myRating, myComment, {
+                    anonymous: postAnonymous,
+                    displayName: postAnonymous ? undefined : trimmedName,
+                  })
+                  .then((data) => {
+                    setReviews(data.reviews);
+                    setReviewSummary({ average: data.averageRating, count: data.ratingCount });
+                    const pending = data.status === 'pending' || data.myReview?.status === 'pending';
+                    setMyReviewPending(pending);
+                    if (!postAnonymous) {
+                      setMyDisplayName(trimmedName);
+                      rememberReviewName(trimmedName);
+                    }
+                    setReviewTone('ok');
+                    setReviewMessage(data.message || 'Saved — thank you!');
+                  })
+                  .catch((error: Error) => {
+                    setReviewTone('err');
+                    setReviewMessage(error.message);
+                  })
+                  .finally(() => setReviewBusy(false));
+              }}
+              className="mt-2 w-full rounded-full py-1.5 font-display font-black text-[12px] text-white disabled:opacity-50"
+              style={{ background: NAVY }}
+            >
+              {reviewBusy ? 'Saving…' : 'Save my review'}
+            </button>
+            {reviewMessage && (
+              <p
+                className="mt-1.5 font-display text-[11px] leading-snug"
+                style={{ color: reviewTone === 'err' ? '#b45309' : MUTED }}
+              >
+                {reviewMessage}
+              </p>
+            )}
+            {myReviewPending && !reviewMessage && (
+              <p className="mt-1 font-display text-[11px] leading-snug" style={{ color: MUTED }}>
+                Your note is waiting for a quick look before families can see it.
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Safety reassurance for parents */}

@@ -35,10 +35,10 @@ const gameSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
-    // Game type: 'modal' (built-in) or 'webview' (external URL)
+    // Game type: 'modal' (built-in), 'webview' (Games island), or 'arcade' (ship basement cabinet)
     gameType: {
         type: String,
-        enum: ['modal', 'webview'],
+        enum: ['modal', 'webview', 'arcade'],
         default: 'modal',
     },
     // Game-specific settings

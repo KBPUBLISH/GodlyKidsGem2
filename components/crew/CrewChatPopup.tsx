@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Users, Volume2, X } from 'lucide-react';
+import { MessageCircle, RefreshCw, Send, Users, Volume2, X } from 'lucide-react';
 import type { UnlockedCharacter } from '../../services/rewardsService';
 import { useUser } from '../../context/UserContext';
 import {
   fetchCharacterChat,
   fetchTtsAudioUrl,
   GREETING_QUESTION,
+  spokenTextForTts,
+  stripEmotionTags,
   type ChatTurn,
 } from '../../services/characterChatService';
 import {
@@ -105,6 +107,10 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [thinking, setThinking] = useState(false);
   const [retryQuestion, setRetryQuestion] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [kbInset, setKbInset] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Typewriter: number of chars revealed for the current reply.
   const [typed, setTyped] = useState(0);
@@ -173,8 +179,8 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
   );
 
   const speakReply = useCallback(
-    async (text: string, replyId: number) => {
-      const url = await fetchTtsAudioUrl(character.voiceId!, text);
+    async (spoken: string, replyId: number, displayChars: number) => {
+      const url = await fetchTtsAudioUrl(character.voiceId!, spoken);
       if (!mountedRef.current) {
         if (url) URL.revokeObjectURL(url);
         return;
@@ -190,7 +196,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
       objectUrlsRef.current.push(url);
       if (replyIdRef.current !== replyId) return; // a newer reply took over
       setReply((prev) => (prev && prev.id === replyId ? { ...prev, audioUrl: url } : prev));
-      playAudio(url, { replyId, chars: text.length });
+      playAudio(url, { replyId, chars: displayChars });
     },
     [character.voiceId, clearAudioWait, playAudio],
   );
@@ -199,7 +205,8 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
   const showReply = useCallback(
     (text: string, withVoice: boolean) => {
       const id = ++replyIdRef.current;
-      setReply({ id, text });
+      const display = stripEmotionTags(text) || text;
+      setReply({ id, text: display });
       setTyped(0);
       setMsPerChar(TYPE_MS_DEFAULT);
       clearAudioWait();
@@ -209,7 +216,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
         audioWaitTimerRef.current = window.setTimeout(() => {
           if (mountedRef.current && replyIdRef.current === id) setTypingActive(true);
         }, AUDIO_WAIT_MS);
-        void speakReply(text, id);
+        void speakReply(spokenTextForTts(text), id, display.length);
       } else {
         setTypingActive(true);
       }
@@ -253,7 +260,9 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
         showReply(res.reply, true);
         // Cached responses can suggest questions the kid already asked —
         // swap those out for fresh ones (backfilled from earlier responses).
-        setSuggestions(selectSuggestions(character.id, res.suggestedQuestions));
+        setSuggestions(
+          selectSuggestions(character.id, res.suggestedQuestions.map(stripEmotionTags)),
+        );
       } catch {
         if (!mountedRef.current) return;
         if (isGreeting) {
@@ -278,6 +287,8 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
     // (covers histories saved before asked-question tracking existed).
     seedAskedFromHistory(character.id, saved);
     setHistory(saved);
+    setComposing(false);
+    setDraft('');
     void ask(GREETING_QUESTION, saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character.id]);
@@ -299,14 +310,45 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
     if (thinking) return;
     recordAskedQuestion(character.id, question);
     setLastQuestion(question);
+    setComposing(false);
+    setDraft('');
     // History updates only when the reply lands — `ask` appends the user
     // turn and the character turn together (see its doc comment).
     void ask(question, history);
   };
 
+  const submitOwnQuestion = () => {
+    const q = draft.trim();
+    if (!q || thinking) return;
+    sendQuestion(q);
+  };
+
+  useEffect(() => {
+    if (!composing) {
+      setKbInset(0);
+      return;
+    }
+    const id = window.setTimeout(() => inputRef.current?.focus(), 50);
+    const vv = window.visualViewport;
+    if (!vv) return () => window.clearTimeout(id);
+    const syncKb = () => {
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKbInset(covered);
+    };
+    vv.addEventListener('resize', syncKb);
+    vv.addEventListener('scroll', syncKb);
+    syncKb();
+    return () => {
+      window.clearTimeout(id);
+      vv.removeEventListener('resize', syncKb);
+      vv.removeEventListener('scroll', syncKb);
+    };
+  }, [composing]);
+
   const showBubble = thinking || retryQuestion || reply;
   const showSuggestions =
-    suggestions.length > 0 && !thinking && !retryQuestion && doneTyping;
+    suggestions.length > 0 && !thinking && !retryQuestion && doneTyping && !composing;
+  const showAskOwn = !thinking && !retryQuestion && doneTyping;
 
   return (
     <div
@@ -323,28 +365,12 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
         onClick={onClose}
       />
 
-      {/* Close X — floats top-right on the scene */}
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute z-20 w-10 h-10 rounded-full flex items-center justify-center text-[#F5E6C8] active:scale-95 transition-transform"
-        style={{
-          right: 'max(12px, env(safe-area-inset-right, 0px))',
-          top: 'max(12px, calc(var(--safe-area-top, 0px) + 8px))',
-          background: 'rgba(42,22,12,0.72)',
-          border: '2px solid #6B4423',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,230,180,0.25), 0 3px 8px rgba(0,0,0,0.4)',
-        }}
-        aria-label="Close"
-      >
-        <X size={20} />
-      </button>
-
       {/* Character talking — bubble above, big face + floating pills below */}
       <div
         className="absolute left-3 right-3 z-10 flex flex-col gap-3 pointer-events-none"
-        style={{ bottom: 'max(16px, calc(var(--safe-area-bottom, 0px) + 14px))' }}
+        style={{
+          bottom: `max(16px, calc(var(--safe-area-bottom, 0px) + 14px + ${kbInset}px))`,
+        }}
       >
         {/* The kid's tapped question — small dark pill, right-aligned */}
         {lastQuestion && (
@@ -360,6 +386,22 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
             {lastQuestion}
           </div>
         )}
+
+        {/* Close X — just above the left of the word bubble */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="pointer-events-auto self-start w-10 h-10 rounded-full flex items-center justify-center text-[#F5E6C8] active:scale-95 transition-transform -mb-1"
+          style={{
+            background: 'rgba(42,22,12,0.72)',
+            border: '2px solid #6B4423',
+            boxShadow:
+              'inset 0 1px 0 rgba(255,230,180,0.25), 0 3px 8px rgba(0,0,0,0.4)',
+          }}
+          aria-label="Close"
+        >
+          <X size={20} />
+        </button>
 
         {/* Speech bubble — tail points down-left at the face below */}
         {showBubble && (
@@ -522,6 +564,72 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
                 <RefreshCw size={15} />
                 Try again
               </button>
+            )}
+
+            {showAskOwn && !composing && (
+              <button
+                type="button"
+                onClick={() => setComposing(true)}
+                className="pointer-events-auto w-full inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 font-display font-bold text-sm leading-tight text-[#F5E6C8] active:scale-[0.97] transition-transform"
+                style={{
+                  minHeight: 44,
+                  backgroundImage: `url(${WOOD_TEX})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  border: '2px solid #6B4423',
+                  textShadow: CARVED_TEXT_SHADOW,
+                  boxShadow:
+                    '0 3px 0 rgba(62,31,7,0.6), 0 5px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
+                }}
+                aria-label={`Ask ${character.name} your own question`}
+              >
+                <MessageCircle size={16} />
+                Ask my own question
+              </button>
+            )}
+
+            {showAskOwn && composing && (
+              <form
+                className="pointer-events-auto flex items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitOwnQuestion();
+                }}
+              >
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={draft}
+                  maxLength={200}
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoCorrect="on"
+                  placeholder={`Ask ${character.name} anything…`}
+                  onChange={(e) => setDraft(e.target.value)}
+                  className="flex-1 min-w-0 rounded-full px-4 py-2.5 font-display font-semibold text-sm text-[#3D2314] placeholder:text-[#9a7a4a] outline-none"
+                  style={{
+                    minHeight: 44,
+                    background: 'rgba(255,252,240,0.96)',
+                    border: '2px solid #A8834C',
+                    boxShadow: '0 3px 8px rgba(0,0,0,0.28)',
+                  }}
+                  aria-label={`Type a question for ${character.name}`}
+                />
+                <button
+                  type="submit"
+                  disabled={!draft.trim()}
+                  className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-[#F5E6C8] active:scale-95 transition-transform disabled:opacity-45"
+                  style={{
+                    backgroundImage: `url(${WOOD_TEX})`,
+                    backgroundSize: 'cover',
+                    border: '2px solid #6B4423',
+                    boxShadow: '0 3px 8px rgba(0,0,0,0.4)',
+                  }}
+                  aria-label="Send question"
+                >
+                  <Send size={18} />
+                </button>
+              </form>
             )}
           </div>
         </div>

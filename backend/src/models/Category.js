@@ -4,7 +4,6 @@ const categorySchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true,
     },
     description: {
@@ -25,6 +24,10 @@ const categorySchema = new mongoose.Schema({
     },
     icon: {
         type: String, // Icon name or emoji
+    },
+    // Square icon image shown as the category icon in the app
+    iconImage: {
+        type: String, // URL to GCS
     },
     // Category cover image for the app cards
     image: {
@@ -52,5 +55,46 @@ categorySchema.pre('save', function() {
     this.updatedAt = Date.now();
 });
 
-module.exports = mongoose.model('Category', categorySchema);
+// Same display name can exist once per library (Read vs Listen).
+categorySchema.index({ name: 1, contentType: 1 }, { unique: true });
 
+const Category = mongoose.model('Category', categorySchema);
+
+const isMissingIndexError = (err) =>
+    err?.code === 27 || err?.codeName === 'IndexNotFound';
+
+const dropLegacyNameIndex = async () => {
+    try {
+        const indexes = await Category.collection.indexes();
+        const legacy = indexes.find((idx) => {
+            if (idx.name === 'name_1') return true;
+            const keys = idx.key || {};
+            return idx.unique && keys.name === 1 && keys.contentType == null;
+        });
+        if (!legacy) return false;
+        await Category.collection.dropIndex(legacy.name);
+        console.log(`📚 Dropped legacy Category index ${legacy.name} so Read and Listen can share names`);
+        return true;
+    } catch (err) {
+        if (!isMissingIndexError(err)) {
+            console.warn('Category name index drop:', err.message);
+        }
+        return false;
+    }
+};
+
+const whenReady = (fn) => {
+    if (mongoose.connection.readyState === 1) {
+        fn();
+        return;
+    }
+    mongoose.connection.once('open', fn);
+};
+
+whenReady(() => {
+    dropLegacyNameIndex();
+});
+
+Category.dropLegacyNameIndex = dropLegacyNameIndex;
+
+module.exports = Category;

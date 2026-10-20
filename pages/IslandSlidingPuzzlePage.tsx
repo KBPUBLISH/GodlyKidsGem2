@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { PartyPopper, RefreshCw, Star } from 'lucide-react';
+import { PartyPopper, RefreshCw, Star, Volume2, VolumeX } from 'lucide-react';
 import WoodBackButton from '../components/WoodBackButton';
 import { useAudio } from '../context/AudioContext';
+import { useSailMusic } from '../hooks/useSailMusic';
 import { getApiBaseUrl } from '../services/apiService';
 import {
   PuzzleScoreEntry,
@@ -148,6 +149,7 @@ type Phase = 'loading' | 'pick' | 'playing' | 'won' | 'missing';
  * Route: /sail/:islandId/lesson/puzzle
  */
 const IslandSlidingPuzzlePage: React.FC = () => {
+  const { soundOn, toggleSound } = useSailMusic();
   const navigate = useNavigate();
   const location = useLocation();
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();
@@ -436,6 +438,19 @@ const IslandSlidingPuzzlePage: React.FC = () => {
         >
           {title}
         </h1>
+        <button
+          type="button"
+          onClick={toggleSound}
+          className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform"
+          style={woodBtnStyle}
+          aria-label={soundOn ? 'Sound off' : 'Sound on'}
+        >
+          {soundOn ? (
+            <Volume2 size={20} className="text-white drop-shadow" strokeWidth={2.6} />
+          ) : (
+            <VolumeX size={20} className="text-white/80 drop-shadow" strokeWidth={2.6} />
+          )}
+        </button>
         <button
           type="button"
           onClick={() => startGame(difficulty)}

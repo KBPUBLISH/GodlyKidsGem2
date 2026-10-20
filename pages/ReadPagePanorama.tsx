@@ -10,6 +10,7 @@ import { ApiService } from '../services/apiService';
 import { Search, ChevronDown, BookOpen, Heart, Sparkles, TreePine, Sword, Star, Book, Users, Crown, Compass, Smile, Castle } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import CoverImage from '../components/ui/CoverImage';
+import HardcoverCover from '../components/ui/HardcoverCover';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -20,6 +21,7 @@ interface CategoryData {
   gradientTo?: string;
   image?: string;
   icon?: string;
+  iconImage?: string;
 }
 
 // Category card configuration with colors for books page
@@ -79,30 +81,31 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
       }}
     >
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border-2 border-purple-400/30 hover:border-purple-400/60 hover:shadow-2xl hover:scale-105 transition-all">
-        <div className="aspect-[3/4] bg-gradient-to-br from-purple-500 to-indigo-600 relative overflow-hidden">
+        <HardcoverCover>
           {series.coverImage ? (
             <CoverImage
               src={series.coverImage}
               alt={series.title}
+              variant="full"
               className="w-full h-full object-cover pointer-events-none"
               draggable={false}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center pointer-events-none">
+            <div className="w-full h-full flex items-center justify-center pointer-events-none bg-gradient-to-br from-purple-500 to-indigo-600">
               <span className="text-6xl">📚</span>
             </div>
           )}
-          <div className="absolute top-2 left-2 bg-purple-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 pointer-events-none">
+          <div className="absolute top-2 left-2 bg-purple-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 pointer-events-none z-20">
             <BookOpen className="w-3 h-3" />
             Series
           </div>
-          <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md pointer-events-none">
+          <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md pointer-events-none z-20">
             {series.books?.length || 0} books
           </div>
           {series.isMembersOnly && !isSubscribed && (
             <PremiumBadge className="absolute top-2 right-2 z-20" />
           )}
-        </div>
+        </HardcoverCover>
         <div className="p-2">
           <h3 className="text-white text-xs font-bold mb-0.5 truncate font-display">
             {series.title}
@@ -207,6 +210,7 @@ const ReadPagePanorama: React.FC = () => {
               gradientTo: c.gradientTo,
               image: c.image,
               icon: c.icon,
+              iconImage: c.iconImage,
             };
             // Debug: Log categories with images
             if (c.image) {
@@ -350,8 +354,8 @@ const ReadPagePanorama: React.FC = () => {
     >
       <Header isVisible={isHeaderVisible} title="READING" variant="plank" />
 
-      {/* Plank header clearance — phone −1.5rem / tablet −4.5rem lift; keep in sync with Header.tsx (mirrors WorldPage) */}
-      <div className="px-4 pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)] pb-52">
+      {/* Plank header clearance — phone −1.5rem / tablet live edge at 6.25rem; keep in sync with Header.tsx */}
+      <div className="px-4 pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)] pb-52">
         
         {/* Search Bar with Age Filter */}
         <div className="flex gap-2 mb-2">
@@ -503,12 +507,17 @@ const ReadPagePanorama: React.FC = () => {
                         )}
                       </div>
                       
-                      {/* Fallback decorative icon if no image */}
-                      {!catData?.image && (
+                      {!catData?.image && catData?.iconImage ? (
+                        <img
+                          src={catData.iconImage}
+                          alt=""
+                          className="absolute right-3 top-1/2 -translate-y-1/2 w-14 h-14 object-contain z-10 drop-shadow"
+                        />
+                      ) : !catData?.image ? (
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">
                           <IconComponent className="w-16 h-16 text-white" />
                         </div>
-                      )}
+                      ) : null}
                       
                       {/* Selected indicator */}
                       {isSelected && (

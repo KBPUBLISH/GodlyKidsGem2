@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Check, Gift, PartyPopper, X } from 'lucide-react';
 import WoodBackButton from '../components/WoodBackButton';
@@ -8,10 +8,22 @@ import {
   resolveRewardPool,
   type RewardDefinition,
 } from '../services/rewardsService';
+import { resolveBibleMapMediaUrl } from '../utils/bibleMapApi';
 import {
   buildIslandSceneNavState,
   buildIslandScenePath,
 } from '../utils/islandSceneReturn';
+import { useAudio } from '../context/AudioContext';
+import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
+import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
+import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
+import {
+  isPlayableMainMapStory,
+  type PackUnlockCoverStory,
+} from '../utils/mainMapStoryUnlock';
+import { storyHasTryIt, type TryItPayload } from '../utils/tryItContent';
+import { primeTryItVideoFromTap } from '../utils/tryItPlayback';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 
@@ -26,6 +38,8 @@ type QuizQuestion = {
 
 type StoryCms = {
   _id?: string;
+  order?: number;
+  status?: string;
   title?: string;
   displayTitle?: string;
   quizMode?: 'book_quiz' | 'custom' | 'none';
@@ -35,7 +49,22 @@ type StoryCms = {
     levels?: Partial<Record<QuizLevel, QuizQuestion[]>>;
   };
   bookId?: string | { _id?: string };
+  mapIconUrl?: string;
   heroImageUrl?: string;
+  tryIt?: TryItPayload;
+  puzzle?: {
+    enabled?: boolean;
+    type?: string;
+    imageUrl?: string;
+  };
+  coloringPageIds?: Array<
+    | string
+    | {
+        _id?: string;
+        backgroundUrl?: string;
+        files?: { background?: { url?: string } };
+      }
+  >;
   /** Story pack rewards config (used for the Claim Treasure reveal). */
   rewards?: { enabled?: boolean; pool?: RewardDefinition[] };
   game?: {
@@ -70,17 +99,49 @@ const getBibleMapApiRoot = (): string => {
 
 const normalizeQuestions = (list: QuizQuestion[] | undefined): QuizQuestion[] =>
   (Array.isArray(list) ? list : [])
-    .map((q) => ({
-      question: String(q.question || '').trim(),
-      options: (Array.isArray(q.options) ? q.options : [])
-        .map((o) => String(o ?? '').trim())
-        .filter(Boolean)
-        .slice(0, 4),
-      correctIndex:
-        typeof q.correctIndex === 'number' && q.correctIndex >= 0 ? q.correctIndex : 0,
-      explanation: String(q.explanation || '').trim(),
-    }))
+    .map((q) => {
+      const rawOptions = (Array.isArray(q.options) ? q.options : []).map((o) =>
+        String(o ?? '').trim(),
+      );
+      const rawCorrect =
+        typeof q.correctIndex === 'number' && q.correctIndex >= 0 ? q.correctIndex : 0;
+      // Drop empty slots without sliding the correct choice to the wrong index.
+      const kept = rawOptions
+        .map((text, orig) => ({ text, orig }))
+        .filter((o) => o.text)
+        .slice(0, 4);
+      const mapped = kept.findIndex((o) => o.orig === rawCorrect);
+      return {
+        question: String(q.question || '').trim(),
+        options: kept.map((o) => o.text),
+        correctIndex: mapped >= 0 ? mapped : 0,
+        explanation: String(q.explanation || '').trim(),
+      };
+    })
     .filter((q) => q.question && q.options.length >= 2);
+
+/** Fisher-Yates per question so CMS "correct is always first" is not always A. */
+const shuffleQuestionOptions = (q: QuizQuestion): QuizQuestion => {
+  const items = q.options.map((text, i) => ({
+    text,
+    isCorrect: i === q.correctIndex,
+  }));
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const swap = items[i];
+    items[i] = items[j];
+    items[j] = swap;
+  }
+  const correctIndex = items.findIndex((it) => it.isCorrect);
+  return {
+    ...q,
+    options: items.map((it) => it.text),
+    correctIndex: correctIndex >= 0 ? correctIndex : 0,
+  };
+};
+
+const preparePlayQuestions = (list: QuizQuestion[]): QuizQuestion[] =>
+  list.map(shuffleQuestionOptions);
 
 const levelsFromStory = (
   story: StoryCms | undefined,
@@ -108,7 +169,11 @@ const IslandQuizPage: React.FC = () => {
     title?: string;
     fromMainMap?: boolean;
     fromSail?: boolean;
+    onboardingJourney?: boolean;
   } | null;
+  const { playSuccess } = useAudio();
+  const onboardingJourney =
+    Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [title, setTitle] = useState('QUIZZ');
@@ -123,6 +188,13 @@ const IslandQuizPage: React.FC = () => {
   const [score, setScore] = useState(0);
   /** Full CMS story — needed for its reward pool when claiming treasure. */
   const [rewardStory, setRewardStory] = useState<StoryCms | null>(null);
+  const [hasTryIt, setHasTryIt] = useState(false);
+  const [tryItDone, setTryItDone] = useState(false);
+  const [tryItVideoUrl, setTryItVideoUrl] = useState('');
+  const [unlockStories, setUnlockStories] = useState<PackUnlockCoverStory[]>([]);
+  const autoAdvanceRef = useRef<number | null>(null);
+  /** Prevents double-advance if tap + Next + timeout fire in the same tick. */
+  const advanceLockRef = useRef(false);
 
   const current = questions[index];
 
@@ -137,23 +209,32 @@ const IslandQuizPage: React.FC = () => {
 
   const goBackToScene = useCallback(() => {
     navigate(sceneBackPath, {
-      state: buildIslandSceneNavState({
-        islandId,
-        storyId: returnStoryId,
-        fromMainMap: Boolean(navState?.fromMainMap),
-        fromSail: Boolean(navState?.fromSail),
-        title: navState?.title || title,
-      }),
+      state: {
+        ...buildIslandSceneNavState({
+          islandId,
+          storyId: returnStoryId,
+          fromMainMap: Boolean(navState?.fromMainMap),
+          fromSail: Boolean(navState?.fromSail),
+          title: navState?.title || title,
+        }),
+        onboardingJourney,
+      },
     });
-  }, [navigate, sceneBackPath, islandId, returnStoryId, navState, title]);
+  }, [navigate, sceneBackPath, islandId, returnStoryId, navState, title, onboardingJourney]);
 
   // Persist quiz completion as soon as the results screen is shown
   useEffect(() => {
     if (phase !== 'done') return;
     const sid = storyId || searchParams.get('storyId') || '';
     if (!sid) return;
-    islandStoryProgressService.markComplete(islandId, sid, 'quiz');
+    storyPackUnlockUxService.markActivityAndFlagUnlock(islandId, sid, 'quiz');
   }, [phase, islandId, storyId, searchParams]);
+
+  const { celebration, dismissCelebration } = usePackUnlockCelebration(
+    islandId,
+    unlockStories,
+    phase === 'done' && unlockStories.length > 0,
+  );
 
   const loadStoryQuiz = useCallback(
     async (controller: AbortController) => {
@@ -164,6 +245,25 @@ const IslandQuizPage: React.FC = () => {
       if (!res.ok) throw new Error('Island not found');
       const data = (await res.json()) as { stories?: StoryCms[] };
       const stories = Array.isArray(data.stories) ? data.stories : [];
+      setUnlockStories(
+        stories
+          .filter((s) => s._id && isPlayableMainMapStory({ _id: s._id, status: s.status }))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map((s) => ({
+            _id: s._id as string,
+            order: s.order,
+            status: s.status,
+            quizMode: s.quizMode,
+            bookId: s.bookId,
+            customQuestions: s.customQuestions,
+            quiz: s.quiz,
+            tryIt: s.tryIt,
+            mapIconUrl: s.mapIconUrl,
+            heroImageUrl: s.heroImageUrl,
+            title: s.title,
+            displayTitle: s.displayTitle,
+          })),
+      );
       const wantedId = searchParams.get('storyId');
 
       const story =
@@ -213,11 +313,22 @@ const IslandQuizPage: React.FC = () => {
       setTitle((story.displayTitle || story.title || 'QUIZZ').toUpperCase());
       setStoryId(story._id || wantedId || '');
       setRewardStory(story);
+      const packHasTryIt = storyHasTryIt(story);
+      setHasTryIt(packHasTryIt);
+      setTryItVideoUrl(
+        packHasTryIt ? resolveBibleMapMediaUrl(story.tryIt?.videoUrl) : '',
+      );
+      const sid = story._id || wantedId || '';
+      setTryItDone(
+        sid
+          ? Boolean(islandStoryProgressService.get(islandId, sid).tryIt)
+          : false,
+      );
       setAvailable(diffs);
       setDifficulty(resolved);
 
       if (diffs.length === 1 || searchParams.get('difficulty')) {
-        setQuestions(levels[resolved] || []);
+        setQuestions(preparePlayQuestions(levels[resolved] || []));
         setIndex(0);
         setSelected(null);
         setRevealed(false);
@@ -265,7 +376,7 @@ const IslandQuizPage: React.FC = () => {
         const qs = levelsFromStory(story).levels[level] || [];
         if (story) setRewardStory(story);
         setDifficulty(level);
-        setQuestions(qs);
+        setQuestions(preparePlayQuestions(qs));
         setIndex(0);
         setSelected(null);
         setRevealed(false);
@@ -284,11 +395,19 @@ const IslandQuizPage: React.FC = () => {
     setSelected(optionIndex);
     setRevealed(true);
     setWasCorrect(correct);
-    if (correct) setScore((s) => s + 1);
+    if (correct) {
+      playSuccess();
+      setScore((s) => s + 1);
+    }
   };
 
-  const goNext = () => {
-    if (!revealed) return;
+  const advanceQuestion = useCallback(() => {
+    if (advanceLockRef.current) return;
+    advanceLockRef.current = true;
+    if (autoAdvanceRef.current != null) {
+      window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
     if (index >= questions.length - 1) {
       setPhase('done');
       return;
@@ -297,32 +416,90 @@ const IslandQuizPage: React.FC = () => {
     setSelected(null);
     setRevealed(false);
     setWasCorrect(false);
-  };
+  }, [index, questions.length]);
+
+  // Unlock after we land on the next question (or results) so the same tap can't skip two.
+  useEffect(() => {
+    advanceLockRef.current = false;
+  }, [index, phase]);
+
+  // After answering, wait 3s so kids can read feedback, then advance automatically.
+  // A tap anywhere on the quiz screen (once revealed) uses the same advanceQuestion.
+  useEffect(() => {
+    if (phase !== 'playing' || !revealed) return;
+    autoAdvanceRef.current = window.setTimeout(() => {
+      advanceQuestion();
+    }, 3000);
+    return () => {
+      if (autoAdvanceRef.current != null) {
+        window.clearTimeout(autoAdvanceRef.current);
+        autoAdvanceRef.current = null;
+      }
+    };
+  }, [phase, revealed, index, advanceQuestion]);
+
+  /** Empty-space taps only advance after an answer is locked in. */
+  const onQuizScreenTap = useCallback(() => {
+    if (phase !== 'playing' || !revealed) return;
+    advanceQuestion();
+  }, [phase, revealed, advanceQuestion]);
 
   const progressPct = useMemo(() => {
     if (!questions.length) return 0;
     return ((index + (revealed ? 1 : 0)) / questions.length) * 100;
   }, [index, questions.length, revealed]);
 
-  /** Treasure is earned at half right or better. */
+  /** Treasure is earned at half right or better — but only after Try It when present. */
   const earnedTreasure = questions.length > 0 && score / questions.length >= 0.5;
+  const needsTryIt = hasTryIt && !tryItDone;
+
+  const openTryIt = useCallback(() => {
+    const sid = storyId || searchParams.get('storyId')?.trim() || '';
+    const qs = sid ? `?storyId=${encodeURIComponent(sid)}` : '';
+    if (tryItVideoUrl) {
+      primeTryItVideoFromTap(tryItVideoUrl);
+    }
+    navigate(`/sail/${islandId}/lesson/try-it${qs}`, {
+      state: {
+        title: navState?.title,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        onboardingJourney,
+      },
+    });
+  }, [
+    storyId,
+    searchParams,
+    tryItVideoUrl,
+    navigate,
+    islandId,
+    navState,
+    onboardingJourney,
+  ]);
 
   const claimTreasure = useCallback(() => {
+    if (needsTryIt) {
+      openTryIt();
+      return;
+    }
     const sid = storyId || searchParams.get('storyId')?.trim() || '';
     if (sid) {
-      // Same bookkeeping as the scene's REWARDS activity (goRewards).
       islandStoryProgressService.markComplete(islandId, sid, 'rewards');
     }
     navigate('/sail/treasure', {
       state: {
+        islandId,
         storyId: sid,
         storyTitle:
           rewardStory?.displayTitle || rewardStory?.title || navState?.title,
         pool: resolveRewardPool(rewardStory),
         returnTo: sceneBackPath,
+        onboardingJourney,
       },
     });
   }, [
+    needsTryIt,
+    openTryIt,
     navigate,
     storyId,
     searchParams,
@@ -330,6 +507,7 @@ const IslandQuizPage: React.FC = () => {
     rewardStory,
     navState?.title,
     sceneBackPath,
+    onboardingJourney,
   ]);
 
   return (
@@ -344,13 +522,20 @@ const IslandQuizPage: React.FC = () => {
       {/* Warm brown darken — same as puzzle/coloring; avoid green under translucent wood */}
       <div className="absolute inset-0 bg-[#2a1810]/70 pointer-events-none" aria-hidden />
 
-      <div className="relative z-10 flex flex-col h-full px-4 pt-[max(12px,var(--safe-area-top))] pb-[max(12px,var(--safe-area-bottom))]">
+      <div
+        className="relative z-10 flex flex-col h-full px-4 pt-[max(12px,var(--safe-area-top))] pb-[max(12px,var(--safe-area-bottom))]"
+        onClick={onQuizScreenTap}
+      >
         <div className="flex items-center gap-3 mb-3">
-          <WoodBackButton
-            onClick={goBackToScene}
-            className="w-11 h-11 flex-shrink-0"
-            aria-label="Back"
-          />
+          {!onboardingJourney ? (
+            <WoodBackButton
+              onClick={goBackToScene}
+              className="w-11 h-11 flex-shrink-0"
+              aria-label="Back"
+            />
+          ) : (
+            <span className="w-11 h-11 flex-shrink-0" aria-hidden />
+          )}
           <h1
             className="flex-1 text-center text-white text-xl font-black tracking-wide drop-shadow"
             style={{ fontFamily: '"Nunito", "Segoe UI", system-ui, sans-serif' }}
@@ -445,8 +630,14 @@ const IslandQuizPage: React.FC = () => {
                     <button
                       key={oi}
                       type="button"
-                      disabled={revealed}
-                      onClick={() => onPick(oi)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (revealed) {
+                          advanceQuestion();
+                          return;
+                        }
+                        onPick(oi);
+                      }}
                       className={cls}
                     >
                       <span className="inline-flex items-center gap-2">
@@ -494,33 +685,39 @@ const IslandQuizPage: React.FC = () => {
               )}
             </div>
 
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                disabled={!revealed}
-                onClick={goNext}
-                className="px-6 py-3 rounded-xl text-white font-black disabled:opacity-40 active:scale-95"
-                style={woodBtnStyle}
-              >
-                {index >= questions.length - 1 ? 'See results' : 'Next'}
-              </button>
-            </div>
+            {revealed && (
+              <p className="mt-3 text-center text-white/75 text-sm font-semibold">
+                Tap anywhere for the next question…
+              </p>
+            )}
           </div>
         )}
 
         {phase === 'done' && (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6 relative">
+            <style>{`
+              @keyframes ob-claim-pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.06); }
+              }
+              .ob-claim-pulse {
+                animation: ob-claim-pulse 1.15s ease-in-out infinite;
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .ob-claim-pulse { animation: none; }
+              }
+            `}</style>
             <PartyPopper className="w-14 h-14 text-[#F5C518] mb-3 drop-shadow" />
             <h2 className="text-white text-2xl font-black mb-2 drop-shadow">Quiz complete!</h2>
             <p className="text-white/90 text-lg font-bold mb-6">
               You got {score} of {questions.length} right
             </p>
             <div className="flex flex-col gap-3 w-full max-w-xs">
-              {earnedTreasure && (
+              {needsTryIt ? (
                 <button
                   type="button"
-                  onClick={claimTreasure}
-                  className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  onClick={openTryIt}
+                  className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] ob-claim-pulse active:scale-95 transition-transform"
                   style={{
                     background:
                       'linear-gradient(180deg, #F0D78C 0%, #D4A017 50%, #B8860B 100%)',
@@ -529,36 +726,83 @@ const IslandQuizPage: React.FC = () => {
                     border: '2px solid #F5E6A3',
                   }}
                 >
-                  <Gift size={22} strokeWidth={2.4} />
-                  Claim Treasure
+                  Try it!
+                </button>
+              ) : onboardingJourney ? (
+                <button
+                  type="button"
+                  onClick={goBackToScene}
+                  className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] ob-claim-pulse active:scale-95 transition-transform"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, #F0D78C 0%, #D4A017 50%, #B8860B 100%)',
+                    boxShadow:
+                      '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,240,200,0.5)',
+                    border: '2px solid #F5E6A3',
+                  }}
+                >
+                  Back to Story Pack
+                </button>
+              ) : (
+                <>
+                  {earnedTreasure && (
+                    <button
+                      type="button"
+                      onClick={claimTreasure}
+                      className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                      style={{
+                        background:
+                          'linear-gradient(180deg, #F0D78C 0%, #D4A017 50%, #B8860B 100%)',
+                        boxShadow:
+                          '0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,240,200,0.5)',
+                        border: '2px solid #F5E6A3',
+                      }}
+                    >
+                      <Gift size={22} strokeWidth={2.4} />
+                      Claim Treasure
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestions((prev) => preparePlayQuestions(prev));
+                      setIndex(0);
+                      setSelected(null);
+                      setRevealed(false);
+                      setWasCorrect(false);
+                      setScore(0);
+                      setPhase(available.length > 1 ? 'pick' : 'playing');
+                    }}
+                    className="py-3 rounded-xl text-white font-black"
+                    style={woodBtnStyle}
+                  >
+                    Play again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goBackToScene}
+                    className="py-3 rounded-xl text-white/95 font-bold border-2 border-white/40"
+                  >
+                    Back to activities
+                  </button>
+                </>
+              )}
+              {needsTryIt && !onboardingJourney && (
+                <button
+                  type="button"
+                  onClick={goBackToScene}
+                  className="py-3 rounded-xl text-white/95 font-bold border-2 border-white/40"
+                >
+                  Back to activities
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  setIndex(0);
-                  setSelected(null);
-                  setRevealed(false);
-                  setWasCorrect(false);
-                  setScore(0);
-                  setPhase(available.length > 1 ? 'pick' : 'playing');
-                }}
-                className="py-3 rounded-xl text-white font-black"
-                style={woodBtnStyle}
-              >
-                Play again
-              </button>
-              <button
-                type="button"
-                onClick={goBackToScene}
-                className="py-3 rounded-xl text-white/95 font-bold border-2 border-white/40"
-              >
-                Back to activities
-              </button>
             </div>
           </div>
         )}
       </div>
+      {celebration && (
+        <PackUnlockCelebration payload={celebration} onDone={dismissCelebration} />
+      )}
     </div>
   );
 };

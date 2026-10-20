@@ -8,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
 import MiniPlayer from '../components/audio/MiniPlayer';
 import CommentSection from '../components/features/CommentSection';
+import HardcoverCover from '../components/ui/HardcoverCover';
 
 // Predefined color palettes for fallback (warm, cool, vibrant variations)
 const FALLBACK_PALETTES = [
@@ -519,18 +520,14 @@ const PlaylistDetailPage: React.FC = () => {
                 <div className="relative z-20 px-6 pt-4 pb-6">
                     {/* Cover Image - With dynamic border color */}
                     {playlist.coverImage && (
-                        <div 
-                            className="w-72 h-72 mx-auto mb-6 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500"
-                            style={{
-                                border: `4px solid ${gradientColors.accent}`,
-                                boxShadow: `0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px ${gradientColors.accent}40`
-                            }}
-                        >
-                            <img
-                                src={playlist.coverImage}
-                                alt={playlist.title}
-                                className="w-full h-full object-cover"
-                            />
+                        <div className="w-72 mx-auto mb-6">
+                            <HardcoverCover aspectClassName="aspect-square">
+                                <img
+                                    src={playlist.coverImage}
+                                    alt={playlist.title}
+                                    className="w-full h-full object-cover"
+                                />
+                            </HardcoverCover>
                         </div>
                     )}
 

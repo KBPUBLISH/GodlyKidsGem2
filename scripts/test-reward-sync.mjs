@@ -35,8 +35,16 @@ await build({
           path: 'apiService-stub',
           namespace: 'stub',
         }));
+        b.onResolve({ filter: /\.\/islandStoryProgressService$/ }, () => ({
+          path: 'islandProgress-stub',
+          namespace: 'stub-progress',
+        }));
         b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
           contents: `export const getApiBaseUrl = () => 'http://cms.test/api/';`,
+          loader: 'js',
+        }));
+        b.onLoad({ filter: /.*/, namespace: 'stub-progress' }, () => ({
+          contents: `export const islandStoryProgressService = { getStoryIdsWithRewardsComplete: () => [] };`,
           loader: 'js',
         }));
       },
@@ -173,5 +181,123 @@ assert.equal(held[0].voiceId, undefined, 'removed CMS voiceId clears stored valu
 assert.equal(held[0].modelUrl, NEW_MODEL, 'modelUrl still current');
 assert.ok(fetchCalls.length > before, 'refresh re-fetched the story');
 console.log('✔ CMS-removed fields are cleared from the stored snapshot');
+
+/* ------------------------------------------------------------------------ *
+ * 5. Reward id re-minted in the portal (real Noah incident, Aug 2026):
+ *    the editor deleted + re-added the character row, so the CMS pool entry
+ *    got a NEW id while the kid's localStorage still held the OLD id. The
+ *    refresh must fall back to story+name matching, adopt the new id, merge
+ *    the duplicate an earlier auto-grant already collected, remap the crew
+ *    roster pick, and claim the new id so future grants don't re-duplicate.
+ *    Pool payload mirrors the real production story 6a709d614ba23721a1e1a8ab.
+ * ------------------------------------------------------------------------ */
+
+const NOAH_STORY = '6a709d614ba23721a1e1a8ab';
+const NOAH_NEW_ID = 'reward-msjbp4qv-w81v';
+const NOAH_OLD_ID = 'reward-msfxxold-0001';
+const NOAH_NEW_MODEL =
+  'https://storage.googleapis.com/productiongk/books/bible-map/genesis/character-model/1786131507650_Meshy_AI_Meshy_Merged_Animations__2_.glb';
+const NOAH_NEW_PERSONA =
+  'Noah is a wise , god fearing man with a funny old man personality, kinda cheeky';
+
+globalThis.fetch = async (url, init) => {
+  fetchCalls.push({ url: String(url), init });
+  if (!String(url).includes(`/bible-map/stories/${NOAH_STORY}`)) {
+    return { ok: false, status: 404, json: async () => ({}) };
+  }
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      story: {
+        _id: NOAH_STORY,
+        status: 'draft',
+        rewards: {
+          enabled: true,
+          pool: [
+            { id: 'reward-msiansx3-3h23', type: 'coins', title: 'Gold Coins', coinMin: 100, coinMax: 1000 },
+            {
+              id: NOAH_NEW_ID,
+              type: 'character',
+              title: 'Noah',
+              characterName: 'Noah',
+              imageUrl: 'https://storage.googleapis.com/productiongk/books/bible-map/6a6d1da601c2b7d1d4305c02/reward-image/1786130114433_noah.png',
+              modelUrl: NOAH_NEW_MODEL,
+              voiceId: '4IITqPrlcBwtCRRvKmzl',
+              persona: NOAH_NEW_PERSONA,
+            },
+          ],
+        },
+      },
+      coloringPages: [],
+    }),
+  };
+};
+
+storage.set(
+  'godlykids_rewards_v1',
+  JSON.stringify({
+    characters: [
+      {
+        // Stale unlock-time snapshot under the OLD (re-minted-away) id.
+        id: NOAH_OLD_ID,
+        name: 'Noah',
+        imageUrl: 'https://storage.googleapis.com/bucket/noah-old.png',
+        modelUrl: OLD_MODEL,
+        voiceId: 'voice-old',
+        persona: 'Old Noah persona',
+        sourceStoryId: NOAH_STORY,
+        unlockedAt: 1785000000000,
+      },
+      {
+        // Duplicate a previous launch's auto-grant collected under the new id.
+        id: NOAH_NEW_ID,
+        name: 'Noah',
+        imageUrl: 'https://storage.googleapis.com/productiongk/books/bible-map/6a6d1da601c2b7d1d4305c02/reward-image/1786130114433_noah.png',
+        modelUrl: NOAH_NEW_MODEL,
+        voiceId: '4IITqPrlcBwtCRRvKmzl',
+        persona: NOAH_NEW_PERSONA,
+        sourceStoryId: NOAH_STORY,
+        unlockedAt: 1786100000000,
+      },
+    ],
+    games: [],
+    bookTemplates: [],
+    claimedKeys: [`${NOAH_STORY}:${NOAH_OLD_ID}`],
+    selectedCrewIds: [NOAH_OLD_ID],
+  }),
+);
+
+assert.equal(
+  await rewardsService.refreshUnlockedCharactersFromCms(),
+  true,
+  'refresh reports a change for the re-minted reward id',
+);
+
+held = rewardsService.getUnlockedCharacters();
+assert.equal(held.length, 1, 'old record + duplicate merged into one Noah');
+assert.equal(held[0].id, NOAH_NEW_ID, 'held record adopted the new CMS id');
+assert.equal(held[0].modelUrl, NOAH_NEW_MODEL, 'GLB updated to the replaced model');
+assert.equal(held[0].persona, NOAH_NEW_PERSONA, 'persona updated');
+assert.equal(held[0].voiceId, '4IITqPrlcBwtCRRvKmzl', 'voiceId updated');
+assert.equal(held[0].unlockedAt, 1785000000000, 'earliest unlock timestamp kept');
+assert.deepEqual(
+  rewardsService.getSelectedCrewIds(),
+  [NOAH_NEW_ID],
+  'crew roster pick follows the id rename',
+);
+assert.equal(
+  rewardsService.isClaimed(NOAH_STORY, NOAH_NEW_ID),
+  true,
+  'new id is claimed so the auto-grant pass cannot duplicate it',
+);
+console.log('✔ re-minted reward id: matched by story+name, id migrated, duplicate merged');
+
+// 6. Full startup sync on the migrated state must be a no-op (no duplicates).
+await rewardsService.syncClaimedRewardsAtStartup();
+held = rewardsService.getUnlockedCharacters();
+assert.equal(held.length, 1, 'startup sync after migration grants no duplicate');
+assert.equal(held[0].id, NOAH_NEW_ID, 'id stable across startup sync');
+console.log('✔ startup sync after migration is idempotent');
 
 console.log('\nAll reward-sync tests passed.');

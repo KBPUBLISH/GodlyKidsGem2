@@ -2,21 +2,29 @@
 
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { rewardsService } from '../services/rewardsService';
+import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
+import { clearAdamTourSeen } from './adamTour';
 
 const STORAGE_KEY = 'godlykids_onboarding_journey';
 export const ONBOARDING_JOURNEY_EVENT = 'gk-onboarding-journey';
 export const ONBOARDING_GENESIS_VIDEO = '/assets/videos/onboarding-genesis-arrival.mp4';
-/** Flame guide on the first-time journey map. */
+export const SPLASH_BOAT_VIDEO = '/assets/videos/splash-set-sail.mp4?v=openart-1';
+export const SPLASH_BOAT_POSTER = '/assets/images/splash-set-sail.jpg?v=openart-1';
+export const SPLASH_CONTINUE_VIDEO = '/assets/videos/splash-continue.mp4?v=openart-1';
+export const SPLASH_TAGLINE = '/assets/images/splash-tagline.png?v=hand-1';
+export const ONBOARDING_FAMILY_BG_VIDEO = '/assets/videos/onboarding-family-bg.mp4?v=openart-3';
+export const ONBOARDING_FAMILY_BG_POSTER = '/assets/images/onboarding-family-bg.jpg?v=openart-3';
+/** Flame guide (kept for fallback). Perry is the live island guide. */
 export const ONBOARDING_GUIDE_IMAGE = '/assets/images/onboarding-guide-spark.png';
-/** Portal ElevenLabs voice "HS". */
-export const ONBOARDING_GUIDE_VOICE_ID = 'nzq834KPTCJtG39LGkdi';
+/** Same ElevenLabs Elli voice Perry uses on the fly-in. */
+export const ONBOARDING_GUIDE_VOICE_ID = 'MF3mGyEYCl7XYWbV9V6O';
 /** On-screen typewriter copy (no emotion tags). */
 export const ONBOARDING_GUIDE_DEFAULT_NAME = 'Godly Kids';
 export const ONBOARDING_GUIDE_LINE =
-  'Ahoy! Welcome Godly Kids, my name is HS! I will be your guide and helper. Are you ready to explore the greatest stories ever told! Tap on Island !';
-/** Spoken copy — ElevenLabs v3 emotion tags (stripped from the bubble). */
+  'Ahoy! Welcome Godly Kids, my name is Perry! I will be your guide and helper. Are you ready to explore the greatest stories ever told! Tap on Island !';
+/** Spoken copy — ElevenLabs v4 emotion tags (stripped from the bubble). */
 export const ONBOARDING_GUIDE_TTS =
-  '[giggles] Ahoy! [happily] Welcome Godly Kids, [warmly] my name is HS! [gently] I will be your guide and helper. [excitedly] Are you ready to explore the greatest stories ever told! [pause] Tap on Island !';
+  '[giggles] Ahoy! [happily] Welcome Godly Kids, [warmly] my name is Perry! [gently] I will be your guide and helper. [excitedly] Are you ready to explore the greatest stories ever told! [pause] Tap on Island !';
 
 export type GuideBeat = {
   line: string;
@@ -34,8 +42,8 @@ function guideFirstName(kidName?: string | null): string {
 export function buildOnboardingGuideCopy(kidName?: string | null): GuideBeat {
   const name = guideFirstName(kidName);
   return {
-    line: `Ahoy! Welcome ${name}, my name is HS! I will be your guide and helper. Are you ready to explore the greatest stories ever told! Tap on Island !`,
-    tts: `[giggles] Ahoy! [happily] Welcome ${name}, [warmly] my name is HS! [gently] I will be your guide and helper. [excitedly] Are you ready to explore the greatest stories ever told! [pause] Tap on Island !`,
+    line: `Ahoy! Welcome ${name}, my name is Perry! I will be your guide and helper. Are you ready to explore the greatest stories ever told! Tap on Island !`,
+    tts: `[giggles] Ahoy! [happily] Welcome ${name}, [warmly] my name is Perry! [gently] I will be your guide and helper. [excitedly] Are you ready to explore the greatest stories ever told! [pause] Tap on Island !`,
   };
 }
 
@@ -107,12 +115,8 @@ export function buildCrewShipGuideBeats(): GuideBeat[] {
       tts: `[happily] And your first crew mate, Adam.`,
     },
     {
-      line: `You can talk to him, ask as many questions as you like.`,
-      tts: `[warmly] You can talk to him, ask as many questions as you like.`,
-    },
-    {
-      line: `And if you get bored with him you can collect more crew by completing story packs.`,
-      tts: `[chuckles] And if you get bored with him you can collect more crew by completing story packs.`,
+      line: `Tap him! He knows this ship inside out and he'll show you around.`,
+      tts: `[excitedly] Tap him! [warmly] He knows this ship inside out and he'll show you around.`,
     },
   ];
 }
@@ -182,7 +186,9 @@ function isGuestOnboarding(): boolean {
 function resetGuestPlayProgress(): void {
   if (!isGuestOnboarding()) return;
   islandStoryProgressService.clearAllLocal();
+  storyPackUnlockUxService.clearAllLocal();
   rewardsService.resetLocal();
+  clearAdamTourSeen();
   try {
     localStorage.removeItem('godlykids_library_hs_guide');
     sessionStorage.removeItem('godlykids_library_hs_guide');

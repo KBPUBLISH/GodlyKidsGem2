@@ -2,16 +2,9 @@ const express = require('express');
 const router = express.Router();
 const EmailSubscriber = require('../models/EmailSubscriber');
 
-// Try to load auth middleware, but don't fail if missing
-let authenticateAdmin;
-try {
-  const auth = require('../middleware/auth');
-  authenticateAdmin = auth.authenticateAdmin;
-} catch (err) {
-  console.warn('⚠️ Auth middleware not found, using passthrough for admin routes');
-  // Fallback: allow all requests (temporary for debugging)
-  authenticateAdmin = (req, res, next) => next();
-}
+// Required, not optional: a passthrough fallback here would publish every
+// subscriber's email address if the middleware ever failed to load.
+const { authenticateAdmin } = require('../middleware/auth');
 
 // POST /api/email-subscribers - Subscribe an email (public endpoint for app)
 router.post('/', async (req, res) => {

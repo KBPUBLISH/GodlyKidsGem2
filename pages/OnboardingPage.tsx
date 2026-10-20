@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, Check, Plus, Trash2, UserCircle, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff } from 'lucide-react';
+import { ChevronLeft, Check, Plus, Trash2, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff, Ship } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -18,6 +18,11 @@ import { facebookPixelService } from '../services/facebookPixelService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { Capacitor } from '@capacitor/core';
+import { ONBOARDING_FAMILY_BG_POSTER, ONBOARDING_FAMILY_BG_VIDEO, startOnboardingJourney } from '../utils/onboardingJourney';
+import { preloadCloudFlythroughAssets } from '../components/onboarding/CloudFlythrough';
+import ForParentsGate from '../components/onboarding/ForParentsGate';
+import PassPhoneHandoff from '../components/onboarding/PassPhoneHandoff';
+import PerryFlyIn from '../components/onboarding/PerryFlyIn';
 
 // File-based avatar heads
 const FUNNY_HEADS = [
@@ -46,6 +51,8 @@ const FUNNY_HEADS = [
   '/avatars/heads/head-23.png',
 ];
 
+const MAX_KIDS = 5;
+
 // Benefits carousel data - Education focused for Academy
 const BENEFITS = [
   { icon: '📚', title: 'Bible Curriculum', desc: 'Complete Christian education' },
@@ -63,6 +70,57 @@ const INCLUDED_ITEMS = [
   { icon: Users, label: 'Family Profiles (Up to 5)', desc: 'Each child gets their own progress' },
   { icon: ClipboardList, label: 'Report Cards', desc: 'Track learning & earning for each kid' },
 ];
+
+const ONBOARD_FIELD =
+  'w-full bg-[#FFF8E7] border-2 border-[#8B5A24] rounded-xl px-3.5 py-3 text-[#3E1F07] font-display placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#E8B923] focus:ring-2 focus:ring-[#E8B923]/30';
+
+const WoodSign: React.FC<{ title: string; subtitle?: string; children?: React.ReactNode }> = ({
+  title,
+  subtitle,
+  children,
+}) => (
+  <div
+    className="relative mb-5 rounded-[22px] px-5 py-4 text-center overflow-hidden"
+    style={{
+      background: 'linear-gradient(180deg, #E0A84A 0%, #C4842C 52%, #8F5A1C 100%)',
+      boxShadow: '0 5px 0 #4A2A0C, 0 10px 18px rgba(0,0,0,0.32)',
+      border: '3px solid #F6D78A',
+    }}
+  >
+    <div
+      className="absolute inset-0 opacity-15 pointer-events-none"
+      style={{
+        backgroundImage:
+          'repeating-linear-gradient(90deg, transparent, transparent 18px, #3E1F07 18px, #3E1F07 20px)',
+      }}
+    />
+    <div className="relative">
+      <h2
+        className="font-display font-bold text-[22px] leading-tight text-[#FFF6C8]"
+        style={{ textShadow: '0 2px 0 #4A2A0C' }}
+      >
+        {title}
+      </h2>
+      {subtitle && <p className="mt-1.5 text-sm text-[#3E1F07] font-medium leading-snug">{subtitle}</p>}
+      {children}
+    </div>
+  </div>
+);
+
+const ParchmentCard: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className = '',
+}) => (
+  <div
+    className={`relative rounded-[24px] p-5 overflow-hidden ${className}`}
+    style={{
+      background: 'linear-gradient(180deg, #F7E7C0 0%, #E8CB8C 100%)',
+      boxShadow: 'inset 0 0 0 3px #C9A35A, 0 8px 18px rgba(0,0,0,0.25)',
+    }}
+  >
+    {children}
+  </div>
+);
 
 // PaywallStep Component - Account creation is SEPARATE from subscription (Apple requirement)
 const PaywallStep: React.FC<{
@@ -690,7 +748,9 @@ const OnboardingPage: React.FC = () => {
   const fromTutorial = (location.state as any)?.fromTutorial === true;
   const skipAccountStep = (location.state as any)?.skipAccountStep === true;
   
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(returnToAccountStep || skipToPaywall ? 6 : 1); // Steps: 1=Parent, 2=Family, 3=Goals, 4=Features, 5=Voice, 6=Account
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>(
+    returnToAccountStep || skipToPaywall ? 6 : 0
+  ); // 0=letter, 1=Captain, 2=Crew, 7=Perry, 8=Pass phone
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -752,10 +812,29 @@ const OnboardingPage: React.FC = () => {
   
   // Email Bonus Modal State (for mobile users who skip) - Hidden but keeping logic
   const [showEmailBonusModal, setShowEmailBonusModal] = useState(false);
+  const familyBgRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = familyBgRef.current;
+    if (!v) return;
+    const play = () => {
+      v.muted = true;
+      v.play().catch(() => {
+        /* muted + playsInline is the autoplay path */
+      });
+    };
+    v.addEventListener('canplay', play);
+    play();
+    return () => v.removeEventListener('canplay', play);
+  }, [step]);
 
   // IMPORTANT:
   // Do NOT wipe existing kid profiles on every onboarding visit.
   // Only reset if there is no existing saved state (fresh install) or if explicitly requested.
+  useEffect(() => {
+    if (step === 2) preloadCloudFlythroughAssets();
+  }, [step]);
+
   useEffect(() => {
     try {
       // Track onboarding started
@@ -804,30 +883,20 @@ const OnboardingPage: React.FC = () => {
 
   // --- HANDLERS ---
 
-  const handleStep1Submit = () => {
-    if (!pName.trim()) return;
+  const goToCrewSetup = () => {
     playClick();
-    // Clear the signing out flag since user is starting fresh
     sessionStorage.removeItem('godlykids_signing_out');
-    setParentName(pName);
-    setEquippedAvatar(pAvatar);
-    // Track step 1 completion
-    activityTrackingService.trackOnboardingEvent('step_1_complete', { step: 1 });
+    if (!parentName.trim()) setParentName('Parent');
+    if (!equippedAvatar) setEquippedAvatar(pAvatar || FUNNY_HEADS[0]);
+    if (!pName.trim()) setPName('Parent');
+    activityTrackingService.trackOnboardingEvent('step_1_complete', { step: 1, skippedParentAvatar: true });
     setStep(2);
   };
 
   const handleAddKid = () => {
     if (!kidName.trim()) return;
-    
-    // Check subscription limit - free users can only have 1 kid during onboarding
-    // This prevents users from adding multiple kids then closing the app before paywall
-    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
-    if (!isPremium && kids.length >= 1) {
-      console.log('🚫 Free users limited to 1 kid during onboarding');
-      // Still allow continuing with the one kid they have
-      return;
-    }
-    
+    if (kids.length >= MAX_KIDS) return;
+
     playSuccess();
     
     // Generate kid ID
@@ -870,12 +939,27 @@ const OnboardingPage: React.FC = () => {
     setKidAvatar(FUNNY_HEADS[Math.floor(Math.random() * FUNNY_HEADS.length)]);
   };
 
-  const handleStep2Continue = () => {
+  const goToHandoff = () => {
+    if (kids.length === 0) return;
     playClick();
-    // Track step 2 completion with kids count
     activityTrackingService.trackOnboardingEvent('step_2_complete', { step: 2, kidsCount: kids.length });
-    // Go to discipleship priorities step
-    setStep(3);
+    setStep(7);
+  };
+
+  const handleSetSail = () => {
+    if (kids.length === 0) return;
+    playClick();
+    activityTrackingService.trackOnboardingEvent('handoff_continue', { kidsCount: kids.length });
+    activityTrackingService.trackOnboardingEvent('onboarding_complete');
+    activityTrackingService.resetOnboardingSession();
+    try {
+      localStorage.setItem('godlykids_tutorial_complete', 'true');
+    } catch {
+      /* ignore */
+    }
+    void savePreferencesToBackend([], []);
+    startOnboardingJourney();
+    navigate('/map', { replace: true, state: { onboardingJourney: true, perryArrive: true } });
   };
   
   const togglePriority = (id: string) => {
@@ -954,14 +1038,7 @@ const OnboardingPage: React.FC = () => {
     setStep(5);
   };
   
-  // Free tier allows only 1 kid account
-  // Premium users can add up to 5 kids
-  const FREE_KID_LIMIT = 1;
-  const MAX_KIDS = 5;
-  const isPremiumUser = localStorage.getItem('godlykids_premium') === 'true';
-  const canAddMoreKids = isPremiumUser 
-    ? kids.length < MAX_KIDS  // Premium: up to 5 kids
-    : kids.length < FREE_KID_LIMIT; // Free: only 1 kid
+  const canAddMoreKids = kids.length < MAX_KIDS;
   
   // Handle inline subscribe from family step
   const handleFamilyUnlockClick = () => {
@@ -1573,30 +1650,45 @@ const OnboardingPage: React.FC = () => {
   // --- RENDERERS ---
 
   const renderProgress = () => {
-    const totalSteps = 6; // Parent, Family, Goals, Features, Voice, Account
+    const isAccountGate = skipToPaywall || returnToAccountStep || step === 6;
+    const totalSteps = isAccountGate ? 1 : 2;
+    const progressStep = isAccountGate ? 1 : step;
+    const pct = (progressStep / totalSteps) * 100;
     return (
     <div className="w-full max-w-md px-1">
-       {/* Wood plank container for progress - compact */}
-       <div className="bg-[#CD853F] rounded-xl p-2.5 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
-         {/* Wood grain */}
-         <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 25px, #3E1F07 25px, #3E1F07 27px)'}}></div>
-         
-         <div className="relative">
-           <div className="flex justify-between mb-1.5 text-[#5c2e0b] font-display font-bold text-[8px] uppercase tracking-wide">
-              <span className={step >= 1 ? "text-[#3E1F07]" : "opacity-40"}>Parent</span>
-              <span className={step >= 2 ? "text-[#3E1F07]" : "opacity-40"}>Family</span>
-              <span className={step >= 3 ? "text-[#3E1F07]" : "opacity-40"}>Goals</span>
-              <span className={step >= 4 ? "text-[#3E1F07]" : "opacity-40"}>Features</span>
-              <span className={step >= 5 ? "text-[#3E1F07]" : "opacity-40"}>Voice</span>
-              <span className={step >= 6 ? "text-[#3E1F07]" : "opacity-40"}>Account</span>
+       <div
+         className="relative overflow-hidden rounded-2xl px-3 py-2.5"
+         style={{
+           background: 'linear-gradient(180deg, #D9A24A 0%, #B87A28 100%)',
+           border: '2px solid #F3D27A',
+           boxShadow: '0 3px 0 #5c2e0b, 0 6px 12px rgba(0,0,0,0.28)',
+         }}
+       >
+         <div className="relative flex items-center justify-between mb-1.5 text-[#3E1F07] font-display font-bold text-[9px] uppercase tracking-wider">
+              {isAccountGate ? (
+                <span>Account</span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  Crew
+                  <Users size={11} strokeWidth={2.6} />
+                </span>
+              )}
            </div>
-           <div className="h-3 bg-[#5c2e0b] rounded-full overflow-hidden border-2 border-[#3E1F07] shadow-inner">
-              <div 
-                className="h-full bg-gradient-to-r from-[#FFD700] to-[#ffb300] transition-all duration-500 ease-out rounded-full"
-                style={{ width: `${(step / totalSteps) * 100}%` }}
-              ></div>
+           <div className="relative h-3.5 bg-[#4A2A0C] rounded-full overflow-visible border-2 border-[#3E1F07] shadow-inner">
+              <div
+                className="h-full bg-gradient-to-r from-[#FFE27A] to-[#E8B923] transition-all duration-500 ease-out rounded-full"
+                style={{ width: `${pct}%` }}
+              />
+              {!isAccountGate && (
+                <span
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-[#F6E7B0] border-2 border-[#8B5A1F] flex items-center justify-center shadow-md transition-all duration-500"
+                  style={{ left: `${Math.max(10, Math.min(90, pct))}%` }}
+                  aria-hidden
+                >
+                  <Ship size={14} className="text-[#5c2e0b]" />
+                </span>
+              )}
            </div>
-         </div>
        </div>
     </div>
     );
@@ -1634,243 +1726,202 @@ const OnboardingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-full w-full relative overflow-y-auto no-scrollbar bg-gradient-to-br from-[#1a237e] to-[#0d113a]">
-      
-      {/* Slim top row: back button (when step > 1) + progress bar - no thick SETUP toolbar */}
-      <div className="flex-shrink-0 pt-4 pb-2 px-4 mb-2 w-full" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
+    <div
+      className="flex flex-col min-h-screen h-full w-full relative overflow-y-auto no-scrollbar bg-[#7EC8E8]"
+    >
+      <img
+        src={ONBOARDING_FAMILY_BG_POSTER}
+        alt=""
+        aria-hidden
+        className="fixed inset-0 z-0 w-full h-full object-cover pointer-events-none select-none"
+      />
+      <video
+        ref={familyBgRef}
+        src={ONBOARDING_FAMILY_BG_VIDEO}
+        poster={ONBOARDING_FAMILY_BG_POSTER}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className="fixed inset-0 z-0 w-full h-full object-cover pointer-events-none select-none"
+        aria-hidden
+      />
+
+      {/* Slim top row: back button + progress bar (hidden on parent gate, handoff, account) */}
+      <div className="flex-shrink-0 pt-4 pb-2 px-4 mb-2 w-full relative z-30" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
         <div className="flex items-center gap-2 w-full max-w-md mx-auto">
-           {step > 1 && (
+           {step !== 6 && (
              <button 
-               onClick={() => setStep(prev => (prev - 1) as any)} 
+               onClick={() => {
+                 if (step === 0) {
+                   navigate('/');
+                   return;
+                 }
+                 if (step === 2) {
+                   setStep(0);
+                   return;
+                 }
+                 if (step === 7) {
+                   setStep(2);
+                   return;
+                 }
+                 if (step === 8) {
+                   setStep(7);
+                   return;
+                 }
+                 setStep(prev => (prev - 1) as any);
+               }} 
                className="flex-shrink-0 w-9 h-9 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
              >
                 <ChevronLeft size={22} strokeWidth={3} />
              </button>
            )}
-           <div className="flex-1 min-w-0">
-             {renderProgress()}
-           </div>
+           {step !== 0 && step !== 2 && step !== 7 && step !== 8 && (
+             <div className="flex-1 min-w-0">
+               {renderProgress()}
+             </div>
+           )}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center pt-2 pb-10 w-full relative z-10">
 
-        {/* --- STEP 1: PARENT PROFILE --- */}
-        {step === 1 && (
-          <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500">
-             
-             {/* Clarification Banner - Wood Themed */}
-             <div className="bg-[#CD853F] rounded-2xl p-4 mb-6 flex items-center gap-3 border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
-                 {/* Wood grain texture */}
-                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
-                 <div className="relative flex items-center gap-3">
-                   <div className="bg-[#FFD700] rounded-full p-2 text-[#5c2e0b] border-2 border-[#B8860B] shadow-md">
-                       <UserCircle size={24} />
-                   </div>
-                   <p className="text-[#5c2e0b] text-sm font-display font-bold">
-                       Step 1: Create the <span className="text-[#3E1F07]">Parent Profile</span>
-                   </p>
-                 </div>
-             </div>
-
-            {/* Avatar Picker - Ship Deck Background */}
-            <div className="rounded-2xl p-5 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden" style={{backgroundImage: 'url(/assets/images/ship-deck.webp)', backgroundSize: 'cover', backgroundPosition: 'center'}}>
-               {/* Slight overlay for better contrast */}
-               <div className="absolute inset-0 bg-black/20 rounded-2xl"></div>
-               
-               <div className="relative flex flex-col items-center">
-                 <div className="w-28 h-28 mb-4 relative flex items-center justify-center">
-                      <div className="w-[90%] h-[90%] flex items-center justify-center">
-                          {renderAvatarAsset(pAvatar)}
-                      </div>
-                 </div>
-                 
-                 <p className="text-white text-xs font-bold mb-3 drop-shadow-lg">Tap to change avatar</p>
-                  
-                  {/* Extra padding to prevent clipping of scaled items */}
-                  <div className="w-full overflow-x-auto no-scrollbar py-3 -my-1">
-                    <div className="flex gap-3 justify-center min-w-min px-4">
-                      {FUNNY_HEADS.map((head) => (
-                        <button
-                          key={head}
-                          onClick={() => setPAvatar(head)}
-                          className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 p-1 bg-[#f3e5ab] flex items-center justify-center ${pAvatar === head ? 'border-[#FFD700] scale-110 ring-2 ring-[#FFD700]/50' : 'border-[#8B4513]/50 opacity-70 hover:opacity-100'}`}
-                        >
-                            {renderAvatarAsset(head)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-             </div>
-
-             {/* Name Input - Wood Container */}
-             <div className="bg-[#CD853F] p-5 rounded-2xl border-2 border-[#8B4513] shadow-lg relative overflow-hidden">
-                 {/* Wood grain */}
-                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
-                 
-                 <div className="relative">
-                   <label className="block text-[#5c2e0b] font-display font-bold text-sm tracking-wide mb-2 uppercase">
-                     Parent Name
-                   </label>
-                   <input 
-                      type="text" 
-                      value={pName}
-                      onChange={(e) => setPName(e.target.value)}
-                      placeholder="e.g. Mom, Dad"
-                      className="w-full bg-[#fff8e1] border-2 border-[#8B4513] rounded-xl px-4 py-3 text-[#3E1F07] font-display text-lg placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30 transition-colors text-center"
-                      autoFocus
-                   />
-                 </div>
-             </div>
-
-             <div className="mt-8">
-                <WoodButton 
-                  fullWidth 
-                  onClick={handleStep1Submit} 
-                  disabled={!pName.trim()}
-                  className={`py-4 text-xl ${!pName.trim() ? 'opacity-50 grayscale' : ''}`}
-                >
-                   NEXT: FAMILY
-                </WoodButton>
-             </div>
-          </div>
+        {step === 0 && (
+          <ForParentsGate
+            onContinue={() => {
+              activityTrackingService.trackOnboardingEvent('parent_gate_passed');
+              goToCrewSetup();
+            }}
+          />
         )}
+
+        {step === 7 && <PassPhoneHandoff onContinue={() => setStep(8)} />}
+
+        {step === 8 && <PerryFlyIn onContinue={handleSetSail} />}
 
         {/* --- STEP 2: ADD KIDS --- */}
         {step === 2 && (
            <div className="w-full max-w-md px-6 animate-in slide-in-from-right-10 duration-500 flex flex-col h-full">
-              
-              {/* Header - Wood Container */}
-              <div className="bg-[#CD853F] rounded-2xl p-4 mb-6 border-2 border-[#8B4513] shadow-lg relative overflow-hidden text-center">
-                 <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
-                 <div className="relative">
-                   <h2 className="text-[#3E1F07] font-display font-bold text-xl">Who is adventuring?</h2>
-                   <p className="text-[#5c2e0b] text-sm">Create profiles for your children.</p>
-                   {subscribedDuringOnboarding && (
-                     <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-[#FFD700] rounded-full text-[#5c2e0b] text-xs font-bold border border-[#B8860B]">
-                       <Crown size={12} /> Premium - Unlimited Kids
-                     </div>
-                   )}
-                 </div>
-              </div>
+              <WoodSign title="Set up your Crew" subtitle="Add each child’s name so they get their own profile." />
 
-              {/* Added Kids List */}
-              <div className="space-y-3 mb-6">
-                  {kids.map((kid, index) => (
-                      <div key={kid.id} className="bg-[#CD853F] rounded-xl p-3 flex items-center justify-between border-2 border-[#8B4513] shadow-md animate-in zoom-in relative overflow-hidden">
-                          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 15px, #3E1F07 15px, #3E1F07 17px)'}}></div>
-                          <div className="relative flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-full bg-[#f3e5ab] overflow-hidden border-2 border-[#8B4513] flex items-center justify-center p-1">
+              {kids.length > 0 && (
+                <div className="space-y-2.5 mb-4">
+                  {kids.map((kid) => (
+                      <div
+                        key={kid.id}
+                        className="rounded-2xl px-3 py-2.5 flex items-center justify-between animate-in zoom-in"
+                        style={{
+                          background: 'linear-gradient(180deg, #E8B45A 0%, #C4842C 100%)',
+                          border: '2px solid #F3D27A',
+                          boxShadow: '0 3px 0 #5c2e0b',
+                        }}
+                      >
+                          <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-12 h-12 rounded-full bg-[#FFF6D8] overflow-hidden border-2 border-[#8B5A24] flex items-center justify-center p-1 shrink-0">
                                    {renderAvatarAsset(kid.avatarSeed)}
                               </div>
-                              <div>
-                                  <h3 className="text-[#3E1F07] font-bold font-display text-lg">{kid.name}</h3>
+                              <div className="min-w-0">
+                                  <h3 className="text-[#3E1F07] font-bold font-display text-lg truncate">{kid.name}</h3>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[#5c2e0b] text-xs font-bold">{kid.age} years old</span>
-                                    {/* Show FREE or PREMIUM badge */}
-                                    {index === 0 ? (
-                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#4CAF50] text-white">FREE</span>
-                                    ) : (
-                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b]">PREMIUM</span>
+                                    {kid.age != null && (
+                                      <span className="text-[#5c2e0b] text-xs font-bold">{kid.age} years old</span>
                                     )}
                                   </div>
                               </div>
                           </div>
-                          <button onClick={() => removeKid(kid.id)} className="relative w-8 h-8 bg-red-500/80 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors border border-red-700">
-                              <Trash2 size={16} />
+                          <button
+                            type="button"
+                            onClick={() => removeKid(kid.id)}
+                            aria-label={`Remove ${kid.name}`}
+                            className="w-8 h-8 bg-[#8B2E2E] text-white rounded-full flex items-center justify-center shrink-0 border border-[#5c1a1a]"
+                          >
+                              <Trash2 size={15} />
                           </button>
                       </div>
                   ))}
-              </div>
-
-              {/* Add Kid Form - Wood Container */}
-              {canAddMoreKids ? (
-                <div className="bg-[#CD853F] p-5 rounded-2xl border-2 border-[#8B4513] shadow-lg mb-6 relative overflow-hidden">
-                   {/* Wood grain */}
-                   <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #3E1F07 20px, #3E1F07 22px)'}}></div>
-                   
-                   {/* Badge shows FREE for first kid, PREMIUM REQUIRED for additional */}
-                   <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10 ${
-                     kids.length === 0 
-                       ? 'bg-[#4CAF50] text-white' 
-                       : 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b]'
-                   }`}>
-                     {kids.length === 0 ? '✓ FREE PROFILE' : '👑 PREMIUM'}
-                   </div>
-                   
-                   <div className="relative flex gap-4 mb-4">
-                      <div className="w-20 shrink-0 flex flex-col gap-2">
-                          <div 
-                             className="w-20 h-20 rounded-xl bg-[#f3e5ab] border-2 border-[#8B4513] overflow-hidden relative cursor-pointer hover:opacity-90 flex items-center justify-center p-2"
-                             onClick={() => setKidAvatar(FUNNY_HEADS[Math.floor(Math.random() * FUNNY_HEADS.length)])}
-                          >
-                               {renderAvatarAsset(kidAvatar)}
-                               <div className="absolute bottom-0 left-0 right-0 bg-[#5c2e0b]/80 text-[#f3e5ab] text-[8px] text-center py-0.5 font-bold">TAP</div>
-                          </div>
-                      </div>
-                      <div className="flex-1 space-y-3">
-                          <input 
-                              type="text" 
-                              placeholder="Child's Name"
-                              value={kidName}
-                              onChange={(e) => setKidName(e.target.value)}
-                              className="w-full bg-[#fff8e1] border-2 border-[#8B4513] rounded-lg px-3 py-2.5 text-[#3E1F07] font-display placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
-                          />
-                          <input 
-                              type="number" 
-                              placeholder="Age"
-                              value={kidAge}
-                              onChange={(e) => setKidAge(e.target.value)}
-                              className="w-20 bg-[#fff8e1] border-2 border-[#8B4513] rounded-lg px-3 py-2.5 text-[#3E1F07] font-display placeholder:text-[#8B4513]/40 focus:outline-none focus:border-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/30"
-                          />
-                      </div>
-                   </div>
-                   
-                   <button 
-                      onClick={handleAddKid}
-                      disabled={!kidName.trim()}
-                      className={`relative w-full bg-[#5c2e0b] hover:bg-[#70380d] text-[#f3e5ab] font-display font-bold py-3 rounded-xl border-2 border-[#3E1F07] flex items-center justify-center gap-2 transition-colors shadow-md ${!kidName.trim() ? 'opacity-50' : ''}`}
-                   >
-                      <Plus size={18} />
-                      ADD CHILD
-                   </button>
-                </div>
-              ) : (
-                /* Max Kids Reached or Premium Required */
-                <div className="bg-[#3E1F07]/50 p-4 rounded-xl border border-[#8B4513] text-center">
-                  {isPremiumUser ? (
-                    <p className="text-[#eecaa0] text-sm">
-                      Maximum of {MAX_KIDS} profiles allowed
-                    </p>
-                  ) : (
-                    <div>
-                      <p className="text-[#FFD700] font-bold text-sm mb-1">
-                        🌟 Want to add more kids?
-                      </p>
-                      <p className="text-[#eecaa0] text-xs">
-                        Upgrade to Premium for unlimited kid profiles!
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
 
-              <div className="mt-auto">
-                 {kids.length === 0 && (
-                   <p className="text-center text-[#FFD700] text-sm mb-3 animate-pulse">
-                     👆 Add at least one child to continue
-                   </p>
-                 )}
-                 <WoodButton 
-                    fullWidth 
-                    onClick={handleStep2Continue}
-                    disabled={kids.length === 0}
-                    className={`py-4 text-xl ${kids.length === 0 ? 'opacity-40 grayscale' : ''}`}
+              {canAddMoreKids ? (
+                <ParchmentCard className="mb-5">
+                   <p className="text-[#5c2e0b] text-[11px] font-bold uppercase tracking-wide mb-2">Choose a face</p>
+                   <div className="flex items-center gap-3 mb-4">
+                      <div className="w-[72px] h-[72px] rounded-2xl bg-[#FFF6D8] border-[3px] border-[#8B5A24] overflow-hidden flex items-center justify-center p-1.5 shrink-0">
+                               {renderAvatarAsset(kidAvatar)}
+                          </div>
+                      <div className="flex-1 overflow-x-auto no-scrollbar">
+                        <div className="flex gap-2 min-w-min py-1">
+                          {FUNNY_HEADS.map((head) => (
+                            <button
+                              key={head}
+                              type="button"
+                              onClick={() => setKidAvatar(head)}
+                              className={`w-10 h-10 rounded-full overflow-hidden border-2 flex-shrink-0 p-0.5 bg-[#FFF6D8] flex items-center justify-center ${kidAvatar === head ? 'border-[#E8B923] scale-110 ring-2 ring-[#E8B923]/40' : 'border-[#8B4513]/30 opacity-70'}`}
+                            >
+                              {renderAvatarAsset(head)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                   </div>
+
+                   <div className="flex gap-2.5">
+                          <input
+                              type="text"
+                              placeholder="Kid's name"
+                              value={kidName}
+                              onChange={(e) => setKidName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && kidName.trim()) handleAddKid();
+                              }}
+                              className={`${ONBOARD_FIELD} flex-1`}
+                              autoFocus={kids.length === 0}
+                          />
+                          <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={18}
+                              placeholder="Age"
+                              value={kidAge}
+                              onChange={(e) => setKidAge(e.target.value)}
+                              className={`${ONBOARD_FIELD} w-[72px] text-center px-2`}
+                          />
+                   </div>
+
+                   <button
+                      type="button"
+                      onClick={handleAddKid}
+                      disabled={!kidName.trim()}
+                      className={`mt-4 w-full bg-[#5c2e0b] text-[#FFF3C4] font-display font-bold py-3.5 rounded-xl border-2 border-[#3E1F07] flex items-center justify-center gap-2 shadow-md active:scale-[0.98] ${!kidName.trim() ? 'opacity-45' : ''}`}
+                   >
+                      <Plus size={18} />
+                      {kids.length === 0 ? 'Add first crew member' : 'Add another'}
+                   </button>
+                </ParchmentCard>
+              ) : (
+                <div
+                  className="mb-5 rounded-2xl px-4 py-3 text-center"
+                  style={{ background: 'rgba(30, 18, 8, 0.45)', border: '1px solid #8B5A24' }}
+                >
+                  <p className="text-[#5c2e0b] text-sm font-bold">
+                    Maximum of {MAX_KIDS} profiles
+                  </p>
+                </div>
+              )}
+
+              {kids.length > 0 && (
+                 <div className="mt-2 pb-2">
+                 <WoodButton
+                    fullWidth
+                    onClick={goToHandoff}
+                    className="py-4 text-xl"
                  >
-                    {kids.length > 0 ? "CONTINUE" : "ADD A CHILD FIRST"}
+                    SET SAIL
                  </WoodButton>
-              </div>
+                 </div>
+              )}
            </div>
         )}
 

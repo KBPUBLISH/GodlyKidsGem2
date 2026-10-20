@@ -27,7 +27,10 @@ const WoodBackButton: React.FC<WoodBackButtonProps> = ({
 }) => (
   <button
     type="button"
-    onClick={onClick}
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
     disabled={disabled}
     tabIndex={tabIndex}
     aria-label={ariaLabel}

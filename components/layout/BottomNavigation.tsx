@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Anchor } from 'lucide-react';
+import { Anchor, Ship } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useTutorial } from '../../context/TutorialContext';
 
@@ -22,7 +22,6 @@ const MAIN_NAV_PAGES = [
   '/games',
   '/map',
   '/library',
-  '/games/library',
 ];
 
 type NavItem = {
@@ -33,7 +32,7 @@ type NavItem = {
 
 /**
  * Home (ship wheel) · Library (treasure map) · My Journey (anchor) ·
- * Favorites (gold star) · Rewards (treasure chest).
+ * Favorites (gold star) · Crew (ship).
  * The active tab sits in a cream door-shaped arch that rises above the plank.
  */
 const NAV_ITEMS: NavItem[] = [
@@ -41,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'library', label: 'Library', path: '/listen' },
   { id: 'journey', label: 'My Journey', path: '/map' },
   { id: 'favorites', label: 'Favorites', path: '/library' },
-  { id: 'rewards', label: 'Rewards', path: '/games/library' },
+  { id: 'crew', label: 'Crew', path: '/crew' },
 ];
 
 /** Tutorial / programmatic tab → path (OnboardingTutorial still dispatches wheel events). */
@@ -59,37 +58,10 @@ const getActiveTab = (pathname: string): string | null => {
   if (pathname === '/listen' || pathname === '/read') return 'library';
   if (pathname === '/map') return 'journey';
   if (pathname === '/library') return 'favorites';
-  if (pathname === '/games/library') return 'rewards';
+  if (pathname === '/crew') return 'crew';
   // /games and other main pages: no matching tab highlight
   return null;
 };
-
-/** Treasure chest icon (brown chest, gold band + lock). */
-const TreasureChestIcon: React.FC = () => (
-  <svg viewBox="0 0 36 32" className="gk-tab-svg" aria-hidden>
-    <path
-      d="M3 14 Q3 3.5 18 3.5 Q33 3.5 33 14 L33 16.5 L3 16.5 Z"
-      fill="#9C6633"
-      stroke="#4A2E12"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-    />
-    <rect
-      x="3"
-      y="16.5"
-      width="30"
-      height="12"
-      rx="2"
-      fill="#B5793F"
-      stroke="#4A2E12"
-      strokeWidth="1.8"
-    />
-    <rect x="14.4" y="3.8" width="7.2" height="24.4" fill="#E9B94D" stroke="#4A2E12" strokeWidth="1.6" />
-    <rect x="15.6" y="13" width="4.8" height="7" rx="1.2" fill="#F4CE6A" stroke="#4A2E12" strokeWidth="1.4" />
-    <circle cx="18" cy="15.8" r="1.15" fill="#4A2E12" />
-    <path d="M18 16.6 L18 18.4" stroke="#4A2E12" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
 
 const renderTabIcon = (id: string): React.ReactNode => {
   switch (id) {
@@ -101,8 +73,8 @@ const renderTabIcon = (id: string): React.ReactNode => {
       return <Anchor className="gk-tab-anchor" strokeWidth={2.75} aria-hidden />;
     case 'favorites':
       return <img src={GOLD_STAR} alt="" draggable={false} className="gk-tab-img" />;
-    case 'rewards':
-      return <TreasureChestIcon />;
+    case 'crew':
+      return <Ship className="gk-tab-ship" strokeWidth={2.4} aria-hidden />;
     default:
       return null;
   }
@@ -111,7 +83,7 @@ const renderTabIcon = (id: string): React.ReactNode => {
 /**
  * Shared wood+rope footer with 5 tabs; the active tab pops up in a cream
  * door/arch shape. Used on every main-nav page (including Map, My Library and
- * the game shelf).
+ * Crew).
  */
 const WoodTabBar: React.FC = () => {
   const navigate = useNavigate();
@@ -288,8 +260,9 @@ const WoodTabBar: React.FC = () => {
           user-select: none;
           pointer-events: none;
         }
-        /* Anchor uses currentColor: cream on the plank, dark inside the notch. */
-        .gk-tab-anchor {
+        /* Anchor / ship use currentColor: cream on the plank, dark inside the notch. */
+        .gk-tab-anchor,
+        .gk-tab-ship {
           width: 92%;
           height: 92%;
           color: #ffeec9;
@@ -332,7 +305,8 @@ const WoodTabBar: React.FC = () => {
           color: #4a2e12;
           text-shadow: none;
         }
-        .gk-tab--active .gk-tab-anchor {
+        .gk-tab--active .gk-tab-anchor,
+        .gk-tab--active .gk-tab-ship {
           color: #4a2e12;
         }
         .gk-tab--active .gk-tab-icon {

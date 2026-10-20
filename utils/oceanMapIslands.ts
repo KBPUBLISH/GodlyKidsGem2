@@ -15,6 +15,8 @@ export interface OceanMapIsland {
   y: number;
   /** Ocean-map island art from CMS (optional). */
   mapArtUrl?: string;
+  /** Optional sail-carousel upload; sail deck prefers map art, then this. */
+  sailArtUrl?: string;
   mainMapUrl?: string;
   mainMapVideoUrl?: string;
   /** True when this row came from the Bible Map API. */
@@ -49,6 +51,7 @@ export type ApiIslandRow = {
   bookLabel?: string;
   description?: string;
   mapArtUrl?: string;
+  sailArtUrl?: string;
   mainMapUrl?: string;
   mainMapVideoUrl?: string;
   mapPosition?: { x?: number; y?: number };
@@ -73,6 +76,10 @@ export const CMS_ISLANDS_TIMEOUT_MS = 15_000;
  */
 export const getOceanIslandArtSrc = (island: OceanMapIsland): string | undefined =>
   island.mapArtUrl || undefined;
+
+/** Sail deck island art — same map icon the ocean map uses, then sail upload. */
+export const getSailIslandArtSrc = (island: OceanMapIsland): string | undefined =>
+  island.mapArtUrl || island.sailArtUrl || undefined;
 
 export const mapApiIslandToOceanIsland = (
   row: ApiIslandRow,
@@ -109,6 +116,7 @@ export const mapApiIslandToOceanIsland = (
     x,
     y,
     mapArtUrl: resolveBibleMapMediaUrl(row.mapArtUrl) || undefined,
+    sailArtUrl: resolveBibleMapMediaUrl(row.sailArtUrl) || undefined,
     mainMapUrl: resolveBibleMapMediaUrl(row.mainMapUrl) || undefined,
     mainMapVideoUrl: resolveBibleMapMediaUrl(row.mainMapVideoUrl) || undefined,
     fromApi: true,

@@ -5,18 +5,22 @@
  * completions survive logout / profile reselect. Unlock (mainMapStoryUnlock)
  * reads through this same service.
  *
- * Product rule: puzzle / coloring / rewards (legacy: game) unlock after both read + quiz are complete.
- * Quiz unlocks after read (when the story has quiz content).
+ * Product rule: treasure / puzzle / coloring unlock after pack beats are done:
+ * Read + Quiz, plus Try It when the pack has it. Packs without Try It still
+ * unlock after Read + Quiz so older packs are not soft-locked.
+ * Quiz unlocks after read. Try It unlocks after quiz (when the pack has both).
  */
 
 import { authService } from './authService';
 import { profileService } from './profileService';
 
-export type IslandActivityId = 'read' | 'quiz' | 'puzzle' | 'coloring' | 'game' | 'rewards';
+export type IslandActivityId = 'read' | 'quiz' | 'tryIt' | 'puzzle' | 'coloring' | 'game' | 'rewards';
 
 export type IslandStoryProgress = {
   read: boolean;
   quiz: boolean;
+  /** Local Try It practice complete — does not replace quiz completion. */
+  tryIt?: boolean;
   puzzle?: boolean;
   coloring?: boolean;
   game?: boolean;
@@ -39,6 +43,14 @@ export type CloudIslandProgress = Record<string, ProgressMap>;
 
 const EMPTY: IslandStoryProgress = { read: false, quiz: false };
 
+/** CMS flags for the Read → Quiz → Try It pack beats. */
+export type PackBeatOptions = {
+  /** Default true — skip the quiz beat only when the pack has no quiz. */
+  hasQuizContent?: boolean;
+  /** Default false — only required when the pack actually has Try It. */
+  hasTryIt?: boolean;
+};
+
 const progressKey = (islandId: string, storyId: string): string =>
   `${islandId.trim()}:${storyId.trim()}`;
 
@@ -52,6 +64,7 @@ const normalizeEntry = (entry: IslandStoryProgress | undefined): IslandStoryProg
   return {
     read: Boolean(entry.read),
     quiz: Boolean(entry.quiz),
+    tryIt: Boolean(entry.tryIt),
     puzzle: Boolean(entry.puzzle),
     coloring: Boolean(entry.coloring),
     game: Boolean(entry.game) || Boolean(entry.rewards),
@@ -73,6 +86,7 @@ const hasAnyCompletion = (entry: IslandStoryProgress | undefined): boolean => {
   return Boolean(
     entry.read ||
       entry.quiz ||
+      entry.tryIt ||
       entry.puzzle ||
       entry.coloring ||
       entry.game ||
@@ -94,6 +108,7 @@ const mergeEntries = (
   return {
     read: left.read || right.read,
     quiz: left.quiz || right.quiz,
+    tryIt: left.tryIt || right.tryIt,
     puzzle: left.puzzle || right.puzzle,
     coloring: left.coloring || right.coloring,
     game: left.game || right.game,
@@ -328,6 +343,22 @@ class IslandStoryProgressService {
     return this.lookup(this.readAll(), islandId, storyId);
   }
 
+  /** Story ids whose Rewards/treasure activity is already marked complete. */
+  getStoryIdsWithRewardsComplete(): string[] {
+    const ids = new Set<string>();
+    try {
+      for (const [key, entry] of Object.entries(this.readAll())) {
+        if (!entry?.rewards && !entry?.game) continue;
+        const idx = key.indexOf(':');
+        const storyId = (idx > 0 ? key.slice(idx + 1) : '').trim();
+        if (storyId) ids.add(storyId);
+      }
+    } catch {
+      /* ignore */
+    }
+    return Array.from(ids);
+  }
+
   /**
    * Unique stories with read complete for any of the island id aliases
    * (slug, CMS ObjectId, genesis fallback). Used when the story list is unavailable.
@@ -401,6 +432,21 @@ class IslandStoryProgressService {
     return saved;
   }
 
+  /** Stamp puzzle/coloring complete when those loot types are collected. */
+  markLootActivities(
+    islandId: string,
+    storyId: string,
+    types: ReadonlyArray<string>,
+  ): IslandStoryProgress {
+    let next = this.get(islandId, storyId);
+    for (const type of types) {
+      if (type === 'puzzle' || type === 'coloring') {
+        next = this.markComplete(islandId, storyId, type);
+      }
+    }
+    return next;
+  }
+
   /**
    * Persist hunt stars for a story. Keeps the best (highest) rating.
    */
@@ -436,23 +482,44 @@ class IslandStoryProgressService {
   }
 
   /**
+   * Pack beats: Read, then Quiz (if present), then Try It (if present).
+   * Try It used to fill the quiz slot — `tryIt` still counts as quiz-done so
+   * kids who already finished that way are not re-locked.
+   */
+  arePackBeatsComplete(
+    islandId: string,
+    storyId: string,
+    opts?: PackBeatOptions,
+  ): boolean {
+    if (!islandId?.trim() || !storyId?.trim()) return false;
+    const p = this.get(islandId, storyId);
+    const quizDone =
+      p.quiz || opts?.hasQuizContent === false || Boolean(p.tryIt);
+    const tryItDone = opts?.hasTryIt !== true || Boolean(p.tryIt);
+    return Boolean(p.read) && quizDone && tryItDone;
+  }
+
+  /**
    * Whether an activity button should be unlocked for the kid.
    * - read: always (entry point)
-   * - quiz: after read (if story has no quiz, treated as not applicable by caller)
-   * - puzzle / coloring / rewards: after both read and quiz
+   * - quiz: after read
+   * - tryIt: after read + quiz (quiz skipped when the pack has none)
+   * - puzzle / coloring / rewards: after all present pack beats
    */
   isActivityUnlocked(
     islandId: string,
     storyId: string,
     activity: IslandActivityId,
-    opts?: { hasQuizContent?: boolean },
+    opts?: PackBeatOptions,
   ): boolean {
     if (activity === 'read') return true;
     const p = this.get(islandId, storyId);
     const readDone = p.read;
-    const quizDone = p.quiz || opts?.hasQuizContent === false;
+    const quizDone =
+      p.quiz || opts?.hasQuizContent === false || Boolean(p.tryIt);
     if (activity === 'quiz') return readDone;
-    return readDone && quizDone;
+    if (activity === 'tryIt') return readDone && quizDone;
+    return this.arePackBeatsComplete(islandId, storyId, opts);
   }
 
   /** Wipe local (and pending cloud) completions — used when a guest restarts onboarding. */

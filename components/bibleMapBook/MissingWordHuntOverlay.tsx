@@ -190,7 +190,7 @@ const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
     if (placement === 'scroll-top') {
         return (
             <div
-                className={`pointer-events-none absolute left-0 right-0 z-[25] flex flex-col items-center gap-1 px-2 pt-1 ${className}`}
+                className={`pointer-events-none absolute left-0 right-0 z-[25] flex flex-col items-center gap-2 px-2 pt-1 ${className}`}
                 style={{ top: 0 }}
                 role="group"
                 aria-label="Tap the missing words in order"
@@ -204,7 +204,7 @@ const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
 
     return (
         <div
-            className={`pointer-events-none absolute inset-0 z-[25] flex flex-col items-center justify-end gap-1 pb-1.5 px-16 sm:px-20 ${className}`}
+            className={`pointer-events-none absolute inset-0 z-[25] flex flex-col items-center justify-end gap-2 pb-1.5 px-16 sm:px-20 ${className}`}
             role="group"
             aria-label="Tap the missing words in order"
         >
@@ -218,13 +218,35 @@ const MissingWordHuntOverlay: React.FC<MissingWordHuntOverlayProps> = ({
 const PIECE_STYLE = `
 /* Kid-friendly instruction above the row of pieces */
 .missing-word-hunt-instruction {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #fdf6e3;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 4px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  color: #3E1F07;
+  background: linear-gradient(180deg, #FFE55C 0%, #FFD700 45%, #DAA520 100%);
+  border: 2px solid #B8860B;
+  box-shadow:
+    0 3px 0 #8B6914,
+    0 8px 16px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  animation: missing-word-hunt-instruction-pulse 1.2s ease-in-out infinite;
   pointer-events: none;
   user-select: none;
+}
+@keyframes missing-word-hunt-instruction-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .missing-word-hunt-instruction {
+    animation: none;
+  }
 }
 /* Still, fully opaque pieces (no idle animation) */
 .missing-word-hunt-piece {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Lock, Star } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
   fetchOceanMapIslands,
@@ -190,19 +190,17 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
         {/* All MapPage islands — CMS mapArtUrl when present; decorative only */}
         {orderedIslands.map((island, index) => {
           const isFocus = Boolean(focusIsland) && island.id === focusIsland.id;
+          if (island.status === 'locked' && !isFocus) return null;
           const pos = exploreIslandPosition(island, focusIsland, focusExplore, index);
           const artSrc = getOceanIslandArtSrc(island);
           const hasArt = Boolean(artSrc);
-          const isLocked = island.status === 'locked';
           const isComplete = island.status === 'complete';
           const isCurrent = island.status === 'current';
           /** The focus island carries its own art/label in the cinematic. */
           const showLabel = !isFocus;
-          const discStyle: React.CSSProperties = isLocked
-            ? { background: 'radial-gradient(circle at 35% 30%, #8fa3ad, #5b6f78)' }
-            : isComplete
-              ? { background: 'radial-gradient(circle at 35% 30%, #7bd66a, #3f9e3a)' }
-              : { background: 'radial-gradient(circle at 35% 30%, #ffd98a, #e0a94a 45%, #c98a3a)' };
+          const discStyle: React.CSSProperties = isComplete
+            ? { background: 'radial-gradient(circle at 35% 30%, #7bd66a, #3f9e3a)' }
+            : { background: 'radial-gradient(circle at 35% 30%, #ffd98a, #e0a94a 45%, #c98a3a)' };
 
           return (
             <div
@@ -241,9 +239,7 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
                 </div>
               ) : (
                 <div
-                  className={`rounded-full border-[3px] shadow-[0_6px_14px_rgba(0,0,0,0.28)] flex items-center justify-center ${
-                    isLocked ? 'border-white/35 grayscale-[30%]' : 'border-white/55'
-                  }`}
+                  className="rounded-full border-[3px] border-white/55 shadow-[0_6px_14px_rgba(0,0,0,0.28)] flex items-center justify-center"
                   style={{
                     width: DISC_SIZE,
                     height: DISC_SIZE,
@@ -257,11 +253,6 @@ const ExploreMapBackdrop: React.FC<ExploreMapBackdropProps> = ({
                   )}
                   {isCurrent && (
                     <Star size={20} className="text-white drop-shadow" fill="#FFD700" strokeWidth={1.5} />
-                  )}
-                  {isLocked && (
-                    <span className="w-7 h-7 rounded-full bg-black/35 flex items-center justify-center">
-                      <Lock size={14} className="text-white" strokeWidth={2.5} />
-                    </span>
                   )}
                 </div>
               )}

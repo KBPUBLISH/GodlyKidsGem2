@@ -1,5 +1,6 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
 import { Book, FeaturedEpisode, AmazonBook } from '../types';
+import { applySiblingGoldPrice } from '../utils/arcadeGoldPrice';
 import { isValidBookId } from '../utils/bookUtils';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
@@ -94,6 +95,29 @@ const normalizeCoverUrl = (url: string | undefined | null): string => {
   const cleanBase = baseUrl.replace(/\/$/, '');
   const cleanUrl = url.startsWith('/') ? url : `/${url}`;
   return `${cleanBase}${cleanUrl}`;
+};
+
+/** Category icon/cover URLs — GCS absolute, or /uploads on the API origin (not /api). */
+const resolveCategoryMediaUrl = (url: string | undefined | null, version?: string): string => {
+  if (!url || !url.trim()) return '';
+  const trimmed = url.trim();
+  let resolved = trimmed;
+  if (
+    !(
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('blob:') ||
+      trimmed.startsWith('/assets/')
+    )
+  ) {
+    const base = getApiBaseUrl().replace(/\/$/, '');
+    const origin = base.replace(/\/api$/, '');
+    const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    resolved = `${origin}${path}`;
+  }
+  if (!version) return resolved;
+  const sep = resolved.includes('?') ? '&' : '?';
+  return `${resolved}${sep}v=${encodeURIComponent(version)}`;
 };
 
 // Transform API response to match Book interface
@@ -1631,12 +1655,27 @@ export const ApiService = {
   // Get all categories (returns full category objects with name, color, icon, etc.)
   // Optional type parameter: 'book' or 'audio' to filter categories by contentType
   // Optional explore parameter: true to get only categories that show on explore page
-  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>> => {
-    const cacheKey = `categories_${type || 'all'}_${explore ? 'explore' : 'all'}`;
-    const cached = getCached<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>>(cacheKey);
-    if (cached) return cached;
-
+  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{
+    _id: string;
+    name: string;
+    description?: string;
+    color: string;
+    icon?: string;
+    iconImage?: string;
+    image?: string;
+    gradientFrom?: string;
+    gradientTo?: string;
+    showOnExplore?: boolean;
+    contentType?: 'Book' | 'Audio';
+  }>> => {
     try {
+      try {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(`${API_CACHE_PREFIX}categories`))
+          .forEach((key) => localStorage.removeItem(key));
+      } catch {
+        /* private mode */
+      }
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching categories from API${type ? ` (type: ${type})` : ''}${explore ? ' (explore: true)' : ''}`);
 
@@ -1667,16 +1706,22 @@ export const ApiService = {
             if (categories.length > 0) {
               console.log(`✅ Found ${categories.length} categories${type ? ` (filtered by type: ${type})` : ''}${explore ? ' (explore page)' : ''}`);
               // Return full category objects
-              const result = categories.map((cat: any) => ({
-                _id: cat._id || cat.id || '',
-                name: String(cat.name || cat.title || cat),
-                description: cat.description,
-                color: cat.color || '#6366f1',
-                icon: cat.icon,
-                showOnExplore: cat.showOnExplore || false,
-                contentType: cat.contentType || 'Book',
-              }));
-              setCache(cacheKey, result);
+              const result = categories.map((cat: any) => {
+                const version = cat.updatedAt ? String(new Date(cat.updatedAt).getTime()) : '';
+                return {
+                  _id: cat._id || cat.id || '',
+                  name: String(cat.name || cat.title || cat),
+                  description: cat.description,
+                  color: cat.color || '#6366f1',
+                  icon: cat.icon,
+                  iconImage: resolveCategoryMediaUrl(cat.iconImage || cat.image, version),
+                  image: resolveCategoryMediaUrl(cat.image, version),
+                  gradientFrom: cat.gradientFrom,
+                  gradientTo: cat.gradientTo,
+                  showOnExplore: cat.showOnExplore || false,
+                  contentType: cat.contentType || 'Book',
+                };
+              });
               return result;
             }
           }
@@ -1697,7 +1742,6 @@ export const ApiService = {
           name: String(name),
           color: '#6366f1',
         }));
-      setCache(cacheKey, fallbackResult);
       return fallbackResult;
     } catch (error) {
       console.error(`❌ Failed to fetch categories:`, error);
@@ -1966,6 +2010,45 @@ export const ApiService = {
       return [];
     } catch (error) {
       console.error('❌ Failed to fetch daily task games:', error);
+      return [];
+    }
+  },
+
+  getArcadeGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const [arcadeResponse, catalogResponse] = await Promise.all([
+        fetchWithTimeout(`${baseUrl}games/arcade`, {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+        fetchWithTimeout(`${baseUrl}games/enabled`, {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+      ]);
+
+      if (arcadeResponse.ok) {
+        const data = await arcadeResponse.json();
+        const games = Array.isArray(data) ? data : [];
+        let catalog: any[] = [];
+        if (catalogResponse.ok) {
+          const catalogData = await catalogResponse.json();
+          catalog = Array.isArray(catalogData) ? catalogData : [];
+        }
+        return applySiblingGoldPrice(games, catalog).map((game: any) => ({
+          ...game,
+          coverImage: resolveCategoryMediaUrl(game.coverImage),
+          logo: resolveCategoryMediaUrl(game.logo),
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch arcade games:', error);
       return [];
     }
   },

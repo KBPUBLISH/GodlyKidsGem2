@@ -182,7 +182,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80">
       <div className="relative w-full max-w-md mx-4 bg-gradient-to-b from-[#2A1810] to-[#1A0F0A] rounded-3xl overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="relative px-6 py-4 bg-gradient-to-r from-[#8B4513] to-[#A0522D]">

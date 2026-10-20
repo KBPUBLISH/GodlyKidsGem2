@@ -1,4 +1,4 @@
-import { MAX_CREW, rewardsService, type UnlockedCharacter } from '../../services/rewardsService';
+import { getOnDeckCrew, type UnlockedCharacter } from '../../services/rewardsService';
 
 /**
  * sessionStorage key remembering which 3D character climbed down the deck
@@ -52,23 +52,18 @@ export function setCrewLocation(characterId: string, rec: CrewLocation): void {
   }
 }
 
-/** The on-deck 3D roster, mirroring CrewPage.loadCrew (incl. DEV hook). */
-function roster3d(): UnlockedCharacter[] {
-  const characters = rewardsService.getUnlockedCharacters();
-  const selected = rewardsService.getSelectedCrewIds();
-  const roster = selected.length
-    ? characters.filter((c) => selected.includes(c.id))
-    : characters;
-  let onDeck = roster.slice(0, MAX_CREW);
+/**
+ * Deck/basement walkers: a GLB (built-in walk clips) or a still image
+ * (procedural bob/lean in CrewDeck3D). Uploaded characters are often a
+ * single PNG / static mesh with no walk frames.
+ */
+export function canWalkOnDeck(c: UnlockedCharacter): boolean {
+  return Boolean(c.modelUrl || (c.imageUrl && String(c.imageUrl).trim()));
+}
 
-  // DEV ONLY debug hook — see CrewPage.loadCrew. Remove when CMS goes live.
-  const debugModelUrl = localStorage.getItem('debugCrewModelUrl');
-  if (debugModelUrl && onDeck.length > 0 && !onDeck.some((c) => c.modelUrl)) {
-    onDeck = onDeck.map((c, i) =>
-      i === 0 ? { ...c, modelUrl: debugModelUrl } : c,
-    );
-  }
-  return onDeck.filter((c) => !!c.modelUrl);
+/** The on-deck 3D roster, mirroring CrewPage.loadCrew (incl. the ship parrot). */
+function roster3d(): UnlockedCharacter[] {
+  return getOnDeckCrew().filter(canWalkOnDeck);
 }
 
 /**

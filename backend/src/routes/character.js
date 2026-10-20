@@ -80,8 +80,10 @@ const getVertexAccessToken = async () => {
     }
 };
 
-// Vertex AI Gemini 2.5 Flash Image: selfie + prompt → image. Uses your GCP project (no consumer API region block).
-// resolvedPrompt: if provided, use instead of style.prompt (e.g. with {{SETTING}} already replaced).
+// Vertex AI Gemini 3.1 Flash Image: selfie + prompt → image.
+// 3.1 is global-endpoint only (regional URLs 404).
+const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-3.1-flash-image').trim() || 'gemini-3.1-flash-image';
+
 const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessToken, projectId, resolvedPrompt = null) => {
     const style = STYLE_PROMPTS[styleId];
     if (!style) return null;
@@ -90,7 +92,7 @@ const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessTok
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const mimeType = (imageBase64.match(/^data:(image\/\w+);base64,/) || [])[1] || 'image/jpeg';
 
-    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+    const url = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${VERTEX_IMAGE_MODEL}:generateContent`;
     const body = {
         contents: [{
             role: 'user',
@@ -123,7 +125,7 @@ const generateCharacterWithVertexGemini = async (imageBase64, styleId, accessTok
         const parts = data.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
             if (part.inlineData && part.inlineData.data) {
-                console.log('✅ Character generated with Vertex AI Gemini 2.5 Flash Image (selfie + style)');
+                console.log(`✅ Character generated with Vertex AI ${VERTEX_IMAGE_MODEL} (selfie + style)`);
                 return part.inlineData.data;
             }
         }
@@ -155,13 +157,13 @@ const generateCharacterWithConsumerGemini = async (imageBase64, styleId, resolve
     try {
         const ai = new GoogleGenAI({ apiKey: geminiKey });
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: VERTEX_IMAGE_MODEL,
             contents
         });
         const parts = response.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
             if (part.inlineData && part.inlineData.data) {
-                console.log('✅ Character generated with consumer Gemini (Nano Banana)');
+                console.log(`✅ Character generated with consumer Gemini (${VERTEX_IMAGE_MODEL})`);
                 return part.inlineData.data;
             }
         }
@@ -200,7 +202,7 @@ const generateCharacterImage = async (imageBase64, styleId, settingId = null) =>
         } catch (_) {}
     }
 
-    // 1) Vertex AI Gemini 2.5 Flash Image — same model as Nano Banana, but via your GCP project so the selfie is used and region block is avoided.
+    // 1) Vertex AI Gemini 3.1 Flash Image (global) — selfie + style.
     if (accessToken && projectId) {
         const vertexImage = await generateCharacterWithVertexGemini(imageBase64, styleId, accessToken, projectId, resolvedPrompt);
         if (vertexImage) return vertexImage;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
-import { BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, X } from 'lucide-react';
+import { BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, Video, X } from 'lucide-react';
 import WoodBackButton from '../components/WoodBackButton';
 import { getApiBaseUrl } from '../services/apiService';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
@@ -11,8 +11,17 @@ import {
   buildIslandScenePath,
   type IslandSceneReturnContext,
 } from '../utils/islandSceneReturn';
+import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
+import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
+import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
+import {
+  isPlayableMainMapStory,
+  type PackUnlockCoverStory,
+} from '../utils/mainMapStoryUnlock';
+import { storyHasTryIt, type TryItPayload } from '../utils/tryItContent';
+import { primeTryItVideoFromTap } from '../utils/tryItPlayback';
 
-const LESSON_BG = '/assets/images/island-lesson-bg-leaves.png';
 const LESSON_HERO = '/assets/images/island-lesson-hero-eden.png';
 const STAR_FILLED = '/assets/images/island-star-win.png';
 
@@ -52,6 +61,23 @@ const DEFAULT_LESSON: LessonContent = {
 
 const titleCase = (value: string) =>
   value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+
+const persistReadingLevel = (bookId: string, level: ReadingLevelKey) => {
+  try {
+    sessionStorage.setItem(`godlykids_island_reading_level:${bookId}`, level);
+  } catch {
+    /* private mode */
+  }
+};
+
+const readPersistedReadingLevel = (bookId: string): ReadingLevelKey | null => {
+  try {
+    const raw = sessionStorage.getItem(`godlykids_island_reading_level:${bookId}`);
+    return AGE_OPTIONS.some((o) => o.key === raw) ? (raw as ReadingLevelKey) : null;
+  } catch {
+    return null;
+  }
+};
 
 const getBibleMapApiRoot = (): string => {
   const base = (getApiBaseUrl() || '').replace(/\/$/, '');
@@ -97,25 +123,36 @@ const IslandLessonPage: React.FC = () => {
   };
 
   const [lesson, setLesson] = useState<LessonContent>(fallbackLesson);
-  const [heroSrc, setHeroSrc] = useState(LESSON_HERO);
+  const [heroSrc, setHeroSrc] = useState('');
+  const [heroReady, setHeroReady] = useState(false);
   const [cmsBookId, setCmsBookId] = useState<string | null>(null);
   const [cmsStoryId, setCmsStoryId] = useState('');
   const [showAgePicker, setShowAgePicker] = useState(false);
   const [readDone, setReadDone] = useState(false);
   const [quizDone, setQuizDone] = useState(false);
+  const [tryItDone, setTryItDone] = useState(false);
   const [hasQuizContent, setHasQuizContent] = useState(true);
+  const [hasTryIt, setHasTryIt] = useState(false);
+  const [tryItVideoUrl, setTryItVideoUrl] = useState('');
   const [hasStartedReading, setHasStartedReading] = useState(false);
   const [readStars, setReadStars] = useState(0);
   const [celebrateRead, setCelebrateRead] = useState(false);
+  const [unlockStories, setUnlockStories] = useState<PackUnlockCoverStory[]>([]);
 
   const navState = location.state as {
     title?: string;
+    /** CMS cover already known from the map/scene — show this immediately. */
+    heroImageUrl?: string;
     fromScene?: boolean;
     fromMainMap?: boolean;
     fromSail?: boolean;
     celebrateRead?: boolean;
     readStars?: number;
+    onboardingJourney?: boolean;
   } | null;
+
+  const onboardingJourney =
+    Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
 
   const returnStoryId = storyIdParam || cmsStoryId;
   const sceneReturnCtx = useMemo<IslandSceneReturnContext>(
@@ -145,8 +182,13 @@ const IslandLessonPage: React.FC = () => {
     const controller = new AbortController();
     setCmsBookId(null);
     setCmsStoryId('');
+    setUnlockStories([]);
     setHasQuizContent(true);
-    setHeroSrc(LESSON_HERO);
+    setHasTryIt(false);
+    setTryItVideoUrl('');
+    const previewHero = resolveMediaUrl(navState?.heroImageUrl);
+    setHeroSrc(previewHero);
+    setHeroReady(false);
     const load = async () => {
       try {
         const res = await fetch(
@@ -160,6 +202,42 @@ const IslandLessonPage: React.FC = () => {
         const sorted = [...stories].sort(
           (a: { order?: number }, b: { order?: number }) =>
             (a.order ?? 0) - (b.order ?? 0),
+        );
+        setUnlockStories(
+          sorted
+            .filter(
+              (s: { _id?: string; status?: string }) =>
+                !!s._id && isPlayableMainMapStory({ _id: s._id, status: s.status }),
+            )
+            .map(
+              (s: {
+                _id: string;
+                order?: number;
+                status?: string;
+                quizMode?: string;
+                bookId?: unknown;
+                customQuestions?: unknown[];
+                quiz?: PackUnlockCoverStory['quiz'];
+                tryIt?: TryItPayload;
+                mapIconUrl?: string;
+                heroImageUrl?: string;
+                title?: string;
+                displayTitle?: string;
+              }) => ({
+                _id: s._id,
+                order: s.order,
+                status: s.status,
+                quizMode: s.quizMode,
+                bookId: s.bookId,
+                customQuestions: s.customQuestions,
+                quiz: s.quiz,
+                tryIt: s.tryIt,
+                mapIconUrl: s.mapIconUrl,
+                heroImageUrl: s.heroImageUrl,
+                title: s.title,
+                displayTitle: s.displayTitle,
+              }),
+            ),
         );
         const primary = (
           (storyIdParam
@@ -180,6 +258,7 @@ const IslandLessonPage: React.FC = () => {
               quiz?: {
                 levels?: Partial<Record<'easy' | 'medium' | 'hard', unknown[]>>;
               };
+              tryIt?: TryItPayload;
             }
           | undefined;
 
@@ -204,9 +283,19 @@ const IslandLessonPage: React.FC = () => {
                 primary.customQuestions.length > 0) ||
               (primary.quizMode === 'book_quiz' && Boolean(bookId)));
           setHasQuizContent(hasQuiz);
+          const packHasTryIt = storyHasTryIt(primary);
+          setHasTryIt(packHasTryIt);
+          setTryItVideoUrl(
+            packHasTryIt ? resolveMediaUrl(primary.tryIt?.videoUrl) : '',
+          );
 
           const cmsHero = resolveMediaUrl(primary.heroImageUrl);
-          if (cmsHero) setHeroSrc(cmsHero);
+          if (cmsHero) {
+            if (cmsHero !== previewHero) setHeroReady(false);
+            setHeroSrc(cmsHero);
+          } else if (!previewHero) {
+            setHeroSrc(LESSON_HERO);
+          }
 
           setLesson({
             title:
@@ -230,7 +319,7 @@ const IslandLessonPage: React.FC = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [islandId, storyIdParam, fallbackLesson.title, fallbackLesson.scriptureRef, fallbackLesson.readSubtitle, fallbackLesson.verse, fallbackLesson.verseRef]);
+  }, [islandId, storyIdParam, navState?.heroImageUrl, fallbackLesson.title, fallbackLesson.scriptureRef, fallbackLesson.readSubtitle, fallbackLesson.verse, fallbackLesson.verseRef]);
 
   // Refresh progress when hub mounts / story resolves / after returning from reader/quiz
   useEffect(() => {
@@ -238,6 +327,7 @@ const IslandLessonPage: React.FC = () => {
     if (!sid) {
       setReadDone(false);
       setQuizDone(false);
+      setTryItDone(false);
       setHasStartedReading(false);
       setReadStars(0);
       setCelebrateRead(false);
@@ -246,6 +336,7 @@ const IslandLessonPage: React.FC = () => {
     const p = islandStoryProgressService.get(islandId, sid);
     setReadDone(p.read);
     setQuizDone(p.quiz);
+    setTryItDone(Boolean(p.tryIt));
     const starsFromStorage =
       typeof p.readStars === 'number' && p.readStars >= 1
         ? Math.min(3, Math.floor(p.readStars))
@@ -260,12 +351,20 @@ const IslandLessonPage: React.FC = () => {
       cmsBookId != null ? readingProgressService.getProgress(cmsBookId) : null;
     setHasStartedReading(Boolean(p.read) || bookProgress != null);
 
+    storyPackUnlockUxService.markPackOpened(islandId, sid);
+
     if (navState?.celebrateRead && p.read) {
       setCelebrateRead(true);
       const t = window.setTimeout(() => setCelebrateRead(false), 2800);
       return () => window.clearTimeout(t);
     }
   }, [islandId, storyIdParam, cmsStoryId, cmsBookId, location.key, navState?.celebrateRead, navState?.readStars]);
+
+  const { celebration, dismissCelebration } = usePackUnlockCelebration(
+    islandId,
+    unlockStories,
+    unlockStories.length > 0,
+  );
 
   const openRead = useCallback(
     (level: ReadingLevelKey) => {
@@ -278,9 +377,11 @@ const IslandLessonPage: React.FC = () => {
         title: navState?.title || lesson.title,
       };
       if (cmsBookId) {
+        persistReadingLevel(cmsBookId, level);
         const params = new URLSearchParams();
         params.set('readingLevel', level);
         appendIslandSceneReturnParams(params, returnCtx);
+        // No `continue` / `page` — BookReader starts at page 1 (stars stay on the hub).
         navigate(`/read/${cmsBookId}?${params.toString()}`, {
           state: {
             fromIslandLesson: islandId,
@@ -315,19 +416,90 @@ const IslandLessonPage: React.FC = () => {
     ],
   );
 
+  const handleRereadStory = useCallback(() => {
+    if (cmsBookId) {
+      const saved = readPersistedReadingLevel(cmsBookId);
+      if (saved) {
+        openRead(saved);
+        return;
+      }
+      setShowAgePicker(true);
+      return;
+    }
+    navigate('/read', {
+      state: {
+        fromIslandLesson: islandId,
+        fromIslandScene: true,
+        ...sceneReturnCtx,
+      },
+    });
+  }, [cmsBookId, islandId, navigate, openRead, sceneReturnCtx]);
+
   const openQuiz = useCallback(() => {
     const qs = returnStoryId
       ? `?storyId=${encodeURIComponent(returnStoryId)}`
       : '';
-    navigate(`/sail/${islandId}/lesson/quiz${qs}`);
-  }, [islandId, navigate, returnStoryId]);
+    navigate(`/sail/${islandId}/lesson/quiz${qs}`, {
+      state: {
+        title: navState?.title || lesson.title,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        onboardingJourney,
+      },
+    });
+  }, [
+    islandId,
+    navigate,
+    returnStoryId,
+    navState?.title,
+    navState?.fromMainMap,
+    navState?.fromSail,
+    lesson.title,
+    onboardingJourney,
+  ]);
+
+  const openTryIt = useCallback(() => {
+    const qs = returnStoryId
+      ? `?storyId=${encodeURIComponent(returnStoryId)}`
+      : '';
+    if (tryItVideoUrl) {
+      primeTryItVideoFromTap(tryItVideoUrl);
+    }
+    navigate(`/sail/${islandId}/lesson/try-it${qs}`, {
+      state: {
+        title: navState?.title || lesson.title,
+        fromMainMap: Boolean(navState?.fromMainMap),
+        fromSail: Boolean(navState?.fromSail),
+        onboardingJourney,
+      },
+    });
+  }, [
+    tryItVideoUrl,
+    islandId,
+    navigate,
+    returnStoryId,
+    navState?.title,
+    navState?.fromMainMap,
+    navState?.fromSail,
+    lesson.title,
+    onboardingJourney,
+  ]);
+
+  const goToStoryPack = useCallback(() => {
+    navigate(sceneBackPath, {
+      state: buildIslandSceneNavState(sceneReturnCtx),
+    });
+  }, [navigate, sceneBackPath, sceneReturnCtx]);
 
   const handlePrimaryCta = useCallback(() => {
-    // Continue targets the next incomplete activity (story → quiz → game).
-    // The game has no route yet, so once everything is done we fall back to
-    // replaying the story.
+    // Continue: Story → Quiz → Try It (when present). Pack-complete return
+    // is the wood back button — no duplicate CTA.
     if (readDone && hasQuizContent && !quizDone) {
       openQuiz();
+      return;
+    }
+    if (readDone && (quizDone || !hasQuizContent) && hasTryIt && !tryItDone) {
+      openTryIt();
       return;
     }
     if (cmsBookId) {
@@ -345,7 +517,10 @@ const IslandLessonPage: React.FC = () => {
     readDone,
     hasQuizContent,
     quizDone,
+    hasTryIt,
+    tryItDone,
     openQuiz,
+    openTryIt,
     cmsBookId,
     islandId,
     navigate,
@@ -353,11 +528,16 @@ const IslandLessonPage: React.FC = () => {
   ]);
 
   const quizLocked = !readDone;
-  const gameLocked = !(readDone && (quizDone || !hasQuizContent));
+  const quizAvailable = hasQuizContent;
+  const quizStepDone = quizDone || !hasQuizContent;
+  const tryItLocked = !readDone || (hasQuizContent && !quizDone);
+  const packBeatsDone =
+    readDone && quizStepDone && (!hasTryIt || tryItDone);
+  const gameLocked = !packBeatsDone;
 
   const steps = useMemo(
-    () => [
-      {
+    () => {
+      const readStep = {
         id: 'read',
         title: 'Story',
         Icon: BookOpen,
@@ -374,53 +554,84 @@ const IslandLessonPage: React.FC = () => {
           : hasStartedReading
             ? 'Keep going'
             : 'Let’s read',
-      },
-      {
+      };
+      const quizStep = {
         id: 'quiz',
         title: 'Quiz',
         Icon: MessageCircleQuestionMark,
         iconBg: 'bg-[#9B5DE5]',
-        status: (!hasQuizContent
+        status: (!quizAvailable
           ? 'done'
-          : quizDone
+          : quizStepDone
             ? 'done'
             : quizLocked
               ? 'locked'
               : 'todo') as 'done' | 'todo' | 'locked',
-        hint: !hasQuizContent
+        hint: !quizAvailable
           ? 'Skip'
-          : quizDone
+          : quizStepDone
             ? 'Done!'
             : quizLocked
               ? 'After story'
               : 'Ready!',
-        onAction:
-          !hasQuizContent || quizLocked ? undefined : openQuiz,
-      },
-      {
-        id: 'game',
-        title: 'Game',
-        Icon: Gamepad2,
-        iconBg: 'bg-[#3BA4F0]',
-        status: (gameLocked ? 'locked' : 'todo') as 'done' | 'todo' | 'locked',
-        hint: gameLocked ? 'Soon' : 'Soon',
-      },
-    ],
+        onAction: !quizAvailable || quizLocked ? undefined : openQuiz,
+      };
+      if (hasTryIt) {
+        return [
+          readStep,
+          quizStep,
+          {
+            id: 'tryIt',
+            title: 'Try it!',
+            Icon: Video,
+            iconBg: 'bg-[#3BA4F0]',
+            status: (tryItDone
+              ? 'done'
+              : tryItLocked
+                ? 'locked'
+                : 'todo') as 'done' | 'todo' | 'locked',
+            hint: tryItDone ? 'Done!' : tryItLocked ? 'After quiz' : 'Ready!',
+            onAction: tryItLocked ? undefined : openTryIt,
+          },
+        ];
+      }
+      return [
+        readStep,
+        quizStep,
+        {
+          id: 'game',
+          title: 'Game',
+          Icon: Gamepad2,
+          iconBg: 'bg-[#3BA4F0]',
+          status: (gameLocked ? 'locked' : 'todo') as 'done' | 'todo' | 'locked',
+          hint: gameLocked ? 'Soon' : 'Soon',
+        },
+      ];
+    },
     [
       readDone,
       readStars,
       hasStartedReading,
-      hasQuizContent,
-      quizDone,
+      quizAvailable,
+      quizStepDone,
       quizLocked,
+      hasTryIt,
+      tryItDone,
+      tryItLocked,
       gameLocked,
       openQuiz,
+      openTryIt,
     ],
   );
 
   const completedCount = steps.filter((s) => s.status === 'done').length;
   const progressPct = (completedCount / steps.length) * 100;
+  const packComplete = packBeatsDone;
   const primaryLabel = hasStartedReading ? 'Continue' : 'Start';
+  const pulseCta =
+    !packComplete &&
+    ((onboardingJourney && primaryLabel === 'Start') ||
+      (readDone && primaryLabel === 'Continue'));
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#2d6b3a]">
@@ -440,14 +651,27 @@ const IslandLessonPage: React.FC = () => {
           55% { transform: scale(1.35); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
+        @keyframes ob-start-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        .ob-start-pulse {
+          animation: ob-start-pulse 1.15s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ob-start-pulse { animation: none; }
+        }
       `}</style>
       <div className="absolute inset-0" aria-hidden>
-        <img
-          src={LESSON_BG}
-          alt=""
-          className="w-full h-full object-cover scale-110 blur-[2px]"
-          draggable={false}
-        />
+        {heroReady && heroSrc ? (
+          <img
+            key={`bg-${heroSrc}`}
+            src={heroSrc}
+            alt=""
+            className="w-full h-full object-cover scale-110 blur-[18px]"
+            draggable={false}
+          />
+        ) : null}
         <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/25" />
       </div>
 
@@ -461,13 +685,9 @@ const IslandLessonPage: React.FC = () => {
       >
         <div className="flex items-center px-4 mb-1">
           <WoodBackButton
-            onClick={() =>
-              navigate(sceneBackPath, {
-                state: buildIslandSceneNavState(sceneReturnCtx),
-              })
-            }
+            onClick={goToStoryPack}
             className="w-12 h-12"
-            aria-label="Back to island scene"
+            aria-label="Back to story pack"
           />
         </div>
 
@@ -508,16 +728,27 @@ const IslandLessonPage: React.FC = () => {
 
         <div className="px-4 mb-3">
           <div
-            className="relative overflow-hidden rounded-[28px] border-[3px] border-white/70"
+            className="relative overflow-hidden rounded-[28px] border-[3px] border-white/70 bg-[#1f4d2a]"
             style={{ boxShadow: '0 10px 28px rgba(0,0,0,0.3)' }}
           >
-            <img
-              src={heroSrc}
-              alt=""
-              onError={() => setHeroSrc(LESSON_HERO)}
-              className="block w-full h-auto object-cover aspect-[4/3]"
-              draggable={false}
-            />
+            {heroSrc ? (
+              <img
+                key={heroSrc}
+                src={heroSrc}
+                alt=""
+                onLoad={() => setHeroReady(true)}
+                onError={() => {
+                  setHeroReady(false);
+                  if (heroSrc !== LESSON_HERO) setHeroSrc(LESSON_HERO);
+                }}
+                className={`block w-full h-auto object-cover aspect-[4/3] transition-opacity duration-200 ${
+                  heroReady ? 'opacity-100' : 'opacity-0'
+                }`}
+                draggable={false}
+              />
+            ) : (
+              <div className="w-full aspect-[4/3] bg-[#1f4d2a]" />
+            )}
             <div
               className="absolute left-1/2 bottom-3 w-[88%] -translate-x-1/2 px-4 py-3 text-center"
               style={{
@@ -559,21 +790,41 @@ const IslandLessonPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Primary CTA */}
-            <button
-              type="button"
-              onClick={handlePrimaryCta}
-              className="w-full min-h-[64px] rounded-[22px] font-display font-black text-white text-[1.75rem] tracking-wide active:scale-[0.98] transition-transform mb-4"
-              style={{
-                background: 'linear-gradient(180deg, #6BCF6B 0%, #3D9B3D 55%, #2E8B2E 100%)',
-                boxShadow:
-                  '0 5px 0 #1f6b1f, 0 10px 20px rgba(0,0,0,0.22), inset 0 2px 0 rgba(255,255,255,0.28)',
-                textShadow: '0 2px 0 rgba(0,0,0,0.2)',
-              }}
-              aria-label={primaryLabel}
-            >
-              {primaryLabel}
-            </button>
+            {!packComplete && (
+              <button
+                type="button"
+                onClick={handlePrimaryCta}
+                className={`w-full min-h-[64px] rounded-[22px] font-display font-black text-white text-[1.75rem] tracking-wide active:scale-[0.98] mb-4 ${
+                  pulseCta ? 'ob-start-pulse' : 'transition-transform'
+                }`}
+                style={{
+                  background: 'linear-gradient(180deg, #6BCF6B 0%, #3D9B3D 55%, #2E8B2E 100%)',
+                  boxShadow:
+                    '0 5px 0 #1f6b1f, 0 10px 20px rgba(0,0,0,0.22), inset 0 2px 0 rgba(255,255,255,0.28)',
+                  textShadow: '0 2px 0 rgba(0,0,0,0.2)',
+                }}
+                aria-label={primaryLabel}
+              >
+                {primaryLabel}
+              </button>
+            )}
+
+            {readDone && (
+              <button
+                type="button"
+                onClick={handleRereadStory}
+                className="w-full min-h-[54px] rounded-[22px] font-display font-black text-[#3D2914] text-[1.35rem] tracking-wide active:scale-[0.98] transition-transform mb-4"
+                style={{
+                  background: 'linear-gradient(180deg, #D4A574 0%, #C4956A 40%, #A67C52 100%)',
+                  boxShadow:
+                    '0 4px 0 #7a5230, 0 8px 16px rgba(0,0,0,0.18), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  border: '2px solid #8B6914',
+                }}
+                aria-label="Re-read story"
+              >
+                Re-read story
+              </button>
+            )}
 
             {/* Bible Map hunt stars (after story complete) */}
             {readDone && readStars > 0 && (
@@ -742,6 +993,9 @@ const IslandLessonPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {celebration && (
+        <PackUnlockCelebration payload={celebration} onDone={dismissCelebration} />
       )}
     </div>
   );

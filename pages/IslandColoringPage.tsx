@@ -16,6 +16,7 @@ import TapFillCanvas, { TapFillCanvasHandle } from '../components/features/TapFi
 import DrawingCanvas from '../components/features/DrawingCanvas';
 import CoverImage from '../components/ui/CoverImage';
 import { useAudio, type AudioItem, type Playlist } from '../context/AudioContext';
+import { useSailMusic } from '../hooks/useSailMusic';
 import { useUser } from '../context/UserContext';
 import {
   buildIslandSceneNavState,
@@ -99,6 +100,7 @@ type Phase = 'loading' | 'ready' | 'missing';
  * Route: /sail/:islandId/lesson/coloring
  */
 const IslandColoringPage: React.FC = () => {
+  useSailMusic();
   const navigate = useNavigate();
   const location = useLocation();
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();

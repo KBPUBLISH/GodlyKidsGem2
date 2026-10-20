@@ -4,12 +4,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Lock, Star, Check, Ship, Compass } from 'lucide-react';
 import CloudFlythrough from '../components/onboarding/CloudFlythrough';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
+import PerryMapGuide from '../components/onboarding/PerryMapGuide';
 import StormySeaError from '../components/ui/StormySeaError';
 import {
   ONBOARDING_GENESIS_VIDEO,
   isOnboardingJourneyActive,
 } from '../utils/onboardingJourney';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
+import { useUser } from '../context/UserContext';
 import { assertFreeTierIslandExists } from '../utils/freeTierAccess';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { profileService } from '../services/profileService';
@@ -24,20 +26,15 @@ import {
   type OceanMapStoryRow,
 } from '../utils/oceanMapIslands';
 
-/** Full-width light wooden plank header (irregular edges; black keyed to alpha). */
-const MAP_HEADER_FRAME = '/assets/images/map-header-frame.png';
-/** Native size of map-header-frame.png (1024×268) — phone height = width × aspect. */
-const MAP_HEADER_ASPECT = 268 / 1024;
 /** Native size of map-footer-frame.png (846×295) — used for --map-footer-h scroll clearance. */
 const MAP_FOOTER_ASPECT = 295 / 846;
 /**
- * Resolved banner heights (CSS vars). Header: phone keeps width×aspect;
- * footer is capped on ALL viewports (phone uncapped 100vw×aspect was ~30%+ of screen).
+ * Resolved banner heights (CSS vars). Header is a thin sky inset under the
+ * safe area (wood plank removed). Footer is capped on ALL viewports
+ * (phone uncapped 100vw×aspect was ~30%+ of screen).
  */
 const MAP_HEADER_H = 'var(--map-header-h)';
 const MAP_FOOTER_H = 'var(--map-footer-h)';
-/** iPad / tablet max header height — ocean dominates. */
-const MAP_HEADER_MAX_VH_TABLET = 14;
 /**
  * Footer caps — match BottomNavigation compact wood tab bar.
  * Phone ~70–78px / tablet ~80–88px.
@@ -73,9 +70,9 @@ type MapSkyCloudSpec = {
 };
 
 /**
- * Horizon cloud bank — modest sky strip under the wood limb, resting on the
- * ocean horizon (matches the “good” crop). Assets have ~20% top alpha padding
- * so topPct near 0 still leaves a thin sky gap before the white puffs.
+ * Horizon cloud bank — modest sky strip under the safe area, resting on the
+ * ocean horizon. Assets have ~20% top alpha padding so topPct near 0 still
+ * leaves a thin sky gap before the white puffs.
  */
 const MAP_SKY_CLOUDS: MapSkyCloudSpec[] = [
   {
@@ -124,14 +121,27 @@ const MAP_SKY_CLOUDS: MapSkyCloudSpec[] = [
 const MAP_SKY_CLOUD_LOOP_SEC = 90;
 
 /**
- * Ocean frame top — just under the wood header so the locked horizon sits snug
- * beneath the title (matches the intended “good” Map screenshot).
+ * Extra drop for water + islands after the wood header was removed
+ * (`--map-header-h` is 0). Keeps the first-island tap cue below the
+ * fixed cloud bank without growing the clouds themselves.
  */
-const OCEAN_VIEWPORT_TOP = `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} - 8px)`;
+const OCEAN_CONTENT_NUDGE_PX = 48;
+/**
+ * Ocean frame top — sits under the safe area (thin header inset, no wood plank),
+ * then nudged down so Beginnings / the tap oval clear the sky clouds.
+ */
+const OCEAN_VIEWPORT_TOP = `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} + ${OCEAN_CONTENT_NUDGE_PX}px)`;
+/**
+ * Sky-cloud band top — flush with the safe area so puffs sit in the sky gap.
+ * Height is fixed (not tied to OCEAN_VIEWPORT_TOP) so the nudge does not
+ * stretch the overlay back over the islands.
+ */
+const MAP_SKY_CLOUD_TOP = `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H})`;
+const MAP_SKY_CLOUD_H = '130px';
 
 /**
  * Globe-limb mask on the ocean WATER frame — soft feather along the curve so
- * the water blends into sky. Curve stays locked under the header.
+ * the water blends into sky. Curve stays locked under the safe-area sky.
  */
 const OCEAN_HORIZON_MASK = `url("data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 400" preserveAspectRatio="none">
@@ -191,8 +201,12 @@ const ISLAND_ART_SIZE = 225;
 const VOYAGE_X_AMPLITUDE = 19;
 /** Islands per full centre → right → centre → left weave. */
 const VOYAGE_X_PERIOD = 4;
-/** Clear water above the first island, below the locked horizon curve. */
-const VOYAGE_TOP_PAD = 28;
+/**
+ * Clear water above the first island, below the locked horizon curve.
+ * 48px water nudge + this pad puts the 0/7 / “Tap Island” oval fully under
+ * the 130px cloud band (the badge paints a bit above the node box).
+ */
+const VOYAGE_TOP_PAD = 132;
 /** Clear water between one island's lowest plank and the next island's badge. */
 const VOYAGE_GAP = 64;
 /** Clear water past the last island so its planks clear the footer nav. */
@@ -530,6 +544,7 @@ const MapPage: React.FC = () => {
   const [zoomIslandId, setZoomIslandId] = useState<string | null>(null);
   const [zoomOrigin, setZoomOrigin] = useState('50% 42%');
   const location = useLocation();
+  const { kids } = useUser();
   const guidedRef = useRef(false);
   /** First island of the voyage — the only tappable one during guided first
    *  run. Held in a ref so the cinematic callbacks keep stable identities. */
@@ -541,12 +556,18 @@ const MapPage: React.FC = () => {
       isOnboardingJourneyActive() ||
       Boolean((location.state as { onboardingJourney?: boolean } | null)?.onboardingJourney),
   );
+  const perryArrive = Boolean(
+    (location.state as { perryArrive?: boolean } | null)?.perryArrive,
+  );
+  const perryKidName =
+    (location.state as { kidName?: string } | null)?.kidName || kids[0]?.name;
   const [cloudLanding, setCloudLanding] = useState(
     () =>
-      isOnboardingJourneyActive() ||
-      Boolean((location.state as { onboardingJourney?: boolean } | null)?.onboardingJourney),
+      !perryArrive &&
+      (isOnboardingJourneyActive() ||
+        Boolean((location.state as { onboardingJourney?: boolean } | null)?.onboardingJourney)),
   );
-  const [showTapIsland, setShowTapIsland] = useState(false);
+  const [showTapIsland, setShowTapIsland] = useState(() => perryArrive);
   const [introVideo, setIntroVideo] = useState(false);
   const [videoFadeOut, setVideoFadeOut] = useState(false);
   const videoLeaveRef = useRef(false);
@@ -884,27 +905,35 @@ const MapPage: React.FC = () => {
 
     // Batch reads first (measure the untransformed outer wrapper so the rect is
     // stable and there is no measure/transform feedback loop).
-    const work: { inner: HTMLElement; norm: number }[] = [];
+    const work: { inner: HTMLElement; norm: number; nearSky: boolean }[] = [];
     nodes.forEach((outer) => {
       const inner = outer.querySelector('[data-globe-inner]') as HTMLElement | null;
       if (!inner) return;
       const r = outer.getBoundingClientRect();
       const centerY = r.top + r.height / 2;
       const norm = Math.max(-1, Math.min(1, (centerY - viewportCenterY) / half));
-      work.push({ inner, norm });
+      // First-island rest pose sits just under the 130px cloud band; a positive
+      // rotateX folds that tap oval back into the clouds.
+      work.push({ inner, norm, nearSky: r.top < 210 });
     });
 
     // Then batch writes.
-    work.forEach(({ inner, norm }) => {
+    work.forEach(({ inner, norm, nearSky }) => {
       const mag = Math.abs(norm);
       // norm < 0 => above center: recede the TOP edge (rotateX +) toward horizon.
       // norm > 0 => below center: recede the BOTTOM edge (rotateX -).
-      const rotateX = -norm * GLOBE_MAX_TILT;
+      let rotateX = -norm * GLOBE_MAX_TILT;
+      if (nearSky && rotateX > 0) rotateX = 0;
       // Keep translateZ at 0 — any negative Z breaks hit-testing on the
       // island button in WebKit/Blink even when the outer button is on top.
       const translateZ = 0;
-      // Slightly stronger scale falloff when rolling over the top limb.
-      const scaleFalloff = norm < 0 ? GLOBE_MAX_SCALE_FALLOFF * 1.15 : GLOBE_MAX_SCALE_FALLOFF;
+      // Slightly stronger scale falloff when rolling over the top limb —
+      // keep the sky-adjacent island closer to full size so the tap oval stays readable.
+      const scaleFalloff = nearSky && norm < 0
+        ? GLOBE_MAX_SCALE_FALLOFF * 0.35
+        : norm < 0
+          ? GLOBE_MAX_SCALE_FALLOFF * 1.15
+          : GLOBE_MAX_SCALE_FALLOFF;
       const scale = 1 - mag * scaleFalloff;
       // Soft wrap: keep full opacity through the main ocean; only fade in the
       // outer limb band so islands near the top but still on water stay solid.
@@ -1017,74 +1046,11 @@ const MapPage: React.FC = () => {
       }
     : undefined;
 
-  const chromeOpacity = sailCinematic || guided ? 0 : 1;
   const chromeTransition = `opacity ${MAP_SAIL_CLEAR_MS}ms ease`;
 
   return (
     <div className={`relative w-full h-full overflow-hidden${sailCinematic ? ' sail-cinematic-active' : ''}`}>
-      {/* Default app Header omitted on Map — wood frame is the page chrome. */}
-
-      {/* ── TOP wood plank (portaled) — above clouds so the limb stays in front.
-          z-[50] > clouds (45) / islands (32) / nav (40); < popup (60). */}
-      {createPortal(
-        <div
-          className="fixed top-0 left-0 right-0 z-[50] pointer-events-none"
-          aria-hidden
-          style={{ opacity: chromeOpacity, transition: chromeTransition }}
-        >
-          <div
-            style={{
-              height: 'var(--safe-area-top, 0px)',
-              background: 'linear-gradient(180deg, #c9945e 0%, #b87d4a 100%)',
-            }}
-          />
-          <img
-            src={MAP_HEADER_FRAME}
-            alt=""
-            className="block w-full select-none"
-            draggable={false}
-            style={{
-              width: '100%',
-              height: MAP_HEADER_H,
-              objectFit: 'cover',
-              objectPosition: 'center 42%',
-            }}
-          />
-        </div>,
-        document.body,
-      )}
-
-      {/* Title over the wood plank — above header art */}
-      {createPortal(
-        <div
-          className="fixed left-0 right-0 z-[51] pointer-events-none px-4 text-center"
-          style={{
-            top: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.28)`,
-            opacity: chromeOpacity,
-            transition: chromeTransition,
-          }}
-        >
-          <h1
-            className="font-display font-black text-[clamp(1.35rem,5.2vw,2.15rem)] leading-none"
-            style={{
-              color: '#ffe9b0',
-              textShadow: '0 2px 0 #5c2e12, 0 3px 8px rgba(0,0,0,0.45)',
-            }}
-          >
-            God&apos;s Word Adventure
-          </h1>
-          <p
-            className="mt-0.5 font-display font-bold text-[clamp(0.7rem,2.8vw,0.9rem)] tracking-wide"
-            style={{
-              color: 'rgba(255,245,220,0.92)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-            }}
-          >
-            Sail. Learn. Grow.
-          </p>
-        </div>,
-        document.body,
-      )}
+      {/* Default app Header omitted on Map — sky sits under the safe area. */}
 
       {/* Bottom wood rope footer is owned by BottomNavigation (shared 4-tab bar). */}
 
@@ -1092,7 +1058,7 @@ const MapPage: React.FC = () => {
       <div
         className="fixed top-0 left-0 right-0 z-[5] pointer-events-none overflow-hidden"
         style={{
-          height: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} + 72px)`,
+          height: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} + ${OCEAN_CONTENT_NUDGE_PX}px + 140px)`,
           background:
             'linear-gradient(180deg, #1a6fd4 0%, #3aa0ef 40%, #7ec8f8 70%, #a8daf8 100%)',
         }}
@@ -1102,7 +1068,7 @@ const MapPage: React.FC = () => {
       {/* ── Fixed sky clouds (portaled) — viewport-pinned at the ocean horizon.
           NOT inside scrollRef / islandsSyncRef: islands/ocean scroll underneath;
           this layer stays put (position:fixed on body).
-          z-[45] > islands (32), < wood header (50) / title (51) / popup (60).
+          z-[45] > islands (32), < popup (60). Clouds overlay the water.
           pointer-events none so island taps still work.
           Seamless L→R marquee: duplicated strips, translateX(-50%→0) linear infinite. */}
       {createPortal(
@@ -1110,9 +1076,10 @@ const MapPage: React.FC = () => {
           data-map-sky-clouds=""
           className="fixed left-0 right-0 z-[45] pointer-events-none overflow-hidden"
           style={{
-            /* Raised toward wood limb / horizon; still visible under plank (z < wood). */
-            top: `calc(var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.78)`,
-            height: `calc(${OCEAN_VIEWPORT_TOP} - (var(--safe-area-top, 0px) + ${MAP_HEADER_H} * 0.78) + 88px)`,
+            /* Flush with the safe-area sky; z < nav / popup. Height stays
+               fixed so the water nudge does not grow this overlay. */
+            top: MAP_SKY_CLOUD_TOP,
+            height: MAP_SKY_CLOUD_H,
             opacity: sailCinematic ? 0.35 : 1,
             transition: chromeTransition,
           }}
@@ -1169,7 +1136,7 @@ const MapPage: React.FC = () => {
 
       {/* ── Ocean frame (fixed curve) + inner scroller ──
           Outer box owns the soft globe-limb mask (water PNG only) and does NOT scroll,
-          so the horizon stays locked under the wood header. Islands are a sibling
+          so the horizon stays locked under the safe-area sky. Islands are a sibling
           overlay with a soft feathered limb + globe fade. z-10: behind haze/clouds/islands.
           overscroll-behavior:none blocks rubber-band pull-up. */}
       <div
@@ -1219,7 +1186,7 @@ const MapPage: React.FC = () => {
           context (BottomNavigation is a z-40 sibling).
           z-[32]: above ocean/haze, BELOW fixed horizon clouds (z-45) so islands
           tuck under the cloud bank as they scroll up; also below nav (40) /
-          wood (50) / popup (60). Empty overlay stays pointer-events:none so
+          popup (60). Empty overlay stays pointer-events:none so
           water scrolls and footer nav stays usable in gaps.
           No CSS mask — mask + pointer-events:none breaks hit testing for auto
           children in WebKit/Blink; limb fade is handled by applyGlobe opacity. */}
@@ -1282,8 +1249,8 @@ const MapPage: React.FC = () => {
                     storiesTotal={guided ? 0 : progress.total}
                     isZoomTarget={zoomIslandId === island.id}
                     cinematic={sailCinematic}
-                    interactive={!guided || index === 0}
-                    showTapCue={guided && showTapIsland && !introVideo && !sailCinematic && index === 0}
+                    interactive={!guided || (index === 0 && !perryArrive)}
+                    showTapCue={guided && !perryArrive && showTapIsland && !introVideo && !sailCinematic && index === 0}
                     onMeasure={handleNodeMeasure}
                     onSelect={handleSelect}
                   />
@@ -1325,7 +1292,7 @@ const MapPage: React.FC = () => {
         )}
 
       {/* ── CMS islands unreachable / empty — say so rather than leaving bare ocean.
-          z-[34]: over the islands overlay (32), under nav (40) / wood (50). */}
+          z-[34]: over the islands overlay (32), under nav (40). */}
       {islandsError &&
         !guided &&
         !sailCinematic &&
@@ -1366,8 +1333,21 @@ const MapPage: React.FC = () => {
         createPortal(<CloudFlythrough onComplete={finishCloudLanding} />, document.body)}
 
       <OnboardingGuideCard
-        active={guided && showTapIsland && !cloudLanding && !introVideo && !sailCinematic}
+        active={guided && !perryArrive && showTapIsland && !cloudLanding && !introVideo && !sailCinematic}
       />
+
+      {perryArrive &&
+        !cloudLanding &&
+        !introVideo &&
+        !sailCinematic &&
+        createPortal(
+          <PerryMapGuide
+            kidName={perryKidName}
+            canSail={Boolean(islands[0])}
+            onSetSail={goToFirstIsland}
+          />,
+          document.body,
+        )}
 
       {introVideo &&
         createPortal(
@@ -1403,7 +1383,7 @@ const MapPage: React.FC = () => {
         /* Banner heights on :root so portaled islands overlay inherits the same inset.
            Footer height matches BottomNavigation wood tab bar (compact). */
         :root {
-          --map-header-h: calc(100vw * ${MAP_HEADER_ASPECT});
+          --map-header-h: 0px;
           --wood-tab-lift: 12px;
           --map-footer-h: min(
             calc(100vw * ${MAP_FOOTER_ASPECT}),
@@ -1414,7 +1394,7 @@ const MapPage: React.FC = () => {
         }
         @media (min-width: 768px) {
           :root {
-            --map-header-h: min(calc(100vw * ${MAP_HEADER_ASPECT}), ${MAP_HEADER_MAX_VH_TABLET}vh);
+            --map-header-h: 0px;
             --map-footer-h: min(
               calc(100vw * ${MAP_FOOTER_ASPECT}),
               ${MAP_FOOTER_MAX_VH_TABLET}vh,

@@ -94,6 +94,26 @@ const isDateCompleted = (date: Date, history: any[]): boolean => {
   return history.some((session) => session.date === dateKey && session.completed);
 };
 
+const WORLD_DAY_SEEN_KEY = 'godlykids_world_day_seen';
+
+const todayKey = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+/** True only on the first /world visit of the calendar day, before today's lesson is done. */
+const takeFirstWorldVisitPulse = (): boolean => {
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    const today = todayKey();
+    const seen = localStorage.getItem(WORLD_DAY_SEEN_KEY) === today;
+    if (!seen) localStorage.setItem(WORLD_DAY_SEEN_KEY, today);
+    return !seen && !isSessionCompletedToday();
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Legacy island overlay — Explore is now the card/Map layout in WorldPage.
  * Kept as a no-op export so App imports stay stable.
@@ -289,6 +309,7 @@ const WorldPage: React.FC = () => {
   const [sessionHistory, setSessionHistory] = useState<any[]>([]);
   const [lessonDone, setLessonDone] = useState(false);
   const [hasInProgress, setHasInProgress] = useState(false);
+  const [pulseStreakStart, setPulseStreakStart] = useState(takeFirstWorldVisitPulse);
   const [featuredItems, setFeaturedItems] = useState<FeaturedCabinItem[]>([]);
   const [videoDevotionals, setVideoDevotionals] = useState<any[]>([]);
   const [showVerseModal, setShowVerseModal] = useState(false);
@@ -523,10 +544,9 @@ const WorldPage: React.FC = () => {
           {featuredItems.length > 0 && (
             <section
               className={
-                // Match plank header: phone full-bleed aspect − lift; tablet max-h 9rem − 4.5rem lift
-                // Phone −1.5rem / tablet−iPad −4.5rem (md ≥768px) — keep in sync with Header.tsx
+                // Match plank header: phone aspect − 1.5rem; tablet live edge at 6.25rem. Keep in sync with Header.tsx
                 'relative w-full explore-chrome pb-5 ' +
-                'pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]'
+                'pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)]'
               }
               aria-label="Featured new releases"
               style={{
@@ -550,10 +570,10 @@ const WorldPage: React.FC = () => {
             </section>
           )}
 
-          {/* Header clearance when featured cabin is absent — phone −1.5rem / tablet −4.5rem lift */}
+          {/* Header clearance when featured cabin is absent — phone −1.5rem / tablet live edge at 6.25rem */}
           {featuredItems.length === 0 && (
             <div
-              className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)] md:pt-[calc(9rem+0.35rem-4.5rem)]"
+              className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)]"
               aria-hidden
             />
           )}
@@ -740,11 +760,15 @@ const WorldPage: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={startLesson}
-                      className="mt-1.5 w-full py-1.5 rounded-lg font-display font-black text-[10px] text-white active:scale-[0.98] transition-transform"
+                      onClick={() => {
+                        setPulseStreakStart(false);
+                        startLesson();
+                      }}
+                      className={`streak-start-btn mt-1.5 w-full py-1.5 rounded-lg font-display font-black text-[10px] text-white active:scale-[0.98] transition-transform${
+                        pulseStreakStart ? ' streak-start-pulse' : ''
+                      }`}
                       style={{
                         background: 'linear-gradient(180deg, #3db8e8, #1B8BB8)',
-                        boxShadow: '0 2px 0 #0e5f7a',
                       }}
                     >
                       {lessonDone ? 'Review' : hasInProgress ? 'Continue' : 'Start'}
@@ -904,6 +928,22 @@ const WorldPage: React.FC = () => {
         @keyframes explore-ship-bob {
           0%, 100% { transform: translateY(0) rotate(-4deg); }
           50% { transform: translateY(-4px) rotate(4deg); }
+        }
+        .streak-start-pulse {
+          animation: streak-start-pulse 1.35s ease-in-out infinite;
+        }
+        @keyframes streak-start-pulse {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 2px 0 #0e5f7a, 0 0 0 0 rgba(61, 184, 232, 0.55);
+          }
+          50% {
+            transform: scale(1.07);
+            box-shadow: 0 2px 0 #0e5f7a, 0 0 0 8px rgba(61, 184, 232, 0);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .streak-start-pulse { animation: none; }
         }
         body[data-modal-open="true"] .bottom-nav-bar {
           display: none !important;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Gamepad2, Lock } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import {
@@ -7,6 +7,10 @@ import {
   type UnlockedRewardGame,
 } from '../services/rewardsService';
 import { toKidSafeGameUrl } from '../utils/kidSafeGameIframe';
+import {
+  safeAppReturnPath,
+  type GameShelfFromTreasureState,
+} from '../utils/treasureNav';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 const GAMES_ICON = '/assets/images/rewards-gamepad-icon.png';
@@ -29,72 +33,8 @@ type LibraryGame = {
   isNew: boolean;
   /** Reward games are one-play-only — true once the single play is used. */
   played: boolean;
-  source: 'reward' | 'placeholder' | 'cms';
+  source: 'reward' | 'cms';
 };
-
-/** Future / teaser slots — stay locked until collected via Rewards loot. */
-const LOCKED_PLACEHOLDERS: LibraryGame[] = [
-  {
-    id: 'placeholder-mystery-quest',
-    name: 'Mystery Quest',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-  {
-    id: 'placeholder-bible-race',
-    name: 'Bible Race',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-  {
-    id: 'placeholder-ark-builder',
-    name: 'Ark Builder',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-  {
-    id: 'placeholder-fishers',
-    name: 'Fishers of Men',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-  {
-    id: 'placeholder-temple-run',
-    name: 'Temple Path',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-  {
-    id: 'placeholder-shepherd',
-    name: 'Shepherd Hero',
-    imageUrl: undefined,
-    url: '',
-    unlocked: false,
-    isNew: false,
-    played: false,
-    source: 'placeholder',
-  },
-];
 
 const SLOTS_PER_SHELF = 3;
 
@@ -123,11 +63,12 @@ function fromReward(g: UnlockedRewardGame): LibraryGame {
 }
 
 /**
- * Games Library — wood-shelf catalog of reward-unlocked games (+ locked teasers).
- * Unlock via Island Rewards loot boxes (rewardsService). Old /games island page stays intact.
+ * Games Library — wood-shelf catalog of games unlocked from Rewards loot boxes.
  */
 const GamesLibraryPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const shelfState = (location.state || {}) as GameShelfFromTreasureState;
   const [rewardGames, setRewardGames] = useState<UnlockedRewardGame[]>([]);
   const [cmsCovers, setCmsCovers] = useState<
     Record<string, { name?: string; imageUrl?: string }>
@@ -173,12 +114,16 @@ const GamesLibraryPage: React.FC = () => {
     return () => window.clearTimeout(id);
   }, [toast]);
 
-  const catalog = useMemo(() => {
-    const unlockedIds = new Set(rewardGames.map((g) => g.id));
-    const unlockedUrls = new Set(
-      rewardGames.map((g) => (g.url || '').trim()).filter(Boolean),
-    );
+  /** After a claimed dig, skip /sail/treasure and return to the story pack. */
+  const goBack = useCallback(() => {
+    if (shelfState.fromCompletedTreasure) {
+      navigate(safeAppReturnPath(shelfState.returnTo), { replace: true });
+      return;
+    }
+    navigate(-1);
+  }, [navigate, shelfState.fromCompletedTreasure, shelfState.returnTo]);
 
+  const catalog = useMemo(() => {
     const unlocked: LibraryGame[] = rewardGames.map((g) => {
       const base = fromReward(g);
       const cms = g.url ? cmsCovers[g.url.trim()] : undefined;
@@ -189,7 +134,6 @@ const GamesLibraryPage: React.FC = () => {
       };
     });
 
-    // Sort newest unlocks first so “NEW” sits near the top shelves.
     unlocked.sort((a, b) => {
       const aAt =
         rewardGames.find((r) => r.id === a.id)?.unlockedAt ?? 0;
@@ -198,11 +142,7 @@ const GamesLibraryPage: React.FC = () => {
       return bAt - aAt;
     });
 
-    const locked = LOCKED_PLACEHOLDERS.filter(
-      (p) => !unlockedIds.has(p.id) && !unlockedUrls.has(p.url),
-    );
-
-    return [...unlocked, ...locked];
+    return unlocked;
   }, [rewardGames, cmsCovers]);
 
   const shelves = useMemo(() => chunkShelves(catalog), [catalog]);
@@ -262,7 +202,7 @@ const GamesLibraryPage: React.FC = () => {
       >
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className="flex items-center justify-center w-11 h-11 rounded-full text-white active:scale-95 transition-transform"
           style={woodBtnStyle}
           aria-label="Back"
@@ -341,11 +281,7 @@ const GamesLibraryPage: React.FC = () => {
                             alt=""
                             draggable={false}
                             className={`w-full h-full object-cover ${
-                              !game.unlocked
-                                ? 'grayscale brightness-75'
-                                : game.played
-                                  ? 'grayscale-[0.7] brightness-90'
-                                  : ''
+                              !game.unlocked ? 'grayscale brightness-75' : ''
                             }`}
                             loading="lazy"
                           />

@@ -705,6 +705,27 @@ router.post('/onboarding/event', async (req, res) => {
         
         res.json({ success: true });
     } catch (error) {
+        // A new app event name must not 500 this public endpoint. Store it anyway.
+        const enumMiss = error?.name === 'ValidationError' && error?.errors?.event;
+        if (enumMiss) {
+            try {
+                const { userId, sessionId, event, metadata } = req.body;
+                const finalUserId = event === 'account_created' && metadata?.email
+                    ? String(metadata.email).toLowerCase().trim()
+                    : userId;
+                await OnboardingEvent.collection.insertOne({
+                    userId: String(finalUserId),
+                    sessionId: sessionId || `session_${Date.now()}`,
+                    event: String(event).slice(0, 80),
+                    metadata: metadata && typeof metadata === 'object' ? metadata : {},
+                    createdAt: new Date(),
+                });
+                console.log(`📊 Onboarding event SAVED (unlisted): ${event}`);
+                return res.json({ success: true });
+            } catch (insertErr) {
+                console.error('📊 Onboarding event insert ERROR:', insertErr.message);
+            }
+        }
         console.error('📊 Onboarding event ERROR:', error.message);
         if (error.name === 'ValidationError') {
             console.error('📊 Validation details:', error.errors);

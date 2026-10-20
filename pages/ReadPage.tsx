@@ -22,6 +22,7 @@ interface CategoryData {
   gradientTo?: string;
   image?: string;
   icon?: string;
+  iconImage?: string;
 }
 
 const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string }> = {
@@ -253,6 +254,7 @@ const ReadPage: React.FC = () => {
               gradientTo: c.gradientTo,
               image: c.image,
               icon: c.icon,
+              iconImage: c.iconImage,
             };
           }
         });
@@ -660,11 +662,17 @@ const ReadPage: React.FC = () => {
                           </h3>
                           {isSelected && <span className="text-white/80 text-sm">Currently viewing</span>}
                         </div>
-                        {!catData?.image && (
+                        {!catData?.image && catData?.iconImage ? (
+                          <img
+                            src={catData.iconImage}
+                            alt=""
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-14 h-14 object-contain z-10 drop-shadow"
+                          />
+                        ) : !catData?.image ? (
                           <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">
                             <IconComponent className="w-16 h-16 text-white" />
                           </div>
-                        )}
+                        ) : null}
                         {isSelected && (
                           <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white flex items-center justify-center z-20">
                             <div className="w-3 h-3 rounded-full bg-green-500" />

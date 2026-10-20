@@ -18,6 +18,27 @@ export type ChatTurn = { role: 'user' | 'character'; text: string };
 
 export const GREETING_QUESTION = '__greeting__';
 
+const EMOTION_TAG_RE = /\[[^\]]+\]/g;
+
+/** Strip ElevenLabs [emotion] tags so they never show in the speech bubble. */
+export function stripEmotionTags(text: string): string {
+  return String(text || '')
+    .replace(EMOTION_TAG_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Keep author tags for ElevenLabs v4. If a reply has none (offline fallback
+ * or an old cached line), add a warm cue so speech is not flat.
+ */
+export function spokenTextForTts(text: string): string {
+  const raw = String(text || '').trim();
+  if (!raw) return raw;
+  if (/\[[^\]]+\]/.test(raw)) return raw;
+  return `[warmly] ${raw}`;
+}
+
 /** Keep the conversation payload small — last ~8 turns. */
 const MAX_HISTORY_TURNS = 8;
 

@@ -487,7 +487,6 @@ class ActivityTrackingService {
       const now = Date.now();
       const timeSinceLastSync = now - this.lastSyncTime;
       if (timeSinceLastSync < 30000 && this.lastSyncTime > 0) { // 30 seconds min between syncs
-        console.log('📊 Skipping sync (too recent):', timeSinceLastSync, 'ms ago');
         return;
       }
       this.lastSyncTime = now;

@@ -1,10 +1,22 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Lock } from 'lucide-react';
+import { Lock, Volume2, VolumeX } from 'lucide-react';
 import {
   getBibleMapApiRoot,
   resolveBibleMapMediaUrl,
 } from '../utils/bibleMapApi';
+import {
+  isOnboardingJourneyActive,
+  subscribeOnboardingJourney,
+} from '../utils/onboardingJourney';
+import {
+  CMS_ISLANDS_TIMEOUT_MS,
+  fetchOceanMapIslands,
+  getSailIslandArtSrc,
+  type OceanMapIsland,
+} from '../utils/oceanMapIslands';
+import { useSailMusic } from '../hooks/useSailMusic';
+
 /** Looping ocean background video (portrait; shown full-bleed cover). */
 const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
 /** Static ocean poster / fallback if the video fails to load. */
@@ -14,14 +26,14 @@ const SAIL_SHIP_DECK = '/assets/images/sail-ship-deck.png';
 const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
 /** Sail-scene bottom overlay — crew roster (three characters on wood plaque). */
 const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
-/** Sail-scene bottom overlay — games (gamepad on wood plaque). */
-const SAIL_BTN_GAMES = '/assets/images/rewards-gamepad-icon.png';
 /** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
 const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
 /** Shared wood texture for Travel Here CTA (matches IslandScene chrome). */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 /** One-time steering-wheel turn hint — hide after first drag. */
 const WHEEL_HINT_STORAGE_KEY = 'godlykids_sail_wheel_hint_seen';
+/** White cover after onboarding intro video — matches map cinematic fade. */
+const ARRIVAL_WHITE_FADE_MS = 700;
 
 const travelHereBtnStyle: React.CSSProperties = {
   backgroundImage: `url(${WOOD_TEX})`,
@@ -36,10 +48,7 @@ const travelHereBtnStyle: React.CSSProperties = {
 const SAIL_BG_CLOUD_A = '/assets/images/sail-bg-cloud-a.png';
 /** Sky cloud B — compact cluster (769×306; alpha already keyed). */
 const SAIL_BG_CLOUD_B = '/assets/images/sail-bg-cloud-b.png';
-/** Distant left island (black keyed to alpha). */
-const SAIL_BG_ISLAND_A = '/assets/images/sail-bg-island-a.png';
-/** Distant right island (black keyed to alpha). */
-const SAIL_BG_ISLAND_B = '/assets/images/sail-bg-island-b.png';
+/** Distant horizon slots — art comes from the same CMS icons as the ocean map. */
 
 /**
  * Layered sky clouds for the seamless marquee strip (same pattern as Map).
@@ -93,108 +102,43 @@ const SAIL_SKY_CLOUDS: SailSkyCloudSpec[] = [
 /** Full loop duration for the duplicated cloud track (linear infinite). */
 const SAIL_SKY_CLOUD_LOOP_SEC = 95;
 
-/**
- * Distant horizon islands — behind the carousel focal island.
- * Viewport-fixed (not ocean-frame %) so they stay visible on the water
- * left/right of the focal island despite the wide letterboxed ocean frame.
- * Kept small / high so they read as scenery, not competing focal points.
- */
-const SAIL_BG_ISLANDS = [
-  {
-    id: 'bg-left',
-    src: SAIL_BG_ISLAND_A,
-    /** Far background: much smaller than carousel (~28% / max 235). */
-    width: 'min(14vw, 96px)',
-    left: '10%',
-    top: '28%',
-    opacity: 0.94,
-  },
-  {
-    id: 'bg-right',
-    src: SAIL_BG_ISLAND_B,
-    width: 'min(11vw, 76px)',
-    left: '90%',
-    top: '30%',
-    opacity: 0.9,
-  },
-] as const;
-
-/**
- * Wheel-driven island carousel overlays (ocean keyed out; island art remains).
- * Order = look stops left → right (clockwise wheel advances index).
- */
-const CAROUSEL_ISLANDS = [
-  {
-    id: 'genesis',
-    title: 'Genesis',
-    src: '/assets/images/sail-carousel-genesis.png',
-  },
-  {
-    id: 'exodus',
-    title: 'Exodus',
-    src: '/assets/images/sail-carousel-exodus.png',
-  },
-  {
-    id: 'daniel',
-    title: 'Daniel',
-    src: '/assets/images/sail-carousel-daniel.png',
-  },
-  {
-    id: 'joshua',
-    title: 'Joshua',
-    src: '/assets/images/sail-carousel-joshua.png',
-  },
-  {
-    id: '1-samuel',
-    title: '1 Samuel',
-    src: '/assets/images/sail-carousel-1-samuel.png',
-  },
-] as const;
-
-/**
- * Per-island adventure completion (mock for now — wire to real progress later).
- * Total matches IslandScene activities (read / quiz / puzzle / coloring / game).
- * Swap this map (or `getIslandProgress`) for live progress when available.
- */
-const ISLAND_ADVENTURE_PROGRESS: Record<
-  (typeof CAROUSEL_ISLANDS)[number]['id'],
-  { completed: number; total: number }
-> = {
-  genesis: { completed: 4, total: 5 },
-  exodus: { completed: 1, total: 5 },
-  daniel: { completed: 0, total: 5 },
-  joshua: { completed: 2, total: 5 },
-  '1-samuel': { completed: 0, total: 5 },
+type SailCarouselIsland = {
+  id: string;
+  title: string;
+  src: string;
+  hasMainMap: boolean;
+  mainMapUrl?: string;
+  mainMapVideoUrl?: string;
+  storiesComplete: number;
+  storiesTotal: number;
 };
 
-/** First carousel level — always unlocked; completing it unlocks the rest. */
-const FIRST_ISLAND_ID: (typeof CAROUSEL_ISLANDS)[number]['id'] = 'genesis';
-
-const getIslandProgress = (islandId: string) =>
-  ISLAND_ADVENTURE_PROGRESS[islandId as keyof typeof ISLAND_ADVENTURE_PROGRESS] ?? {
-    completed: 0,
-    total: 5,
-  };
+const getIslandProgress = (island: SailCarouselIsland) => ({
+  completed: island.storiesComplete,
+  total: island.storiesTotal,
+});
 
 /** Island is complete when all adventures are done (completed === total). */
-const isIslandComplete = (islandId: string): boolean => {
-  const { completed, total } = getIslandProgress(islandId);
+const isIslandComplete = (island: SailCarouselIsland | undefined): boolean => {
+  if (!island) return false;
+  const { completed, total } = getIslandProgress(island);
   return total > 0 && completed >= total;
 };
 
 /**
- * Unlock rule (easy to swap later):
- * - Genesis (FIRST_ISLAND_ID) is always available.
- * - Every other carousel island unlocks only after Genesis is fully complete.
+ * Unlock rule:
+ * - First CMS island (voyage start) is always available.
+ * - Every other carousel island unlocks only after the first is fully complete.
  */
-const isIslandUnlocked = (islandId: string): boolean => {
-  if (islandId === FIRST_ISLAND_ID) return true;
-  return isIslandComplete(FIRST_ISLAND_ID);
+const isIslandUnlocked = (
+  islandId: string,
+  islands: SailCarouselIsland[],
+): boolean => {
+  const first = islands[0];
+  if (!first) return false;
+  if (islandId === first.id) return true;
+  return isIslandComplete(first);
 };
-
-const LOOK_COUNT = CAROUSEL_ISLANDS.length;
-/** Wheel rest angle center (Daniel) when starting mid-voyage; start index may differ. */
-const CENTER_INDEX = Math.floor((LOOK_COUNT - 1) / 2);
 
 /** Deck art aspect (h/w) for matching wheel bottom to pedestal. */
 const DECK_ASPECT_H_OVER_W = 829 / 1024;
@@ -232,10 +176,16 @@ const SKY_GRADIENT =
 
 /** Degrees between carousel stops — matches bottom-nav ITEM_ANGLE. */
 const STEP_ANGLE = 36;
+/**
+ * How far apart islands sit, in vw from the screen center.
+ * Index 0 rests in the center; every later island waits to its left.
+ */
+const ISLAND_SPACING_VW = 46;
 /** Degrees of movement below which we treat as a tap (same as bottom nav). */
 const TAP_THRESHOLD = 22;
-/** Settle easing after release — matches bottom-nav wheel. */
-const SNAP_EASING = 'transform 1.2s cubic-bezier(0.22, 0.61, 0.36, 1)';
+/** Wheel settles; islands use a shorter overshoot so the next one pops in. */
+const SNAP_EASING = 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
+const ISLAND_POP = '0.62s cubic-bezier(0.16, 1.45, 0.32, 1)';
 const ISLAND_FADE_MS = 420;
 /** Boat sails toward the tapped island — kid-friendly ease-in-out. */
 const SAIL_DURATION_MS = 2100;
@@ -243,7 +193,8 @@ const SAIL_EASING = 'cubic-bezier(0.45, 0.05, 0.25, 1)';
 /** Short hop when prefers-reduced-motion is on, then navigate. */
 const SAIL_REDUCED_MS = 120;
 
-const clampIndex = (i: number) => Math.max(0, Math.min(LOOK_COUNT - 1, i));
+const clampIndex = (i: number, lookCount: number) =>
+  Math.max(0, Math.min(Math.max(lookCount, 1) - 1, i));
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -252,15 +203,16 @@ const prefersReducedMotion = () =>
 const normalizeIslandId = (value: string) =>
   value.toLowerCase().trim().replace(/_/g, '-').replace(/\s+/g, '-');
 
-const resolveStartIndex = (islandId?: string): number => {
+const resolveStartIndex = (
+  islands: SailCarouselIsland[],
+  islandId?: string,
+): number => {
+  if (!islands.length) return 0;
   if (!islandId) return 0;
   const id = normalizeIslandId(islandId);
-  const exact = CAROUSEL_ISLANDS.findIndex((island) => island.id === id);
+  const exact = islands.findIndex((island) => island.id === id);
   if (exact >= 0) return exact;
-  if (id === '1samuel' || id === 'samuel') {
-    return CAROUSEL_ISLANDS.findIndex((island) => island.id === '1-samuel');
-  }
-  return 0; // Genesis default
+  return 0;
 };
 
 type SailNavState = {
@@ -268,6 +220,7 @@ type SailNavState = {
   hasMainMap?: boolean;
   mainMapUrl?: string;
   mainMapVideoUrl?: string;
+  onboardingJourney?: boolean;
 } | null;
 
 const mediaIndicatesMainMap = (
@@ -278,6 +231,22 @@ const mediaIndicatesMainMap = (
     (mainMapUrl && mainMapUrl.trim()) ||
       (mainMapVideoUrl && mainMapVideoUrl.trim()),
   );
+
+const toCarouselIsland = (island: OceanMapIsland): SailCarouselIsland | null => {
+  const src = getSailIslandArtSrc(island);
+  if (!src) return null;
+  const title = (island.book && island.book.trim()) || island.title;
+  return {
+    id: island.id,
+    title,
+    src,
+    hasMainMap: mediaIndicatesMainMap(island.mainMapUrl, island.mainMapVideoUrl),
+    mainMapUrl: island.mainMapUrl,
+    mainMapVideoUrl: island.mainMapVideoUrl,
+    storiesComplete: island.storiesComplete,
+    storiesTotal: island.storiesTotal || 5,
+  };
+};
 
 /** Fetch whether a CMS island has a main-map PNG/video (legacy if unknown/fail). */
 const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
@@ -303,11 +272,12 @@ const fetchIslandHasMainMap = async (id: string): Promise<boolean> => {
  * Turn the wheel like the app nav: release and it snaps to the next island.
  */
 const SailScenePage: React.FC = () => {
+  const { soundOn, toggleSound } = useSailMusic();
   const navigate = useNavigate();
   const location = useLocation();
   const { islandId } = useParams<{ islandId?: string }>();
-  const startIndex = resolveStartIndex(islandId);
   const navState = location.state as SailNavState;
+  const arrowMarkerId = `gk-sail-helm-arrow-${useId().replace(/:/g, '')}`;
 
   const wheelRef = useRef<HTMLDivElement>(null);
   const oceanVideoRef = useRef<HTMLVideoElement>(null);
@@ -319,15 +289,17 @@ const SailScenePage: React.FC = () => {
   const totalMoveRef = useRef(0);
   const lastTouchEndRef = useRef(0);
   const dragRotationRef = useRef<number | null>(null);
-  const lookIndexRef = useRef(startIndex);
+  const lookIndexRef = useRef(0);
   const isSailingRef = useRef(false);
   const sailTimerRef = useRef<number | null>(null);
   /** Cache: island id → has CMS main map (PNG/video). */
   const mainMapCacheRef = useRef<Record<string, boolean>>({});
   const navStateRef = useRef(navState);
   const routeIslandIdRef = useRef(islandId);
+  const carouselIslandsRef = useRef<SailCarouselIsland[]>([]);
 
-  const [lookIndex, setLookIndex] = useState(startIndex);
+  const [carouselIslands, setCarouselIslands] = useState<SailCarouselIsland[]>([]);
+  const [lookIndex, setLookIndex] = useState(0);
   const [dragRotation, setDragRotation] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   /** True while the boat is sailing toward the tapped island. */
@@ -344,12 +316,53 @@ const SailScenePage: React.FC = () => {
       return true;
     }
   });
+  const fromOnboarding = Boolean(navState?.onboardingJourney);
+  const [journeyActive, setJourneyActive] = useState(() =>
+    isOnboardingJourneyActive() || fromOnboarding,
+  );
+  /** Home + Crew planks stay off during guided first-run; return after it ends. */
+  const hideDeckNav = journeyActive;
+  const [arrivalWhite, setArrivalWhite] = useState(fromOnboarding);
+  const [arrivalWhiteOpacity, setArrivalWhiteOpacity] = useState(
+    fromOnboarding ? 1 : 0,
+  );
 
   lookIndexRef.current = lookIndex;
   dragRotationRef.current = dragRotation;
   isSailingRef.current = isSailing;
   navStateRef.current = navState;
   routeIslandIdRef.current = islandId;
+  carouselIslandsRef.current = carouselIslands;
+
+  const lookCount = Math.max(carouselIslands.length, 1);
+  const firstIsland = carouselIslands[0];
+
+  useEffect(() => {
+    const sync = () => setJourneyActive(isOnboardingJourneyActive());
+    sync();
+    return subscribeOnboardingJourney(sync);
+  }, []);
+
+  // Onboarding: land under white (same overlay the intro video faded to) and reveal.
+  useEffect(() => {
+    if (!fromOnboarding) return;
+    if (prefersReducedMotion()) {
+      setArrivalWhiteOpacity(0);
+      setArrivalWhite(false);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setArrivalWhiteOpacity(0));
+    });
+    const doneId = window.setTimeout(
+      () => setArrivalWhite(false),
+      ARRIVAL_WHITE_FADE_MS,
+    );
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(doneId);
+    };
+  }, [fromOnboarding]);
 
   // Seed main-map cache from Map → Sail navigation state.
   useEffect(() => {
@@ -380,12 +393,50 @@ const SailScenePage: React.FC = () => {
     };
   }, [islandId]);
 
-  // Sync start when route island changes (e.g. map → sail).
+  // CMS islands — same voyage list / mapArtUrl icons as the ocean map.
   useEffect(() => {
-    const next = resolveStartIndex(islandId);
-    setLookIndex(next);
-    lookIndexRef.current = next;
-  }, [islandId]);
+    let cancelled = false;
+    const controller = new AbortController();
+    const failSafe = window.setTimeout(
+      () => controller.abort(),
+      CMS_ISLANDS_TIMEOUT_MS,
+    );
+
+    const load = async () => {
+      try {
+        const mapped = await fetchOceanMapIslands(controller.signal);
+        if (cancelled || !mapped) return;
+        const next = mapped
+          .map(toCarouselIsland)
+          .filter((row): row is SailCarouselIsland => row != null);
+        if (!next.length) return;
+        setCarouselIslands(next);
+        for (const island of next) {
+          if (typeof island.hasMainMap === 'boolean') {
+            mainMapCacheRef.current[island.id] = island.hasMainMap;
+          }
+        }
+        // Always open on the first island. Later islands wait to the left
+        // and the wheel brings them in.
+        setLookIndex(0);
+        lookIndexRef.current = 0;
+      } catch {
+        /* leave the ocean bare rather than inventing genesis art */
+      } finally {
+        window.clearTimeout(failSafe);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(failSafe);
+    };
+  }, []);
+
+  // Keep the voyage starting on the first island even if the route names
+  // a later one. The wheel is how you reach the rest.
 
   useEffect(
     () => () => {
@@ -401,11 +452,14 @@ const SailScenePage: React.FC = () => {
     [],
   );
 
-  const activeIsland = CAROUSEL_ISLANDS[lookIndex] ?? CAROUSEL_ISLANDS[0];
+  const activeIsland = carouselIslands[lookIndex] ?? firstIsland;
+  const firstIslandTitle = firstIsland?.title || 'the first island';
 
-  const restingRotation = (lookIndex - CENTER_INDEX) * STEP_ANGLE;
+  const restingRotation = lookIndex * STEP_ANGLE;
   const visualRotation =
     isDragging && dragRotation !== null ? dragRotation : restingRotation;
+  /** 0 = first island centered. Higher values slide the next islands in from the left. */
+  const carouselProgress = visualRotation / STEP_ANGLE;
 
   const sailDurationMs = prefersReducedMotion() ? SAIL_REDUCED_MS : SAIL_DURATION_MS;
   const sailTransition = isSailing
@@ -417,12 +471,13 @@ const SailScenePage: React.FC = () => {
    * When sailing the island we arrived for from Map, prefer the route slug (CMS id).
    */
   const continueAfterSail = useCallback(
-    (carouselIsland: (typeof CAROUSEL_ISLANDS)[number]) => {
+    (carouselIsland: SailCarouselIsland) => {
+      const islands = carouselIslandsRef.current;
       const routeId = routeIslandIdRef.current;
       const arrivedForThis =
         !!routeId &&
-        resolveStartIndex(routeId) ===
-          CAROUSEL_ISLANDS.findIndex((i) => i.id === carouselIsland.id);
+        resolveStartIndex(islands, routeId) ===
+          islands.findIndex((i) => i.id === carouselIsland.id);
       const destId = arrivedForThis
         ? normalizeIslandId(routeId!)
         : carouselIsland.id;
@@ -432,14 +487,19 @@ const SailScenePage: React.FC = () => {
         carouselIsland.title;
 
       const go = (hasMainMap: boolean) => {
+        const nextState = {
+          title,
+          fromSail: true,
+          onboardingJourney: Boolean(state?.onboardingJourney),
+        };
         if (hasMainMap) {
           navigate(`/map/${encodeURIComponent(destId)}/main`, {
-            state: { title, fromSail: true },
+            state: nextState,
           });
           return;
         }
         navigate(`/sail/${encodeURIComponent(destId)}/lesson`, {
-          state: { fromSail: true, title },
+          state: nextState,
         });
       };
 
@@ -495,11 +555,11 @@ const SailScenePage: React.FC = () => {
   }, []);
 
   const startSailToIsland = useCallback(
-    (island: (typeof CAROUSEL_ISLANDS)[number]) => {
+    (island: SailCarouselIsland) => {
       if (isSailingRef.current) return;
 
       // Locked islands: shake only — no sail-forward / lesson navigation.
-      if (!isIslandUnlocked(island.id)) {
+      if (!isIslandUnlocked(island.id, carouselIslandsRef.current)) {
         pulseLockedFeedback(island.id);
         return;
       }
@@ -579,10 +639,10 @@ const SailScenePage: React.FC = () => {
       dismissWheelHint();
       draggingRef.current = true;
       startAngleRef.current = getAngle(clientX, clientY);
-      // Rest angle for current island (center index at 0°, like nav index * STEP)
-      startRotationRef.current =
-        (lookIndexRef.current - CENTER_INDEX) * STEP_ANGLE;
+      // Rest angle: first island at 0°. Each stop is one STEP further.
+      startRotationRef.current = lookIndexRef.current * STEP_ANGLE;
       totalMoveRef.current = 0;
+      dragRotationRef.current = startRotationRef.current;
       setDragRotation(startRotationRef.current);
       setIsDragging(true);
     },
@@ -600,15 +660,22 @@ const SailScenePage: React.FC = () => {
       if (delta < -180) delta += 360;
 
       totalMoveRef.current += Math.abs(delta);
-      // Continuous follow — no clamp while dragging (snap clamps on release)
-      setDragRotation(startRotationRef.current + delta);
+      const count = Math.max(carouselIslandsRef.current.length, 1);
+      const minDeg = 0;
+      const maxDeg = (count - 1) * STEP_ANGLE;
+      let next = startRotationRef.current + delta;
+      // Rubber-band past the first and last island so the wheel can't spin into empty water.
+      if (next < minDeg) next = minDeg - (minDeg - next) * 0.22;
+      if (next > maxDeg) next = maxDeg + (next - maxDeg) * 0.22;
+      dragRotationRef.current = next;
+      setDragRotation(next);
     },
     [getAngle],
   );
 
   const snapToIndex = useCallback((index: number) => {
     draggingRef.current = false;
-    setLookIndex(clampIndex(index));
+    setLookIndex(clampIndex(index, carouselIslandsRef.current.length));
     setDragRotation(null);
     setIsDragging(false);
   }, []);
@@ -630,8 +697,8 @@ const SailScenePage: React.FC = () => {
       return;
     }
 
-    // Swipe: snap to nearest carousel stop (same Math.round pattern as bottom nav)
-    const rawIndex = Math.round(currentDrag / STEP_ANGLE) + CENTER_INDEX;
+    // Swipe: snap to the nearest island. 0° is the first island.
+    const rawIndex = Math.round(currentDrag / STEP_ANGLE);
     snapToIndex(rawIndex);
   }, [snapToIndex]);
 
@@ -673,7 +740,7 @@ const SailScenePage: React.FC = () => {
     return () => el.removeEventListener('touchmove', preventDefault);
   }, []);
 
-  const lookLabel = `Island: ${activeIsland.title}`;
+  const lookLabel = `Island: ${activeIsland?.title ?? 'Island'}`;
 
   return (
     <div
@@ -763,30 +830,6 @@ const SailScenePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Distant bg islands — horizon L/R, behind carousel (z < frame). */}
-        <div
-          className="absolute inset-0 z-[1] pointer-events-none overflow-hidden"
-          aria-hidden
-        >
-          {SAIL_BG_ISLANDS.map((island) => (
-            <img
-              key={island.id}
-              src={island.src}
-              alt=""
-              aria-hidden
-              draggable={false}
-              className="absolute pointer-events-none select-none max-w-none h-auto"
-              style={{
-                left: island.left,
-                top: island.top,
-                width: island.width,
-                opacity: island.opacity,
-                transform: 'translate(-50%, -40%)',
-              }}
-            />
-          ))}
-        </div>
-
         <div
           className="absolute left-1/2 top-1/2 z-[2] max-w-none select-none"
           style={{
@@ -801,15 +844,22 @@ const SailScenePage: React.FC = () => {
             pointerEvents: isSailing ? 'none' : 'auto',
           }}
         >
-          {/* Island carousel — one overlay at a time, high on the water */}
-          {CAROUSEL_ISLANDS.map((island, i) => {
-            const offset = i - lookIndex;
-            const active = i === lookIndex;
-            const unlocked = isIslandUnlocked(island.id);
-            const baseTransform = `translate(calc(-50% + ${offset * 14}%), -42%)`;
-            const sailTransform = `${baseTransform} scale(1.55) translateY(-6%)`;
-            const progress = getIslandProgress(island.id);
+          {/* Island carousel — first island centered, the rest queued to the left.
+              Turning the wheel slides the next one in from the left. */}
+          {carouselIslands.map((island, i) => {
+            const offset = i - carouselProgress;
+            const distance = Math.abs(offset);
+            const active = i === lookIndex && !isDragging;
+            const unlocked = isIslandUnlocked(island.id, carouselIslands);
+            // Center island reads close; each step back shrinks and lifts toward the horizon.
+            const scale = Math.max(0.4, 1.34 - distance * 0.74);
+            const yPct = -42 - distance * 16;
+            const xVw = -offset * ISLAND_SPACING_VW;
+            const baseTransform = `translate(-50%, ${yPct}%) scale(${scale})`;
+            const sailTransform = `translate(-50%, -48%) scale(${scale * 1.28})`;
+            const progress = getIslandProgress(island);
             const shaking = lockShakeId === island.id;
+            const visible = distance < 2.8;
             return (
               <button
                 key={island.id}
@@ -823,7 +873,7 @@ const SailScenePage: React.FC = () => {
                   active
                     ? unlocked
                       ? `Visit ${island.title}, ${progress.completed} of ${progress.total} adventures complete`
-                      : `${island.title} locked — complete Genesis to unlock`
+                      : `${island.title} locked — complete ${firstIslandTitle} to unlock`
                     : undefined
                 }
                 aria-disabled={active && !unlocked ? true : undefined}
@@ -832,16 +882,17 @@ const SailScenePage: React.FC = () => {
                   shaking ? ' sail-island-lock-shake' : ''
                 }`}
                 style={{
-                  left: '50%',
+                  left: `calc(50% + ${xVw}vw)`,
                   top: '18%',
-                  width: '28%',
-                  maxWidth: 235,
-                  opacity: active ? 1 : 0,
+                  width: 'min(34vw, 220px)',
+                  opacity: visible ? Math.max(0.38, 1 - distance * 0.34) : 0,
                   transform: isSailing && active ? sailTransform : baseTransform,
-                  transition: isSailing
-                    ? sailTransition
-                    : `opacity ${ISLAND_FADE_MS}ms ease, transform ${ISLAND_FADE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
-                  zIndex: active ? 2 : 1,
+                  transition: isDragging
+                    ? 'none'
+                    : isSailing
+                      ? sailTransition
+                      : `opacity ${ISLAND_FADE_MS}ms ease, transform ${ISLAND_POP}, left ${ISLAND_POP}`,
+                  zIndex: Math.max(1, 8 - Math.round(distance * 2)),
                   pointerEvents: active && !isSailing ? 'auto' : 'none',
                   cursor:
                     active && !isSailing
@@ -896,16 +947,16 @@ const SailScenePage: React.FC = () => {
           })}
 
           {/* Travel Here — kid CTA over the focused island; same sail path as tapping it */}
-          {!isSailing && (
+          {!isSailing && !isDragging && activeIsland && (
             <button
               type="button"
               onClick={() => startSailToIsland(activeIsland)}
               aria-label={
-                isIslandUnlocked(activeIsland.id)
+                isIslandUnlocked(activeIsland.id, carouselIslands)
                   ? `Travel here to ${activeIsland.title}`
-                  : `${activeIsland.title} locked — complete Genesis to unlock`
+                  : `${activeIsland.title} locked — complete ${firstIslandTitle} to unlock`
               }
-              className="absolute z-[3] px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl appearance-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[0.7rem] sm:text-[0.8rem] leading-none text-[#F5E6C8] active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              className="absolute z-20 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl appearance-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[0.7rem] sm:text-[0.8rem] leading-none text-[#F5E6C8] active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
               style={{
                 ...travelHereBtnStyle,
                 left: '50%',
@@ -915,10 +966,10 @@ const SailScenePage: React.FC = () => {
                 textShadow:
                   '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
                 pointerEvents: 'auto',
-                cursor: isIslandUnlocked(activeIsland.id)
+                cursor: isIslandUnlocked(activeIsland.id, carouselIslands)
                   ? 'pointer'
                   : 'not-allowed',
-                opacity: isIslandUnlocked(activeIsland.id) ? 1 : 0.85,
+                opacity: isIslandUnlocked(activeIsland.id, carouselIslands) ? 1 : 0.85,
               }}
             >
               Travel Here
@@ -1072,7 +1123,7 @@ const SailScenePage: React.FC = () => {
           role="slider"
           aria-label="Steer to change island"
           aria-valuemin={0}
-          aria-valuemax={LOOK_COUNT - 1}
+          aria-valuemax={Math.max(lookCount - 1, 0)}
           aria-valuenow={lookIndex}
           aria-valuetext={lookLabel}
           aria-disabled={isSailing}
@@ -1097,29 +1148,28 @@ const SailScenePage: React.FC = () => {
                 viewBox="0 0 100 100"
                 className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
               >
-                {/* Curved arrow along the upper-right rim */}
+                <defs>
+                  <marker
+                    id={arrowMarkerId}
+                    viewBox="0 0 10 10"
+                    refX="0.35"
+                    refY="5"
+                    markerWidth="2.8"
+                    markerHeight="2.8"
+                    markerUnits="strokeWidth"
+                    orient="auto"
+                  >
+                    <path d="M 0 0.6 L 10 5 L 0 9.4 Z" fill="#F5E6C8" />
+                  </marker>
+                </defs>
+                {/* Clockwise rim arc; marker orients to the end tangent (down). */}
                 <path
-                  d="M 72 22 A 36 36 0 0 1 88 55"
+                  d="M 72 22 A 36 36 0 0 1 88 58"
                   fill="none"
                   stroke="#F5E6C8"
                   strokeWidth="4.5"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 82 50 L 90 56 L 80 62"
-                  fill="none"
-                  stroke="#F5E6C8"
-                  strokeWidth="4.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M 72 22 A 36 36 0 0 1 88 55"
-                  fill="none"
-                  stroke="#8B5A2B"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  opacity="0.55"
+                  strokeLinecap="butt"
+                  markerEnd={`url(#${arrowMarkerId})`}
                 />
               </svg>
             </div>
@@ -1127,7 +1177,26 @@ const SailScenePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom overlay — Crew | Games | Explore on the ship deck. */}
+      <button
+        type="button"
+        onClick={toggleSound}
+        className="absolute z-[30] flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        style={{
+          ...travelHereBtnStyle,
+          top: 'max(12px, var(--safe-area-top))',
+          left: 'max(12px, var(--safe-area-left, 0px))',
+        }}
+        aria-label={soundOn ? 'Sound off' : 'Sound on'}
+      >
+        {soundOn ? (
+          <Volume2 size={20} className="text-white drop-shadow" strokeWidth={2.6} />
+        ) : (
+          <VolumeX size={20} className="text-white/80 drop-shadow" strokeWidth={2.6} />
+        )}
+      </button>
+
+      {/* Bottom overlay — Crew | Home on the ship deck (hidden during first-run). */}
+      {!hideDeckNav && (
       <div
         className="absolute left-0 right-0 z-[25] flex items-end justify-between pointer-events-none"
         style={{
@@ -1147,17 +1216,10 @@ const SailScenePage: React.FC = () => {
               to: '/crew' as string | null,
             },
             {
-              id: 'games',
-              src: SAIL_BTN_GAMES,
-              label: 'GAMES',
-              ariaLabel: 'Games',
-              to: '/games/library' as string | null,
-            },
-            {
-              id: 'explore',
+              id: 'home',
               src: SAIL_BTN_EXPLORE,
-              label: 'EXPLORE',
-              ariaLabel: 'Explore',
+              label: 'Home',
+              ariaLabel: 'Home',
               to: '/world' as string | null,
             },
           ] as const
@@ -1167,7 +1229,8 @@ const SailScenePage: React.FC = () => {
             type="button"
             disabled={isSailing}
             onClick={() => {
-              if (btn.to) navigate(btn.to);
+              if (!btn.to) return;
+              navigate(btn.to);
             }}
             className="pointer-events-auto flex flex-col items-center gap-0 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
             style={{
@@ -1194,6 +1257,21 @@ const SailScenePage: React.FC = () => {
           </button>
         ))}
       </div>
+      )}
+
+      {arrivalWhite && (
+        <div
+          className="absolute inset-0 z-[80] pointer-events-none"
+          style={{
+            background: '#fff',
+            opacity: arrivalWhiteOpacity,
+            transition: prefersReducedMotion()
+              ? 'none'
+              : `opacity ${ARRIVAL_WHITE_FADE_MS}ms ease-out`,
+          }}
+          aria-hidden
+        />
+      )}
     </div>
   );
 };

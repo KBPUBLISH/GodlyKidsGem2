@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, User as UserIcon, Settings, ChevronLeft, ShoppingBag, Crown, Lock } from 'lucide-react';
+import { Plus, User as UserIcon, Settings, ChevronLeft, ShoppingBag, Crown } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import ShopModal from '../components/features/ShopModal';
 import { useUser } from '../context/UserContext';
@@ -90,7 +90,7 @@ const ProfileSelectionPage: React.FC = () => {
             {/* KIDS PROFILES ONLY - Parent profile removed from selection */}
             {kids.map((profile, index) => {
               // Use the kid's current avatar (updated in shop) or fall back to initial avatarSeed
-              const kidAvatar = profile.avatar || profile.avatarSeed;
+              const kidAvatar = profile.characterAvatar || profile.avatar || profile.avatarSeed;
               
               return (
                 <div 
@@ -119,29 +119,7 @@ const ProfileSelectionPage: React.FC = () => {
 
           </div>
 
-          {/* New Profile Button - Moved Outside Grid, Lower Down */}
-          {/* Show lock badge if free user already has 1 kid */}
-          {!isSubscribed && kids.length >= 1 ? (
-            <div 
-                onClick={() => navigate('/paywall')}
-                className="flex flex-col items-center gap-2 cursor-pointer group mt-8"
-            >
-               <div className="w-28 h-28 rounded-full bg-[#64748b]/50 backdrop-blur-md border-4 border-dashed border-white/40 shadow-lg flex items-center justify-center transition-transform duration-200 group-active:scale-95 group-hover:bg-[#64748b]/60 relative">
-                  {/* Plus sign - clearly visible */}
-                  <Plus size={48} className="text-white/80" strokeWidth={3} />
-                  {/* Small lock badge in corner */}
-                  <div className="absolute -top-1 -right-1 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full p-1.5 border-2 border-white shadow-lg">
-                    <Lock size={14} className="text-[#5c2e0b]" />
-                  </div>
-               </div>
-               <span className="font-display font-bold text-white text-base tracking-wide drop-shadow-md text-center">
-                  Add Profile
-                </span>
-               <span className="text-[10px] text-[#FFD700] font-bold bg-black/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Crown size={10} fill="currentColor" /> Premium
-                </span>
-            </div>
-          ) : (
+          {kids.length < 5 && (
             <div 
                 onClick={() => navigate('/create-profile')}
                 className="flex flex-col items-center gap-3 cursor-pointer group mt-8"
@@ -158,7 +136,7 @@ const ProfileSelectionPage: React.FC = () => {
           {/* Go Premium Banner (If Not Subscribed) */}
           {!isSubscribed && (
               <div 
-                onClick={() => navigate('/paywall')}
+                onClick={() => navigate('/onboarding/welcome', { state: { returnTo: '/profile' } })}
                 className="w-full max-w-xs mt-8 mb-2 bg-gradient-to-r from-[#FFD700] to-[#FDB931] rounded-xl p-1 shadow-lg cursor-pointer transform transition-transform active:scale-95 group"
               >
                   <div className="bg-[#fff8e1] rounded-[10px] px-4 py-3 flex items-center justify-between border border-[#FDB931]">

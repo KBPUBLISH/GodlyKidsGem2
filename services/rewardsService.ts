@@ -7,8 +7,9 @@
  */
 
 import { getApiBaseUrl } from './apiService';
+import { islandStoryProgressService } from './islandStoryProgressService';
 
-export type RewardType = 'character' | 'game' | 'coins' | 'book_template';
+export type RewardType = 'character' | 'game' | 'coins' | 'book_template' | 'puzzle' | 'coloring';
 
 /** CMS / default pool entry (story-pack rewards config). */
 export type RewardDefinition = {
@@ -26,6 +27,8 @@ export type RewardDefinition = {
   persona?: string;
   /** game — 1:1 icon + link */
   gameUrl?: string;
+  /** game — portal Games catalog id, so the arcade can unlock that cabinet */
+  catalogGameId?: string;
   /** book_template — Kids Monthly Book id */
   bookId?: string;
   bookCoverUrl?: string;
@@ -46,6 +49,13 @@ export type UnlockedCharacter = {
   voiceId?: string;
   /** Freeform speech-style description passed to the AI chat endpoint */
   persona?: string;
+  /**
+   * Extra size multiplier on the ship deck. 1 is a full-height crew mate.
+   * The ship parrot stays well below that so it reads as a bird.
+   */
+  deckScale?: number;
+  /** Flies a lap around the ship and lands on a perch instead of strolling. */
+  flyer?: boolean;
   /** Clip names this crew mate has earned (e.g. waving from a ship visit). */
   unlockedAnimations?: string[];
   sourceStoryId?: string;
@@ -57,6 +67,8 @@ export type UnlockedRewardGame = {
   name: string;
   imageUrl?: string;
   url: string;
+  /** Portal Games catalog id, when the reward was picked from that list */
+  catalogGameId?: string;
   sourceStoryId?: string;
   unlockedAt: number;
   /** Show NEW until dismissed / opened */
@@ -98,6 +110,9 @@ type RewardsStore = {
 
 const STORAGE_KEY = 'godlykids_rewards_v1';
 export const MAX_CREW = 12;
+/** Legacy built-in ship parrot. No longer aboard; kept only to scrub old saves. */
+export const SHIP_PARROT_ID = 'ship-parrot';
+
 /** Fallback first crew mate if the Creation pack pool has no Adam yet. */
 export const ONBOARDING_ADAM_ID = 'onboarding-adam';
 export const ONBOARDING_ADAM_REWARD: RewardDefinition = {
@@ -121,6 +136,19 @@ const EMPTY: RewardsStore = {
 
 const claimKey = (storyId: string, rewardId: string) =>
   `${storyId.trim()}:${rewardId.trim()}`;
+
+/** Put a newly unlocked character on the ship if a roster slot is free. */
+function seatOnCrew(store: RewardsStore, characterId: string): void {
+  const id = String(characterId || '').trim();
+  if (!id) return;
+  if (!store.characters.some((c) => c.id === id)) return;
+  if (store.selectedCrewIds.includes(id)) return;
+  // Empty roster means "everyone unlocked walks". Don't collapse that to
+  // only the new character — Adam (and anyone else) would vanish.
+  if (store.selectedCrewIds.length === 0) return;
+  if (store.selectedCrewIds.length >= MAX_CREW) return;
+  store.selectedCrewIds = [...store.selectedCrewIds, id];
+}
 
 function readStore(): RewardsStore {
   try {
@@ -180,9 +208,105 @@ function labelForType(type: RewardType): string {
       return 'Gold Coins';
     case 'book_template':
       return 'Story Template';
+    case 'puzzle':
+      return 'Puzzle';
+    case 'coloring':
+      return 'Coloring Page';
     default:
       return 'Reward';
   }
+}
+
+const PUZZLE_ICON = '/assets/images/island-activity-puzzle.png';
+const COLORING_ICON = '/assets/images/island-activity-coloring.png';
+
+type RewardStoryShape = {
+  _id?: string;
+  heroImageUrl?: string;
+  rewards?: {
+    enabled?: boolean;
+    pool?: RewardDefinition[];
+  };
+  game?: {
+    enabled?: boolean;
+    kind?: string;
+    gameId?: string;
+    webview?: { title?: string; url?: string; coverImage?: string };
+  };
+  puzzle?: {
+    enabled?: boolean;
+    type?: string;
+    imageUrl?: string;
+  };
+  coloringPageIds?: Array<
+    | string
+    | {
+        _id?: string;
+        backgroundUrl?: string;
+        files?: { background?: { url?: string } };
+      }
+  >;
+};
+
+export function storyHasPuzzleLoot(story: RewardStoryShape | null | undefined): boolean {
+  return Boolean(
+    story?.puzzle?.enabled &&
+      story.puzzle?.type === 'sliding_image' &&
+      String(story.puzzle?.imageUrl || '').trim(),
+  );
+}
+
+export function storyHasColoringLoot(story: RewardStoryShape | null | undefined): boolean {
+  return Array.isArray(story?.coloringPageIds) && story!.coloringPageIds!.length > 0;
+}
+
+function firstColoringThumb(story: RewardStoryShape | null | undefined): string {
+  const ids = story?.coloringPageIds;
+  if (!Array.isArray(ids)) return '';
+  for (const item of ids) {
+    if (!item || typeof item === 'string') continue;
+    const url =
+      String(item.backgroundUrl || '').trim() ||
+      String(item.files?.background?.url || '').trim();
+    if (url) return url;
+  }
+  return '';
+}
+
+/** Puzzle + coloring page loot when the pack already has those activities. */
+export function defaultActivityLoot(story?: RewardStoryShape | null): RewardDefinition[] {
+  const storyId = story?._id ? String(story._id) : '';
+  const suffix = storyId ? `-${storyId.slice(-6)}` : '';
+  const items: RewardDefinition[] = [];
+  if (storyHasPuzzleLoot(story)) {
+    items.push({
+      id: `default-puzzle${suffix}`,
+      type: 'puzzle',
+      title: 'Puzzle',
+      imageUrl: resolveRewardImageUrl(story?.puzzle?.imageUrl) || PUZZLE_ICON,
+    });
+  }
+  if (storyHasColoringLoot(story)) {
+    items.push({
+      id: `default-coloring${suffix}`,
+      type: 'coloring',
+      title: 'Coloring Page',
+      imageUrl: resolveRewardImageUrl(firstColoringThumb(story)) || COLORING_ICON,
+    });
+  }
+  return items;
+}
+
+function withActivityLoot(
+  pool: RewardDefinition[],
+  story?: RewardStoryShape | null,
+): RewardDefinition[] {
+  const extras = defaultActivityLoot(story);
+  const out = [...pool];
+  for (const extra of extras) {
+    if (!out.some((r) => r.type === extra.type)) out.push(extra);
+  }
+  return out;
 }
 
 /**
@@ -211,21 +335,11 @@ function resolveRewardImageUrl(url: string | undefined | null): string {
  * Normalize MapStory.rewards (or legacy game) into a pool for the loot modal.
  * Rewards missing their own image fall back to the story pack hero image.
  * Coin rewards always use the home-screen gold coin icon.
+ * Puzzle and coloring are added when the pack already has those activities.
  */
-export function resolveRewardPool(story: {
-  _id?: string;
-  heroImageUrl?: string;
-  rewards?: {
-    enabled?: boolean;
-    pool?: RewardDefinition[];
-  };
-  game?: {
-    enabled?: boolean;
-    kind?: string;
-    gameId?: string;
-    webview?: { title?: string; url?: string; coverImage?: string };
-  };
-} | null | undefined): RewardDefinition[] {
+export function resolveRewardPool(
+  story: RewardStoryShape | null | undefined,
+): RewardDefinition[] {
   const storyId = story?._id ? String(story._id) : '';
   const heroImage = (story?.heroImageUrl || '').trim();
   const cmsPool = Array.isArray(story?.rewards?.pool) ? story!.rewards!.pool! : [];
@@ -253,14 +367,15 @@ export function resolveRewardPool(story: {
         modelUrl: resolveRewardImageUrl(r.modelUrl) || undefined,
         voiceId: (r.voiceId && String(r.voiceId).trim()) || undefined,
         persona: (r.persona && String(r.persona).trim()) || undefined,
+        catalogGameId: (r.catalogGameId && String(r.catalogGameId).trim()) || undefined,
       };
     });
 
   if (cleaned.length > 0) {
-    if (!cleaned.some((r) => r.type === 'coins')) {
-      return [...cleaned, ...defaultRewardPool(storyId)];
-    }
-    return cleaned;
+    const withCoins = cleaned.some((r) => r.type === 'coins')
+      ? cleaned
+      : [...cleaned, ...defaultRewardPool(storyId)];
+    return withActivityLoot(withCoins, story);
   }
 
   const pool = defaultRewardPool(storyId);
@@ -276,7 +391,7 @@ export function resolveRewardPool(story: {
       gameUrl: g.webview.url.trim(),
     });
   }
-  return pool;
+  return withActivityLoot(pool, story);
 }
 
 class RewardsService {
@@ -340,6 +455,13 @@ class RewardsService {
       const sid = (item.sourceStoryId || '').trim();
       if (sid) ids.add(sid);
     }
+    try {
+      for (const sid of islandStoryProgressService.getStoryIdsWithRewardsComplete()) {
+        if (sid) ids.add(sid);
+      }
+    } catch {
+      /* progress store unavailable */
+    }
     return Array.from(ids);
   }
 
@@ -377,6 +499,11 @@ class RewardsService {
         }
         if (this.isClaimed(storyId, def.id)) {
           summary.skippedAlreadyClaimed += 1;
+          if (def.type === 'character') {
+            const store = readStore();
+            seatOnCrew(store, def.id);
+            writeStore(store);
+          }
           continue;
         }
         const result = this.collectReward(storyId, def);
@@ -719,6 +846,7 @@ class RewardsService {
         ];
       }
       store.claimedKeys = [...store.claimedKeys, key];
+      seatOnCrew(store, charId);
       writeStore(store);
       return { ok: true };
     }
@@ -734,6 +862,7 @@ class RewardsService {
             name: def.title || 'New Game',
             imageUrl: def.imageUrl,
             url,
+            catalogGameId: (def.catalogGameId || '').trim() || undefined,
             sourceStoryId: storyId,
             unlockedAt: now,
             isNew: true,
@@ -762,6 +891,12 @@ class RewardsService {
           },
         ];
       }
+      store.claimedKeys = [...store.claimedKeys, key];
+      writeStore(store);
+      return { ok: true };
+    }
+
+    if (def.type === 'puzzle' || def.type === 'coloring') {
       store.claimedKeys = [...store.claimedKeys, key];
       writeStore(store);
       return { ok: true };
@@ -797,6 +932,40 @@ class RewardsService {
 }
 
 export const rewardsService = new RewardsService();
+
+/** Drop the retired ship parrot from saves that still carry it. */
+function purgeShipParrot(): void {
+  const store = readStore();
+  const hadCharacter = store.characters.some((c) => c.id === SHIP_PARROT_ID);
+  const hadSelection = store.selectedCrewIds.includes(SHIP_PARROT_ID);
+  if (!hadCharacter && !hadSelection) return;
+  store.characters = store.characters.filter((c) => c.id !== SHIP_PARROT_ID);
+  store.selectedCrewIds = store.selectedCrewIds.filter((id) => id !== SHIP_PARROT_ID);
+  writeStore(store);
+}
+
+/**
+ * Crew currently standing on the ship (selected roster, or everyone when
+ * none is picked).
+ */
+export function getOnDeckCrew(): UnlockedCharacter[] {
+  purgeShipParrot();
+  const characters = rewardsService
+    .getUnlockedCharacters()
+    .filter((c) => c.id !== SHIP_PARROT_ID);
+  const selected = rewardsService.getSelectedCrewIds();
+  const roster = selected.length
+    ? characters.filter((c) => selected.includes(c.id))
+    : characters;
+  let onDeck = roster.slice(0, MAX_CREW);
+  // DEV ONLY debug hook: `localStorage.debugCrewModelUrl = '/models/x.glb'`
+  const debugModelUrl =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('debugCrewModelUrl') : null;
+  if (debugModelUrl && onDeck.length > 0 && !onDeck.some((c) => c.modelUrl)) {
+    onDeck = onDeck.map((c, i) => (i === 0 ? { ...c, modelUrl: debugModelUrl } : c));
+  }
+  return onDeck;
+}
 
 const isAdamCharacter = (name?: string, id?: string) =>
   /^adam$/i.test(String(name || '').trim()) || id === ONBOARDING_ADAM_ID;

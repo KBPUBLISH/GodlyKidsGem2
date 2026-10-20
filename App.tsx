@@ -4,7 +4,8 @@ import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'r
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import OnboardingPage from './pages/OnboardingPage';
+import PerryMeetPage from './pages/PerryMeetPage';
+import ChallengeIntroPage from './pages/ChallengeIntroPage';
 import WorldPage from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import LifetimeOfferModal from './components/features/LifetimeOfferModal';
@@ -614,6 +615,7 @@ import IslandLessonPage from './pages/IslandLessonPage';
 import IslandSlidingPuzzlePage from './pages/IslandSlidingPuzzlePage';
 import IslandColoringPage from './pages/IslandColoringPage';
 import IslandQuizPage from './pages/IslandQuizPage';
+import IslandTryItPage from './pages/IslandTryItPage';
 import CrewPage from './pages/CrewPage';
 import CrewCanonGolfPage from './pages/CrewCanonGolfPage';
 import SailBoatBasementPage from './pages/SailBoatBasementPage';
@@ -1254,6 +1256,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const stayInLibraryTrip =
       p === '/listen' ||
       p === '/read' ||
+      p.startsWith('/read/') ||
       p === '/library' ||
       p.startsWith('/book') ||
       p.startsWith('/audio') ||
@@ -1410,7 +1413,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMainMapScene || isPremiumOnboarding || isTrialStats;
+  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMainMapScene || isPremiumOnboarding || isTrialStats;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1657,7 +1660,8 @@ const App: React.FC = () => {
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
-                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/onboarding/welcome" element={<ChallengeIntroPage />} />
+                  <Route path="/onboarding" element={<PerryMeetPage />} />
                   <Route path="/ready" element={<ReadyToJumpInPage />} />
                   <Route path="/welcome" element={<NewUserWelcomePage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
@@ -1677,6 +1681,7 @@ const App: React.FC = () => {
                   <Route path="/sail/:islandId/lesson/puzzle" element={<IslandSlidingPuzzlePage />} />
                   <Route path="/sail/:islandId/lesson/coloring" element={<IslandColoringPage />} />
                   <Route path="/sail/:islandId/lesson/quiz" element={<IslandQuizPage />} />
+                  <Route path="/sail/:islandId/lesson/try-it" element={<IslandTryItPage />} />
                   <Route path="/crew/canon" element={<CrewCanonGolfPage />} />
                   <Route path="/crew" element={<CrewPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}

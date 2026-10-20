@@ -40,6 +40,22 @@ const onboardingEventSchema = new mongoose.Schema({
             'godly_kids_time_paused',
             'godly_kids_time_exited',
             
+            // Perry meet + pass the phone
+            'challenge_intro_continue',
+            'challenge_intro_start',
+            'challenge_intro_book',
+            'challenge_intro_book_declined',
+            'challenge_intro_join',
+            'challenge_intro_later',
+            'pass_phone_continue',
+            'handoff_continue',
+            'perry_name_entered',
+            'perry_woohoo',
+            'parent_gate_passed',
+            'onboarding_character_create_tapped',
+            'onboarding_character_created',
+            'kid_profile_created_from_lesson',
+
             // Onboarding flow events
             'onboarding_started',
             'step_1_complete',      // Parent profile
@@ -58,6 +74,11 @@ const onboardingEventSchema = new mongoose.Schema({
             'step_4_viewed',        // Paywall viewed (legacy)
             'paywall_viewed',       // Paywall shown
             'paywall_shown',        // Alias for paywall_viewed
+            'paywall_intro_shown',
+            'paywall_flow_step',
+            'paywall_notify_reminder_shown',
+            'paywall_notify_reminder_continue',
+            'paywall_notify_reminder_dismiss',
             'paywall_exit',         // User closed paywall
             'paywall_closed',       // Alias for paywall_exit
             'paywall_trial_clicked',
@@ -101,6 +122,7 @@ const onboardingEventSchema = new mongoose.Schema({
             'reverse_trial_screen_5_viewed',
             'reverse_trial_screen_6_viewed',
             'reverse_trial_onboarding_completed',
+            'reverse_trial_onboarding_skipped',
             
             // Trial stats page events
             'trial_stats_subscribe_clicked',
@@ -134,6 +156,7 @@ const onboardingEventSchema = new mongoose.Schema({
     // Additional data
     metadata: {
         step: Number,
+        stepName: String,           // paywall_flow_step: value | trust | book | checkout
         planType: String,           // 'annual' | 'monthly' | 'lifetime'
         source: String,             // 'create-your-story' | 'onboarding-first-time-user' | etc.
         kidsCount: Number,

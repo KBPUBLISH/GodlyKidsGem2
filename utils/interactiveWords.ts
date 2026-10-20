@@ -245,9 +245,19 @@ export function puzzleChipPosition(
 /**
  * Adaptive Bible Map parchment band (% of viewport height).
  * Short pages keep the scroll low so more of the illustration shows.
+ * Phones need a taller band — a short scroll clips the last lines.
  */
-export function bibleMapScrollBandPct(wordCount: number): { mid: number; max: number } {
+export function bibleMapScrollBandPct(
+    wordCount: number,
+    options?: { mobile?: boolean },
+): { mid: number; max: number } {
     const n = Math.max(0, Math.floor(Number(wordCount) || 0));
+    if (options?.mobile) {
+        if (n <= 10) return { mid: 36, max: 44 };
+        if (n <= 22) return { mid: 46, max: 54 };
+        if (n <= 40) return { mid: 54, max: 62 };
+        return { mid: 60, max: 70 };
+    }
     if (n <= 12) return { mid: 24, max: 28 };
     if (n <= 24) return { mid: 30, max: 34 };
     return { mid: 36, max: 40 };

@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { useUser } from '../../context/UserContext';
+import PerryGuidePortrait from './PerryGuidePortrait';
 import {
-  ONBOARDING_GUIDE_IMAGE,
   ONBOARDING_GUIDE_VOICE_ID,
   buildOnboardingGuideCopy,
   buildStoryPackGuideBeats,
@@ -267,13 +267,8 @@ const OnboardingGuideCard: React.FC<Props> = ({
           boxShadow: '0 0 0 2px #8a5a1c, 0 8px 20px rgba(0,0,0,0.5)',
         }}
       >
-        <div className="w-full h-full flex items-center justify-center bg-[#fff8e8]">
-          <img
-            src={ONBOARDING_GUIDE_IMAGE}
-            alt=""
-            draggable={false}
-            className="w-[92%] h-[92%] object-contain pointer-events-none select-none"
-          />
+        <div className="w-full h-full flex items-center justify-center bg-[#7EC8E8] overflow-hidden">
+          <PerryGuidePortrait key="perry-guide-v5" />
         </div>
       </div>
 

@@ -15,6 +15,7 @@ import { userPlaylistService, UserPlaylist } from '../services/userPlaylistServi
 import { authService } from '../services/authService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 import CoverImage from '../components/ui/CoverImage';
+import ProfilePortholeButton from '../components/layout/ProfilePortholeButton';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -441,7 +442,17 @@ const LibraryPage: React.FC = () => {
       ref={scrollRef}
       onScroll={handleScroll}
       className="flex flex-col h-full overflow-y-auto no-scrollbar relative"
+      style={{ backgroundColor: '#C17A32' }}
     >
+      <div aria-hidden className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+        <img
+          src="/assets/images/library-wood-bg.jpg?v=2"
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover object-top select-none"
+        />
+      </div>
+      <div className="relative z-10 flex flex-col flex-1">
       {/* Back button */}
       <div className="sticky top-0 z-30 flex items-center px-3 pt-3 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
         <button
@@ -453,7 +464,7 @@ const LibraryPage: React.FC = () => {
           Back
         </button>
         <span className="flex-1 text-center text-white font-extrabold text-lg tracking-wide" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>MY LIBRARY</span>
-        <div style={{ width: 65 }} />
+        <ProfilePortholeButton />
       </div>
 
       <div className="px-4 pt-2 pb-52">
@@ -721,6 +732,7 @@ const LibraryPage: React.FC = () => {
             )}
           </>
         )}
+      </div>
       </div>
     </div>
   );

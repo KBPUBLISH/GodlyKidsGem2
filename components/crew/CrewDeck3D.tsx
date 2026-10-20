@@ -2,6 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { UnlockedCharacter } from '../../services/rewardsService';
 import { danceMusic } from '../../services/danceMusicService';
@@ -11,9 +12,12 @@ import { getCrewLocation, setCrewLocation } from './basementCharacter';
  * Fullscreen transparent WebGL overlay for 3D crew characters over painted
  * scene art (ship deck or basement, selected via the `zone` prop).
  *
- * Characters with a GLB modelUrl alternate naturally between standing idle
- * (~4–10s, occasionally playing a one-shot variation clip) and strolling 1–3
- * destinations. Destinations are sampled inside a walkable polygon traced
+ * Characters with a GLB modelUrl (or a still imageUrl) alternate naturally
+ * between standing idle (~4–10s, occasionally playing a one-shot variation
+ * clip) and strolling 1–3 destinations. Built-in GLBs play their authored
+ * walk/idle clips. Uploaded stills (PNG or a static mesh with no walk clip)
+ * use a procedural translate + bob/lean so they still look like they walk.
+ * Destinations are sampled inside a walkable polygon traced
  * over the scene painting, minus obstacle cut-outs; every 2nd stroll is a
  * "tour" biased toward a deck region he hasn't visited recently, so over a
  * few minutes he covers the whole ship — including climbing the quarterdeck
@@ -79,8 +83,26 @@ export type CrewDeckHandle = {
    * (falls back to a variation clip). Returns false if nobody is ready yet.
    */
   waveAll: () => boolean;
+  /**
+   * Tap-to-talk: this character faces the camera and loops a talking clip
+   * until stopTalk(). Returns false if they aren't loaded yet.
+   */
+  talk: (characterId: string) => boolean;
+  /** End talking (chat closed) and return to idle. Omit id to stop everyone. */
+  stopTalk: (characterId?: string) => void;
   /** Cancel a running party early (chat opened / hatch descent / cleanup). */
   stopParty: () => void;
+  /**
+   * Guided tour: walk this character to a spot (zone image coords, 0–1),
+   * then turn to the camera and hold in the talking pose until stopTalk().
+   * onArrive fires once he's there. Returns false if he can't be steered
+   * right now (not loaded / mid-exit / flyer).
+   */
+  walkTo: (
+    characterId: string,
+    spot: { x: number; y: number },
+    onArrive: () => void,
+  ) => boolean;
   /**
    * Screen-space foot positions (CSS px) of every visible character — lets
    * DOM props on the page (e.g. the jukebox) re-layer themselves so a
@@ -92,7 +114,7 @@ export type CrewDeckHandle = {
 };
 
 type Props = {
-  /** Only characters that actually have a modelUrl. */
+  /** Characters with a modelUrl and/or a still imageUrl. */
   characters: UnlockedCharacter[];
   /** Which painted scene this overlay sits on. Default 'deck'. */
   zone?: 'deck' | 'basement';
@@ -150,131 +172,109 @@ type ZoneConfig = {
 };
 
 /* ------------------------------------------------------------------------ *
- * Ship deck — traced over public/assets/images/crew-ship-deck-ship.png
- * (764×1024, transparent sky; bow platform at the TOP with two staircases
- * flanking the mast, glowing cannon on the left rail, open hatch right-mid,
- * chest + rope coils on the right rail, stern beam across the bottom).
+ * Ship deck — traced over public/assets/images/crew-ship-deck-v2.jpg
+ * (1008×1344, opaque sky). Raised quarterdeck at the TOP with a cabin door
+ * behind the mast and two staircases flanking it, painted jukebox at the
+ * mast foot, cannon on the left rail, glowing open hatch right-mid, chest +
+ * rope coils down the right rail, stern beam + rail across the bottom.
  * ------------------------------------------------------------------------ */
 const DECK_ZONE: ZoneConfig = {
-  img: { width: 764, height: 1024 },
-  bg: '/assets/images/crew-ship-deck-ship.png',
+  img: { width: 1008, height: 1344 },
+  bg: '/assets/images/crew-ship-deck-v2.jpg',
   walkable: [
-    P(0.30, 0.295), // left stair base, below the bow fascia
-    P(0.68, 0.295), // right stair base
-    P(0.72, 0.32),
-    P(0.80, 0.38), // right rail widening
-    P(0.87, 0.44),
-    P(0.92, 0.52),
-    P(0.925, 0.60),
-    P(0.88, 0.68),
-    P(0.80, 0.76),
-    P(0.68, 0.81), // bottom-right, above the stern beam
-    P(0.50, 0.835), // beam dips lowest mid-ship
+    P(0.30, 0.31), // left stair base
+    P(0.66, 0.31), // right stair base
+    P(0.72, 0.33),
+    P(0.80, 0.40), // right rail widening
+    P(0.88, 0.47),
+    P(0.93, 0.55),
+    P(0.95, 0.63),
+    P(0.92, 0.72),
+    P(0.84, 0.79),
+    P(0.70, 0.81), // bottom-right, above the stern beam
+    P(0.50, 0.82), // beam dips lowest mid-ship
     P(0.32, 0.81), // bottom-left, above the beam
-    P(0.19, 0.76),
-    P(0.10, 0.68),
-    P(0.045, 0.60),
-    P(0.035, 0.52),
-    P(0.05, 0.44),
-    P(0.10, 0.36),
-    P(0.21, 0.30), // left rail
+    P(0.20, 0.78),
+    P(0.10, 0.70),
+    P(0.03, 0.62),
+    P(0.03, 0.55),
+    P(0.07, 0.45),
+    P(0.12, 0.38),
+    P(0.20, 0.32), // left rail
   ],
   obstacles: [
     {
-      // Floor grates flanking the mast, right below the bow fascia.
-      name: 'mast-grates',
-      poly: [P(0.39, 0.28), P(0.645, 0.28), P(0.645, 0.34), P(0.39, 0.34)],
+      // Mast foot + the painted jukebox leaning against it.
+      name: 'mast-jukebox',
+      poly: [P(0.40, 0.30), P(0.57, 0.30), P(0.57, 0.48), P(0.40, 0.48)],
     },
     {
-      // Mast column + base flange.
-      name: 'mast-base',
-      poly: [P(0.40, 0.34), P(0.60, 0.34), P(0.60, 0.45), P(0.40, 0.45)],
+      // Two barrels + rope coil along the upper-left rail.
+      name: 'left-rail-barrels',
+      poly: [P(0.12, 0.27), P(0.30, 0.27), P(0.30, 0.40), P(0.12, 0.40)],
     },
     {
-      // X-stamped crate parked against the bow fascia, left of the mast.
-      name: 'fascia-crate',
-      poly: [P(0.36, 0.245), P(0.465, 0.245), P(0.465, 0.325), P(0.36, 0.325)],
-    },
-    {
-      // Glowing cannon on the left rail.
+      // Cannon on its carriage, left rail.
       name: 'cannon',
-      poly: [P(0.0, 0.36), P(0.28, 0.385), P(0.31, 0.44), P(0.28, 0.50), P(0.14, 0.53), P(0.0, 0.53)],
+      poly: [P(0.0, 0.39), P(0.27, 0.40), P(0.27, 0.52), P(0.14, 0.56), P(0.0, 0.56)],
     },
     {
-      // Barrels + rope coil along the upper-left rail.
-      name: 'left-rail-clutter',
-      poly: [P(0.04, 0.26), P(0.30, 0.26), P(0.30, 0.35), P(0.31, 0.36), P(0.31, 0.41), P(0.22, 0.41), P(0.04, 0.38)],
-    },
-    {
-      // Stacked barrels right of the right stair base.
+      // Barrel + crates right of the right stair base.
       name: 'right-rail-barrels',
-      poly: [P(0.71, 0.26), P(0.84, 0.26), P(0.84, 0.335), P(0.71, 0.335)],
+      poly: [P(0.69, 0.26), P(0.80, 0.26), P(0.80, 0.38), P(0.69, 0.38)],
     },
     {
-      // Chest + big rope coil down the right rail.
+      // Rope coils, crate and chest down the right rail.
       name: 'right-rail-chest',
-      poly: [P(0.79, 0.40), P(0.97, 0.40), P(0.97, 0.585), P(0.81, 0.585)],
+      poly: [P(0.76, 0.37), P(0.97, 0.37), P(0.97, 0.58), P(0.86, 0.58), P(0.78, 0.44)],
     },
     {
       // Open hatch (glowing frame included).
       name: 'hatch',
-      poly: [P(0.655, 0.53), P(0.945, 0.53), P(0.945, 0.695), P(0.655, 0.695)],
+      poly: [P(0.62, 0.56), P(0.92, 0.56), P(0.92, 0.73), P(0.62, 0.73)],
     },
     {
-      // Rope-topped barrels + chest stacked in the bottom-left corner.
+      // Barrels, rope and chest stacked in the bottom-left corner.
       name: 'bottom-left-clutter',
-      poly: [P(0.0, 0.62), P(0.13, 0.645), P(0.17, 0.72), P(0.30, 0.765), P(0.30, 0.88), P(0.0, 0.88)],
+      poly: [P(0.0, 0.63), P(0.11, 0.63), P(0.17, 0.71), P(0.24, 0.75), P(0.24, 0.90), P(0.0, 0.90)],
     },
     {
       // Treasure-map crate against the bottom-right rail.
       name: 'map-crate',
-      poly: [P(0.845, 0.66), P(1.0, 0.66), P(1.0, 0.81), P(0.845, 0.81)],
+      poly: [P(0.90, 0.68), P(1.0, 0.68), P(1.0, 0.80), P(0.90, 0.80)],
     },
     {
       // Tilted crate just above the stern beam, right side.
       name: 'tilted-crate',
-      poly: [P(0.75, 0.77), P(0.92, 0.77), P(0.92, 0.89), P(0.75, 0.89)],
-    },
-    {
-      // Jukebox prop leaning against the front of the mast plinth (DOM
-      // overlay drawn above the canvas on CrewPage) — extends the mast-base
-      // obstacle downward so walkers route around it, never through.
-      name: 'jukebox',
-      poly: [P(0.44, 0.43), P(0.56, 0.43), P(0.56, 0.49), P(0.44, 0.49)],
+      poly: [P(0.80, 0.75), P(0.94, 0.75), P(0.94, 0.88), P(0.80, 0.88)],
     },
   ],
-  // Bow platform: two stair-top landings flanking the center railing + mast,
-  // each fed by its own staircase. Crossing pockets means climbing down one
-  // stair and up the other. Stair polylines are traced along the painted
-  // tread centers (measured from zoomed art crops). Landings are small —
-  // clutter (rope coil left, bulwark right) leaves little standing room.
+  // Quarterdeck landings at the top of each staircase (railing stands
+  // behind them, so no occluder is needed).
   platforms: [
     {
       id: 'bow-left',
-      // Landing left of the rope coil parked at the stair top.
-      poly: [P(0.285, 0.19), P(0.335, 0.19), P(0.335, 0.215), P(0.285, 0.215)],
-      stair: [P(0.335, 0.30), P(0.325, 0.255), P(0.315, 0.208)],
+      poly: [P(0.27, 0.165), P(0.36, 0.165), P(0.36, 0.195), P(0.27, 0.195)],
+      stair: [P(0.33, 0.31), P(0.315, 0.25), P(0.31, 0.20)],
     },
     {
       id: 'bow-right',
-      poly: [P(0.605, 0.19), P(0.675, 0.19), P(0.675, 0.215), P(0.605, 0.215)],
-      stair: [P(0.655, 0.30), P(0.66, 0.25), P(0.645, 0.208)],
+      poly: [P(0.60, 0.165), P(0.70, 0.165), P(0.70, 0.195), P(0.60, 0.195)],
+      stair: [P(0.63, 0.31), P(0.64, 0.25), P(0.65, 0.20)],
     },
   ],
-  // Center balustrade between the two stair openings — redrawn above the
-  // canvas so a character climbing near it is hidden correctly.
-  occluders: [{ x: 0.39, y: 0.163, w: 0.225, h: 0.062 }],
   regions: [
     { name: 'bow-left', platform: 'bow-left' },
     { name: 'bow-right', platform: 'bow-right' },
-    { name: 'foredeck', bbox: [0.30, 0.30, 0.68, 0.42] },
-    { name: 'port', bbox: [0.05, 0.52, 0.30, 0.74] },
-    { name: 'starboard', bbox: [0.50, 0.42, 0.78, 0.53] },
-    { name: 'stern', bbox: [0.32, 0.60, 0.70, 0.80] },
+    { name: 'foredeck-left', bbox: [0.20, 0.31, 0.40, 0.42] },
+    { name: 'foredeck-right', bbox: [0.58, 0.31, 0.72, 0.42] },
+    { name: 'port', bbox: [0.05, 0.56, 0.30, 0.74] },
+    { name: 'starboard', bbox: [0.50, 0.46, 0.75, 0.56] },
+    { name: 'stern', bbox: [0.30, 0.62, 0.70, 0.80] },
   ],
   hatch: {
-    approach: P(0.615, 0.63), // stand just left of the hatch opening
-    center: P(0.80, 0.615), // sink toward the middle of the opening
+    approach: P(0.58, 0.66), // stand just left of the hatch opening
+    center: P(0.77, 0.645), // sink toward the middle of the opening
   },
 };
 
@@ -300,7 +300,7 @@ const BASEMENT_ZONE: ZoneConfig = {
   obstacles: [
     {
       name: 'pool-table',
-      poly: [P(0.13, 0.57), P(0.58, 0.60), P(0.60, 0.72), P(0.44, 0.82), P(0.12, 0.74)],
+      poly: [P(0.12, 0.55), P(0.66, 0.56), P(0.68, 0.68), P(0.58, 0.8), P(0.38, 0.84), P(0.1, 0.72)],
     },
     {
       name: 'barrels-bottom-right',
@@ -330,6 +330,8 @@ const WALK_SPEED = 0.055;
 const STAIR_SPEED_MULT = 0.7;
 /** Scripted hatch-approach speed (normalized/s) — keeps the descent snappy. */
 const DESCEND_SPEED = 0.18;
+/** Guided-tour walking speed — purposeful, but slower than a hatch dash. */
+const GUIDE_SPEED = 0.11;
 /** Sink-into-hatch / rise-out / stairs-fade duration (ms). */
 const SINK_MS = 800;
 /** Heading smoothing time constant (s) — ~0.3s to settle on a new direction. */
@@ -350,6 +352,14 @@ const FALLBACK_STRIDE_HEIGHTS_PER_SEC = 0.6;
  * busy-little-character energy rather than a strict physical stride match.
  */
 const WALK_CADENCE_BOOST = 2.6;
+/** Procedural step rate (rad/s) for still uploads with no walk clip. */
+const PROC_WALK_CADENCE = 14;
+/** Vertical bob as a fraction of on-screen height (procedural walk). */
+const PROC_WALK_BOB = 0.07;
+/** Side lean (rad) at peak step (procedural walk). */
+const PROC_WALK_SWAY = 0.1;
+/** Forward lean (rad) while locomoting without a walk clip. */
+const PROC_WALK_LEAN = 0.12;
 /** How many recent stroll destinations to remember for wander biasing. */
 const REGION_MEMORY = 3;
 /** Time on deck before an autonomous hatch trip (ms). */
@@ -399,11 +409,43 @@ const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /* ----------------------------- clip helpers ----------------------------- */
 
-const isLocomotion = (c: THREE.AnimationClip) => /walk|run/i.test(c.name);
+/** In-place flight (the ship parrot) counts as locomotion, same as walk/run. */
+const isFlyClip = (c: THREE.AnimationClip) => /\bfly|flight/i.test(c.name);
+const isLocomotion = (c: THREE.AnimationClip) =>
+  /walk|run/i.test(c.name) || isFlyClip(c);
+/** One-shot emotes — must not loop as a stand-in idle. */
+const isGestureClip = (c: THREE.AnimationClip) =>
+  /scratch|confused|stretch|yawn/i.test(c.name);
+
+const isWaveClip = (c: THREE.AnimationClip) =>
+  /wav(e|ing)|hello|greet|hi\b|salut|bye/i.test(c.name);
+const isTalkClip = (c: THREE.AnimationClip) =>
+  /talk|speak|speech|chat|dialog|mouth|say/i.test(c.name);
+const isDanceClip = (c: THREE.AnimationClip) =>
+  /dance|beat|groove|party|hip.?hop|boogie|disco|ymca|jig|salsa|funky|funny/i.test(
+    c.name,
+  );
 
 const pickIdleClip = (clips: THREE.AnimationClip[]) =>
-  clips.find((c) => /idle|stand|breath/i.test(c.name)) ||
-  clips.find((c) => !isLocomotion(c)) ||
+  clips.find((c) => /idle/i.test(c.name)) ||
+  clips.find(
+    (c) => /stand|breath/i.test(c.name) && !isTalkClip(c) && !isDanceClip(c),
+  ) ||
+  // Mixamo packs without a real idle (Noah) — walk is safer than a talk/move
+  // clip whose scale tracks can shrink the mesh after we measure height.
+  clips.find((c) => /^walk(ing)?$/i.test(c.name)) ||
+  clips.find(
+    (c) =>
+      !isLocomotion(c) &&
+      !isTalkClip(c) &&
+      !isWaveClip(c) &&
+      !isDanceClip(c) &&
+      !isGestureClip(c),
+  ) ||
+  clips.find((c) => !isLocomotion(c) && !isTalkClip(c) && !isGestureClip(c)) ||
+  clips.find((c) => !isLocomotion(c) && !isGestureClip(c)) ||
+  // Parrot pack has no perch idle — hover on the in-place Flying cycle.
+  clips.find((c) => /^flying$/i.test(c.name)) ||
   clips[0] ||
   null;
 
@@ -411,15 +453,67 @@ const pickWalkClip = (clips: THREE.AnimationClip[]) =>
   clips.find((c) => /^walk(ing)?$/i.test(c.name)) ||
   clips.find((c) => /walk/i.test(c.name)) ||
   clips.find((c) => /run/i.test(c.name)) ||
+  clips.find((c) => /^flying$/i.test(c.name)) ||
+  clips.find((c) => isFlyClip(c) && !/left|right|path/i.test(c.name)) ||
   null;
 
 const pickDanceClip = (clips: THREE.AnimationClip[], idle: THREE.AnimationClip | null) =>
-  clips.find((c) => /dance|beat|groove|party|hip.?hop|boogie|disco/i.test(c.name)) ||
-  clips.find((c) => c !== idle && !isLocomotion(c)) ||
+  clips.find(isDanceClip) ||
+  clips.find(
+    (c) => c !== idle && !isLocomotion(c) && !isWaveClip(c) && !isTalkClip(c),
+  ) ||
   null;
 
 const pickWaveClip = (clips: THREE.AnimationClip[]) =>
-  clips.find((c) => /wav(e|ing)|hello|greet|hi\b|salut|bye/i.test(c.name)) || null;
+  clips.find(isWaveClip) || null;
+
+const pickTalkClip = (clips: THREE.AnimationClip[]) =>
+  clips.find(isTalkClip) || null;
+
+/**
+ * Spots on the ship the parrot actually lands on (image coords). Feet sit
+ * at `x,y` — the cannon barrel, the top of the jukebox, the bow rail, and
+ * the port rail. `heading` is the sit pose (radians, 0 faces the camera).
+ */
+const PARROT_PERCHES: { x: number; y: number; heading: number }[] = [
+  { x: 0.2, y: 0.5, heading: -0.2 }, // on the cannon, right of the lock
+  { x: 0.5, y: 0.33, heading: 0.05 }, // standing on top of the jukebox
+  { x: 0.5, y: 0.152, heading: 0 }, // bow railing
+  { x: 0.06, y: 0.57, heading: 0.9 }, // port rail, below the cannon
+];
+/** How long the parrot stays perched before taking off again. */
+const PARROT_SIT_MS = 8000;
+const PARROT_ZOOM = 0.4;
+/** Cruise height between landings, in body-heights above the spot. */
+const PARROT_CRUISE_ALT = 1.05;
+
+const parrotPerch = (index: number) =>
+  PARROT_PERCHES[((index % PARROT_PERCHES.length) + PARROT_PERCHES.length) % PARROT_PERCHES.length];
+
+/** Pull dull PBR exports toward the painted deck — more chroma, less gray sheen. */
+function brightenCrewMaterial(mat: THREE.Material) {
+  const pbr = mat as THREE.MeshStandardMaterial;
+  if (!pbr.isMeshStandardMaterial && !(pbr as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) {
+    return;
+  }
+  const hsl = { h: 0, s: 0, l: 0 };
+  pbr.color.getHSL(hsl);
+  pbr.color.setHSL(
+    hsl.h,
+    Math.min(1, hsl.s * 1.55 + 0.18),
+    Math.min(0.68, hsl.l * 1.2 + 0.08),
+  );
+  pbr.metalness = 0;
+  pbr.roughness = Math.min(pbr.roughness, 0.42);
+  if (pbr.map) pbr.emissiveMap = pbr.map;
+  pbr.emissive.set(0xffffff);
+  pbr.emissiveIntensity = 0.72;
+  const phys = pbr as THREE.MeshPhysicalMaterial;
+  if (phys.isMeshPhysicalMaterial) {
+    phys.sheen = 0;
+    phys.clearcoat = Math.min(phys.clearcoat ?? 0, 0.12);
+  }
+}
 
 const strippedClips = new WeakSet<THREE.AnimationClip>();
 /** Authored root XZ travel per clip loop (local hips units), pre-strip. */
@@ -435,6 +529,9 @@ const clipStrideLocal = new WeakMap<THREE.AnimationClip, number>();
  */
 function stripRootXZ(clips: THREE.AnimationClip[], rootBoneName: string) {
   for (const clip of clips) {
+    // The parrot's Flight Path carries the swoop on the armature. Stripping
+    // it would pin the bird in place and throw away the updated path.
+    if (/flight\s*path/i.test(clip.name)) continue;
     if (strippedClips.has(clip)) continue;
     strippedClips.add(clip);
     for (const track of clip.tracks) {
@@ -496,6 +593,8 @@ type Exit = {
 type Figure = {
   character: UnlockedCharacter;
   group: THREE.Group;
+  /** Visual root inside `group` — procedural bob/lean is applied here. */
+  inner: THREE.Group;
   mixer: THREE.AnimationMixer;
   materials: THREE.Material[];
   shadow: THREE.Mesh;
@@ -504,10 +603,15 @@ type Figure = {
   walkAction: THREE.AnimationAction | null;
   danceAction: THREE.AnimationAction | null;
   waveAction: THREE.AnimationAction | null;
+  talkAction: THREE.AnimationAction | null;
   variationActions: THREE.AnimationAction[];
   currentAction: THREE.AnimationAction | null;
   /** Authored walk coverage as body-heights per second (for timeScale). */
   walkStrideHeightsPerSec: number;
+  /** True when the GLB/image has no walk clip — use bob/lean instead. */
+  usesProceduralWalk: boolean;
+  /** Accumulated step phase for procedural walk (radians). */
+  walkPhase: number;
   /** Normalized screen position of the feet. */
   pos: Pt;
   /** Remaining route legs for the current destination. */
@@ -519,6 +623,8 @@ type Figure = {
     | 'variation'
     | 'walking'
     | 'dancing'
+    | 'talking'
+    | 'guided' // tour: walking to a feature before talking about it
     | 'exiting' // scripted hatch descent or basement departure
     | 'away' // below deck while this (deck) page stays mounted
     | 'emerging' // rising back out of the hatch
@@ -539,8 +645,23 @@ type Figure = {
   /** Basement: when to head back up the stairs (epoch ms). */
   departAt: number;
   exit: Exit | null;
+  /** Guided-tour walk in progress (see CrewDeckHandle.walkTo). */
+  guide: { legs: Leg[]; onArrive: (() => void) | null } | null;
   /** True while waiting at a stair base for another climber (single-file). */
   stairHolding: boolean;
+  /** Ship parrot: flies between ship spots, then stays perched. */
+  flyer: boolean;
+  /** Current height above the landing spot, in body-heights. */
+  flightAlt: number;
+  /** Smoothed pitch; +π/2 lays the belly toward the deck. */
+  flightPitch: number;
+  flightLeg: number;
+  /** performance.now() deadline while perched. */
+  flightPerchedUntil: number;
+  /** Authored Flight Path clip. Null on crew who walk. */
+  flightPathAction: THREE.AnimationAction | null;
+  /** Deck point the current Flight Path lap started from. */
+  flightFrom: { x: number; y: number } | null;
 };
 
 const gltfCache = new Map<string, Promise<GLTF>>();
@@ -553,6 +674,36 @@ function loadGltf(loader: GLTFLoader, url: string): Promise<GLTF> {
     gltfCache.set(url, cached);
   }
   return cached;
+}
+
+/** Still-image billboard for uploads that have no GLB (or whose GLB failed). */
+function loadBillboard(
+  url: string,
+): Promise<{ mesh: THREE.Mesh; material: THREE.MeshBasicMaterial }> {
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const img = tex.image as { width?: number; height?: number };
+        const aspect =
+          img?.width && img?.height ? img.width / Math.max(img.height, 1) : 0.55;
+        const material = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          depthWrite: true,
+          alphaTest: 0.08,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(aspect, 1), material);
+        mesh.position.y = 0.5;
+        resolve({ mesh, material });
+      },
+      undefined,
+      (err) => reject(err),
+    );
+  });
 }
 
 const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
@@ -572,7 +723,10 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
   const hitTestFnRef = useRef<CrewDeckHandle['characterAt'] | null>(null);
   const danceAllFnRef = useRef<((durationMs: number) => boolean) | null>(null);
   const waveAllFnRef = useRef<(() => boolean) | null>(null);
+  const talkFnRef = useRef<((id: string) => boolean) | null>(null);
+  const stopTalkFnRef = useRef<((id?: string) => void) | null>(null);
   const stopPartyFnRef = useRef<(() => void) | null>(null);
+  const walkToFnRef = useRef<CrewDeckHandle['walkTo'] | null>(null);
   const feetFnRef = useRef<(() => { x: number; y: number }[]) | null>(null);
   const anchorFnRef = useRef<((id?: string) => { x: number; y: number } | null) | null>(
     null,
@@ -586,7 +740,10 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       characterAt: (x: number, y: number) => hitTestFnRef.current?.(x, y) ?? null,
       danceAll: (durationMs: number) => danceAllFnRef.current?.(durationMs) ?? false,
       waveAll: () => waveAllFnRef.current?.() ?? false,
+      talk: (id: string) => talkFnRef.current?.(id) ?? false,
+      stopTalk: (id?: string) => stopTalkFnRef.current?.(id),
       stopParty: () => stopPartyFnRef.current?.(),
+      walkTo: (id, spot, onArrive) => walkToFnRef.current?.(id, spot, onArrive) ?? false,
       feetPositions: () => feetFnRef.current?.() ?? [],
       characterAnchor: (id?: string) => anchorFnRef.current?.(id) ?? null,
     }),
@@ -594,7 +751,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
   );
 
   // Rebuild the scene only when the roster of 3D characters actually changes.
-  const signature = `${zone}:${characters.map((c) => `${c.id}|${c.modelUrl}`).join(',')}`;
+  const signature = `${zone}:${characters.map((c) => `${c.id}|${c.modelUrl || ''}|${c.imageUrl || ''}|${c.deckScale ?? ''}|${c.flyer ? 1 : 0}`).join(',')}`;
   const charactersRef = useRef(characters);
   charactersRef.current = characters;
 
@@ -629,7 +786,16 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 2000);
     camera.position.z = 1000;
 
-    // Warm lighting to match the painted art (golden deck / lantern basement)
+    // Warm lighting to match the painted art (golden deck / lantern basement).
+    // Soft IBL so PBR uploads aren't muddy, kept quiet so they don't blow out.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment();
+    const envMap = pmrem.fromScene(room, 0.04).texture;
+    scene.environment = envMap;
+    scene.environmentIntensity = 0.45;
+    room.dispose();
+    pmrem.dispose();
+
     scene.add(new THREE.HemisphereLight(0xffeed8, 0x9a6238, 1.25));
     const sun = new THREE.DirectionalLight(0xffe9c4, 1.5);
     sun.position.set(-0.4, 1, 0.8);
@@ -652,6 +818,8 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     let hatchApproach: Pt | null = null;
     let hatchCenter: Pt | null = null;
     let spawnPt: Pt | null = null;
+    /** Zone image coords (0–1) → normalized screen coords (object-cover). */
+    let imgToScreen: (p: Pt) => Pt = (p) => p;
     let walkYMin = 0.3;
     let walkYMax = 0.8;
     let walkBBox = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
@@ -670,6 +838,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         x: (p.x * dw + ox) / viewW,
         y: (p.y * dh + oy) / viewH,
       });
+      imgToScreen = map;
       walkPoly = zoneCfg.walkable.map(map);
       obstaclePolys = zoneCfg.obstacles.map((o) => o.poly.map(map));
       platformPolys = (zoneCfg.platforms ?? []).map((p) => ({
@@ -738,6 +907,8 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     /** On-screen character height in px at a given depth. */
     const heightAt = (ny: number) =>
       baseCharacterHeight(viewH) * zoneScale * depthScale(ny);
+    /** Same height, times this crew mate's deckScale (parrot is smaller). */
+    const sizedHeight = (f: Figure) => heightAt(f.pos.y) * (f.character.deckScale ?? 1);
 
     /** Which walk surface a point is on: a platform id or the main deck. */
     const levelOf = (p: Pt): string => {
@@ -942,9 +1113,11 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     let partyUntil = 0;
 
     /** Top-of-head anchor in CSS px, for positioning the HTML action menu. */
+    const parrotLiftPx = (f: Figure) => f.flightAlt * sizedHeight(f);
     const anchorFor = (f: Figure) => {
-      const h = heightAt(f.pos.y);
-      return { x: f.pos.x * viewW, y: f.pos.y * viewH - h };
+      const h = sizedHeight(f);
+      const liftPx = f.flyer ? parrotLiftPx(f) : 0;
+      return { x: f.pos.x * viewW, y: f.pos.y * viewH - h - liftPx };
     };
 
     const startAction = (
@@ -1111,8 +1284,157 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       startAction(f, f.walkAction ?? f.idleAction);
     };
 
+    const addFigure = (
+      character: UnlockedCharacter,
+      charIndex: number,
+      inner: THREE.Group,
+      materials: THREE.Material[],
+      mixer: THREE.AnimationMixer,
+      idleAction: THREE.AnimationAction | null,
+      walkAction: THREE.AnimationAction | null,
+      danceAction: THREE.AnimationAction | null,
+      waveAction: THREE.AnimationAction | null,
+      talkAction: THREE.AnimationAction | null,
+      variationActions: THREE.AnimationAction[],
+      walkStrideHeightsPerSec: number,
+      flightPathAction: THREE.AnimationAction | null = null,
+    ) => {
+      if (disposed) return;
+      const group = new THREE.Group();
+      group.add(inner);
+      group.userData.characterId = character.id;
+      scene.add(group);
+
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        transparent: true,
+        depthWrite: false,
+      });
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      scene.add(shadow);
+
+      const now = performance.now();
+      const preferred =
+        charIndex === 0 && spawnPt && isStandableMain(spawnPt) ? spawnPt : null;
+      const spawn = preferred ?? sampleMainPoint() ?? P(0.4, 0.7);
+      const f: Figure = {
+        character,
+        group,
+        inner,
+        mixer,
+        materials,
+        shadow,
+        shadowMat,
+        idleAction,
+        walkAction,
+        danceAction,
+        waveAction,
+        talkAction,
+        variationActions,
+        currentAction: null,
+        walkStrideHeightsPerSec,
+        usesProceduralWalk: !walkAction,
+        walkPhase: Math.random() * Math.PI * 2,
+        pos: { ...spawn },
+        legs: [],
+        heading: 0,
+        targetHeading: 0,
+        mode: 'idle',
+        idleUntil: now + rand(1500, 4000),
+        nextVariationAt: now + rand(...VARIATION_GAP_MS),
+        strollStopsLeft: 0,
+        strollCount: 0,
+        recentRegions: [],
+        tripAt: Date.now() + tripDelayMs(),
+        emergeAt: 0,
+        emergeT0: 0,
+        departAt: Date.now() + stayMs(),
+        exit: null,
+        guide: null,
+        stairHolding: false,
+        flyer: !!character.flyer,
+        flightAlt: 0,
+        flightPitch: 0,
+        flightLeg: 0,
+        flightPerchedUntil: now + (character.flyer ? PARROT_SIT_MS : 0),
+        flightPathAction,
+        flightFrom: null,
+      };
+      startAction(f, idleAction, 0);
+      if (character.flyer) {
+        const home = parrotPerch(0);
+        f.pos = { x: home.x, y: home.y };
+        f.mode = 'idle';
+        f.targetHeading = home.heading;
+        f.heading = home.heading;
+        if (f.walkAction) f.walkAction.paused = true;
+        setCrewLocation(character.id, { loc: 'deck' });
+      }
+
+      if (zone === 'deck') {
+        const rec = getCrewLocation(character.id);
+        if (rec.loc === 'basement') {
+          f.mode = 'away';
+          f.emergeAt = rec.returnAt ?? Date.now();
+          f.group.visible = false;
+          f.shadow.visible = false;
+        }
+      } else {
+        const rec = getCrewLocation(character.id);
+        f.departAt = rec.returnAt ?? Date.now() + stayMs();
+      }
+
+      mixer.addEventListener('finished', () => {
+        if (f.mode !== 'variation') return;
+        const t = performance.now();
+        goIdle(f, t);
+        f.nextVariationAt = t + rand(...VARIATION_GAP_MS);
+      });
+      mixer.update(0.001);
+      figures.push(f);
+      if (f.usesProceduralWalk) {
+        console.info(
+          `CrewDeck3D[${zone}]: "${character.name}" procedural bob/lean walk (no walk clip)`,
+        );
+      }
+    };
+
+    const mountBillboard = (character: UnlockedCharacter, charIndex: number) => {
+      const url = character.imageUrl?.trim();
+      if (!url) return Promise.resolve();
+      return loadBillboard(url).then(({ mesh, material }) => {
+        if (disposed) {
+          material.map?.dispose();
+          material.dispose();
+          mesh.geometry.dispose();
+          return;
+        }
+        const inner = new THREE.Group();
+        inner.add(mesh);
+        addFigure(
+          character,
+          charIndex,
+          inner,
+          [material],
+          new THREE.AnimationMixer(inner),
+          null,
+          null,
+          null,
+          null,
+          null,
+          [],
+          FALLBACK_STRIDE_HEIGHTS_PER_SEC,
+        );
+      });
+    };
+
     charactersRef.current.forEach((character, charIndex) => {
-      if (!character.modelUrl) return;
+      if (!character.modelUrl) {
+        void mountBillboard(character, charIndex).catch((err) => {
+          console.warn('CrewDeck3D: failed to load still', character.imageUrl, err);
+        });
+        return;
+      }
       loadGltf(loader, character.modelUrl)
         .then((gltf) => {
           if (disposed) return;
@@ -1147,6 +1469,11 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
                   c.transparent = false;
                   c.depthWrite = true;
                 }
+                const pbr = c as THREE.MeshStandardMaterial;
+                if (pbr.isMeshStandardMaterial) {
+                  pbr.metalness = Math.min(pbr.metalness, 0.35);
+                }
+                if (character.flyer) brightenCrewMaterial(c);
                 c.userData.wasTransparent = c.transparent;
                 c.userData.wasDepthWrite = c.depthWrite;
                 return c;
@@ -1156,18 +1483,21 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             }
           });
 
-          // Root bone = first bone in the hierarchy (depth-first from root)
-          let rootBone: THREE.Bone | null = null;
+          // Prefer hips/pelvis — Mixamo trees list leaf bones first (HeadTop_End).
+          const bones: THREE.Bone[] = [];
           model.traverse((obj) => {
-            if (!rootBone && (obj as THREE.Bone).isBone) {
-              rootBone = obj as THREE.Bone;
-            }
+            if ((obj as THREE.Bone).isBone) bones.push(obj as THREE.Bone);
           });
+          const rootBone =
+            bones.find((b) => /^(mixamorig:)?(hips|pelvis|root)$/i.test(b.name)) ||
+            bones.find((b) => /hips|pelvis/i.test(b.name)) ||
+            bones[0] ||
+            null;
           const clips = gltf.animations || [];
           // Hips-parent world scale converts local hips travel to model units
           model.updateMatrixWorld(true);
-          const hipsParentScale = rootBone
-            ? (rootBone as THREE.Bone).parent!.getWorldScale(new THREE.Vector3()).y
+          const hipsParentScale = rootBone?.parent
+            ? rootBone.parent.getWorldScale(new THREE.Vector3()).y
             : 1;
           if (rootBone) stripRootXZ(clips, (rootBone as THREE.Bone).name);
 
@@ -1176,17 +1506,32 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           const walkClip = pickWalkClip(clips);
           const danceClip = pickDanceClip(clips, idleClip);
           const waveClip = pickWaveClip(clips);
+          const talkClip = pickTalkClip(clips);
+          const flightPathClip =
+            clips.find((c) => /flight\s*path/i.test(c.name)) || null;
           const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
           const walkAction = walkClip ? mixer.clipAction(walkClip) : null;
           const danceAction = danceClip ? mixer.clipAction(danceClip) : null;
           const variationActions = clips
             .filter(
-              (c) => c !== idleClip && c !== danceClip && !isLocomotion(c),
+              (c) =>
+                c !== idleClip &&
+                c !== danceClip &&
+                c !== talkClip &&
+                !isLocomotion(c),
             )
             .map((c) => mixer.clipAction(c));
           const waveAction = waveClip
             ? mixer.clipAction(waveClip)
             : variationActions[0] || null;
+          const talkAction = talkClip
+            ? mixer.clipAction(talkClip)
+            : variationActions.find((a) => a !== waveAction) ||
+              waveAction ||
+              idleAction;
+          const flightPathAction = flightPathClip
+            ? mixer.clipAction(flightPathClip)
+            : null;
 
           // Normalize to unit height, feet at y=0, centered on x/z.
           // IMPORTANT: measure the *animated* pose, not the bind pose — some
@@ -1211,7 +1556,12 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           if (boneCount === 0) bounds.setFromObject(model); // static model fallback
           const size = bounds.getSize(new THREE.Vector3());
           // Bones stop at joints (skull base, ankles) — pad for head/feet flesh
-          const height = Math.max(size.y, 0.0001) * (boneCount > 0 ? 1.18 : 1);
+          let height = Math.max(size.y, 0.0001) * (boneCount > 0 ? 1.18 : 1);
+          if (!Number.isFinite(height) || height < 1e-4) {
+            bounds.setFromObject(model);
+            const meshSize = bounds.getSize(new THREE.Vector3());
+            height = Math.max(meshSize.y, 1);
+          }
           if (idleAction) {
             mixer.stopAllAction();
             // Desync idle cycles so a full crew doesn't breathe in lockstep
@@ -1230,7 +1580,10 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             `CrewDeck3D[${zone}]: "${character.name}" idle="${idleClip?.name ?? 'none'}", ` +
               `walk="${walkClip?.name ?? 'none'}" (stride ${walkStrideHeightsPerSec.toFixed(2)} heights/s` +
               `${strideFraction > 0.08 ? ', measured' : ', fallback'}), ` +
-              `dance="${danceClip?.name ?? 'none'}"`,
+              `wave="${waveClip?.name ?? waveAction?.getClip().name ?? 'none'}", ` +
+              `talk="${talkClip?.name ?? talkAction?.getClip().name ?? 'none'}", ` +
+              `dance="${danceClip?.name ?? 'none'}", ` +
+              `flightPath="${flightPathClip?.name ?? 'none'}"`,
           );
 
           const inner = new THREE.Group();
@@ -1242,88 +1595,27 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           );
           inner.scale.setScalar(1 / height);
 
-          const group = new THREE.Group();
-          group.add(inner);
-          group.userData.characterId = character.id;
-          scene.add(group);
-
-          // Blob shadow — soft warm ellipse under the feet
-          const shadowMat = new THREE.MeshBasicMaterial({
-            map: shadowTexture,
-            transparent: true,
-            depthWrite: false,
-          });
-          const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-          scene.add(shadow);
-
-          const now = performance.now();
-          const preferred =
-            charIndex === 0 && spawnPt && isStandableMain(spawnPt) ? spawnPt : null;
-          const spawn = preferred ?? sampleMainPoint() ?? P(0.4, 0.7);
-          const f: Figure = {
+          addFigure(
             character,
-            group,
-            mixer,
+            charIndex,
+            inner,
             materials,
-            shadow,
-            shadowMat,
+            mixer,
             idleAction,
             walkAction,
             danceAction,
             waveAction,
+            talkAction,
             variationActions,
-            currentAction: null,
             walkStrideHeightsPerSec,
-            pos: { ...spawn },
-            legs: [],
-            heading: 0,
-            targetHeading: 0,
-            mode: 'idle',
-            idleUntil: now + rand(1500, 4000), // first stroll comes soon
-            nextVariationAt: now + rand(...VARIATION_GAP_MS),
-            strollStopsLeft: 0,
-            strollCount: 0,
-            recentRegions: [],
-            tripAt: Date.now() + tripDelayMs(),
-            emergeAt: 0,
-            emergeT0: 0,
-            departAt: Date.now() + stayMs(),
-            exit: null,
-            stairHolding: false,
-          };
-          startAction(f, idleAction, 0);
-
-          // Location persistence: a deck character whose record says he's
-          // still below starts hidden and rises from the hatch when due.
-          if (zone === 'deck') {
-            const rec = getCrewLocation(character.id);
-            if (rec.loc === 'basement') {
-              f.mode = 'away';
-              f.emergeAt = rec.returnAt ?? Date.now();
-              f.group.visible = false;
-              f.shadow.visible = false;
-            }
-          } else {
-            // Basement: he stays until his persisted return time.
-            const rec = getCrewLocation(character.id);
-            f.departAt = rec.returnAt ?? Date.now() + stayMs();
-          }
-
-          // One-shot variation clips fade back to idle when done.
-          // (Party dances loop and end via partyUntil, never through here.)
-          mixer.addEventListener('finished', () => {
-            if (f.mode !== 'variation') return;
-            const t = performance.now();
-            goIdle(f, t);
-            f.nextVariationAt = t + rand(...VARIATION_GAP_MS);
-          });
-          // Pose the skeleton before the first render so the bind-pose/first
-          // frame never flashes at a broken scale.
-          mixer.update(0.001);
-          figures.push(f);
+            flightPathAction,
+          );
         })
         .catch((err) => {
           console.warn('CrewDeck3D: failed to load model', character.modelUrl, err);
+          void mountBillboard(character, charIndex).catch((stillErr) => {
+            console.warn('CrewDeck3D: still fallback failed', character.imageUrl, stillErr);
+          });
         });
     });
 
@@ -1332,22 +1624,30 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     danceAllFnRef.current = (durationMs: number) => {
       let joined = 0;
       for (const f of figures) {
-        if (!f.danceAction) continue;
+        const dance =
+          f.danceAction ||
+          f.variationActions.find((a) => isDanceClip(a.getClip())) ||
+          f.variationActions[0] ||
+          null;
+        if (!dance) continue;
         if (
           f.mode !== 'idle' &&
           f.mode !== 'variation' &&
           f.mode !== 'walking' &&
-          f.mode !== 'dancing'
+          f.mode !== 'dancing' &&
+          f.mode !== 'talking' &&
+          f.mode !== 'guided'
         ) {
           continue; // exiting/away/emerging characters sit this one out
         }
         f.legs = [];
+        f.guide = null; // a tour walk must not resume mid-party
         f.mode = 'dancing';
         f.targetHeading = 0;
         // Loop the clip so everyone keeps dancing for the whole party
-        f.danceAction.setLoop(THREE.LoopRepeat, Infinity);
-        f.danceAction.clampWhenFinished = false;
-        startAction(f, f.danceAction);
+        dance.setLoop(THREE.LoopRepeat, Infinity);
+        dance.clampWhenFinished = false;
+        startAction(f, dance);
         joined += 1;
       }
       if (joined === 0) return false;
@@ -1391,6 +1691,70 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       return true;
     };
 
+    /** Can this figure be steered / told to talk right now? */
+    const steerable = (f: Figure | undefined): f is Figure =>
+      !!f &&
+      f.mode !== 'gone' &&
+      f.mode !== 'exiting' &&
+      f.mode !== 'away' &&
+      f.mode !== 'emerging';
+
+    /** Face the camera and loop the talking clip (chat open / tour beat). */
+    const beginTalking = (f: Figure): boolean => {
+      const action =
+        f.talkAction || f.waveAction || f.variationActions[0] || f.idleAction;
+      if (!action) return false;
+      f.legs = [];
+      f.guide = null;
+      f.strollStopsLeft = 0;
+      f.mode = 'talking';
+      f.targetHeading = 0;
+      if (f.walkAction) f.walkAction.timeScale = 1;
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+      startAction(f, action);
+      console.info(`CrewDeck3D[${zone}]: "${f.character.name}" talking`);
+      return true;
+    };
+
+    talkFnRef.current = (characterId: string) => {
+      const f = figures.find((fig) => fig.character.id === characterId);
+      if (!steerable(f)) return false;
+      return beginTalking(f);
+    };
+
+    stopTalkFnRef.current = (characterId?: string) => {
+      const now = performance.now();
+      for (const f of figures) {
+        if (f.mode !== 'talking' && f.mode !== 'guided') continue;
+        if (characterId && f.character.id !== characterId) continue;
+        f.guide = null;
+        f.legs = [];
+        goIdle(f, now);
+      }
+    };
+
+    walkToFnRef.current = (characterId, spot, onArrive) => {
+      const f = figures.find((fig) => fig.character.id === characterId);
+      if (!steerable(f) || f.flyer) return false;
+      stopPartyFnRef.current?.();
+      const target = imgToScreen(spot);
+      if (Math.hypot(target.x - f.pos.x, target.y - f.pos.y) < 0.012) {
+        // Already standing there — just turn and talk.
+        beginTalking(f);
+        onArrive();
+        return true;
+      }
+      const legs = buildRoute(f.pos, target) ?? [{ to: target, stair: false }];
+      f.legs = [];
+      f.strollStopsLeft = 0;
+      f.stairHolding = false;
+      f.mode = 'guided';
+      f.guide = { legs, onArrive };
+      startAction(f, f.walkAction ?? f.idleAction);
+      return true;
+    };
+
     const endParty = (now: number) => {
       if (partyUntil === 0) return;
       partyUntil = 0;
@@ -1405,7 +1769,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     descendFnRef.current = (characterId: string, onDone: () => void) => {
       if (!hatchApproach || !hatchCenter) return false;
       const f = figures.find((fig) => fig.character.id === characterId);
-      if (!f) return false;
+      if (!f || f.flyer) return false;
       if (f.mode === 'gone' || f.mode === 'exiting' || f.mode === 'away' || f.mode === 'emerging') {
         return false;
       }
@@ -1426,6 +1790,14 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const raycaster = new THREE.Raycaster();
 
     /** Tappable figure under a viewport point (CSS px), or null. */
+    const tappable = (f: Figure | undefined): f is Figure =>
+      !!f &&
+      (f.mode === 'idle' ||
+        f.mode === 'variation' ||
+        f.mode === 'walking' ||
+        f.mode === 'dancing' ||
+        f.mode === 'talking');
+
     const figureAtPoint = (clientX: number, clientY: number): Figure | null => {
       const rect = renderer.domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(
@@ -1440,18 +1812,32 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           const id = obj.userData?.characterId as string | undefined;
           if (id) {
             const f = figures.find((fig) => fig.character.id === id);
-            return f &&
-              (f.mode === 'idle' ||
-                f.mode === 'variation' ||
-                f.mode === 'walking' ||
-                f.mode === 'dancing')
-              ? f
-              : null;
+            return tappable(f) ? f : null;
           }
           obj = obj.parent;
         }
       }
-      return null;
+      // Skinned meshes are skinny — if the ray missed, take the nearest
+      // character whose on-screen body covers this tap.
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      let nearest: Figure | null = null;
+      let nearestD = Infinity;
+      for (const f of figures) {
+        if (!tappable(f)) continue;
+        const feetX = f.pos.x * viewW;
+        const feetY = f.pos.y * viewH;
+        const h = sizedHeight(f);
+        const liftPx = f.flyer ? parrotLiftPx(f) : 0;
+        const dx = localX - feetX;
+        const dy = localY - (feetY - liftPx - h * 0.45);
+        const d = Math.hypot(dx, dy);
+        if (d < h * 0.55 && d < nearestD) {
+          nearest = f;
+          nearestD = d;
+        }
+      }
+      return nearest;
     };
 
     hitTestFnRef.current = (clientX, clientY) => {
@@ -1553,7 +1939,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
      * -------------------------------------------------------------------- */
 
     /** Personal-space radius in px at the character's current depth. */
-    const radiusPx = (f: Figure) => heightAt(f.pos.y) * 0.17;
+    const radiusPx = (f: Figure) => sizedHeight(f) * 0.17;
 
     /**
      * Figures that occupy floor space — idlers block walkers, and so do
@@ -1564,10 +1950,13 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       figures.filter(
         (o) =>
           o !== self &&
+          !o.flyer &&
           (o.mode === 'idle' ||
             o.mode === 'variation' ||
             o.mode === 'walking' ||
+            o.mode === 'guided' ||
             o.mode === 'dancing' ||
+            o.mode === 'talking' ||
             o.mode === 'emerging' ||
             (o.mode === 'exiting' && o.exit?.phase === 'approach')),
       );
@@ -1729,6 +2118,107 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       return false;
     };
 
+    const stepParrot = (f: Figure, dt: number, now: number) => {
+      const flyClip = f.walkAction;
+      const path = f.flightPathAction;
+      const sit = (perch: { x: number; y: number; heading: number }) => {
+        f.mode = 'idle';
+        f.pos.x += (perch.x - f.pos.x) * Math.min(1, dt * 8);
+        f.pos.y += (perch.y - f.pos.y) * Math.min(1, dt * 8);
+        f.flightAlt += (0 - f.flightAlt) * Math.min(1, dt * 7);
+        f.flightPitch = 0;
+        f.flightFrom = null;
+        f.targetHeading = perch.heading;
+        if (path) {
+          path.stop();
+          path.time = 0;
+        }
+        if (flyClip) {
+          flyClip.setLoop(THREE.LoopRepeat, Infinity);
+          flyClip.paused = true;
+          flyClip.time = 0;
+          if (!flyClip.isRunning()) flyClip.play();
+          f.currentAction = flyClip;
+        }
+      };
+      // Stay perched on the current spot until the stay is over.
+      if (now < f.flightPerchedUntil) {
+        sit(parrotPerch(f.flightLeg));
+        return;
+      }
+      // The stay just ended and we're still on that spot — take off for the next one.
+      // flightPerchedUntil === 0 means a lap is already in progress.
+      const here = parrotPerch(f.flightLeg);
+      const hereDist = Math.hypot(here.x - f.pos.x, here.y - f.pos.y);
+      if (f.flightPerchedUntil !== 0 && hereDist < 0.05 && f.flightAlt < 0.25 && !f.flightFrom) {
+        f.flightFrom = { x: f.pos.x, y: f.pos.y };
+        f.flightLeg = (f.flightLeg + 1) % PARROT_PERCHES.length;
+        f.flightPerchedUntil = 0;
+        if (path) {
+          path.paused = false;
+          path.enabled = true;
+          path.setLoop(THREE.LoopOnce, 1);
+          path.clampWhenFinished = true;
+          path.timeScale = 1;
+          path.reset();
+          path.setEffectiveWeight(1);
+          path.play();
+          if (flyClip && flyClip !== path) flyClip.stop();
+          f.currentAction = path;
+        }
+      }
+      const dest = parrotPerch(f.flightLeg);
+      // Authored Flight Path: the armature swoops and banks, then returns
+      // to the origin. Slide the bird to the next perch across that lap.
+      if (path && f.flightFrom) {
+        const dur = Math.max(path.getClip().duration, 0.001);
+        const p = Math.min(1, path.time / dur);
+        f.mode = 'walking';
+        f.flightAlt = 0;
+        f.flightPitch = 0;
+        f.pos.x = f.flightFrom.x + (dest.x - f.flightFrom.x) * p;
+        f.pos.y = f.flightFrom.y + (dest.y - f.flightFrom.y) * p;
+        // Keep the bird facing the camera so the authored left/right swoop
+        // stays on screen instead of turning into depth.
+        f.targetHeading = 0;
+        if (!path.isRunning()) path.play();
+        if (p >= 0.985) {
+          f.pos.x = dest.x;
+          f.pos.y = dest.y;
+          f.flightPerchedUntil = now + PARROT_SIT_MS;
+          sit(dest);
+        }
+        return;
+      }
+      const dx = dest.x - f.pos.x;
+      const dy = dest.y - f.pos.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 0.03 && f.flightAlt < 0.2) {
+        f.flightPerchedUntil = now + PARROT_SIT_MS;
+        sit(dest);
+        return;
+      }
+      f.mode = 'walking';
+      if (flyClip) {
+        flyClip.paused = false;
+        flyClip.setLoop(THREE.LoopRepeat, Infinity);
+        flyClip.clampWhenFinished = false;
+        flyClip.timeScale = 1.65;
+        if (!flyClip.isRunning()) flyClip.play();
+        f.currentAction = flyClip;
+      }
+      const nd = dist || 1;
+      const step = Math.min(PARROT_ZOOM * dt, nd);
+      f.pos.x += (dx / nd) * step;
+      f.pos.y += (dy / nd) * step;
+      f.targetHeading = Math.atan2(dx, dy * 1.4);
+      // High while crossing, then drop onto the spot as it gets close.
+      const wantAlt = dist > 0.12 ? PARROT_CRUISE_ALT : Math.max(0.05, dist * 8);
+      const altGap = wantAlt - f.flightAlt;
+      const altStep = Math.min(3.2 * dt, Math.abs(altGap));
+      if (altStep > 0) f.flightAlt += Math.sign(altGap) * altStep;
+    };
+
     const clock = new THREE.Clock();
     const animate = () => {
       rafId = requestAnimationFrame(animate);
@@ -1750,7 +2240,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           continue;
         }
 
-        const s = heightAt(f.pos.y);
+        const s = sizedHeight(f);
         let lift = 0; // world-y offset in px (negative = below the floor line)
         let shadowMul = 1;
 
@@ -1814,6 +2304,35 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             );
             if (crowded) f.idleUntil = now + 500;
           }
+        } else if (f.flyer) {
+          const showingOff = f.mode === 'talking' || f.mode === 'dancing';
+          if (showingOff) {
+            f.flightPitch += (0 - f.flightPitch) * Math.min(1, dt * 5);
+          } else if (!isPaused) {
+            stepParrot(f, dt, now);
+            // Flight Path carries its own bank. The extra pitch is only for
+            // the in-place Flying fallback, which is authored upright.
+            const airborne =
+              !f.flightFrom && f.flightAlt > 0.28 && now >= f.flightPerchedUntil;
+            const targetPitch = airborne ? Math.PI / 2 : 0;
+            // Settle upright quickly once the feet are on the dowel.
+            const pitchRate = airborne ? 5 : 14;
+            f.flightPitch += (targetPitch - f.flightPitch) * Math.min(1, dt * pitchRate);
+          }
+          lift = parrotLiftPx(f);
+          // Keep the beak on screen when the lap climbs over the bow.
+          const maxLift = Math.max(0, f.pos.y * viewH - s - 28);
+          lift = Math.min(lift, maxLift);
+          shadowMul = 1 - Math.min(1, f.flightAlt / 2.2) * 0.72;
+        } else if (f.mode === 'guided' && f.guide) {
+          // Tour walk: keep timing (steer around people, never hold), then
+          // turn to the camera in the talking pose and tell the page.
+          if (walkLegs(f, f.guide.legs, GUIDE_SPEED, dt, s, 'steer')) {
+            const onArrive = f.guide.onArrive;
+            f.guide = null;
+            if (!beginTalking(f)) goIdle(f, now);
+            onArrive?.();
+          }
         } else if (f.mode === 'walking') {
           if (isPaused) {
             // Menu/chat opened mid-stroll: stop where he is
@@ -1859,8 +2378,46 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         f.heading += turn * Math.min(1, dt / TURN_SMOOTHING);
         f.group.rotation.y = f.heading;
 
+        if (f.flyer) {
+          // Pitch around the chest so a +90° roll lays the belly on the deck
+          // and the beak points along the lap, without swinging through the floor.
+          const pivotY = 0.34;
+          const pitch = f.flightPitch;
+          const cos = Math.cos(pitch);
+          const sin = Math.sin(pitch);
+          f.inner.rotation.x = pitch;
+          f.inner.rotation.z = 0;
+          f.inner.position.set(0, pivotY * (1 - cos), -pivotY * sin);
+        }
+
+        // Still uploads (no walk clip): bob + lean + sway while the scene
+        // translates them. Built-in clip walkers never enter this path.
+        let procBob = 0;
+        if (f.usesProceduralWalk) {
+          const locomoting =
+            f.mode === 'walking' ||
+            f.mode === 'guided' ||
+            f.mode === 'emerging' ||
+            (f.mode === 'exiting' && f.exit?.phase === 'approach');
+          if (locomoting) {
+            f.walkPhase += dt * PROC_WALK_CADENCE;
+            const step = Math.sin(f.walkPhase);
+            procBob = Math.abs(step) * s * PROC_WALK_BOB;
+            f.inner.rotation.z = step * PROC_WALK_SWAY;
+            f.inner.rotation.x = PROC_WALK_LEAN + Math.abs(step) * 0.03;
+          } else {
+            f.inner.rotation.z *= 0.82;
+            f.inner.rotation.x *= 0.82;
+            if (Math.abs(f.inner.rotation.z) < 0.002) f.inner.rotation.z = 0;
+            if (Math.abs(f.inner.rotation.x) < 0.002) f.inner.rotation.x = 0;
+            if (!f.idleAction && (f.mode === 'idle' || f.mode === 'dancing')) {
+              procBob = Math.sin(now * 0.0035) * s * 0.018;
+            }
+          }
+        }
+
         const world = toWorld(f.pos.x, f.pos.y, f.pos.y * Z_DEPTH);
-        world.y += lift;
+        world.y += lift + procBob;
         f.group.position.copy(world);
         f.group.scale.setScalar(s);
 
@@ -1884,7 +2441,10 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       danceMusic.stop(); // page navigation / re-mount ends any dance tune
       danceAllFnRef.current = null;
       waveAllFnRef.current = null;
+      talkFnRef.current = null;
+      stopTalkFnRef.current = null;
       stopPartyFnRef.current = null;
+      walkToFnRef.current = null;
       descendFnRef.current = null;
       hitTestFnRef.current = null;
       feetFnRef.current = null;
@@ -1908,6 +2468,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       shadowTexture.dispose();
       shadowGeo.dispose();
       dracoLoader.dispose();
+      envMap.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };

@@ -150,6 +150,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
         }}
       >
           <div 
+            id="builder-part-head"
             className={`w-[72%] h-[72%] flex items-center justify-center ${headAnimationClass} ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : 'pointer-events-none'}`} // Sized to sit on neck
             style={{ animationDuration: animationStyle === 'anim-spin' ? '1s' : '2s' }}
             onClick={(e) => onPartClick && handlePartClick(e, 'head')}
@@ -161,16 +162,16 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                       <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
                           {headAsset}
                       </svg>
-                  ) : (
+                  ) : headUrl ? (
                       // IMAGE HEAD - use object-contain for proper centering
                       <AvatarPartImage
-                        src={headUrl || ''}
+                        src={headUrl}
                         alt="Head"
                         className="w-full h-full object-contain object-center pointer-events-none"
                         style={{ transform: 'scale(1.15)' }}
                         loading="eager"
                       />
-                  )}
+                  ) : null}
               </div>
           </div>
       </div>
@@ -219,6 +220,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
           >
               {/* Inner wrapper for animation - anchored at top for squish effect */}
               <div
+                  id="builder-part-legs"
                   onClick={(e) => handlePartClick(e, 'legs')}
                   className={`w-full h-full flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${getLegsAnimClass()}`}
                   style={{ transformOrigin: 'top center' }}
@@ -280,6 +282,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     }}
                   >
                       <div
+                        id="builder-part-leftArm"
                         onClick={(e) => handlePartClick(e, 'leftArm')}
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-left' : ''} ${getLimbAnimClass()}`}
                         style={{ transformOrigin: '50% 50%' }} 
@@ -309,6 +312,7 @@ const AvatarCompositor: React.FC<AvatarCompositorProps> = ({
                     }}
                   >
                       <div 
+                        id="builder-part-rightArm"
                         onClick={(e) => handlePartClick(e, 'rightArm')}
                         className={`w-full h-full transition-colors duration-300 flex items-center justify-center ${onPartClick ? 'cursor-pointer hover:brightness-110 active:scale-95 pointer-events-auto' : ''} ${isAnimating && animationStyle !== 'anim-spin' ? 'animate-arm-sway-right' : ''} ${getLimbAnimClass()}`}
                         style={{ transformOrigin: '50% 50%' }} 

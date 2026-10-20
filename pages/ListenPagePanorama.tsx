@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
@@ -8,6 +8,10 @@ import { useTutorial } from '../context/TutorialContext';
 import { Search, Music, Music2, ChevronDown, ChevronRight, Lock, BookOpen, Heart, Sparkles, TreePine, Star, Book, Users, Crown, Compass, Smile, Play, Headphones, Clock } from 'lucide-react';
 import PremiumBadge from '../components/ui/PremiumBadge';
 import CoverImage from '../components/ui/CoverImage';
+import HardcoverCover from '../components/ui/HardcoverCover';
+import { playBookOpenFromEvent } from '../components/ui/BookOpenTransition';
+import { playCdSpinFromEvent } from '../components/ui/CdSpinTransition';
+import BookshelfRow from '../components/ui/BookshelfRow';
 import { getApiBaseUrl, ApiService } from '../services/apiService';
 import StormySeaError from '../components/ui/StormySeaError';
 import MusicVideoOverlay, { MusicVideo } from '../components/audio/MusicVideoOverlay';
@@ -15,15 +19,46 @@ import { getCoverThumb } from '../utils/coverImage';
 import { DEFAULT_BOOK_COVER } from '../utils/placeholderImage';
 import { playHistoryService } from '../services/playHistoryService';
 import { useAudio, Playlist as AudioPlaylist } from '../context/AudioContext';
+import { getLibraryMode, setLibraryMode as persistLibraryMode, type LibraryMode } from '../utils/libraryMode';
+import {
+  clearLibraryFromBasement,
+  isLibraryFromBasement,
+  markLibraryFromBasement,
+} from '../utils/libraryFromBasement';
+import {
+  armTourWrapFromLibrary,
+  hasSeenAdamTour,
+  isAdamFinaleDone,
+  isTourWrapPending,
+} from '../utils/adamTour';
+import ProfilePortholeButton from '../components/layout/ProfilePortholeButton';
+import WoodBackButton from '../components/WoodBackButton';
+import { DespiaService } from '../services/despiaService';
+import CreatorsDiscoverPanel from '../components/creators/CreatorsDiscoverPanel';
+
+type FeaturedHeroItem = {
+  id: string;
+  title: string;
+  coverUrl: string;
+  itemType: 'book' | 'playlist' | 'episode' | 'amazonBook';
+  playlistId?: string;
+  itemIndex?: number;
+  amazonUrl?: string;
+  isAudio?: boolean;
+};
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
-// Background of the wavy content panel — warm cream, sampled from the
-// reference design. Shared by the wave SVG fill, the panel itself, and the
-// fixed scroll underlay so everything reads as ONE uniform surface while
-// scrolling; change it only here.
-const PANEL_BG = '#F7F1E3';
+// Left-to-right order of the library tabs, used to pick the slide direction.
+const LIBRARY_MODE_ORDER: LibraryMode[] = ['listen', 'read', 'creators'];
+
+// Library wall — warm cream panel that fills the viewport behind the catalog.
+const CREATORS_BG = '#F7F0E6';
+// Listen / Read / Creators all share the same warm cream panel.
+const PANEL_BG = CREATORS_BG;
 const NAVY = '#173A5E';
+const ON_WOOD = NAVY;
+const ON_WOOD_MUTED = 'rgba(23, 58, 94, 0.66)';
 
 // Shared "claymation" card chrome: white face, big corner radii, warm soft
 // drop shadow plus a faint inner top highlight / bottom shading, so cards read
@@ -34,6 +69,8 @@ const CLAY_CARD =
 
 // Hero artwork — Jesus with kids in a sailboat (1024x683 jpg, ~160KB)
 const HERO_IMAGE = '/assets/images/listen-hero-boat.jpg';
+const CREATORS_HERO_IMAGE = '/assets/images/creators-hero.jpg';
+const HERO_HEIGHT = 'min(32vh, 244px)';
 
 // Category card configuration with colors and optional images for audio page
 const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string; image?: string }> = {
@@ -49,6 +86,7 @@ const CATEGORY_CONFIG: Record<string, { icon: any; bgColor: string; image?: stri
   'Worship': { icon: Star, bgColor: 'from-yellow-400 to-amber-500' },
   'Lullabies': { icon: Smile, bgColor: 'from-indigo-400 to-blue-500' },
   'Sleepy Sounds': { icon: Smile, bgColor: 'from-indigo-400 to-violet-500' },
+  'Bedtime': { icon: Smile, bgColor: 'from-indigo-400 to-blue-500' },
   'Bedtime Stories': { icon: Smile, bgColor: 'from-indigo-500 to-purple-600' },
   'Stories': { icon: BookOpen, bgColor: 'from-teal-400 to-cyan-500' },
   'Fantasy Worlds': { icon: Crown, bgColor: 'from-sky-400 to-blue-500' },
@@ -83,6 +121,17 @@ interface CategoryData {
   gradientTo?: string;
   image?: string;
   icon?: string;
+  iconImage?: string;
+}
+
+function itemBelongsToCategory(
+  item: { category?: string; categories?: string[] },
+  name: string,
+): boolean {
+  const list = Array.isArray(item.categories) && item.categories.length
+    ? item.categories
+    : (item.category ? [item.category] : []);
+  return list.includes(name);
 }
 
 // GET play-events/top-week — global weekly play chart entry
@@ -101,28 +150,6 @@ interface TopEpisode {
   playlist?: { _id: string; title?: string };
 }
 
-/** Ocean-wave top edge of the content panel — two stacked SVG paths for depth. */
-const WaveDivider: React.FC = () => (
-  <div className="relative z-10 -mt-10 pointer-events-none" aria-hidden>
-    {/* Back wave — translucent cream peeking above the front wave */}
-    <svg
-      viewBox="0 0 1440 110"
-      preserveAspectRatio="none"
-      className="block w-full h-14 md:h-20"
-    >
-      <path
-        d="M0,50 C200,10 420,92 660,58 C900,24 1140,88 1440,40 L1440,110 L0,110 Z"
-        fill={PANEL_BG}
-        opacity={0.5}
-      />
-      <path
-        d="M0,74 C220,112 430,28 690,52 C950,76 1130,110 1440,60 L1440,110 L0,110 Z"
-        fill={PANEL_BG}
-      />
-    </svg>
-  </div>
-);
-
 /** Bold navy section heading with an optional "View All >" link on the right. */
 const SectionHeading: React.FC<{
   children: React.ReactNode;
@@ -130,7 +157,12 @@ const SectionHeading: React.FC<{
   viewAllLabel?: string;
 }> = ({ children, onViewAll, viewAllLabel = 'View All' }) => (
   <div className="flex items-center justify-between mb-3">
-    <h2 className="font-display font-black text-xl" style={{ color: NAVY }}>{children}</h2>
+    <h2
+      className="font-display font-black text-xl"
+      style={{ color: ON_WOOD }}
+    >
+      {children}
+    </h2>
     {onViewAll && (
       <button
         type="button"
@@ -144,6 +176,82 @@ const SectionHeading: React.FC<{
   </div>
 );
 
+/** Horizontal / wrap category tiles used by both Listen and Read library modes. */
+const CategoryTiles: React.FC<{
+  categories: string[];
+  categoryData: Record<string, CategoryData>;
+  selectedCategory: string;
+  onSelect: (name: string) => void;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+  mode: 'listen' | 'read';
+}> = ({ categories, categoryData, selectedCategory, onSelect, showAll, onToggleShowAll, mode }) => {
+  if (categories.length <= 1) return null;
+  const AffordanceIcon = mode === 'read' ? BookOpen : Headphones;
+
+  return (
+    <div className="pt-1 mb-6">
+      <SectionHeading
+        onViewAll={() => onToggleShowAll()}
+        viewAllLabel={showAll ? 'Show Less' : 'View All'}
+      >
+        Explore Categories
+      </SectionHeading>
+      <div className={showAll
+        ? 'flex flex-wrap gap-3'
+        : 'flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1'
+      }>
+        {categories.map((category, i) => {
+          const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
+          const IconComponent = config.icon;
+          const isSelected = selectedCategory === category;
+          const catData = categoryData[category];
+          const pastel = TILE_PASTELS[i % TILE_PASTELS.length];
+          const iconColor = TILE_ICON_COLORS[i % TILE_ICON_COLORS.length];
+          const label = category === 'All' ? 'All' : category;
+          const cmsIcon = catData?.iconImage || catData?.image;
+          const hasCmsIcon = Boolean(cmsIcon);
+
+          return (
+            <button
+              key={`${mode}-${category}`}
+              type="button"
+              onClick={() => onSelect(category)}
+              className={`relative shrink-0 w-28 aspect-[3/4] rounded-3xl overflow-hidden active:scale-95 transition-transform shadow-[0_5px_14px_rgba(122,90,44,0.18)] ${
+                isSelected ? 'ring-[3px] ring-[#2563eb]' : 'ring-[3px] ring-white'
+              }`}
+              style={{ backgroundColor: hasCmsIcon ? '#ffffff' : pastel }}
+            >
+              {hasCmsIcon ? (
+                <img
+                  src={cmsIcon}
+                  alt=""
+                  className="absolute left-1/2 top-[50%] -translate-x-1/2 -translate-y-1/2 w-[5.75rem] h-[5.75rem] object-contain"
+                />
+              ) : (
+                <IconComponent
+                  size={44}
+                  className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2"
+                  style={{ color: iconColor }}
+                />
+              )}
+              <span
+                className="absolute top-2 inset-x-1.5 text-center font-display font-bold text-[13px] leading-tight"
+                style={{ color: NAVY }}
+              >
+                {label}
+              </span>
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-[0_2px_6px_rgba(23,58,94,0.3)]">
+                <AffordanceIcon size={17} className="text-[#2563eb]" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /**
  * Story book card for Read mode — same clay chrome, portrait 3:4 cover and
  * sizing as the Explore Audio Library playlist cards, so the read catalog
@@ -152,7 +260,7 @@ const SectionHeading: React.FC<{
  */
 const StoryBookCard: React.FC<{
   book: any;
-  onClick: (id: string) => void;
+  onClick: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
   isSubscribed: boolean;
   className?: string;
 }> = ({ book, onClick, isSubscribed, className = '' }) => {
@@ -172,15 +280,16 @@ const StoryBookCard: React.FC<{
   return (
     <button
       type="button"
-      onClick={() => onClick(book.id)}
-      className={`relative p-1.5 text-left cursor-pointer active:scale-[0.97] hover:scale-105 transition-all group ${CLAY_CARD} ${isLocked ? 'opacity-80' : ''} ${className}`}
+      onClick={(event) => onClick(book.id, event)}
+      className={`relative text-left cursor-pointer active:scale-[0.98] transition-transform group ${isLocked ? 'opacity-80' : ''} ${className}`}
     >
-      <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+      <HardcoverCover>
         <CoverImage
           src={book.coverUrl}
           alt={book.title}
           fallback={DEFAULT_BOOK_COVER}
-          className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${isLocked ? 'brightness-75' : ''}`}
+          variant="full"
+          className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
         />
 
         {isLocked && (
@@ -206,18 +315,102 @@ const StoryBookCard: React.FC<{
         <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shadow-md z-20">
           <BookOpen size={15} className="text-[#2563eb]" />
         </div>
-      </div>
+      </HardcoverCover>
 
       {/* Info */}
       <div className="px-1 pt-1.5 pb-1">
-        <h3 className="text-xs font-bold mb-0.5 truncate font-display" style={{ color: NAVY }}>
+        <h3 className="text-xs font-bold mb-0.5 truncate font-display" style={{ color: ON_WOOD }}>
           {translatedTitle}
         </h3>
         {book.author && (
-          <p className="text-[10px] truncate" style={{ color: 'rgba(23,58,94,0.55)' }}>{book.author}</p>
+          <p className="text-[10px] truncate" style={{ color: ON_WOOD_MUTED }}>{book.author}</p>
         )}
       </div>
     </button>
+  );
+};
+
+const LibraryPlaylistCard: React.FC<{
+  playlist: Playlist;
+  isSubscribed: boolean;
+  onOpen: (event: React.MouseEvent<HTMLElement>) => void;
+  className?: string;
+  tutorialFirst?: boolean;
+}> = ({ playlist, isSubscribed, onOpen, className = '', tutorialFirst = false }) => {
+  const isPlaylistLocked = playlist.isMembersOnly && !isSubscribed;
+  const isInProgress = playHistoryService.wasPlayedRecently(playlist._id);
+
+  return (
+    <div
+      id={tutorialFirst ? 'audiobook-card-0' : undefined}
+      data-tutorial={tutorialFirst ? 'audiobook-card-0' : undefined}
+      onClick={onOpen}
+      className={`active:scale-[0.98] transition-transform cursor-pointer group ${isPlaylistLocked ? 'opacity-80' : ''} ${className}`}
+    >
+      <HardcoverCover>
+        {playlist.coverImage ? (
+          <CoverImage
+            src={playlist.coverImage}
+            alt={playlist.title}
+            variant="full"
+            className={`w-full h-full object-cover ${isPlaylistLocked ? 'brightness-75' : ''}`}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+            {playlist.type === 'Audiobook' ? (
+              <BookOpen className="w-24 h-24 text-white opacity-50" />
+            ) : (
+              <Music className="w-24 h-24 text-white opacity-50" />
+            )}
+          </div>
+        )}
+
+        {isPlaylistLocked && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+            <div className="bg-black/70 rounded-full p-3 border-2 border-[#FFD700]">
+              <Lock size={24} className="text-[#FFD700]" />
+            </div>
+          </div>
+        )}
+        {playlist.isMembersOnly && !isSubscribed && (
+          <PremiumBadge className="absolute top-2 right-2 z-20" />
+        )}
+
+        <div className="absolute top-2 left-2 z-20 flex flex-col items-start gap-1">
+          {isInProgress && (
+            <div className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-[#2563eb]/95 shadow-md">
+              In Progress
+            </div>
+          )}
+          <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${
+            playlist.type === 'Audiobook'
+              ? 'bg-amber-600/90'
+              : 'bg-purple-600/90'
+          }`}>
+            {playlist.type === 'Audiobook' ? '📖 Audiobook' : '🎵 Music'}
+          </div>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent"></div>
+
+        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md border border-white/20 z-20">
+          {playlist.level || (playlist.minAge ? `${playlist.minAge}+` : 'All')}
+        </div>
+
+        <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shadow-md z-20">
+          <Headphones size={15} className="text-[#2563eb]" />
+        </div>
+      </HardcoverCover>
+
+      <div className="px-1 pt-1.5 pb-1">
+        <h3 className="text-xs font-bold mb-0.5 truncate font-display" style={{ color: ON_WOOD }}>
+          {playlist.title}
+        </h3>
+        {playlist.author && (
+          <p className="text-[10px] truncate" style={{ color: ON_WOOD_MUTED }}>{playlist.author}</p>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -347,6 +540,7 @@ const MusicVideosSection: React.FC = () => {
 const ListenPagePanorama: React.FC = () => {
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { books, loading, error: booksError, refreshBooks } = useBooks();
   const { isSubscribed, kids, currentProfileId } = useUser();
   const { isTutorialActive, isStepActive, nextStep } = useTutorial();
@@ -355,8 +549,10 @@ const ListenPagePanorama: React.FC = () => {
   const [selectedAge, setSelectedAge] = useState<string>('All Ages');
   const [showAgeDropdown, setShowAgeDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [categories, setCategories] = useState<string[]>(['All']);
-  const [categoryData, setCategoryData] = useState<Record<string, CategoryData>>({});
+  const [listenCategories, setListenCategories] = useState<string[]>(['All']);
+  const [readCategories, setReadCategories] = useState<string[]>(['All']);
+  const [listenCategoryData, setListenCategoryData] = useState<Record<string, CategoryData>>({});
+  const [readCategoryData, setReadCategoryData] = useState<Record<string, CategoryData>>({});
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [playlistsError, setPlaylistsError] = useState<string | null>(null);
@@ -366,12 +562,51 @@ const ListenPagePanorama: React.FC = () => {
   const [topWeek, setTopWeek] = useState<TopWeekEntry[]>([]);
   const [topEpisodes, setTopEpisodes] = useState<TopEpisode[]>([]);
   // One library, two modes: Listen (audio catalog) or Read (story books).
-  // Read-mode data loads lazily on the first switch.
-  const [libraryMode, setLibraryMode] = useState<'listen' | 'read'>('listen');
+  // Read-mode data loads lazily on the first switch. Restore last mode so
+  // Back from a book stays on Read instead of resetting to Listen.
+  const [libraryMode, setLibraryMode] = useState<LibraryMode>(() => {
+    const fromState = (location.state as { libraryMode?: LibraryMode } | null)?.libraryMode;
+    if (fromState === 'read' || fromState === 'listen') return fromState;
+    const saved = getLibraryMode();
+    return saved === 'creators' ? 'listen' : saved;
+  });
+  // Direction the tab pane slides in from: tapping a tab to the right of the
+  // current one brings the new pane in from the right, and vice versa.
+  const [modeSlideFrom, setModeSlideFrom] = useState('0px');
+  const fromBasement =
+    (location.state as { from?: string } | null)?.from === '/sail/basement' ||
+    isLibraryFromBasement();
+  const [featuredHeroItems, setFeaturedHeroItems] = useState<FeaturedHeroItem[]>([]);
+  const [heroSlide, setHeroSlide] = useState(0);
+  const heroTrackRef = useRef<HTMLDivElement>(null);
+  const heroPauseRef = useRef(false);
   const [bookSeries, setBookSeries] = useState<any[]>([]);
   const [trendingBooks, setTrendingBooks] = useState<any[]>([]);
   const readDataLoadedRef = useRef(false);
   const ageDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    persistLibraryMode(libraryMode);
+  }, [libraryMode]);
+
+  useEffect(() => {
+    if ((location.state as { from?: string } | null)?.from === '/sail/basement') {
+      markLibraryFromBasement();
+    }
+  }, [location.state]);
+
+  const openBook = (
+    id: string,
+    event?: React.MouseEvent<HTMLElement>,
+    coverUrl?: string,
+  ) => {
+    const go = () => navigate(`/book/${id}`, { state: { from: '/listen', libraryMode } });
+    if (event) {
+      playBookOpenFromEvent(event, coverUrl, go);
+      return;
+    }
+    go();
+  };
   // "View All" on Recommended scrolls to the full playlist grid below
   const voyageRef = useRef<HTMLDivElement>(null);
 
@@ -413,11 +648,6 @@ const ListenPagePanorama: React.FC = () => {
       // offsetTop is relative to the scroller (its offsetParent, position:relative)
       const panelTop = panelRef.current?.offsetTop ?? 400;
       setIsPastWave(el.scrollTop >= panelTop - 2);
-      if (heroImgRef.current && !reducedMotionRef.current) {
-        // Clamped at 0 so top rubber-banding never pulls the image up off the wave
-        const y = Math.max(0, el.scrollTop) * 0.45;
-        heroImgRef.current.style.transform = `translate3d(0, ${y}px, 0)`;
-      }
     });
   };
 
@@ -515,6 +745,38 @@ const ListenPagePanorama: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getFeaturedContent()
+      .then((data) => {
+        if (cancelled || !Array.isArray(data)) return;
+        const items: FeaturedHeroItem[] = data
+          .map((raw: any) => {
+            const id = String(raw._id || raw.id || '');
+            if (!id) return null;
+            return {
+              id,
+              title: raw.title || 'Featured',
+              coverUrl: getCoverThumb(
+                raw.coverUrl || raw.coverImage || raw.files?.coverImage || '',
+              ),
+              itemType: raw._itemType || (raw.isAudio ? 'playlist' : 'book'),
+              playlistId: raw._playlistId,
+              itemIndex: raw._itemIndex ?? raw._trackIndex,
+              amazonUrl: raw._amazonUrl || raw.amazonUrl,
+              isAudio: Boolean(raw.isAudio),
+            } as FeaturedHeroItem;
+          })
+          .filter((item): item is FeaturedHeroItem => !!item)
+          .slice(0, 8);
+        setFeaturedHeroItems(items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Lazy-load Read-mode data (book series + trending books) on first switch.
   // Failures just hide the respective rows — never an error state.
   useEffect(() => {
@@ -528,39 +790,46 @@ const ListenPagePanorama: React.FC = () => {
     })();
   }, [libraryMode]);
 
-  // Fetch categories on mount (audio type only, excluding explore-only categories)
+  // Fetch Listen (audio) and Read (book) categories independently so a Bedtime
+  // icon on an Audio category shows on Listen even if a Book category shares the name.
   useEffect(() => {
+    const toMap = (cats: Array<{ name?: string; _id?: string; gradientFrom?: string; gradientTo?: string; image?: string; icon?: string; iconImage?: string }>) => {
+      const dataMap: Record<string, CategoryData> = {};
+      cats.forEach((c) => {
+        if (c.name) {
+          dataMap[c.name] = {
+            _id: c._id || '',
+            name: c.name,
+            gradientFrom: c.gradientFrom,
+            gradientTo: c.gradientTo,
+            image: c.image,
+            icon: c.icon,
+            iconImage: c.iconImage,
+          };
+        }
+      });
+      return dataMap;
+    };
+
     const fetchCategories = async () => {
       try {
-        const cats = await ApiService.getCategories('audio');
-        // Filter out categories that are marked for explore page only
-        const nonExploreCategories = cats.filter((c: any) => !c.showOnExplore);
-        const categoryNames = ['All', ...nonExploreCategories.map((c: any) => c.name).filter(Boolean)];
-        setCategories(categoryNames);
-
-        // Store full category data for images and gradients
-        const dataMap: Record<string, CategoryData> = {};
-        nonExploreCategories.forEach((c: any) => {
-          if (c.name) {
-            dataMap[c.name] = {
-              _id: c._id,
-              name: c.name,
-              gradientFrom: c.gradientFrom,
-              gradientTo: c.gradientTo,
-              image: c.image,
-              icon: c.icon,
-            };
-          }
-        });
-        console.log('📚 Category data loaded:', Object.keys(dataMap).length, 'categories');
-        setCategoryData(dataMap);
+        const [audioCats, bookCats] = await Promise.all([
+          ApiService.getCategories('audio'),
+          ApiService.getCategories('book'),
+        ]);
+        const audioNames = audioCats.map((c) => c.name).filter(Boolean);
+        const bookNames = bookCats.map((c) => c.name).filter(Boolean);
+        setListenCategories(['All', ...audioNames]);
+        setReadCategories(['All', ...bookNames]);
+        setListenCategoryData(toMap(audioCats));
+        setReadCategoryData(toMap(bookCats));
       } catch (error) {
         console.error('Error fetching categories:', error);
-        // Extract categories from playlists and books as fallback
         const playlistCategories = playlists.map(p => p.category).filter(Boolean);
-        const bookCategories = books.filter(b => b.isAudio).map(b => b.category).filter(Boolean);
-        const uniqueCategories = ['All', ...new Set([...playlistCategories, ...bookCategories])];
-        setCategories(uniqueCategories as string[]);
+        const audioBookCategories = books.filter(b => b.isAudio).map(b => b.category).filter(Boolean);
+        const storyCategories = books.filter(b => !b.isAudio).map(b => b.category).filter(Boolean);
+        setListenCategories(['All', ...new Set([...playlistCategories, ...audioBookCategories])] as string[]);
+        setReadCategories(['All', ...new Set(storyCategories)] as string[]);
       }
     };
     fetchCategories();
@@ -802,32 +1071,116 @@ const ListenPagePanorama: React.FC = () => {
   const matchesSelectedAge = (level?: string): boolean =>
     selectedAge === 'All Ages' || (level || '').includes(selectedAge.replace('+', ''));
 
-  // Standalone story books, respecting the shared search + age controls
+  const matchesSelectedCategory = (item: { category?: string; categories?: string[] }): boolean => {
+    if (selectedCategory === 'All') return true;
+    const list = Array.isArray(item.categories) && item.categories.length
+      ? item.categories
+      : (item.category ? [item.category] : []);
+    return list.includes(selectedCategory);
+  };
+
+  // Standalone story books, respecting the shared search + age + category controls
   const filteredReadBooks = books.filter(b => {
     if (b.isAudio) return false;
     const bookId = (b.id || (b as any)._id)?.toString?.() ?? '';
     if (booksInSeries.has(bookId)) return false;
     if (!matchesSelectedAge(b.level)) return false;
+    if (!matchesSelectedCategory(b as any)) return false;
     const q = searchQuery.toLowerCase();
     return b.title.toLowerCase().includes(q) || Boolean(b.author && b.author.toLowerCase().includes(q));
   });
 
   const filteredReadSeries = bookSeries.filter((s: any) => {
     if (!matchesSelectedAge(s.level || s.minAge?.toString())) return false;
+    if (!matchesSelectedCategory(s)) return false;
     const q = searchQuery.toLowerCase();
     return (s.title || '').toLowerCase().includes(q) || Boolean(s.author && s.author.toLowerCase().includes(q));
   });
 
   const trendingReadBooks = trendingBooks.filter((b: any) => !b.isAudio).slice(0, 10);
 
-  const openPlaylist = (playlist: Playlist, index?: number) => {
+  const playlistFitsAge = (p: Playlist): boolean => {
+    if (selectedAge === 'All Ages') return true;
+    const selectedAgeNum = parseInt(selectedAge.replace('+', ''), 10);
+    if (p.minAge !== undefined && p.minAge !== null) return p.minAge <= selectedAgeNum;
+    if (p.level) {
+      const levelMatch = p.level.match(/(\d+)/);
+      if (levelMatch) return parseInt(levelMatch[1], 10) <= selectedAgeNum;
+    }
+    return true;
+  };
+
+  const titleFitsSearch = (title?: string, author?: string): boolean => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return true;
+    return (title || '').toLowerCase().includes(q) || Boolean(author && author.toLowerCase().includes(q));
+  };
+
+  const listenCategoryShelves = useMemo(
+    () =>
+      listenCategories
+        .filter((name) => name !== 'All')
+        .map((name) => ({
+          name,
+          playlists: playlists.filter(
+            (p) => itemBelongsToCategory(p, name) && playlistFitsAge(p) && titleFitsSearch(p.title, p.author),
+          ),
+        }))
+        .filter((row) => row.playlists.length > 0),
+    [listenCategories, playlists, selectedAge, searchQuery],
+  );
+
+  const readCategoryShelves = useMemo(
+    () =>
+      readCategories
+        .filter((name) => name !== 'All')
+        .map((name) => ({
+          name,
+          books: books.filter((b) => {
+            if (b.isAudio) return false;
+            const bookId = (b.id || (b as any)._id)?.toString?.() ?? '';
+            if (booksInSeries.has(bookId)) return false;
+            return (
+              itemBelongsToCategory(b as any, name) &&
+              matchesSelectedAge(b.level) &&
+              titleFitsSearch(b.title, b.author)
+            );
+          }),
+        }))
+        .filter((row) => row.books.length > 0),
+    [readCategories, books, booksInSeries, selectedAge, searchQuery],
+  );
+
+  const explorePlaylists = useMemo(() => {
+    const browsingAll = selectedCategory === 'All' && !searchQuery;
+    if (!browsingAll || listenCategoryShelves.length === 0) return filteredPlaylists;
+    const onAShelf = new Set(listenCategoryShelves.flatMap((row) => row.playlists.map((p) => p._id)));
+    return filteredPlaylists.filter((p) => !onAShelf.has(p._id));
+  }, [selectedCategory, searchQuery, listenCategoryShelves, filteredPlaylists]);
+
+  const leftoverReadBooks = useMemo(() => {
+    if (searchQuery || readCategoryShelves.length === 0) return filteredReadBooks;
+    const onAShelf = new Set(readCategoryShelves.flatMap((row) => row.books.map((b) => b.id)));
+    return filteredReadBooks.filter((b) => !onAShelf.has(b.id));
+  }, [searchQuery, readCategoryShelves, filteredReadBooks]);
+
+  const openPlaylist = (
+    playlist: Playlist,
+    index?: number,
+    event?: React.MouseEvent<HTMLElement>,
+  ) => {
     // Allow navigation to detail page even for locked content — the detail
     // page shows preview functionality (1-minute demo).
     // Advance tutorial when clicking the highlighted audiobook.
     if (index === 0 && isTutorialActive && isStepActive('audiobook_highlight')) {
       nextStep(); // Advance to tutorial_complete
     }
-    navigate(`/audio/playlist/${playlist._id}`);
+    const go = () => navigate(`/audio/playlist/${playlist._id}`);
+    if (event) {
+      playCdSpinFromEvent(event, playlist.coverImage, go);
+      return;
+    }
+    go();
   };
 
   // Resume the last-played episode right here on the Listen page — the global
@@ -861,6 +1214,59 @@ const ListenPagePanorama: React.FC = () => {
   const showTopWeek = topWeekPlaylists.length > 0 && isBrowsingAll;
   const showMostPlayed = mostPlayedEpisodes.length > 0 && isBrowsingAll;
 
+  const goBackToBasement = () => {
+    if (!isAdamFinaleDone() && hasSeenAdamTour()) armTourWrapFromLibrary();
+    clearLibraryFromBasement();
+    navigate('/sail/basement', {
+      state: isTourWrapPending() ? { adamTourWrap: true } : undefined,
+    });
+  };
+
+  const openFeaturedHero = useCallback(
+    (item: FeaturedHeroItem) => {
+      if (item.itemType === 'amazonBook' && item.amazonUrl) {
+        ApiService.trackAmazonBookClick(item.id);
+        DespiaService.openExternalUrl(item.amazonUrl);
+        return;
+      }
+      if (item.itemType === 'episode' && item.playlistId != null) {
+        navigate(`/audio/playlist/${item.playlistId}/play/${item.itemIndex ?? 0}`);
+        return;
+      }
+      if (item.itemType === 'playlist' || item.isAudio) {
+        navigate(`/audio/playlist/${item.id}`);
+        return;
+      }
+      navigate(`/book/${item.id}`, { state: { from: '/listen', libraryMode } });
+    },
+    [libraryMode, navigate],
+  );
+
+  const heroSlideCount = 1 + featuredHeroItems.length;
+
+  const onHeroTrackScroll = useCallback(() => {
+    const el = heroTrackRef.current;
+    if (!el || heroSlideCount < 1) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const index = Math.round(el.scrollLeft / w);
+    if (index !== heroSlide && index >= 0 && index < heroSlideCount) {
+      setHeroSlide(index);
+    }
+  }, [heroSlide, heroSlideCount]);
+
+  useEffect(() => {
+    if (heroSlideCount < 2) return;
+    const id = window.setInterval(() => {
+      if (heroPauseRef.current) return;
+      const el = heroTrackRef.current;
+      if (!el) return;
+      const next = (heroSlide + 1) % heroSlideCount;
+      el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
+    }, 5500);
+    return () => window.clearInterval(id);
+  }, [heroSlide, heroSlideCount]);
+
   return (
     <div
       ref={scrollRef}
@@ -875,54 +1281,192 @@ const ListenPagePanorama: React.FC = () => {
         <div
           aria-hidden
           className="fixed inset-0 pointer-events-none"
-          style={{ backgroundColor: PANEL_BG, zIndex: -1 }}
+          style={{ backgroundColor: PANEL_BG, zIndex: 0 }}
         />
       )}
 
-      {/* ============ HERO — boat artwork with the greeting overlaid ============ */}
-      {/* No page header here — just clear the notch/status bar, then the greeting */}
-      <div className="relative px-4 pt-[calc(var(--safe-area-top,0px)+1.25rem)] pb-14">
-        {/* Boat scene fills the hero. The clipped wrapper lets the image
-            translate for the parallax without ever painting past the hero
-            bounds, keeping the wave seam clean. */}
-        <div aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none">
-          <img
-            ref={heroImgRef}
-            src={HERO_IMAGE}
-            alt=""
-            draggable={false}
-            className="w-full h-full object-cover object-[70%_center] select-none will-change-transform"
-          />
-        </div>
-        {/* Top scrim so the greeting stays readable — fades out before the
-            faces in the lower half of the artwork */}
+      {/* ============ FEATURED HERO CAROUSEL ============ */}
+      <div className="relative">
         <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
+          className="absolute z-30"
           style={{
-            background:
-              'linear-gradient(to bottom, rgba(9,38,68,0.5) 0%, rgba(9,38,68,0.28) 38%, rgba(9,38,68,0.04) 62%, transparent 78%)',
+            top: 'max(10px, calc(var(--safe-area-top, 0px) + 8px))',
+            left: fromBasement ? '12px' : undefined,
+            right: fromBasement ? undefined : '12px',
           }}
-        />
-
-        {/* Hero content paints above the artwork — greeting only, anchored to
-            the top of the hero so the faces in the boat scene stay clear */}
-        <div className="relative min-h-[9.5rem] flex flex-col justify-start">
-          <div className="max-w-xl">
-            <h1 className="font-display font-black text-4xl md:text-5xl text-white leading-tight drop-shadow-[0_2px_8px_rgba(10,40,80,0.65)]">
-              Ahoy, {kidName}!
-            </h1>
-            <p className="font-display font-semibold text-white/90 text-base md:text-lg mt-1 drop-shadow-[0_1px_4px_rgba(10,40,80,0.6)]">
-              Listen to God&rsquo;s Word and let your journey begin!
-            </p>
-          </div>
+        >
+          {fromBasement ? (
+            <WoodBackButton
+              onClick={goBackToBasement}
+              className="w-12 h-12"
+              aria-label="Back to ship basement"
+            />
+          ) : (
+            <ProfilePortholeButton />
+          )}
         </div>
+
+        {libraryMode === 'creators' ? (
+          <section
+            className="relative w-full overflow-hidden"
+            style={{ height: HERO_HEIGHT }}
+          >
+            <img
+              src={CREATORS_HERO_IMAGE}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 w-full h-full object-cover object-[62%_center] select-none"
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(8,22,44,0.62) 0%, rgba(8,22,44,0.28) 48%, rgba(8,22,44,0.08) 72%, transparent 100%)',
+              }}
+            />
+            <div
+              className={`relative h-full flex flex-col justify-center px-4 ${
+                fromBasement ? 'pl-16' : 'pr-[7.5rem]'
+              }`}
+              style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 0.35rem)' }}
+            >
+              <h1 className="font-display font-black text-[1.65rem] md:text-3xl text-white leading-[1.12] drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                Stories by
+                <br />
+                Creators.
+                <br />
+                Powered by You.
+              </h1>
+              <p className="font-display font-semibold text-white/90 text-[11px] md:text-sm mt-1.5 max-w-[15.5rem] leading-snug drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)]">
+                Support amazing creators and help bring more faith-filled adventures.
+              </p>
+            </div>
+          </section>
+        ) : (
+        <div
+          ref={heroTrackRef}
+          onScroll={heroSlideCount > 1 ? onHeroTrackScroll : undefined}
+          onPointerDown={() => {
+            heroPauseRef.current = true;
+          }}
+          onPointerUp={() => {
+            heroPauseRef.current = false;
+          }}
+          className={`flex w-full ${
+            heroSlideCount > 1 ? 'overflow-x-auto snap-x snap-mandatory no-scrollbar' : ''
+          }`}
+          style={
+            heroSlideCount > 1
+              ? {
+                  WebkitOverflowScrolling: 'touch',
+                  touchAction: 'pan-x pan-y',
+                  overscrollBehaviorX: 'contain',
+                }
+              : undefined
+          }
+        >
+          <section
+            className="relative w-full min-w-full max-w-full snap-center shrink-0 overflow-hidden"
+            style={{ height: HERO_HEIGHT }}
+          >
+            <img
+              src={HERO_IMAGE}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 w-full h-full object-cover object-[70%_center] select-none"
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(to bottom, rgba(9,38,68,0.5) 0%, rgba(9,38,68,0.28) 38%, rgba(9,38,68,0.04) 62%, transparent 78%)',
+              }}
+            />
+            <div
+              className={`relative h-full flex flex-col justify-start px-4 ${
+                fromBasement ? 'pl-16' : 'pr-16'
+              }`}
+              style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 1.25rem)' }}
+            >
+              <h1 className="font-display font-black text-3xl md:text-4xl text-white leading-tight drop-shadow-[0_2px_8px_rgba(10,40,80,0.65)]">
+                Ahoy, {kidName}!
+              </h1>
+              <p className="font-display font-semibold text-white/90 text-sm md:text-base mt-1 drop-shadow-[0_1px_4px_rgba(10,40,80,0.6)]">
+                Listen to God&rsquo;s Word and let your journey begin!
+              </p>
+            </div>
+          </section>
+
+          {featuredHeroItems.map((item) => (
+            <button
+              key={`${item.itemType}-${item.id}`}
+              type="button"
+              onClick={() => openFeaturedHero(item)}
+              className="relative w-full min-w-full max-w-full snap-center shrink-0 overflow-hidden text-left"
+              style={{ height: HERO_HEIGHT }}
+              aria-label={`Open ${item.title}`}
+            >
+              {item.coverUrl ? (
+                <CoverImage
+                  src={item.coverUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-[#173A5E]" />
+              )}
+              <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(to top, rgba(8,22,44,0.82) 0%, rgba(8,22,44,0.25) 46%, rgba(8,22,44,0.35) 100%)',
+                }}
+              />
+              <div
+                className="relative h-full min-w-0 max-w-full w-full flex flex-col justify-end px-5 pr-8 pb-14"
+                style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 1.25rem)' }}
+              >
+                <span className="self-start mb-1.5 px-2.5 py-0.5 rounded-full bg-[#E8B923] text-[#3E1F07] font-display font-black text-[10px] uppercase tracking-wide">
+                  Featured
+                </span>
+                <h2 className="min-w-0 max-w-[18.5rem] sm:max-w-[21rem] font-display font-black text-[1.25rem] sm:text-[1.35rem] text-white leading-snug drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)] break-words [overflow-wrap:anywhere] line-clamp-3">
+                  {item.title}
+                </h2>
+                <p className="mt-1 font-display font-bold text-white/90 text-sm">
+                  {item.itemType === 'playlist' || item.itemType === 'episode' || item.isAudio
+                    ? 'Tap to listen'
+                    : 'Tap to read'}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+        )}
+
+        {libraryMode !== 'creators' && heroSlideCount > 1 && (
+          <div className="absolute bottom-8 inset-x-0 z-20 flex justify-center gap-1.5 pointer-events-none">
+            {Array.from({ length: heroSlideCount }).map((_, index) => (
+              <span
+                key={index}
+                className="rounded-full transition-all duration-300"
+                style={{
+                  width: index === heroSlide ? 8 : 6,
+                  height: index === heroSlide ? 8 : 6,
+                  background:
+                    index === heroSlide ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.4)',
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ============ WAVY TRANSITION + CREAM CONTENT PANEL ============ */}
-      <WaveDivider />
-      {/* min-h-screen: the cream panel always extends at least a full viewport
-          past the wave, so normal scrolling can never run out of cream surface
+      {/* ============ WOOD LIBRARY PANEL ============ */}
+      {/* min-h-screen: the wood panel always extends at least a full viewport
+          past the hero, so normal scrolling can never run out of the wall
           even in loading/short-content states. All sections live inside it.
           NOTE: no flex-1 here — inside the fixed-height flex column it locked
           the panel box at exactly 100vh, so long content overflowed PAST the
@@ -935,51 +1479,58 @@ const ListenPagePanorama: React.FC = () => {
           ~24% above the plank) + lift + safe area + breathing room. */}
       <div
         ref={panelRef}
-        className="-mt-px px-4 min-h-screen shrink-0"
+        className="relative z-10 px-4 min-h-screen shrink-0 -mt-12 rounded-t-[2rem] shadow-[0_-8px_24px_rgba(30,15,0,0.18)]"
         style={{
           backgroundColor: PANEL_BG,
-          paddingBottom:
-            'calc(var(--safe-area-bottom, 0px) + var(--wood-tab-lift, 12px) + var(--map-footer-h, 78px) * 1.24 + 2rem)',
+          paddingBottom: fromBasement
+            ? 'calc(var(--safe-area-bottom, 0px) + 2rem)'
+            : 'calc(var(--safe-area-bottom, 0px) + var(--wood-tab-lift, 12px) + var(--map-footer-h, 78px) * 1.24 + 2rem)',
         }}
       >
+        <div className="relative z-10">
 
-        {/* Listen / Read segmented toggle — a compact pill floating in the
-            wave/water transition (pulled up over the wave with negative
-            margin; the pill is opaque and sits above the wave's z-10, so
-            nothing shows through). Active segment: solid navy, white text;
-            inactive: white pill with a thin outline and navy text. */}
-        <div className="relative z-20 -mt-9 mb-4 flex justify-center">
-          <div className="inline-flex items-center gap-1.5 p-1 rounded-full bg-white shadow-[0_5px_14px_rgba(23,58,94,0.28)]">
-            <button
-              type="button"
-              onClick={() => setLibraryMode('listen')}
-              aria-pressed={libraryMode === 'listen'}
-              className={`flex items-center justify-center gap-1.5 px-5 py-2 rounded-full font-display font-black text-sm transition-colors ${
-                libraryMode === 'listen'
-                  ? 'bg-[#173A5E] text-white'
-                  : 'bg-white text-[#173A5E] border border-[#173A5E]/30 active:bg-[#f4f7fa]'
-              }`}
-            >
-              <Headphones size={16} />
-              Listen
-            </button>
-            <button
-              type="button"
-              onClick={() => setLibraryMode('read')}
-              aria-pressed={libraryMode === 'read'}
-              className={`flex items-center justify-center gap-1.5 px-5 py-2 rounded-full font-display font-black text-sm transition-colors ${
-                libraryMode === 'read'
-                  ? 'bg-[#173A5E] text-white'
-                  : 'bg-white text-[#173A5E] border border-[#173A5E]/30 active:bg-[#f4f7fa]'
-              }`}
-            >
-              <BookOpen size={16} />
-              Read
-            </button>
+        {/* Listen / Read / Creators segmented toggle */}
+        <div className="relative z-20 pt-4 mb-4 flex justify-center">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white shadow-[0_5px_14px_rgba(23,58,94,0.28)]">
+            {([
+              { id: 'listen' as const, label: 'Listen', Icon: Headphones },
+              { id: 'read' as const, label: 'Read', Icon: BookOpen },
+            ]).map(({ id, label, Icon }, index) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  if (id === libraryMode) return;
+                  const current = LIBRARY_MODE_ORDER.indexOf(libraryMode);
+                  setModeSlideFrom(index > current ? '28px' : '-28px');
+                  setLibraryMode(id);
+                  setSelectedCategory('All');
+                  setShowAllCategories(false);
+                }}
+                aria-pressed={libraryMode === id}
+                className={`flex items-center justify-center gap-1 px-3 sm:px-4 py-2 rounded-full font-display font-black text-xs sm:text-sm transition-colors ${
+                  libraryMode === id
+                    ? 'bg-[#173A5E] text-white'
+                    : 'bg-white text-[#173A5E] border border-[#173A5E]/30 active:bg-[#f4f7fa]'
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Search Bar with Age Filter — shared by both modes (light style) */}
+        {/* Tab pane — remounted per mode (key) so the slide-in replays on every
+            Listen / Read / Creators switch. */}
+        <div
+          key={libraryMode}
+          className="gk-library-pane"
+          style={{ '--gk-pane-from': modeSlideFrom } as React.CSSProperties}
+        >
+
+        {/* Search + age filter — Listen and Read only */}
+        {libraryMode !== 'creators' && (
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -987,7 +1538,11 @@ const ListenPagePanorama: React.FC = () => {
             </div>
             <input
               type="text"
-              placeholder={libraryMode === 'read' ? 'Search stories...' : 'Search adventures...'}
+              placeholder={
+                libraryMode === 'read'
+                  ? 'Search stories...'
+                  : 'Search adventures...'
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border-2 border-[#eee3cd] rounded-xl py-3 pl-10 pr-4 font-display text-[#173A5E] placeholder:text-[#173A5E]/45 shadow-[0_3px_8px_rgba(122,90,44,0.08)] focus:outline-none focus:border-[#2563eb]/50 transition-colors"
@@ -1029,6 +1584,7 @@ const ListenPagePanorama: React.FC = () => {
             )}
           </div>
         </div>
+        )}
 
         {/* ============ LISTEN MODE — audio catalog ============ */}
         {libraryMode === 'listen' && (<>
@@ -1089,69 +1645,7 @@ const ListenPagePanorama: React.FC = () => {
           </button>
         )}
 
-        {/* Explore Categories — small rounded-square tiles, label underneath.
-            "View All" toggles between one scrollable row and a wrapped grid. */}
-        <div className="pt-1 mb-6">
-          <SectionHeading
-            onViewAll={() => setShowAllCategories(v => !v)}
-            viewAllLabel={showAllCategories ? 'Show Less' : 'View All'}
-          >
-            Explore Categories
-          </SectionHeading>
-          <div className={showAllCategories
-            ? 'flex flex-wrap gap-3'
-            : 'flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1'
-          }>
-            {categories.map((category, i) => {
-              const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['default'];
-              const IconComponent = config.icon;
-              const isSelected = selectedCategory === category;
-              const catData = categoryData[category];
-              const pastel = TILE_PASTELS[i % TILE_PASTELS.length];
-              const iconColor = TILE_ICON_COLORS[i % TILE_ICON_COLORS.length];
-              const label = category === 'All' ? 'All' : category;
-
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setSelectedCategory(category)}
-                  className={`relative shrink-0 w-28 aspect-[3/4] rounded-3xl overflow-hidden active:scale-95 transition-transform shadow-[0_5px_14px_rgba(122,90,44,0.18)] ${
-                    isSelected ? 'ring-[3px] ring-[#2563eb]' : 'ring-[3px] ring-white'
-                  }`}
-                  style={{ backgroundColor: pastel }}
-                >
-                  {/* Artwork fills the card below the title band */}
-                  {catData?.image ? (
-                    <img
-                      src={catData.image}
-                      alt=""
-                      loading="lazy"
-                      className="absolute inset-x-0 bottom-0 h-[72%] w-full object-cover"
-                    />
-                  ) : (
-                    <IconComponent
-                      size={44}
-                      className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2"
-                      style={{ color: iconColor }}
-                    />
-                  )}
-                  {/* Title band on the pastel card top */}
-                  <span
-                    className="absolute top-2 inset-x-1.5 text-center font-display font-bold text-[13px] leading-tight"
-                    style={{ color: NAVY }}
-                  >
-                    {label}
-                  </span>
-                  {/* Headphone affordance at the card bottom */}
-                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-[0_2px_6px_rgba(23,58,94,0.3)]">
-                    <Headphones size={17} className="text-[#2563eb]" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Category tiles hidden — portal categories render as shelf rows below. */}
 
         {/* Recommended for you — horizontal content cards (unplayed playlists) */}
         {showRecommended && (
@@ -1161,7 +1655,7 @@ const ListenPagePanorama: React.FC = () => {
             >
               Recommended for you
             </SectionHeading>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+            <BookshelfRow>
               {recommendedPlaylists.map((playlist) => {
                 const minutes = getPlaylistMinutes(playlist);
                 const age = getAgeLabel(playlist);
@@ -1171,14 +1665,14 @@ const ListenPagePanorama: React.FC = () => {
                   <button
                     key={playlist._id}
                     type="button"
-                    onClick={() => openPlaylist(playlist)}
-                    className={`relative shrink-0 w-40 p-1.5 text-left active:scale-[0.97] transition-transform ${CLAY_CARD}`}
+                    onClick={(event) => openPlaylist(playlist, undefined, event)}
+                    className="relative shrink-0 w-40 text-left active:scale-[0.97] transition-transform"
                   >
-                    <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+                    <HardcoverCover>
                       {playlist.coverImage ? (
-                        <CoverImage src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="full" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
                           {playlist.type === 'Audiobook' ? (
                             <BookOpen className="w-10 h-10 text-white/60" />
                           ) : (
@@ -1187,20 +1681,20 @@ const ListenPagePanorama: React.FC = () => {
                         </div>
                       )}
                       {isLocked && <PremiumBadge className="absolute top-1.5 right-1.5 z-10" />}
-                    </div>
+                    </HardcoverCover>
                     <div className="px-1 pt-2 pb-1">
-                      <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: NAVY }}>
+                      <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: ON_WOOD }}>
                         {playlist.title}
                       </p>
                       <div className="mt-1.5 flex items-center gap-2 pr-9 min-h-[14px]">
                         {minutes !== null && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold" style={{ color: 'rgba(23,58,94,0.55)' }}>
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold" style={{ color: ON_WOOD_MUTED }}>
                             <Clock size={10} />
                             {minutes} min
                           </span>
                         )}
                         {age && (
-                          <span className="text-[10px] font-bold" style={{ color: 'rgba(23,58,94,0.55)' }}>
+                          <span className="text-[10px] font-bold" style={{ color: ON_WOOD_MUTED }}>
                             Ages {age}
                           </span>
                         )}
@@ -1212,7 +1706,7 @@ const ListenPagePanorama: React.FC = () => {
                   </button>
                 );
               })}
-            </div>
+            </BookshelfRow>
           </div>
         )}
 
@@ -1287,21 +1781,21 @@ const ListenPagePanorama: React.FC = () => {
         {showTopWeek && (
           <div className="mb-6">
             <SectionHeading>Top 10 of the week</SectionHeading>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+            <BookshelfRow>
               {topWeekPlaylists.map((playlist, rank) => {
                 const isLocked = playlist.isMembersOnly && !isSubscribed;
                 return (
                   <button
                     key={playlist._id}
                     type="button"
-                    onClick={() => openPlaylist(playlist)}
-                    className={`relative shrink-0 w-40 p-1.5 text-left active:scale-[0.97] transition-transform ${CLAY_CARD}`}
+                    onClick={(event) => openPlaylist(playlist, undefined, event)}
+                    className="relative shrink-0 w-40 text-left active:scale-[0.97] transition-transform"
                   >
-                    <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+                    <HardcoverCover>
                       {playlist.coverImage ? (
-                        <CoverImage src={playlist.coverImage} alt={playlist.title} className="w-full h-full object-cover" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="full" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
                           {playlist.type === 'Audiobook' ? (
                             <BookOpen className="w-10 h-10 text-white/60" />
                           ) : (
@@ -1314,9 +1808,9 @@ const ListenPagePanorama: React.FC = () => {
                       <span className="absolute bottom-1 left-2 z-10 font-display font-black text-5xl text-white leading-none drop-shadow-[0_2px_5px_rgba(0,0,0,0.65)]">
                         {rank + 1}
                       </span>
-                    </div>
+                    </HardcoverCover>
                     <div className="px-1 pt-2 pb-1 pr-9">
-                      <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: NAVY }}>
+                      <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: ON_WOOD }}>
                         {playlist.title}
                       </p>
                     </div>
@@ -1326,7 +1820,7 @@ const ListenPagePanorama: React.FC = () => {
                   </button>
                 );
               })}
-            </div>
+            </BookshelfRow>
           </div>
         )}
 
@@ -1374,7 +1868,7 @@ const ListenPagePanorama: React.FC = () => {
         )}
 
         {(loading || playlistsLoading) ? (
-          <div className="font-display text-center mt-10 font-bold" style={{ color: 'rgba(23,58,94,0.7)' }}>
+          <div className="font-display text-center mt-10 font-bold" style={{ color: ON_WOOD }}>
             Loading sounds...
           </div>
         ) : (booksError || playlistsError) ? (
@@ -1393,104 +1887,44 @@ const ListenPagePanorama: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Explore Audio Library — the full playlist catalog. A horizontal
-                carousel like the other content rows while browsing; switches
-                to a wrapped grid during search/category filtering so results
-                can be scanned vertically instead of hiding in a long row. */}
-            {filteredPlaylists.length > 0 && (
+            {isBrowsingAll && listenCategoryShelves.map((row) => (
+              <div key={`listen-shelf-${row.name}`} className="mb-8">
+                <SectionHeading>{row.name}</SectionHeading>
+                <BookshelfRow>
+                  {row.playlists.map((playlist) => (
+                    <LibraryPlaylistCard
+                      key={playlist._id}
+                      playlist={playlist}
+                      isSubscribed={isSubscribed}
+                      onOpen={(event) => openPlaylist(playlist, undefined, event)}
+                      className="w-40"
+                    />
+                  ))}
+                </BookshelfRow>
+              </div>
+            ))}
+
+            {/* Full catalog while searching, or leftover titles that have no
+                portal category once those categories are listed as shelves. */}
+            {explorePlaylists.length > 0 && (
               <div className="mb-8 scroll-mt-4" ref={voyageRef}>
-                <SectionHeading>Explore Audio Library</SectionHeading>
-                <div className={isBrowsingAll
-                  ? 'flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1'
-                  : 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 max-w-6xl mx-auto'
-                }>
-                  {filteredPlaylists.map((playlist, index) => {
-                    const isPlaylistLocked = playlist.isMembersOnly && !isSubscribed;
-                    const isInProgress = playHistoryService.wasPlayedRecently(playlist._id);
-
-                    return (
-                      <div
-                        key={playlist._id}
-                        id={index === 0 ? 'audiobook-card-0' : undefined}
-                        data-tutorial={index === 0 ? 'audiobook-card-0' : undefined}
-                        onClick={() => openPlaylist(playlist, index)}
-                        className={`${isBrowsingAll ? 'shrink-0 w-40' : 'w-full max-w-[9.5rem] mx-auto'} p-1.5 hover:scale-105 transition-all cursor-pointer group ${CLAY_CARD} ${isPlaylistLocked ? 'opacity-80' : ''}`}
-                      >
-                        {/* Cover Image — portrait ratio to match the carousels */}
-                        <div className="aspect-[3/4] rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
-                          {playlist.coverImage ? (
-                            <CoverImage
-                              src={playlist.coverImage}
-                              alt={playlist.title}
-                              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${isPlaylistLocked ? 'filter brightness-75' : ''}`}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              {playlist.type === 'Audiobook' ? (
-                                <BookOpen className="w-24 h-24 text-white opacity-50" />
-                              ) : (
-                                <Music className="w-24 h-24 text-white opacity-50" />
-                              )}
-                            </div>
-                          )}
-
-                          {/* Lock Overlay for Members Only Content */}
-                          {isPlaylistLocked && (
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                              <div className="bg-black/70 rounded-full p-3 border-2 border-[#FFD700]">
-                                <Lock size={24} className="text-[#FFD700]" />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Members Only Badge - Only show if user is NOT subscribed */}
-                          {playlist.isMembersOnly && !isSubscribed && (
-                            <PremiumBadge className="absolute top-2 right-2 z-20" />
-                          )}
-
-                          {/* Top-left badges: In Progress + type */}
-                          <div className="absolute top-2 left-2 z-20 flex flex-col items-start gap-1">
-                            {isInProgress && (
-                              <div className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-[#2563eb]/95 shadow-md">
-                                In Progress
-                              </div>
-                            )}
-                            <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${
-                              playlist.type === 'Audiobook'
-                                ? 'bg-amber-600/90'
-                                : 'bg-purple-600/90'
-                            }`}>
-                              {playlist.type === 'Audiobook' ? '📖 Audiobook' : '🎵 Music'}
-                            </div>
-                          </div>
-
-                          {/* Gradient overlay at bottom */}
-                          <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent"></div>
-
-                          {/* Age Badge - Bottom Left */}
-                          <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md border border-white/20 z-20">
-                            {playlist.level || (playlist.minAge ? `${playlist.minAge}+` : 'All')}
-                          </div>
-
-                          {/* Headphone play affordance - Bottom Right */}
-                          <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shadow-md z-20">
-                            <Headphones size={15} className="text-[#2563eb]" />
-                          </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="px-1 pt-1.5 pb-1">
-                          <h3 className="text-xs font-bold mb-0.5 truncate font-display" style={{ color: NAVY }}>
-                            {playlist.title}
-                          </h3>
-                          {playlist.author && (
-                            <p className="text-[10px] truncate" style={{ color: 'rgba(23,58,94,0.55)' }}>{playlist.author}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <SectionHeading>
+                  {isBrowsingAll && listenCategoryShelves.length > 0
+                    ? 'More Audio'
+                    : 'Explore Audio Library'}
+                </SectionHeading>
+                <BookshelfRow grid={!isBrowsingAll}>
+                  {explorePlaylists.map((playlist, index) => (
+                    <LibraryPlaylistCard
+                      key={playlist._id}
+                      playlist={playlist}
+                      isSubscribed={isSubscribed}
+                      onOpen={(event) => openPlaylist(playlist, index, event)}
+                      tutorialFirst={index === 0}
+                      className={isBrowsingAll ? 'w-40' : 'w-full max-w-[9.5rem] mx-auto'}
+                    />
+                  ))}
+                </BookshelfRow>
               </div>
             )}
 
@@ -1506,7 +1940,11 @@ const ListenPagePanorama: React.FC = () => {
                     <div key={book.id} className="w-full max-w-[9.5rem] mx-auto [&_p]:!text-[#173A5E]">
                       <BookCard
                         book={book}
-                        onClick={(id) => navigate(`/book/${id}`, { state: { from: '/listen' } })}
+                        onClick={(id, event) => {
+                          const go = () =>
+                            navigate(`/book/${id}`, { state: { from: '/listen', libraryMode } });
+                          playCdSpinFromEvent(event, book.coverUrl, go);
+                        }}
                       />
                     </div>
                   ))}
@@ -1521,51 +1959,57 @@ const ListenPagePanorama: React.FC = () => {
         {/* ============ READ MODE — story books catalog ============ */}
         {libraryMode === 'read' && (
           loading ? (
-            <div className="font-display text-center mt-10 font-bold" style={{ color: 'rgba(23,58,94,0.7)' }}>
+            <div className="font-display text-center mt-10 font-bold" style={{ color: ON_WOOD }}>
               Loading library...
             </div>
           ) : (
             <>
+              {/* Category tiles hidden — portal categories render as shelf rows below. */}
+
               {/* Book Series — clay carousel; opens the series page */}
               {filteredReadSeries.length > 0 && (
                 <div className="mb-6">
                   <SectionHeading>Book Series</SectionHeading>
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                  <BookshelfRow>
                     {filteredReadSeries.map((series: any) => (
                       <div
                         key={series._id}
                         role="button"
-                        onClick={() => navigate(`/book-series/${series._id}`)}
-                        className={`relative shrink-0 w-40 p-1.5 cursor-pointer active:scale-[0.97] transition-transform ${CLAY_CARD}`}
+                        onClick={(event) =>
+                          playBookOpenFromEvent(event, series.coverImage, () =>
+                            navigate(`/book-series/${series._id}`),
+                          )
+                        }
+                        className="relative shrink-0 w-40 cursor-pointer active:scale-[0.97] transition-transform"
                       >
-                        <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 relative">
+                        <HardcoverCover>
                           {series.coverImage ? (
-                            <CoverImage src={series.coverImage} alt={series.title} className="w-full h-full object-cover" />
+                            <CoverImage src={series.coverImage} alt={series.title} variant="full" className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-5xl">📚</div>
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 text-5xl">📚</div>
                           )}
-                          <span className="absolute top-2 left-2 bg-purple-600/90 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
+                          <span className="absolute top-2 left-2 bg-purple-600/90 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 z-20">
                             <BookOpen className="w-3 h-3" />
                             Series
                           </span>
-                          <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-md">
+                          <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-md z-20">
                             {series.books?.length || 0} books
                           </span>
                           {series.isMembersOnly && !isSubscribed && (
                             <PremiumBadge className="absolute top-2 right-2 z-20" />
                           )}
-                        </div>
+                        </HardcoverCover>
                         <div className="px-1 pt-2 pb-1">
-                          <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: NAVY }}>
+                          <p className="font-display font-bold text-sm leading-snug truncate" style={{ color: ON_WOOD }}>
                             {series.title}
                           </p>
                           {series.author && (
-                            <p className="text-[10px] truncate" style={{ color: 'rgba(23,58,94,0.55)' }}>{series.author}</p>
+                            <p className="text-[10px] truncate" style={{ color: ON_WOOD_MUTED }}>{series.author}</p>
                           )}
                         </div>
                       </div>
                     ))}
-                  </div>
+                  </BookshelfRow>
                 </div>
               )}
 
@@ -1574,43 +2018,57 @@ const ListenPagePanorama: React.FC = () => {
               {!searchQuery && trendingReadBooks.length > 0 && (
                 <div className="mb-6">
                   <SectionHeading>Trending Stories</SectionHeading>
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                  <BookshelfRow>
                     {trendingReadBooks.map((book: any, i: number) => (
                       <StoryBookCard
                         key={book.id || `trending-${i}`}
                         book={book}
                         isSubscribed={isSubscribed}
-                        onClick={(id) => navigate(`/book/${id}`, { state: { from: '/listen' } })}
-                        className="shrink-0 w-40"
+                        onClick={(id, event) => openBook(id, event, book.coverUrl)}
+                        className="w-40"
                       />
                     ))}
-                  </div>
+                  </BookshelfRow>
                 </div>
               )}
 
-              {/* Story Books — the standalone (non-series) reading catalog.
-                  A horizontal carousel like Explore Audio Library while
-                  browsing; switches to a wrapped grid during search so
-                  results can be scanned vertically. */}
-              {filteredReadBooks.length > 0 ? (
-                <div>
-                  <SectionHeading>Story Books</SectionHeading>
-                  <div className={!searchQuery
-                    ? 'flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1'
-                    : 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 max-w-6xl mx-auto'
-                  }>
-                    {filteredReadBooks.map((book: any) => (
+              {!searchQuery && readCategoryShelves.map((row) => (
+                <div key={`read-shelf-${row.name}`} className="mb-8">
+                  <SectionHeading>{row.name}</SectionHeading>
+                  <BookshelfRow>
+                    {row.books.map((book: any) => (
                       <StoryBookCard
                         key={book.id}
                         book={book}
                         isSubscribed={isSubscribed}
-                        onClick={(id) => navigate(`/book/${id}`, { state: { from: '/listen' } })}
-                        className={!searchQuery ? 'shrink-0 w-40' : 'w-full max-w-[9.5rem] mx-auto'}
+                        onClick={(id, event) => openBook(id, event, book.coverUrl)}
+                        className="w-40"
                       />
                     ))}
-                  </div>
+                  </BookshelfRow>
                 </div>
-              ) : filteredReadSeries.length === 0 ? (
+              ))}
+
+              {/* Story Books — leftover titles with no portal category, or
+                  the full catalog while searching. */}
+              {leftoverReadBooks.length > 0 ? (
+                <div>
+                  <SectionHeading>
+                    {!searchQuery && readCategoryShelves.length > 0 ? 'More Stories' : 'Story Books'}
+                  </SectionHeading>
+                  <BookshelfRow grid={Boolean(searchQuery)}>
+                    {leftoverReadBooks.map((book: any) => (
+                      <StoryBookCard
+                        key={book.id}
+                        book={book}
+                        isSubscribed={isSubscribed}
+                        onClick={(id, event) => openBook(id, event, book.coverUrl)}
+                        className={!searchQuery ? 'w-40' : 'w-full max-w-[9.5rem] mx-auto'}
+                      />
+                    ))}
+                  </BookshelfRow>
+                </div>
+              ) : filteredReadSeries.length === 0 && readCategoryShelves.length === 0 ? (
                 <div className={`font-display text-center mt-10 p-6 ${CLAY_CARD}`} style={{ color: 'rgba(23,58,94,0.75)' }}>
                   {searchQuery ? 'No matching stories found.' : 'No story books found right now. Try the Listen tab!'}
                 </div>
@@ -1618,6 +2076,10 @@ const ListenPagePanorama: React.FC = () => {
             </>
           )
         )}
+
+        {libraryMode === 'creators' && <CreatorsDiscoverPanel />}
+        </div>
+        </div>
       </div>
     </div>
   );

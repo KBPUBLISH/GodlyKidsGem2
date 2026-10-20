@@ -113,9 +113,16 @@ interface PageData {
 export type ScrollState = 'hidden' | 'mid' | 'max';
 
 /** Resolve scroll band heights; legacy pages may only have scrollHeight. */
-function resolveScrollHeights(page: PageData): { max: number; mid: number } {
-    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
-    const mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+function resolveScrollHeights(
+    page: PageData,
+    opts?: { ensureVisibleResize?: boolean },
+): { max: number; mid: number } {
+    let max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
+    let mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+    // Story books often save mid≈max, so raising the tab would not move the art.
+    if (opts?.ensureVisibleResize && max - mid < 18) {
+        max = Math.min(72, mid + 22);
+    }
     return { max, mid };
 }
 
@@ -148,9 +155,8 @@ interface BookPageRendererProps {
     /** Speak a single visible word (hunt practice / parchment taps). */
     onSpeakWord?: (word: string) => void;
     /**
-     * Bible Map layout: crop page art to the upper region above the parchment/scroll
-     * so characters are not covered by text (3:4 art above, scroll+text below).
-     * When scroll is hidden, art expands toward fullscreen.
+     * Bible Map extras (word hunt, page-nav chrome, green art fallback).
+     * Art still crops above the parchment for every book that has a scroll.
      */
     bibleMapLayout?: boolean;
     /**
@@ -191,17 +197,30 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     bibleMapLayout = false,
     pageNav,
 }) => {
-    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
+    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page, {
+        ensureVisibleResize: !bibleMapLayout,
+    });
     const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
     const scrollOffset = page.scrollOffsetY || 0;
     const motionEnabled = scrollState !== 'hidden';
+    const [viewportW, setViewportW] = useState(
+        () => (typeof window === 'undefined' ? 1024 : window.innerWidth),
+    );
+    useEffect(() => {
+        const onResize = () => setViewportW(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+    /** Phone parchment: fill the scroll and shrink type so the page isn't clipped. */
+    const bibleMapMobile = bibleMapLayout && viewportW < 640;
 
-    /** Bible Map: art fills band above parchment; expands to fullscreen when scroll is hidden. */
-    const bibleMapArtHeightPct = useMemo(() => {
-        if (!bibleMapLayout) return 100;
+    /** Art fills the band above the parchment; expands fullscreen when the scroll is hidden. */
+    const cropArtToScroll = Boolean(page.scrollUrl);
+    const artHeightPct = useMemo(() => {
+        if (!cropArtToScroll) return 100;
         if (scrollState === 'hidden') return 100;
-        return Math.max(58, 100 - currentScrollHeightNum - scrollOffset);
-    }, [bibleMapLayout, scrollState, currentScrollHeightNum, scrollOffset]);
+        return Math.max(32, 100 - currentScrollHeightNum - scrollOffset);
+    }, [cropArtToScroll, scrollState, currentScrollHeightNum, scrollOffset]);
 
     const pageInteractiveTargets = useMemo(
         () => collectPageInteractiveTargets(page.textBoxes),
@@ -437,12 +456,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         };
     }, [page.id, scrollMaxH, scrollMidH]);
 
-    // Swipe detection for scroll height changes (handle + pull-tab only — not whole page)
-    const touchStartY = useRef<number>(0);
-    const touchEndY = useRef<number>(0);
+    // Raise/lower the parchment from the tab (tap or swipe). Pointer covers mouse + touch.
+    const pointerStartY = useRef<number | null>(null);
+    const pointerMoved = useRef(false);
 
     const applyScrollPanelGesture = (deltaY: number) => {
-        const minSwipeDistance = 50;
+        const minSwipeDistance = 36;
         if (Math.abs(deltaY) <= minSwipeDistance || !onScrollStateChange) return;
         if (deltaY > 0) {
             const newState: ScrollState =
@@ -455,17 +474,44 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
     };
 
-    const handleScrollTouchStart = (e: React.TouchEvent) => {
-        e.stopPropagation();
-        touchStartY.current = e.touches[0].clientY;
+    const cycleScrollFromTab = () => {
+        if (!onScrollStateChange) return;
+        if (scrollState === 'hidden') {
+            onScrollStateChange('mid');
+            return;
+        }
+        if (scrollState === 'mid') {
+            onScrollStateChange('max');
+            return;
+        }
+        onScrollStateChange('mid');
     };
 
-    const handleScrollTouchEnd = (e: React.TouchEvent) => {
+    const handleScrollTabPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         e.stopPropagation();
-        touchEndY.current = e.changedTouches[0].clientY;
-        applyScrollPanelGesture(touchStartY.current - touchEndY.current);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pointerStartY.current = e.clientY;
+        pointerMoved.current = false;
     };
-    
+
+    const handleScrollTabPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (pointerStartY.current == null) return;
+        if (Math.abs(pointerStartY.current - e.clientY) > 8) pointerMoved.current = true;
+    };
+
+    const handleScrollTabPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        const start = pointerStartY.current;
+        pointerStartY.current = null;
+        if (start == null) return;
+        const deltaY = start - e.clientY;
+        if (Math.abs(deltaY) > 36) {
+            applyScrollPanelGesture(deltaY);
+            return;
+        }
+        if (!pointerMoved.current) cycleScrollFromTab();
+    };
+
     const handleScrollClick = (e: React.MouseEvent) => {
         // Tap on scroll to toggle visibility (restore pre-hide state via parent when available)
         e.stopPropagation();
@@ -686,18 +732,21 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Fixed position prevents movement during touch/swipe gestures */}
             <div 
                 className={
-                    bibleMapLayout
-                        ? 'absolute top-0 left-0 right-0 bg-gradient-to-b from-[#2d5a3d] to-[#1e3d28] overflow-hidden'
+                    cropArtToScroll
+                        ? `absolute top-0 left-0 right-0 overflow-hidden ${
+                              bibleMapLayout
+                                  ? 'bg-gradient-to-b from-[#2d5a3d] to-[#1e3d28]'
+                                  : 'bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7]'
+                          }`
                         : 'absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden'
                 }
                 style={{
                     // Ensure background stays locked in place
                     touchAction: 'none',
                     pointerEvents: 'none',
-                    ...(bibleMapLayout
+                    ...(cropArtToScroll
                         ? {
-                              // Mid/max: art in upper band; hidden: expand toward fullscreen
-                              height: `${bibleMapArtHeightPct}%`,
+                              height: `${artHeightPct}%`,
                               transition: layoutReady
                                   ? 'height 0.5s ease-in-out'
                                   : 'none',
@@ -712,7 +761,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <TrimmedPlaybackVideo
                             ref={videoRefA}
                             src={bufferAVideoUrl || ''}
-                            className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
+                            className={`absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300 ${
+                                cropArtToScroll ? 'object-top' : ''
+                            }`}
                             autoPlay={activeBuffer === 'A'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
                             muted // Always muted - use separate sound effects MP3 instead
@@ -749,7 +800,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <TrimmedPlaybackVideo
                             ref={videoRefB}
                             src={bufferBVideoUrl || ''}
-                            className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
+                            className={`absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300 ${
+                                cropArtToScroll ? 'object-top' : ''
+                            }`}
                             autoPlay={activeBuffer === 'B'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
                             muted // Always muted - use separate sound effects MP3 instead
@@ -840,7 +893,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     key={`${img.url}-${currentImageIndex}`}
                                     src={img.url}
                                     alt={`Background ${index + 1}`}
-                                    className="absolute w-full h-full object-cover"
+                                    className={`absolute w-full h-full object-cover ${cropArtToScroll ? 'object-top' : ''}`}
                                     style={{
                                         // Scale up slightly to allow room for pan/zoom effects
                                         minWidth: '110%',
@@ -907,7 +960,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         ref={videoRef}
                         src={page.backgroundUrl}
                         className={
-                            bibleMapLayout
+                            cropArtToScroll
                                 ? 'absolute inset-0 w-full h-full object-cover object-top min-w-full min-h-full'
                                 : 'absolute inset-0 w-full h-full object-cover min-w-full min-h-full'
                         }
@@ -972,7 +1025,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 <img
                                     src={page.backgroundUrl}
                                     alt={`Page ${page.pageNumber}`}
-                                    className={bibleMapLayout ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
+                                    className={cropArtToScroll ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                     loading="eager"
                                     style={{
                                         position: 'absolute',
@@ -1026,7 +1079,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 <div
                     className="absolute left-0 right-0 top-0 z-[25] pointer-events-none"
                     style={{
-                        height: `${bibleMapArtHeightPct}%`,
+                        height: `${artHeightPct}%`,
                         transition: layoutReady ? 'height 0.5s ease-in-out' : 'none',
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -1054,7 +1107,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 <div
                     className="absolute left-0 right-0 z-[25] pointer-events-none"
                     style={{
-                        top: `${Math.max(bibleMapArtHeightPct - 8, 50)}%`,
+                        top: `${Math.max(artHeightPct - 8, 50)}%`,
                         height: '10%',
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -1239,40 +1292,43 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     );
                 })()}
 
-            {/* Swipe Indicator - Inside the scroll, at the top */}
-            {page.scrollUrl && scrollState !== 'hidden' && (
-                <div 
-                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none ease-in-out"
+            {/* Scroll tab — tap or swipe to raise/lower the parchment and resize art */}
+            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute left-1/2 z-[22] pointer-events-auto flex flex-col items-center justify-end"
                     style={{
-                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 24px)`,
-                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 2px)`,
+                        width: 'min(78%, 300px)',
+                        height: '52px',
+                        transform: 'translateX(-50%)',
+                        touchAction: 'none',
+                        transition: layoutReady && motionEnabled ? 'bottom 0.5s ease-in-out' : 'none',
                     }}
+                    onPointerDown={handleScrollTabPointerDown}
+                    onPointerMove={handleScrollTabPointerMove}
+                    onPointerUp={handleScrollTabPointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    role="slider"
+                    aria-valuemin={0}
+                    aria-valuemax={2}
+                    aria-valuenow={scrollState === 'max' ? 2 : 1}
+                    aria-label="Raise or lower the reading scroll"
                 >
-                    <div className="flex flex-col items-center gap-0.5 opacity-50">
-                        <div className="w-10 h-1 bg-white rounded-full shadow"></div>
+                    <div className="flex flex-col items-center gap-1 pb-1">
+                        <span
+                            className="rounded-full shadow-md"
+                            style={{
+                                width: 44,
+                                height: 6,
+                                background: 'rgba(255,255,255,0.92)',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                            }}
+                        />
                         <span className="text-white/90 text-[9px] font-medium drop-shadow">
-                            {scrollState === 'mid' ? '↑ Swipe for more' : '↓ Swipe to shrink'}
+                            {scrollState === 'mid' ? '↑ Tap for more' : '↓ Tap to shrink'}
                         </span>
                     </div>
                 </div>
-            )}
-
-            {/* Resize handle — swipe here to expand/shrink panel (not on story text) */}
-            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
-                <div
-                    className="absolute left-1/2 z-[22] pointer-events-auto"
-                    style={{
-                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 6px)`,
-                        width: 'min(72%, 280px)',
-                        height: '44px',
-                        transform: 'translateX(-50%)',
-                        touchAction: 'none',
-                    }}
-                    onTouchStart={handleScrollTouchStart}
-                    onTouchEnd={handleScrollTouchEnd}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Swipe to resize reading panel"
-                />
             )}
 
             {/* Pull tab when panel is hidden */}
@@ -1280,16 +1336,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 <div
                     className="absolute bottom-0 left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
                     style={{ touchAction: 'none' }}
-                    onTouchStart={handleScrollTouchStart}
-                    onTouchEnd={handleScrollTouchEnd}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleScrollVisibility?.();
-                    }}
-                    aria-label="Swipe up to show reading panel"
+                    onPointerDown={handleScrollTabPointerDown}
+                    onPointerMove={handleScrollTabPointerMove}
+                    onPointerUp={handleScrollTabPointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Show reading scroll"
                 >
-                    <div className="flex flex-col items-center gap-1 opacity-60">
-                        <div className="w-10 h-1 bg-white rounded-full shadow" />
+                    <div className="flex flex-col items-center gap-1 opacity-70">
+                        <div className="w-11 h-1.5 rounded-full bg-white shadow" />
                         <span className="text-white/90 text-[9px] font-medium drop-shadow">↑ Show text</span>
                     </div>
                 </div>
@@ -1303,7 +1357,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 style={page.scrollUrl ? {
                     clipPath: scrollState === 'hidden' 
                         ? 'inset(100% 0 0 0)' // Hide all when scroll is hidden
-                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + 5}% 0)`,
+                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + (bibleMapMobile ? 0 : 5)}% 0)`,
                     transition: layoutReady && motionEnabled ? 'clip-path 0.5s ease-in-out' : 'none',
                 } : {}}
             >
@@ -1325,7 +1379,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     let textTopStyle: string;
                     let textMaxHeightStyle: string;
                     
-                    if (page.scrollUrl) {
+                    if (page.scrollUrl && bibleMapMobile) {
+                        // Keep words on the paper, clear of the wooden rollers.
+                        const rollerPct = Math.max(4, currentScrollHeightNum * 0.13);
+                        const innerTop = 100 - currentScrollHeightNum - scrollOffset + rollerPct;
+                        textTopStyle = `${innerTop}%`;
+                        textMaxHeightStyle = `${Math.max(14, currentScrollHeightNum - rollerPct * 2)}%`;
+                    } else if (page.scrollUrl) {
                         const scrollTopPosition = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
                         textTopStyle = `max(${boxY}%, ${scrollTopPosition})`;
                         const scrollStartPercent = 100 - currentScrollHeightNum - scrollOffset + 3;
@@ -1338,7 +1398,17 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     }
 
                     const showBg = box.showBackground === true;
-                    
+                    const boxWordCount = (box.text || '').trim().split(/\s+/).filter(Boolean).length;
+                    const authoredPx = (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
+                        ? Math.round((box.fontSize || 24) * 1.2)
+                        : (box.fontSize || 24);
+                    const mobileFontCap =
+                        boxWordCount > 55 ? 16
+                        : boxWordCount > 40 ? 18
+                        : boxWordCount > 28 ? 20
+                        : boxWordCount > 16 ? 22
+                        : 24;
+
                     return (
                         <div
                             key={idx}
@@ -1349,10 +1419,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
-                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
+                                left: bibleMapMobile
+                                    ? 'calc(8% + env(safe-area-inset-left, 0px))'
+                                    : `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                 top: textTopStyle,
-                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
-                                textAlign: box.alignment || 'left',
+                                width: bibleMapMobile
+                                    ? 'calc(84% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))'
+                                    : `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
+                                textAlign: bibleMapMobile ? 'center' : (box.alignment || 'left'),
                                 color: box.color || '#4a3b2a',
                                 // Use Google Font with fallbacks for iOS compatibility
                                 // Comic Sans MS may not be available on iOS
@@ -1361,9 +1435,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
                                     : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
                                 // Increase font size by 20% when using Patrick Hand fallback (it renders smaller)
-                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
-                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
-                                    : `${box.fontSize || 24}px`,
+                                fontSize: `${bibleMapMobile ? Math.min(authoredPx, mobileFontCap) : authoredPx}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
                                 overscrollBehavior: 'contain',
@@ -1386,7 +1458,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 // Show background box if user explicitly enabled it
                                 backgroundColor: showBg ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: showBg ? '12px' : '0',
-                                padding: showBg ? '12px 16px' : '8px',
+                                padding: bibleMapMobile ? '2px 0' : showBg ? '12px 16px' : '8px',
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
@@ -1403,12 +1475,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         >
                             <div className={`
                                 relative rounded-xl transition-all duration-300
-                                ${isActive
+                                ${isActive && !bibleMapMobile
                                     ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-105'
-                                    : 'hover:scale-102 cursor-pointer'
+                                    : isActive
+                                      ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)]'
+                                      : 'hover:scale-102 cursor-pointer'
                                 }
                             `}>
-                                <p className="leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" style={{ whiteSpace: 'pre-wrap' }}>
+                                <p className={`${bibleMapMobile ? 'leading-snug' : 'leading-relaxed'} relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]`} style={{ whiteSpace: 'pre-wrap' }}>
                                     {(() => {
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);

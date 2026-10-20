@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Lock, MapPin } from 'lucide-react';
+import { ArrowLeft, Lock, MapPin, Volume2, VolumeX } from 'lucide-react';
+import { useSailMusic } from '../hooks/useSailMusic';
 import {
   getBibleMapApiRoot,
   prefersReducedMotion,
@@ -9,8 +10,15 @@ import {
 } from '../utils/bibleMapApi';
 import { isPlayableMainMapStory, isStoryUnlocked } from '../utils/mainMapStoryUnlock';
 import { profileService } from '../services/profileService';
+import {
+  STORY_PACK_UX_EVENT,
+  storyPackUnlockUxService,
+} from '../services/storyPackUnlockUxService';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
 import { rememberLastStoryIsland } from '../utils/lastStoryIsland';
+import StoryPackNewBadge from '../components/world/StoryPackNewBadge';
+import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
+import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
 
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 const CMS_FETCH_TIMEOUT_MS = 4_000;
@@ -281,6 +289,7 @@ function resolvePoint(
  * Icons share the full-viewport box with the object-cover background.
  */
 const MainMapPage: React.FC = () => {
+  const { soundOn, toggleSound } = useSailMusic();
   const navigate = useNavigate();
   const { islandId = '' } = useParams<{ islandId: string }>();
   const location = useLocation();
@@ -334,10 +343,12 @@ const MainMapPage: React.FC = () => {
     document.addEventListener('visibilitychange', onVisible);
     const onProgress = () => setProgressTick((t) => t + 1);
     window.addEventListener('islandStoryProgressUpdated', onProgress);
+    window.addEventListener(STORY_PACK_UX_EVENT, onProgress);
     const unsub = profileService.onProfileChange(onProgress);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('islandStoryProgressUpdated', onProgress);
+      window.removeEventListener(STORY_PACK_UX_EVENT, onProgress);
       unsub();
     };
   }, []);
@@ -428,8 +439,18 @@ const MainMapPage: React.FC = () => {
       iconUrl: resolveBibleMapMediaUrl(story.mapIconUrl),
       label: story.displayTitle || story.title || `Story ${story.order ?? index + 1}`,
       locked: !isStoryUnlocked(islandId, stories, index),
+      isNew:
+        !isStoryUnlocked(islandId, stories, index)
+          ? false
+          : storyPackUnlockUxService.isPackNew(islandId, story._id),
     }));
   }, [stories, layoutKey, islandId, progressTick]);
+
+  const { celebration, dismissCelebration } = usePackUnlockCelebration(
+    islandId,
+    stories,
+    !loading && stories.length > 0,
+  );
 
   const firstPack = useMemo(
     () => markers.find((m) => !m.locked) || markers[0] || null,
@@ -470,6 +491,7 @@ const MainMapPage: React.FC = () => {
       if (onboardingJourney && firstPack && story._id !== firstPack.story._id) {
         return;
       }
+      storyPackUnlockUxService.markPackOpened(islandId, story._id);
       // Story intro plays only after icon tap (IslandScene), not on main map.
       const qs = `?storyId=${encodeURIComponent(story._id)}`;
       navigate(`/sail/${encodeURIComponent(islandId)}/lesson${qs}`, {
@@ -581,7 +603,7 @@ const MainMapPage: React.FC = () => {
       {!loading && hasBg && markers.length > 0 && (
         <div className="absolute inset-0 z-10">
           {markers.map((marker, index) => {
-            const { story, position, size, iconUrl, label, locked } = marker;
+            const { story, position, size, iconUrl, label, locked, isNew } = marker;
             return (
               <button
                 key={story._id}
@@ -611,7 +633,9 @@ const MainMapPage: React.FC = () => {
                     : `main-map-icon-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
                   animationDelay: reduceMotion ? undefined : `${0.08 + index * 0.07}s`,
                 }}
-                aria-label={locked ? `${label} (locked)` : label}
+                aria-label={
+                  locked ? `${label} (locked)` : isNew ? `${label} (new)` : label
+                }
                 aria-disabled={locked}
               >
                 <span
@@ -640,6 +664,7 @@ const MainMapPage: React.FC = () => {
                     </span>
                   )}
                   {locked && <StoryLockBadge size={Math.min(40, 28 + Math.round(size.w))} />}
+                  {!locked && isNew && <StoryPackNewBadge />}
                 </span>
                 <span
                   className="absolute left-1/2 top-full -translate-x-1/2 mt-0.5 text-[10px] sm:text-xs leading-tight font-display font-black text-white tracking-wide truncate max-w-[140%] text-center px-0.5 pointer-events-none"
@@ -666,7 +691,7 @@ const MainMapPage: React.FC = () => {
         </div>
       )}
 
-      {/* Floating chrome — back only; hidden during first-sail guided tour */}
+      {/* Floating chrome — back (hidden during first-sail) + sound */}
       {!onboardingJourney && (
       <button
         type="button"
@@ -681,6 +706,22 @@ const MainMapPage: React.FC = () => {
         <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
       </button>
       )}
+      <button
+        type="button"
+        onClick={toggleSound}
+        className="absolute z-30 right-3 flex items-center justify-center w-11 h-11 rounded-full active:scale-95 transition-transform pointer-events-auto"
+        style={{
+          ...woodBtnStyle,
+          top: 'max(calc(var(--safe-area-top, 0px) + 8px), 12px)',
+        }}
+        aria-label={soundOn ? 'Sound off' : 'Sound on'}
+      >
+        {soundOn ? (
+          <Volume2 size={20} className="text-white drop-shadow" strokeWidth={2.6} />
+        ) : (
+          <VolumeX size={20} className="text-white/80 drop-shadow" strokeWidth={2.6} />
+        )}
+      </button>
 
       <div className="absolute inset-0 z-20 pointer-events-none">
         {loading && (
@@ -818,6 +859,9 @@ const MainMapPage: React.FC = () => {
           }
         }
       `}</style>
+      {celebration && (
+        <PackUnlockCelebration payload={celebration} onDone={dismissCelebration} />
+      )}
     </div>
   );
 };

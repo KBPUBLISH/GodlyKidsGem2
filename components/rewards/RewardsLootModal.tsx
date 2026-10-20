@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Gift, Sparkles, X, Coins, User, Gamepad2, BookOpen } from 'lucide-react';
+import { Gift, Sparkles, X, Coins, User, Gamepad2, BookOpen, Puzzle, Palette } from 'lucide-react';
 import {
   rewardsService,
   type RewardDefinition,
   type RewardType,
 } from '../../services/rewardsService';
+import { islandStoryProgressService } from '../../services/islandStoryProgressService';
 import { useUser } from '../../context/UserContext';
 
 type Phase = 'closed' | 'opening' | 'choose';
@@ -15,6 +16,7 @@ type Props = {
   storyId: string;
   storyTitle?: string;
   pool: RewardDefinition[];
+  islandId?: string;
 };
 
 const TYPE_ICON: Record<RewardType, React.ElementType> = {
@@ -22,6 +24,8 @@ const TYPE_ICON: Record<RewardType, React.ElementType> = {
   character: User,
   game: Gamepad2,
   book_template: BookOpen,
+  puzzle: Puzzle,
+  coloring: Palette,
 };
 
 const TYPE_LABEL: Record<RewardType, string> = {
@@ -29,6 +33,8 @@ const TYPE_LABEL: Record<RewardType, string> = {
   character: 'Character',
   game: 'New Game',
   book_template: 'Story Template',
+  puzzle: 'Puzzle',
+  coloring: 'Coloring Page',
 };
 
 /**
@@ -41,6 +47,7 @@ const RewardsLootModal: React.FC<Props> = ({
   storyId,
   storyTitle,
   pool,
+  islandId,
 }) => {
   const { addCoins } = useUser();
   const [phase, setPhase] = useState<Phase>('closed');
@@ -93,6 +100,9 @@ const RewardsLootModal: React.FC<Props> = ({
       setToast(`+${result.coinsGranted} gold coins!`);
     } else {
       setToast(`Unlocked: ${def.title}`);
+    }
+    if (islandId && (def.type === 'puzzle' || def.type === 'coloring')) {
+      islandStoryProgressService.markLootActivities(islandId, storyId, [def.type]);
     }
     setCollectedIds((prev) => [...prev, def.id]);
     window.setTimeout(() => setToast(null), 2200);
@@ -217,11 +227,11 @@ const RewardsLootModal: React.FC<Props> = ({
                     style={{ border: '1.5px solid rgba(245,230,200,0.35)' }}
                   >
                     <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[#2a160c] flex items-center justify-center border border-[#F5E6A3]/40">
-                      {def.imageUrl ? (
+                      {def.type === 'coins' || def.imageUrl ? (
                         <img
-                          src={def.imageUrl}
+                          src={def.type === 'coins' ? '/assets/ui/coin.png' : def.imageUrl}
                           alt=""
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                           draggable={false}
                         />
                       ) : (

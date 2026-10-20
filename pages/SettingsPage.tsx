@@ -10,7 +10,9 @@ import { ApiService } from '../services/apiService';
 import { getHiddenVoices, isVoiceHidden, toggleVoiceVisibility } from '../services/voiceManagementService';
 import { cleanVoiceDescription } from '../utils/voiceUtils';
 import { authService } from '../services/authService';
+import { clearLocalStoragePreservingIslandProgress } from '../services/islandStoryProgressService';
 import { getApiBaseUrl } from '../services/apiService';
+import { applyDevResetPremium } from '../utils/devPremium';
 import WebViewModal from '../components/features/WebViewModal';
 import ParentGateModal from '../components/features/ParentGateModal';
 import DespiaService from '../services/despiaService';
@@ -687,7 +689,7 @@ const SettingsPage: React.FC = () => {
                         <WoodButton 
                             variant="gold" 
                             fullWidth 
-                            onClick={() => navigate('/paywall')}
+                            onClick={() => navigate('/onboarding/welcome', { state: { returnTo: '/settings' } })}
                             className="flex items-center justify-center gap-2 text-sm py-3"
                         >
                             <Crown size={18} />
@@ -717,6 +719,20 @@ const SettingsPage: React.FC = () => {
                         </p>
                     )}
                 </div>
+                
+                {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            applyDevResetPremium();
+                            window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: false } }));
+                            window.location.reload();
+                        }}
+                        className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-amber-100/80 hover:bg-amber-100 rounded-lg border border-amber-300/60 mt-2"
+                    >
+                        Turn off premium (testing)
+                    </button>
+                )}
                 
                 {/* Restore Result Message */}
                 {restoreResult && (
@@ -783,11 +799,10 @@ const SettingsPage: React.FC = () => {
                         // STEP 1: Sign out from auth service FIRST (clears tokens)
                         authService.signOut();
                         
-                        // STEP 2: Clear ALL localStorage - be aggressive
+                        // STEP 2: Clear session keys but keep Bible Map story completions
                         try {
-                          localStorage.clear(); // Nuclear option - clear everything
+                          clearLocalStoragePreservingIslandProgress();
                         } catch (e) {
-                          // Fallback: manual clear
                           const allKeys = Object.keys(localStorage);
                           allKeys.forEach(k => localStorage.removeItem(k));
                         }

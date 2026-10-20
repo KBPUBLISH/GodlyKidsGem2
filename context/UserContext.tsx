@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
 import { profileService, CloudProfile } from '../services/profileService';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -223,7 +224,7 @@ const UserContext = createContext<UserContextType>({
 export const useUser = () => useContext(UserContext);
 
 const STORAGE_KEY = 'godly_kids_data_v6'; // Version bump for saves
-const FREE_KID_LIMIT = 1; // Free users can only have 1 kid profile
+const MAX_KID_PROFILES = 5;
 const DEFAULT_OWNED_ITEMS = ['f1', 'anim1', 'bg1'];
 
 /** Merge sparse cloud kid rows into local profiles without wiping shop/avatar progress. */
@@ -428,6 +429,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // IMPORTANT: Read subscription status from godlykids_premium which is set by RevenueCat
   // This is the SOURCE OF TRUTH for subscription status
   const [isSubscribed, setIsSubscribed] = useState(() => {
+    if (localStorage.getItem('godlykids_dev_force_free') === 'true') return false;
     const premiumFlag = localStorage.getItem('godlykids_premium');
     return premiumFlag === 'true';
   });
@@ -548,8 +550,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (cloudProfile.defaultVoiceId) {
             localStorage.setItem('godlykids_default_voice', cloudProfile.defaultVoiceId);
           }
-          
+
           console.log('☁️ Profile loaded from cloud successfully!');
+        }
+
+        if (cloudProfile.islandStoryProgress) {
+          islandStoryProgressService.hydrateFromCloud(
+            cloudProfile.islandStoryProgress as Parameters<
+              typeof islandStoryProgressService.hydrateFromCloud
+            >[0],
+          );
         }
         
         // Only overwrite local coins on forced sign-in sync (new device).
@@ -793,6 +803,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unlockedAvatarItems: ownedItems,
         unlockedVoices,
         defaultVoiceId: defaultVoice || null,
+        islandStoryProgress: islandStoryProgressService.exportForCloud(),
       };
       if (kids.length > 0) {
         cloudPayload.kids = kids.map(k => ({
@@ -826,6 +837,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync subscription status from godlykids_premium (RevenueCat source of truth)
   useEffect(() => {
     const syncSubscription = () => {
+      if (localStorage.getItem('godlykids_dev_force_free') === 'true') {
+        if (isSubscribed) setIsSubscribed(false);
+        return;
+      }
       const premiumFlag = localStorage.getItem('godlykids_premium');
       const isPremium = premiumFlag === 'true';
       if (isPremium !== isSubscribed) {
@@ -931,10 +946,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addKid = (kid: KidProfile) => {
-    // Check subscription limit - free users can only have 1 kid
-    if (!isSubscribed && kids.length >= FREE_KID_LIMIT) {
-      console.warn('🚫 Free users limited to', FREE_KID_LIMIT, 'kid profile(s). Upgrade to premium for unlimited profiles.');
-      return; // Don't add the kid
+    if (kids.length >= MAX_KID_PROFILES) {
+      console.warn('Maximum of', MAX_KID_PROFILES, 'kid profiles.');
+      return;
     }
     
     // Kids inherit parent's unlocked voices when created
@@ -1538,6 +1552,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const subscribe = () => {
     // Update both localStorage (source of truth) and React state
+    localStorage.removeItem('godlykids_dev_force_free');
     localStorage.setItem('godlykids_premium', 'true');
     setIsSubscribed(true);
     // Dispatch event so other components can react

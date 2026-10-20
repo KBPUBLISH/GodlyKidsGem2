@@ -41,8 +41,58 @@ function validateItems(items) {
             return `"${item.title}" is marked coming soon, so it needs a release month`;
         }
         if (!item.planned && !item.audioUrl) {
-            return `"${item.title}" needs an audio file, or mark it coming soon`;
+            return `"${item.title}" needs an audio file or link, or mark it coming soon`;
         }
+    }
+    return null;
+}
+
+// A local dev upload answers with an http loopback URL, so those stay legal.
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+/**
+ * Judge one media address on an episode.
+ *
+ * Audio and cover art each arrive either as something the creator uploaded or
+ * as a link they pasted, and both land in the same field — so this only asks
+ * whether the address is usable. Whether an episode is allowed to have no
+ * audio at all is `validateItems`.
+ *
+ * Only https passes. The app fetches media from an https origin, so an http
+ * link is refused as mixed content on the web build and by App Transport
+ * Security on iOS: it would store cleanly and then never play for a child. The
+ * same allowlist keeps `data:` and `javascript:` addresses out of a field the
+ * app hands straight to an <audio> or <img> src.
+ */
+function describeMediaUrl(url, label, episodeTitle) {
+    const value = String(url || '').trim();
+    if (!value) return null;
+
+    let parsed;
+    try {
+        parsed = new URL(value);
+    } catch {
+        return `"${episodeTitle}": the ${label} is not a complete web address`;
+    }
+
+    if (parsed.protocol === 'https:') return null;
+    if (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname)) return null;
+
+    return `"${episodeTitle}" needs an https:// ${label} — ${parsed.protocol}// addresses will not play in the app`;
+}
+
+/**
+ * Returns an error message for an unusable media address on any episode, or
+ * null. Kept apart from `validateItems` because it has to run on every write —
+ * including a draft save, which `validateItems` deliberately doesn't police.
+ */
+function validateItemMedia(items) {
+    for (const [index, item] of (items || []).entries()) {
+        const title = item.title || `Episode ${index + 1}`;
+        const audioProblem = describeMediaUrl(item.audioUrl, 'audio link', title);
+        if (audioProblem) return audioProblem;
+        const coverProblem = describeMediaUrl(item.coverImage, 'cover image link', title);
+        if (coverProblem) return coverProblem;
     }
     return null;
 }
@@ -123,6 +173,7 @@ function mergeEpisodeUpdate(existingItems, incomingItems) {
 module.exports = {
     sanitizeItems,
     validateItems,
+    validateItemMedia,
     toPublicPlaylist,
     mergeEpisodeUpdate,
 };

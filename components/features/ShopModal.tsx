@@ -182,6 +182,130 @@ type VoiceShopItem = ShopItem & { characterImage?: string; previewUrl?: string }
 
 const VOICE_PREVIEW_TEXT = 'Hello Godly Kid! Are you ready for an adventure?';
 
+const BUILDER_TUTORIAL_KEY = 'godlykids_builder_tutorial_v3';
+
+/** Shop catalog parts live under /avatars. Selfie profile photos do not. */
+const isCatalogAvatar = (url?: string | null) =>
+    !!url && (url.startsWith('/avatars/') || url.startsWith('head-'));
+
+type BuilderAim = 'tab' | 'item' | 'avatar' | 'move';
+type BuilderPart = 'head' | 'leftArm' | 'rightArm' | 'legs';
+
+const BUILDER_TUTORIAL: { title: string; body: string; tab?: ShopTab; aim: BuilderAim; part?: BuilderPart }[] = [
+    { title: "Let's build a parrot", body: 'Tap Heads.', tab: 'head', aim: 'tab' },
+    { title: 'Choose a head', body: 'Tap this head.', tab: 'head', aim: 'item' },
+    { title: 'Add a body', body: 'Tap Bodies.', tab: 'body', aim: 'tab' },
+    { title: 'Add a body', body: 'Tap this body.', tab: 'body', aim: 'item' },
+    { title: 'Add wings', body: 'Tap Wings.', tab: 'arms', aim: 'tab' },
+    { title: 'Add wings', body: 'Tap these wings.', tab: 'arms', aim: 'item' },
+    { title: 'Add feet', body: 'Tap Legs.', tab: 'legs', aim: 'tab' },
+    { title: 'Add feet', body: 'Tap these feet.', tab: 'legs', aim: 'item' },
+    { title: 'Adjust the parts', body: 'Tap the head.', aim: 'avatar', part: 'head' },
+    { title: 'Adjust the parts', body: 'Tap the arrow to move the head.', aim: 'move', part: 'head' },
+    { title: 'Adjust the parts', body: 'Tap a wing.', aim: 'avatar', part: 'leftArm' },
+    { title: 'Adjust the parts', body: 'Tap the arrow to move the wing.', aim: 'move', part: 'leftArm' },
+    { title: 'Adjust the parts', body: 'Tap the feet.', aim: 'avatar', part: 'legs' },
+    { title: 'Adjust the parts', body: 'Tap the arrow to move the feet.', aim: 'move', part: 'legs' },
+];
+
+const builderTutorialSelector = (beat: { aim: BuilderAim; tab?: ShopTab; part?: BuilderPart }) => {
+    if (beat.aim === 'tab' && beat.tab) return `#shop-tab-${beat.tab}`;
+    if (beat.aim === 'item') return '#builder-first-item';
+    if (beat.aim === 'avatar') return `#builder-part-${beat.part || 'head'}`;
+    return '#builder-move-up';
+};
+
+/** Bouncing fingertip parked on the button for the current tutorial step. */
+const BuilderFinger: React.FC<{ selector: string | null }> = ({ selector }) => {
+    const [rect, setRect] = useState<DOMRect | null>(null);
+
+    useEffect(() => {
+        if (!selector) {
+            setRect(null);
+            return;
+        }
+        const measure = () => {
+            const el = document.querySelector(selector);
+            if (!el) {
+                setRect(null);
+                return;
+            }
+            const next = el.getBoundingClientRect();
+            if (next.width < 2 || next.height < 2) {
+                setRect(null);
+                return;
+            }
+            setRect((prev) => {
+                if (
+                    prev &&
+                    Math.abs(prev.left - next.left) < 1 &&
+                    Math.abs(prev.top - next.top) < 1 &&
+                    Math.abs(prev.width - next.width) < 1 &&
+                    Math.abs(prev.height - next.height) < 1
+                ) {
+                    return prev;
+                }
+                return next;
+            });
+        };
+        const started = Date.now();
+        const track = () => {
+            const el = document.querySelector(selector);
+            if (el && Date.now() - started < 700) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+            measure();
+        };
+        track();
+        const id = window.setInterval(track, 250);
+        window.addEventListener('resize', measure);
+        return () => {
+            window.clearInterval(id);
+            window.removeEventListener('resize', measure);
+        };
+    }, [selector]);
+
+    if (!rect) return null;
+
+    return createPortal(
+        <>
+            <div
+                className="fixed z-[260] pointer-events-none rounded-2xl border-[3px] border-[#FFD700]"
+                style={{
+                    left: rect.left - 6,
+                    top: rect.top - 6,
+                    width: rect.width + 12,
+                    height: rect.height + 12,
+                    boxShadow: '0 0 18px rgba(255, 215, 0, 0.85)',
+                }}
+            />
+            <div
+                className="fixed z-[261] pointer-events-none"
+                style={{
+                    left: rect.left + rect.width / 2 - 18,
+                    top: rect.top + rect.height * 0.45,
+                    width: 72,
+                    height: 72,
+                    animation: 'builder-finger-tap 0.9s ease-in-out infinite',
+                }}
+            >
+                <img
+                    src="/assets/images/finger-pointer.png"
+                    alt=""
+                    className="w-full h-full object-contain drop-shadow-lg"
+                />
+            </div>
+            <style>{`
+                @keyframes builder-finger-tap {
+                    0%, 100% { transform: translateY(18px); }
+                    45% { transform: translateY(0) scale(0.94); }
+                }
+            `}</style>
+        </>,
+        document.body,
+    );
+};
+
 const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, initialBuilderMode = false, hideCloseButton = false }) => {
     const navigate = useNavigate();
     const { t } = useLanguage();
@@ -198,6 +322,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     const [showScrollHint, setShowScrollHint] = useState(false);
     const [showCoinHistory, setShowCoinHistory] = useState(false);
     const [showHatHint, setShowHatHint] = useState(false);
+    const [builderTutorialStep, setBuilderTutorialStep] = useState<number | null>(null);
     const hatHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const menuContainerRef = useRef<HTMLDivElement>(null);
@@ -207,6 +332,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
     const voicePreviewCacheRef = useRef<Record<string, string>>({});
     const voicePreviewRevokeRef = useRef<string | null>(null);
+    const builderIntroReady = useRef(false);
 
     const handleDrawerTouchStart = (e: React.TouchEvent) => {
         touchStartY.current = e.touches[0].clientY;
@@ -256,20 +382,12 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         }
     }, [initialTab]);
 
-    // Parrot Island / deep links: land in builder mode when the shop opens
-    useEffect(() => {
-        if (isOpen && initialBuilderMode) {
-            setIsBuilderMode(true);
-            setSelectedPart('head');
-            setIsMenuMinimized(false);
-        }
-    }, [isOpen, initialBuilderMode]);
-
     useEffect(() => {
         if (!isOpen) {
             setIsBuilderMode(false);
             setSelectedPart(null);
             setPreviewAnimation(null);
+            setBuilderTutorialStep(null);
             stopVoicePreview();
         }
     }, [isOpen]);
@@ -465,7 +583,83 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         equipSavedCharacter
     } = useUser();
 
+    // Ship door opens the builder. First visit gets the parrot guide and
+    // does not jump into adjusting the profile photo. Run once per open so
+    // picking a head mid-tutorial does not restart the guide.
+    useEffect(() => {
+        if (!isOpen) {
+            builderIntroReady.current = false;
+            return;
+        }
+        if (builderIntroReady.current) return;
+        builderIntroReady.current = true;
+        let seen = false;
+        try {
+            seen = localStorage.getItem(BUILDER_TUTORIAL_KEY) === '1';
+        } catch {
+            seen = true;
+        }
+        if (!seen) {
+            setIsBuilderMode(true);
+            setIsMenuMinimized(false);
+            setSelectedPart(null);
+            setActiveTab('head');
+            setBuilderTutorialStep(0);
+            return;
+        }
+        setBuilderTutorialStep(null);
+        if (!initialBuilderMode) return;
+        setIsBuilderMode(true);
+        setIsMenuMinimized(false);
+        setSelectedPart(isCatalogAvatar(equippedAvatar) ? 'head' : null);
+    }, [isOpen, initialBuilderMode, equippedAvatar]);
+
     if (!isOpen) return null;
+
+    const finishBuilderTutorial = () => {
+        try {
+            localStorage.setItem(BUILDER_TUTORIAL_KEY, '1');
+        } catch {
+            /* private mode */
+        }
+        setBuilderTutorialStep(null);
+    };
+
+    const advanceBuilderTutorial = () => {
+        if (builderTutorialStep == null) return;
+        const next = builderTutorialStep + 1;
+        if (next >= BUILDER_TUTORIAL.length) {
+            finishBuilderTutorial();
+            return;
+        }
+        const beat = BUILDER_TUTORIAL[next];
+        if (beat.aim === 'item' && beat.tab) setActiveTab(beat.tab);
+        if (beat.aim === 'avatar') {
+            setSelectedPart(null);
+            setIsMenuMinimized(false);
+        }
+        if (beat.aim === 'move') {
+            setIsBuilderMode(true);
+            setSelectedPart(beat.part || 'head');
+        }
+        setBuilderTutorialStep(next);
+    };
+
+    const completeTutorialAim = (aim: BuilderAim, tab?: string) => {
+        if (builderTutorialStep == null) return;
+        const beat = BUILDER_TUTORIAL[builderTutorialStep];
+        if (beat.aim !== aim) return;
+        if ((aim === 'tab' || aim === 'item') && beat.tab && tab && beat.tab !== tab) return;
+        if (aim === 'avatar' && beat.part && tab) {
+            const tapped = tab as string;
+            const wanted = beat.part;
+            const wingTap = wanted === 'leftArm' && (tapped === 'leftArm' || tapped === 'rightArm');
+            if (tapped !== wanted && !wingTap) return;
+        }
+        advanceBuilderTutorial();
+    };
+
+    const tutorialBeat = builderTutorialStep == null ? null : BUILDER_TUTORIAL[builderTutorialStep];
 
     const handleBuy = async (item: ShopItem) => {
         if (item.type === 'voice') {
@@ -502,9 +696,11 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
             // Equip both halves so the wings always come as a matching pair.
             equipItem('leftArm', item.value);
             equipItem('rightArm', item.pairValue);
+            completeTutorialAim('item', activeTab);
             return;
         }
         equipItem(item.type, item.value);
+        completeTutorialAim('item', activeTab);
         if (item.type === 'animation') {
             setPreviewAnimation(null);
             setIsPlaying(true);
@@ -629,6 +825,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         // Non-voice items (animations handled above via the preview branch)
         if (isOwned(item.id)) {
             if (isEquipped(item)) {
+                if (tutorialBeat?.aim === 'item') {
+                    completeTutorialAim('item', activeTab);
+                    return;
+                }
                 handleUnequipItem(item);
             } else {
                 const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
@@ -680,10 +880,16 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
     // --- BUILDER CONTROLS LOGIC ---
     const handlePartClick = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => {
+        if (tutorialBeat?.aim === 'avatar' && tutorialBeat.part) {
+            const wanted = tutorialBeat.part;
+            const wingTap = wanted === 'leftArm' && (part === 'leftArm' || part === 'rightArm');
+            if (part !== wanted && !wingTap) return;
+        }
         if (!isBuilderMode) {
             setIsBuilderMode(true);
         }
         setSelectedPart(part);
+        if (tutorialBeat?.aim === 'avatar') completeTutorialAim('avatar', part);
         if (part === 'hat' && showHatHint) {
             setShowHatHint(false);
             if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
@@ -704,6 +910,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         // No limits on movement
         const next = currentVal + delta;
         setPartOffset(selectedPart, axis, next);
+        completeTutorialAim('move');
     };
 
     const updateRotation = (delta: number) => {
@@ -734,9 +941,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         const step = 0.05; // 5% increments for finer control
         const next = currentScale + (delta * step);
         setPartScale(selectedPart, next);
+        completeTutorialAim('move');
     };
 
-    const renderItem = (item: ShopItem) => {
+    const renderItem = (item: ShopItem, index: number) => {
         const owned = isOwned(item.id);
         const equipped = isEquipped(item);
         const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
@@ -757,6 +965,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
         return (
             <div
                 key={item.id}
+                id={index === 0 && tutorialBeat?.aim === 'item' ? 'builder-first-item' : undefined}
                 onClick={() => handleCardClick(item)}
                 className={`bg-[#3E1F07] rounded-xl p-3 border-2 border-[#5c2e0b] shadow-lg flex flex-col items-center group ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-[#d4a373]'} relative transition-colors`}
             >
@@ -967,7 +1176,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
             <div className="w-full aspect-square relative overflow-hidden mb-2">
                 <div className="w-full h-full transform scale-75 translate-y-2">
                     <AvatarCompositor
-                        headUrl={character.avatar}
+                        headUrl={isCatalogAvatar(character.avatar) ? character.avatar : ''}
                         hat={character.hat}
                         body={character.body}
                         leftArm={character.leftArm}
@@ -1013,6 +1222,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                     inline: 'center',
                     block: 'nearest'
                 });
+                completeTutorialAim('tab', id);
             }}
             className={`flex-shrink-0 px-4 py-2 rounded-xl font-display font-bold text-sm transition-all whitespace-nowrap z-10 relative ${activeTab === id ? 'bg-[#8B4513] text-[#FFD700] shadow-md border border-[#FFD700]/20' : 'text-[#8B4513] hover:bg-[#3E1F07]/10'}`}
         >
@@ -1053,12 +1263,16 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
                 {/* Preview Area (Live updates) */}
                 <div
-                    className={`w-full relative shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${
-                        isBuilderMode && selectedPart
+                    className={`w-full relative shadow-inner ${tutorialBeat?.aim === 'avatar' ? 'overflow-visible' : 'overflow-hidden'} flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${
+                        isBuilderMode && selectedPart && tutorialBeat?.aim !== 'avatar'
                             ? 'flex-1 min-h-0 shrink'
                             : isMenuMinimized
                                 ? 'flex-1 min-h-0'
-                                : 'h-[16rem] shrink-0'
+                                : tutorialBeat?.aim === 'avatar'
+                                    ? 'h-[22rem] shrink-0'
+                                    : tutorialBeat
+                                        ? 'h-[13rem] shrink-0'
+                                        : 'h-[16rem] shrink-0'
                     }`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
                     onClick={isBuilderMode && selectedPart ? undefined : toggleDrawerMinimized}
@@ -1112,15 +1326,24 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
 
                     {/* The Compositor */}
                     <div
+                        id="builder-avatar"
                         className="w-40 h-40 relative z-20"
+                        onClick={tutorialBeat?.aim === 'avatar' && tutorialBeat.part === 'head' ? (e) => {
+                            e.stopPropagation();
+                            handlePartClick('head');
+                        } : undefined}
                         style={{
                             transition: 'all 0.5s ease-in-out',
-                            transform: isBuilderMode && selectedPart
+                            transform: tutorialBeat?.aim === 'avatar'
+                                ? 'scale(1)'
+                                : isBuilderMode && selectedPart
                                 ? 'scale(0.8)'
                                 : isMenuMinimized
                                     ? 'scale(1.25) translateY(-1.75rem)'
                                     : 'scale(0.5)',
-                            marginTop: isBuilderMode && selectedPart
+                            marginTop: tutorialBeat?.aim === 'avatar'
+                                ? '4.5rem'
+                                : isBuilderMode && selectedPart
                                 ? '4rem'
                                 : isMenuMinimized
                                     ? 'auto'
@@ -1134,7 +1357,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                     >
                         <div className="w-full h-full relative">
                             <AvatarCompositor
-                                headUrl={equippedAvatar}
+                                headUrl={isCatalogAvatar(equippedAvatar) ? equippedAvatar : ''}
                                 hat={equippedHat}
                                 body={equippedBody}
                                 leftArm={equippedLeftArm}
@@ -1179,6 +1402,32 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                             )}
                         </div>
                     </div>
+
+                    {tutorialBeat && tutorialBeat.aim !== 'move' && (
+                        <div
+                            className={`absolute left-3 right-3 z-40 rounded-2xl border-2 border-[#FFD700] bg-[#3E1F07]/95 px-3 py-2 text-left shadow-xl ${tutorialBeat.aim === 'avatar' ? 'top-16' : 'bottom-3'}`}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#FFD700]">
+                                        {builderTutorialStep! + 1} of {BUILDER_TUTORIAL.length}
+                                    </p>
+                                    <p className="mt-0.5 font-display font-bold text-white text-sm leading-tight">
+                                        {tutorialBeat.title}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-[#eecaa0] leading-snug">{tutorialBeat.body}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={finishBuilderTutorial}
+                                    className="shrink-0 px-2 py-1 text-[10px] font-bold text-[#eecaa0]"
+                                >
+                                    Skip
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Drawer + shop menu — hidden while adjusting a part so controls aren't clipped */}
@@ -1317,7 +1566,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                             <div className="flex items-center gap-2">
                                 <div className="bg-[#FFD700] w-2 h-5 rounded-full"></div>
                                 <span className="text-white font-display font-bold text-sm uppercase tracking-wider">
-                                    Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Wing' : selectedPart === 'rightArm' ? 'Right Wing' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}
+                                    {tutorialBeat?.aim === 'move' ? tutorialBeat.body : `Adjust ${selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Wing' : selectedPart === 'rightArm' ? 'Right Wing' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}`}
                                 </span>
                             </div>
                             <button
@@ -1335,7 +1584,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
                                 <div className="grid grid-cols-2 gap-0.5">
                                     <button onClick={() => updateOffset('x', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} className="rotate-180" /></button>
                                     <button onClick={() => updateOffset('x', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} /></button>
-                                    <button onClick={() => updateOffset('y', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={14} /></button>
+                                    <button id="builder-move-up" onClick={() => updateOffset('y', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={14} /></button>
                                     <button onClick={() => updateOffset('y', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={14} /></button>
                                 </div>
                             </div>
@@ -1416,6 +1665,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, init
     return (
         <>
             {createPortal(content, document.body)}
+            {tutorialBeat && <BuilderFinger selector={builderTutorialSelector(tutorialBeat)} />}
             <CoinHistoryModal 
                 isOpen={showCoinHistory} 
                 onClose={() => setShowCoinHistory(false)}

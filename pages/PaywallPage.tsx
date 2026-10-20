@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft, Gift, Clock } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft, Gift, Clock, BookOpen, Gamepad2, Sparkles, Star, Shield, CalendarDays } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
@@ -11,6 +11,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { markShipsLibraryPaywallSeen } from '../utils/shipsLibraryPaywall';
 
 // Check if user has a real account (not just device ID)
 const hasAccount = (): boolean => {
@@ -109,6 +110,9 @@ const PaywallPage: React.FC = () => {
   
   const fromState = (location.state as any)?.from as string | undefined;
   const fromOnboarding = (location.state as any)?.fromOnboarding === true;
+  const returnTo = (location.state as any)?.returnTo as string | undefined;
+  const isLibraryPaywall = fromState === 'library';
+  const isSevenDayOffer = fromState === 'seven-day-offer';
   
   const { 
     isLoading, 
@@ -126,14 +130,19 @@ const PaywallPage: React.FC = () => {
   // Create Your Story paywall: hero image, 12 custom books for annual. Show lifetime option when from deal page.
   const isCreateYourStoryPaywall = fromState === 'create-your-story';
   const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
+  const isThreeStepPaywall = !isCreateYourStoryPaywall && !showLifetimeOption;
 
   /** Funnel source for analytics (portal "Paywall sources"). Not every entry path sets this. */
   const paywallAnalyticsSource =
     fromState === 'create-your-story'
       ? 'create-your-story'
-      : fromOnboarding
-        ? 'onboarding-first-time-user'
-        : undefined;
+      : fromState === 'library'
+        ? 'library'
+        : fromState === 'seven-day-offer'
+          ? 'seven-day-offer'
+          : fromOnboarding
+            ? 'onboarding-first-time-user'
+            : undefined;
   const paywallSourceMeta = paywallAnalyticsSource ? { source: paywallAnalyticsSource } : {};
   
   const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(() => {
@@ -144,6 +153,13 @@ const PaywallPage: React.FC = () => {
   const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
   // Monthly plan is hidden by default; revealed via the "monthly billing" dropdown toggle.
   const [showMonthlyOption, setShowMonthlyOption] = useState(false);
+  /** 0 = value, 1 = trust, 2 = plans + checkout. Default Godly Kids Plus flow.
+   *  The 7-day offer skips those intro screens — Join Now lands on checkout. */
+  const [flowStep, setFlowStep] = useState(() => {
+    if ((location.state as any)?.from === 'seven-day-offer') return 3;
+    return (location.state as any)?.resumeSubscribe ? 2 : 0;
+  });
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const [showParentGate, setShowParentGate] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -163,6 +179,40 @@ const PaywallPage: React.FC = () => {
   // Exit-intent 24h trial popup state
   const [showExitTrialOffer, setShowExitTrialOffer] = useState(false);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
+  type OfferBook = {
+    _id?: string;
+    title?: string;
+    description?: string;
+    value?: string;
+    coverImage?: string;
+  };
+  const [offerBooks, setOfferBooks] = useState<OfferBook[]>([]);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const offerBook = offerBooks.find((b) => b._id && b._id === selectedOfferId) || offerBooks[0] || null;
+  /** Seven-day flow adds a book-choice step before checkout. */
+  const checkoutStep = isSevenDayOffer ? 3 : 2;
+
+  useEffect(() => {
+    if (!isSevenDayOffer) return;
+    let cancelled = false;
+    const base = getApiBaseUrl().replace(/\/$/, '');
+    fetch(`${base}/api/book-offers`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const list = Array.isArray(data?.data) ? (data.data as OfferBook[]) : [];
+        if (cancelled) return;
+        setOfferBooks(list.filter((b) => b?.coverImage));
+        const saved = sessionStorage.getItem('godlykids_seven_day_book_offer');
+        const match = list.find((b) => b._id && b._id === saved);
+        const pick = match?._id || list.find((b) => b._id)?._id || null;
+        setSelectedOfferId(pick);
+        if (pick) sessionStorage.setItem('godlykids_seven_day_book_offer', pick);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isSevenDayOffer]);
   
   // Get personalized name
   const firstName = getUserFirstName();
@@ -268,6 +318,7 @@ const PaywallPage: React.FC = () => {
     }
 
     console.log('🔐 Resuming from trial reminder — showing parent gate');
+    setFlowStep(isSevenDayOffer ? 3 : 2);
     activityTrackingService.trackOnboardingEvent('paywall_parent_gate_shown', {
       planType: plan,
       ...paywallSourceMeta,
@@ -364,7 +415,14 @@ const PaywallPage: React.FC = () => {
         }
         
         subscribe();
-        navigate('/home');
+        if (isLibraryPaywall) {
+          markShipsLibraryPaywallSeen();
+          navigate(returnTo || '/listen');
+        } else if (isSevenDayOffer) {
+          navigate(returnTo || '/sail/basement');
+        } else {
+          navigate('/home');
+        }
 
         // Non-blocking background recheck: if the webhook hasn't arrived yet, keep
         // polling the backend so the premium status is eventually persisted server-side.
@@ -497,12 +555,19 @@ const PaywallPage: React.FC = () => {
 
   // Calculate prices and savings
   const monthlyPrice = 5.99;
-  const annualPrice = 39.99;  // Main paywall: annual subscription
+  // Settings / onboarding: $39.99/year. Library: $69.99/year shown as a weekly rate, billed yearly.
+  const annualPrice = isLibraryPaywall ? 69.99 : 39.99;
+  const annualWeeklyPrice = (annualPrice / 52).toFixed(2);
   const lifetimeOriginalPrice = 69.99;  // Lifetime (exit deal only) - was $69.99, sale $19.99
   const lifetimeSalePrice = 19.99;      // Only shown in LifetimeOfferModal (exit paywall deal)
   const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
+  const annualTrialLine = isSevenDayOffer
+    ? `14-day free trial, then $${annualPrice}/year. Finish 7 story packs in 7 days and your free book ships. Cancel anytime.`
+    : isLibraryPaywall
+      ? `14-day free trial, then $${annualWeeklyPrice}/week ($${annualPrice} billed yearly). Cancel anytime.`
+      : `14-day free trial, then $${annualPrice}/year. Cancel anytime.`;
   
   // 30-minute countdown timer for lifetime deal
   const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
@@ -566,6 +631,19 @@ const PaywallPage: React.FC = () => {
     return () => clearInterval(id);
   }, [isCreateYourStoryPaywall]);
 
+  useEffect(() => {
+    if (!isThreeStepPaywall) return;
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    const names = ['value', 'trust', 'checkout'] as const;
+    activityTrackingService
+      .trackOnboardingEvent('paywall_flow_step', {
+        step: flowStep + 1,
+        stepName: names[flowStep],
+        ...paywallSourceMeta,
+      })
+      .catch(() => {});
+  }, [flowStep, isThreeStepPaywall]);
+
   const EXIT_TRIAL_SHOWN_KEY = 'godlykids_exit_trial_shown';
 
   const proceedWithPaywallBack = () => {
@@ -606,6 +684,15 @@ const PaywallPage: React.FC = () => {
     }
     if (fromState === 'create-your-story') {
       navigate('/create-your-story', { replace: true });
+      return;
+    }
+    if (isLibraryPaywall) {
+      markShipsLibraryPaywallSeen();
+      navigate(returnTo || '/listen');
+      return;
+    }
+    if (isSevenDayOffer) {
+      navigate(returnTo || '/sail/basement');
       return;
     }
     navigate('/home');
@@ -663,6 +750,7 @@ const PaywallPage: React.FC = () => {
 
   return (
     <div
+      ref={scrollerRef}
       className="relative h-full w-full bg-gradient-to-b from-[#f8faff] via-[#eef2ff] to-[#e0e7ff] overflow-y-auto no-scrollbar flex flex-col"
       style={{ paddingTop: 'var(--safe-area-top, 0px)' }}
     >
@@ -674,8 +762,19 @@ const PaywallPage: React.FC = () => {
           <div className="absolute bottom-20 right-10 w-32 h-20 bg-[#fde68a]/20 rounded-full blur-xl"></div>
         </div>
 
-        {/* Close button for default paywall variant */}
-        {!isCreateYourStoryPaywall && !hideCloseButton && (
+        {/* Close / back — 3-step: back on later screens, close on last (and always if allowed) */}
+        {isThreeStepPaywall && !isSevenDayOffer && flowStep > 0 && (
+          <button
+            type="button"
+            onClick={() => setFlowStep((s) => Math.max(0, s - 1))}
+            className="absolute top-3 left-3 z-20 w-9 h-9 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-white shadow-sm transition-all"
+            style={{ marginTop: 'var(--safe-area-top, 0px)' }}
+            aria-label="Back"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+        )}
+        {!isCreateYourStoryPaywall && !hideCloseButton && (flowStep === checkoutStep || !isThreeStepPaywall) && (
           <button
             type="button"
             onClick={handlePaywallBack}
@@ -740,6 +839,455 @@ const PaywallPage: React.FC = () => {
         )}
 
         <div className={`flex-1 flex flex-col items-center px-3 pb-8 relative z-10 w-full max-w-xl mx-auto ${isCreateYourStoryPaywall ? 'pt-2' : ''}`}>
+            {isThreeStepPaywall ? (
+              <div className={`w-full flex-1 flex flex-col min-h-0 ${isSevenDayOffer ? 'pt-12' : ''}`}>
+                {!isSevenDayOffer && (
+                <div className="flex justify-center gap-1.5 pt-12 pb-3" aria-hidden>
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i === flowStep ? 'w-6 bg-[#6366f1]' : 'w-2 bg-[#a5b4fc]'
+                      }`}
+                    />
+                  ))}
+                </div>
+                )}
+
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={flowStep}
+                    initial={{ opacity: 0, x: 28 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -18 }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex-1 flex flex-col"
+                  >
+                    {flowStep === 0 && (
+                      <div className="flex-1 flex flex-col items-center text-center px-2">
+                        <div className="relative w-full max-w-sm mb-5">
+                          <div className="absolute inset-4 rounded-full bg-[#ddd6fe]/50 blur-2xl" aria-hidden />
+                          <img
+                            src={isSevenDayOffer && offerBook?.coverImage ? offerBook.coverImage : '/assets/images/paywall-carousel-1.png'}
+                            alt={isSevenDayOffer ? offerBook?.title || 'Free book' : ''}
+                            className="relative z-10 w-full max-h-[34vh] object-contain mx-auto rounded-3xl"
+                          />
+                          {isSevenDayOffer && offerBook?.value && (
+                            <span className="absolute top-2 right-6 z-20 rounded-full bg-[#6366f1] px-3 py-1 text-xs font-bold text-white shadow">
+                              {offerBook.value} value
+                            </span>
+                          )}
+                        </div>
+                        <h1 className="text-[#1e1b4b] font-display font-extrabold text-[1.65rem] sm:text-3xl leading-tight mb-5">
+                          {isSevenDayOffer ? (
+                            <>
+                              Finish 7 story packs in 7 days.{' '}
+                              <span className="text-[#6366f1]">Get a free book.</span>
+                            </>
+                          ) : (
+                            <>
+                              Start your free 14 days of{' '}
+                              <span className="text-[#6366f1]">Godly Kids Plus</span>
+                            </>
+                          )}
+                        </h1>
+                        <div className="w-full text-left space-y-4 mb-5">
+                          {(isSevenDayOffer
+                            ? [
+                                {
+                                  icon: Gift,
+                                  title: offerBook?.title ? `Free book: ${offerBook.title}` : 'A real book, shipped to you',
+                                  body: offerBook?.description || 'Complete 7 story packs in 7 days and pick the book we mail you.',
+                                },
+                                {
+                                  icon: Sparkles,
+                                  title: 'Start with a free trial',
+                                  body: 'The book ships once the trial turns into a yearly membership.',
+                                },
+                                {
+                                  icon: BookOpen,
+                                  title: 'Stories along the way',
+                                  body: '150+ books and audio stories to finish those 7 packs.',
+                                },
+                              ]
+                            : [
+                                {
+                                  icon: Sparkles,
+                                  title: 'Grow in the Word',
+                                  body: 'Personalized Bible stories your child will actually finish',
+                                },
+                                {
+                                  icon: BookOpen,
+                                  title: 'Read together',
+                                  body: '150+ books with word highlighting',
+                                },
+                                {
+                                  icon: Gamepad2,
+                                  title: 'Play and remember',
+                                  body: '15+ Bible games that make Scripture stick',
+                                },
+                              ]
+                          ).map((item) => (
+                            <div key={item.title} className="flex items-start gap-3">
+                              <div className="w-9 h-9 rounded-full bg-[#eef2ff] flex items-center justify-center shrink-0 mt-0.5">
+                                <item.icon size={18} className="text-[#6366f1]" strokeWidth={2.2} />
+                              </div>
+                              <div>
+                                <p className="font-bold text-[#1e1b4b] leading-tight">{item.title}</p>
+                                <p className="text-sm text-gray-500 leading-snug">{item.body}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-[#475569] mb-4">
+                          <span className="inline-flex text-[#f59e0b]" aria-label="5 stars">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} size={14} className="fill-[#f59e0b] text-[#f59e0b]" />
+                            ))}
+                          </span>
+                          <span className="font-semibold">Loved by families</span>
+                          <span className="text-gray-400">·</span>
+                          <span>8/10 members refer Godly Kids</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {flowStep === 1 && (
+                      <div className="flex-1 flex flex-col items-center text-center px-2 pt-2">
+                        <h1 className="text-[#1e1b4b] font-display font-extrabold text-[1.65rem] sm:text-3xl leading-tight mb-2">
+                          Most kids stay hooked after just 3 story packs
+                        </h1>
+                        <p className="text-gray-500 text-base mb-6">
+                          Short daily adventures. Real lasting faith.
+                        </p>
+                        <div className="relative w-full max-w-sm mb-6">
+                          <div className="absolute inset-6 rounded-full bg-[#fde68a]/40 blur-2xl" aria-hidden />
+                          <img
+                            src="/assets/images/paywall-carousel-2.png"
+                            alt=""
+                            className="relative z-10 w-full max-h-[36vh] object-contain mx-auto rounded-3xl"
+                          />
+                        </div>
+                        <div className="inline-flex items-center gap-2 font-bold text-[#1e1b4b]">
+                          <span className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                            <Check size={14} className="text-green-600" strokeWidth={3} />
+                          </span>
+                          A difference you&apos;ll notice within a week
+                        </div>
+                      </div>
+                    )}
+
+                    {isSevenDayOffer && flowStep === 2 && (
+                      <div className="flex-1 flex flex-col items-center text-center px-2">
+                        <h1 className="text-[#1e1b4b] font-display font-extrabold text-[1.65rem] sm:text-3xl leading-tight mb-2">
+                          Start 7 Day Challenge Free
+                        </h1>
+                        <p className="text-gray-500 text-base mb-5">
+                          Choose the book. Finish 7 story packs in 7 days and it ships free.
+                        </p>
+                        {offerBooks.length === 0 ? (
+                          <p className="text-sm text-gray-500">Book choices are loading. You can still continue.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+                            {offerBooks.map((book) => {
+                              const selected = (book._id || book.coverImage) === (selectedOfferId || offerBook?._id || offerBook?.coverImage);
+                              return (
+                                <button
+                                  key={book._id || book.coverImage}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!book._id) return;
+                                    setSelectedOfferId(book._id);
+                                    sessionStorage.setItem('godlykids_seven_day_book_offer', book._id);
+                                  }}
+                                  className={`relative rounded-2xl border-2 p-2 text-left transition-all ${
+                                    selected
+                                      ? 'border-[#6366f1] bg-[#eef2ff] shadow-md'
+                                      : 'border-gray-200 bg-white'
+                                  }`}
+                                >
+                                  <img
+                                    src={book.coverImage}
+                                    alt=""
+                                    className="w-full aspect-[3/4] object-cover rounded-xl bg-slate-100"
+                                  />
+                                  {selected && (
+                                    <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#6366f1] flex items-center justify-center shadow">
+                                      <Check size={14} className="text-white" strokeWidth={3} />
+                                    </span>
+                                  )}
+                                  {book.value && (
+                                    <span className="absolute top-3 left-3 rounded-full bg-[#6366f1] px-2 py-0.5 text-[10px] font-bold text-white">
+                                      {book.value}
+                                    </span>
+                                  )}
+                                  <p className="mt-2 px-1 font-bold text-sm text-[#1e1b4b] leading-tight line-clamp-2">
+                                    {book.title || 'Free book'}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {flowStep === checkoutStep && (
+                      <div className="flex-1 flex flex-col items-center px-1">
+                        <h1 className="text-[#1e1b4b] font-display font-extrabold text-[1.45rem] sm:text-2xl leading-tight text-center mb-4 px-2">
+                          {isSevenDayOffer
+                            ? 'Start the 7-day challenge with a free trial'
+                            : 'Kids who explore Godly Kids daily grow in Scripture'}
+                        </h1>
+                        <div className="w-full text-left space-y-3 mb-5">
+                          {[
+                            {
+                              icon: Sparkles,
+                              bg: 'bg-[#eef2ff]',
+                              color: 'text-[#6366f1]',
+                              title: '12 free custom books',
+                              body: 'Personalized learning fun made for your child.',
+                            },
+                            {
+                              icon: BookOpen,
+                              bg: 'bg-[#ecfdf5]',
+                              color: 'text-[#059669]',
+                              title: 'Unlimited stories',
+                              body: '150+ books with word highlighting as they read along.',
+                            },
+                            {
+                              icon: Gamepad2,
+                              bg: 'bg-[#f5f3ff]',
+                              color: 'text-[#7c3aed]',
+                              title: 'Bible games that stick',
+                              body: '15+ games and exercises that help them remember.',
+                            },
+                            ...(isSevenDayOffer
+                              ? [
+                                  {
+                                    icon: Shield,
+                                    bg: 'bg-[#ecfeff]',
+                                    color: 'text-[#0891b2]',
+                                    title: 'Feel Safe with Christian Entertainment',
+                                    body: 'Stories, videos, and games you can trust.',
+                                  },
+                                  {
+                                    icon: Gamepad2,
+                                    bg: 'bg-[#fff7ed]',
+                                    color: 'text-[#ea580c]',
+                                    title: 'Faith Filled Fun Learning Games',
+                                    body: 'Play that points kids back to Scripture.',
+                                  },
+                                  {
+                                    icon: BookOpen,
+                                    bg: 'bg-[#fefce8]',
+                                    color: 'text-[#ca8a04]',
+                                    title: 'Learn the Bible through gamified engagement',
+                                    body: 'Packs, puzzles, and quests that make the Word stick.',
+                                  },
+                                  {
+                                    icon: CalendarDays,
+                                    bg: 'bg-[#fdf2f8]',
+                                    color: 'text-[#db2777]',
+                                    title: 'New content added weekly',
+                                    body: 'Fresh stories and activities every week.',
+                                  },
+                                ]
+                              : []),
+                          ].map((item) => (
+                            <div key={item.title} className="flex items-start gap-3">
+                              <div className={`w-10 h-10 rounded-full ${item.bg} flex items-center justify-center shrink-0`}>
+                                <item.icon size={18} className={item.color} strokeWidth={2.2} />
+                              </div>
+                              <div>
+                                <p className="font-bold text-[#1e1b4b] leading-tight">{item.title}</p>
+                                <p className="text-sm text-gray-500 leading-snug">{item.body}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="w-full space-y-3 mb-4">
+                          <div
+                            onClick={() => setSelectedPlan('annual')}
+                            className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                              selectedPlan === 'annual'
+                                ? 'bg-[#eef2ff] border-[#6366f1] shadow-md'
+                                : 'bg-white border-gray-200'
+                            }`}
+                          >
+                            <div className="absolute top-0 right-0">
+                              <div className="bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+                                BEST VALUE
+                              </div>
+                            </div>
+                            <div className="p-4 flex items-center gap-4">
+                              <div
+                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                  selectedPlan === 'annual' ? 'bg-[#6366f1] border-[#6366f1]' : 'border-gray-300'
+                                }`}
+                              >
+                                {selectedPlan === 'annual' && <Check size={14} className="text-white" strokeWidth={3} />}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-bold text-[#1e1b4b]">Annual</p>
+                                <p className="text-xs text-gray-500">
+                                  14-day free trial, then{' '}
+                                  <span className="font-semibold text-green-600">
+                                    {isLibraryPaywall ? `$${annualWeeklyPrice}/week` : `$${annualPrice}/year`}
+                                  </span>
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                {isLibraryPaywall ? (
+                                  <>
+                                    <p className="font-extrabold text-xl text-[#1e1b4b]">
+                                      ${annualWeeklyPrice}<span className="text-sm font-medium">/wk</span>
+                                    </p>
+                                    <p className="text-[10px] text-green-600 font-semibold">${annualPrice} billed yearly</p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="font-extrabold text-xl text-[#1e1b4b]">
+                                      ${annualPrice}<span className="text-sm font-medium">/yr</span>
+                                    </p>
+                                    <p className="text-[10px] text-green-600 font-semibold">12 free custom books</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {showMonthlyOption || selectedPlan === 'monthly' ? (
+                            <div
+                              onClick={() => setSelectedPlan('monthly')}
+                              className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                                selectedPlan === 'monthly'
+                                  ? 'bg-[#eef2ff] border-[#6366f1] shadow-md'
+                                  : 'bg-white border-gray-200'
+                              }`}
+                            >
+                              <div className="p-4 flex items-center gap-4">
+                                <div
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                    selectedPlan === 'monthly' ? 'bg-[#6366f1] border-[#6366f1]' : 'border-gray-300'
+                                  }`}
+                                >
+                                  {selectedPlan === 'monthly' && <Check size={14} className="text-white" strokeWidth={3} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-[#1e1b4b]">Family Monthly Plan</p>
+                                  <p className="text-xs text-gray-500">Over 1,000 members · Cancel anytime</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="font-extrabold text-xl text-[#1e1b4b]">
+                                    ${monthlyPrice} <span className="text-sm font-medium">USD</span>
+                                  </p>
+                                  <p className="text-xs text-gray-400">/month</p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowMonthlyOption(true)}
+                              className="w-full flex items-center justify-center gap-1 text-[#6366f1] text-sm font-medium py-2"
+                            >
+                              Prefer monthly billing?
+                              <ChevronDown size={16} />
+                            </button>
+                          )}
+                        </div>
+
+                        {error && (
+                          error.includes('processing') ? (
+                            <div className="w-full bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-3 text-sm">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Loader2 size={16} className="animate-spin shrink-0" />
+                                <span className="font-semibold">Confirming your purchase...</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-3 text-sm flex items-start gap-2">
+                              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                              <span>{error}</span>
+                            </div>
+                          )
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleSubscribeClick}
+                          disabled={isPurchasing || isRestoring || isLoading}
+                          className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
+                        >
+                          {isPurchasing ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Processing...
+                            </span>
+                          ) : (
+                            <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
+                          )}
+                        </button>
+                        <div className="mb-5 text-center">
+                          <div className="flex items-center justify-center gap-2 text-green-600 mb-1">
+                            <Check size={18} strokeWidth={3} />
+                            <span className="font-semibold text-sm">No payment now!</span>
+                          </div>
+                          <p className="text-gray-500 text-xs">
+                            {selectedPlan === 'annual'
+                              ? annualTrialLine
+                              : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
+                          </p>
+                        </div>
+
+                        <div className="w-full bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+                          <h3 className="font-bold text-[#1e1b4b] mb-2">How can I cancel?</h3>
+                          <p className="text-gray-600 text-sm leading-relaxed">
+                            It&apos;s easy! Open your phone Settings, tap your name, then tap Subscriptions and choose Godly Kids. Tap Cancel Subscription. Done!
+                          </p>
+                        </div>
+
+                        <p className="text-gray-400 text-[10px] text-center px-4 w-full leading-relaxed mb-3">
+                          Free trial for 14 days, then subscription automatically renews unless cancelled at least 24-hours before the trial ends. Cancel anytime in App Store or Google Play.
+                        </p>
+                        <div className="flex items-center justify-center gap-4 pb-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const user = authService.getUser();
+                              setRestoreEmail(user?.email || '');
+                              setShowRestoreModal(true);
+                            }}
+                            disabled={isRestoring}
+                            className="text-[#6366f1] text-sm font-semibold disabled:opacity-50"
+                          >
+                            {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                {flowStep < checkoutStep && (
+                  <div
+                    className="sticky bottom-0 z-20 pt-3 bg-gradient-to-t from-[#e0e7ff] via-[#e0e7ff] to-transparent"
+                    style={{ paddingBottom: 'max(12px, var(--safe-area-bottom, 0px))' }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setFlowStep((s) => Math.min(checkoutStep, s + 1))}
+                      className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+            <>
             {/* Main Title - hidden on Create Your Story (simpler paywall) */}
             {!isCreateYourStoryPaywall && (
             <div className="text-center mb-6">
@@ -1166,6 +1714,8 @@ const PaywallPage: React.FC = () => {
                 {isRestoring ? 'Restoring...' : 'Restore'}
               </button>
             </div>
+            </>
+            )}
         </div>
 
         <ParentGateModal 

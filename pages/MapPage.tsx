@@ -12,7 +12,7 @@ import {
 } from '../utils/onboardingJourney';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
 import { useUser } from '../context/UserContext';
-import { assertFreeTierIslandExists } from '../utils/freeTierAccess';
+import { assertFreeTierIslandExists, hasPremiumAccess } from '../utils/freeTierAccess';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { profileService } from '../services/profileService';
 import { isPlayableMainMapStory, isStoryPackComplete } from '../utils/mainMapStoryUnlock';
@@ -658,9 +658,31 @@ const MapPage: React.FC = () => {
    * tap lands a kid on the content rather than on a wheel they must steer first.
    * Timing (~2.35s): 350ms hold → zoom → 1550ms fade → 2350ms next beat.
    */
+  const islandIsVoyageLocked = useCallback(
+    (island: Island) => {
+      const index = islands.findIndex((row) => row.id === island.id);
+      if (index < 0) return island.status === 'locked';
+      if (island.status === 'locked') return true;
+      if (index === 0) return false;
+      const prev = islands[index - 1];
+      const progress = islandProgress[prev.id];
+      return !(progress && progress.total > 0 && progress.complete >= progress.total);
+    },
+    [islands, islandProgress],
+  );
+
+  const openJourneyTrial = useCallback(() => {
+    navigate('/onboarding/welcome', {
+      state: { returnTo: '/map', reason: 'continue-journey' },
+    });
+  }, [navigate]);
+
   const handleSelect = useCallback(
     (island: Island, node: HTMLElement) => {
-      if (island.status === 'locked' && !guidedRef.current) return;
+      if (islandIsVoyageLocked(island) && !guidedRef.current) {
+        if (!hasPremiumAccess()) openJourneyTrial();
+        return;
+      }
       if (sailCinematicLockRef.current) return;
       if (guidedRef.current && island.id !== firstIslandIdRef.current) return;
 
@@ -725,7 +747,7 @@ const MapPage: React.FC = () => {
       const nextId = window.setTimeout(afterCinematic, MAP_SAIL_NAVIGATE_MS);
       sailTimersRef.current = [zoomId, fadeId, nextId];
     },
-    [navigate, clearSailTimers],
+    [navigate, clearSailTimers, islandIsVoyageLocked, openJourneyTrial],
   );
 
   const finishCloudLanding = useCallback(() => {
@@ -1244,10 +1266,12 @@ const MapPage: React.FC = () => {
                   total: island.storiesTotal,
                 };
                 const slot = voyage.slots[index];
+                const voyageLocked = islandIsVoyageLocked(island);
+                const shown = voyageLocked ? { ...island, status: 'locked' as const } : island;
                 return (
                   <IslandNode
                     key={island.id}
-                    island={island}
+                    island={shown}
                     index={index}
                     top={slot.top}
                     x={slot.x}

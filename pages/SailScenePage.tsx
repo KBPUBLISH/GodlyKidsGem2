@@ -16,6 +16,7 @@ import {
   type OceanMapIsland,
 } from '../utils/oceanMapIslands';
 import { useSailMusic } from '../hooks/useSailMusic';
+import { hasPremiumAccess } from '../utils/freeTierAccess';
 
 /** Looping ocean background video (portrait; shown full-bleed cover). */
 const SAIL_SCENE_BG = '/assets/videos/sail-ocean-bg.mp4';
@@ -561,6 +562,11 @@ const SailScenePage: React.FC = () => {
       // Locked islands: shake only — no sail-forward / lesson navigation.
       if (!isIslandUnlocked(island.id, carouselIslandsRef.current)) {
         pulseLockedFeedback(island.id);
+        if (!hasPremiumAccess()) {
+          navigate('/onboarding/welcome', {
+            state: { returnTo: '/map', reason: 'continue-journey' },
+          });
+        }
         return;
       }
 
@@ -585,7 +591,7 @@ const SailScenePage: React.FC = () => {
         continueAfterSail(island);
       }, SAIL_DURATION_MS);
     },
-    [continueAfterSail, pulseLockedFeedback],
+    [continueAfterSail, pulseLockedFeedback, navigate],
   );
 
   // Ocean visual width as % of viewport (height-fit × cover zoom).

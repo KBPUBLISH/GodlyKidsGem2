@@ -25,6 +25,7 @@ import {
   hasSeenAdamTour,
   isAdamFinaleDone,
   isTourWrapPending,
+  dismissLegacyTutorialForChallenge,
   markAdamTourSeen,
   markTourWrapDone,
 } from '../utils/adamTour';
@@ -423,6 +424,7 @@ const SailBoatBasementPage: React.FC = () => {
     deckRef.current?.stopTalk(t.character.id);
     if (reason === 'skip') {
       markTourWrapDone();
+      dismissLegacyTutorialForChallenge();
       navigate('/onboarding/welcome', {
         state: { returnTo: '/sail/basement', reason: 'skip-tour' },
       });

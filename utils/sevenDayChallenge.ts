@@ -11,6 +11,8 @@ import {
 } from './oceanMapIslands';
 
 const STORAGE_KEY = 'godlykids_seven_day_challenge_v1';
+/** Set only when the free trial actually starts, so browsing the intro does not start the clock. */
+const COMMIT_KEY = 'godlykids_seven_day_challenge_committed';
 export const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
 export const CHALLENGE_PACK_COUNT = 7;
 
@@ -40,16 +42,23 @@ export function getChallengeStartedAt(): number | null {
 }
 
 export function isSevenDayChallengeActive(now = Date.now()): boolean {
+  try {
+    if (localStorage.getItem(COMMIT_KEY) !== 'true') return false;
+  } catch {
+    return false;
+  }
   const started = getChallengeStartedAt();
   if (started == null) return false;
   return now < started + SEVEN_DAY_MS;
 }
 
-/** Starts the 7-day window once. Later calls keep the original start. */
+/** Starts the 7-day window once the free trial begins. Later calls keep the original start. */
 export function startSevenDayChallenge(): void {
-  if (getChallengeStartedAt() != null) return;
   try {
-    localStorage.setItem(STORAGE_KEY, new Date().toISOString());
+    if (getChallengeStartedAt() == null) {
+      localStorage.setItem(STORAGE_KEY, new Date().toISOString());
+    }
+    localStorage.setItem(COMMIT_KEY, 'true');
   } catch {
     /* private mode */
   }

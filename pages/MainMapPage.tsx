@@ -8,7 +8,12 @@ import {
   resolveBibleMapMediaUrl,
   TABLET_MIN_WIDTH,
 } from '../utils/bibleMapApi';
-import { isPlayableMainMapStory, isStoryUnlocked } from '../utils/mainMapStoryUnlock';
+import {
+  isPlayableMainMapStory,
+  isStorySequentiallyUnlocked,
+  isStoryUnlocked,
+  laterStoryPackNeedsTrial,
+} from '../utils/mainMapStoryUnlock';
 import { profileService } from '../services/profileService';
 import {
   STORY_PACK_UX_EVENT,
@@ -483,9 +488,18 @@ const MainMapPage: React.FC = () => {
   }, [navigate, islandId, navState?.fromSail, navState?.title]);
 
   const handleStoryTap = useCallback(
-    (story: MainMapStory, label: string, locked: boolean) => {
-      if (locked) {
+    (story: MainMapStory, label: string, index: number) => {
+      if (!isStorySequentiallyUnlocked(islandId, stories, index)) {
         showLockHint();
+        return;
+      }
+      if (laterStoryPackNeedsTrial(index)) {
+        navigate('/onboarding/welcome', {
+          state: {
+            returnTo: `/map/${encodeURIComponent(islandId)}/main`,
+            reason: 'continue-journey',
+          },
+        });
         return;
       }
       if (onboardingJourney && firstPack && story._id !== firstPack.story._id) {
@@ -504,8 +518,20 @@ const MainMapPage: React.FC = () => {
         },
       });
     },
-    [navigate, islandId, navState?.fromSail, showLockHint, onboardingJourney, firstPack],
+    [navigate, islandId, stories, navState?.fromSail, showLockHint, onboardingJourney, firstPack],
   );
+
+  useEffect(() => {
+    const need = Boolean((location.state as { needAccount?: boolean } | null)?.needAccount);
+    if (!need) return;
+    navigate('/onboarding/welcome', {
+      replace: true,
+      state: {
+        returnTo: `/map/${encodeURIComponent(islandId)}/main`,
+        reason: 'continue-journey',
+      },
+    });
+  }, [location.state, islandId, navigate]);
 
   const hasVideo = Boolean(mainMapVideoUrl);
   const hasImage = Boolean(mainMapUrl);
@@ -608,7 +634,7 @@ const MainMapPage: React.FC = () => {
               <button
                 key={story._id}
                 type="button"
-                onClick={() => handleStoryTap(story, label, locked)}
+                onClick={() => handleStoryTap(story, label, index)}
                 className={`absolute flex items-center justify-center touch-manipulation focus:outline-none ${
                   locked || (onboardingJourney && firstPack && story._id !== firstPack.story._id)
                     ? 'cursor-not-allowed'

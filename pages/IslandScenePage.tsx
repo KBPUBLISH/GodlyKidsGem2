@@ -28,6 +28,7 @@ import {
 } from '../utils/sceneHotspotHit';
 import {
   isPlayableMainMapStory,
+  laterStoryPackNeedsTrial,
   type PackUnlockCoverStory,
 } from '../utils/mainMapStoryUnlock';
 import { storyHasTryIt, type TryItPayload } from '../utils/tryItContent';
@@ -708,9 +709,24 @@ const IslandScenePage: React.FC = () => {
         const sorted = [...stories].sort(
           (a, b) => (a.order ?? 0) - (b.order ?? 0),
         );
+        const playable = sorted.filter(
+          (s) => s._id && isPlayableMainMapStory({ _id: s._id, status: (s as { status?: string }).status }),
+        );
+        const packIndex = storyIdParam
+          ? playable.findIndex((s) => s._id === storyIdParam)
+          : 0;
+        if (laterStoryPackNeedsTrial(packIndex)) {
+          navigate('/onboarding/welcome', {
+            replace: true,
+            state: {
+              returnTo: `/map/${encodeURIComponent(islandId)}/main`,
+              reason: 'continue-journey',
+            },
+          });
+          return;
+        }
         setUnlockStories(
-          sorted
-            .filter((s) => s._id && isPlayableMainMapStory({ _id: s._id, status: (s as { status?: string }).status }))
+          playable
             .map((s) => ({
               _id: s._id as string,
               order: s.order,

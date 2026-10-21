@@ -17,6 +17,7 @@ import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
 import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
 import {
   isPlayableMainMapStory,
+  laterStoryPackNeedsTrial,
   type PackUnlockCoverStory,
 } from '../utils/mainMapStoryUnlock';
 import { storyHasTryIt, type TryItPayload } from '../utils/tryItContent';
@@ -203,12 +204,25 @@ const IslandLessonPage: React.FC = () => {
           (a: { order?: number }, b: { order?: number }) =>
             (a.order ?? 0) - (b.order ?? 0),
         );
+        const playable = sorted.filter(
+          (s: { _id?: string; status?: string }) =>
+            !!s._id && isPlayableMainMapStory({ _id: s._id, status: s.status }),
+        );
+        const packIndex = storyIdParam
+          ? playable.findIndex((s: { _id?: string }) => s._id === storyIdParam)
+          : 0;
+        if (laterStoryPackNeedsTrial(packIndex)) {
+          navigate('/onboarding/welcome', {
+            replace: true,
+            state: {
+              returnTo: `/map/${encodeURIComponent(islandId)}/main`,
+              reason: 'continue-journey',
+            },
+          });
+          return;
+        }
         setUnlockStories(
-          sorted
-            .filter(
-              (s: { _id?: string; status?: string }) =>
-                !!s._id && isPlayableMainMapStory({ _id: s._id, status: s.status }),
-            )
+          playable
             .map(
               (s: {
                 _id: string;

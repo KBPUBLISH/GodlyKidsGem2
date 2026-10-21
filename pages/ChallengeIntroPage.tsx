@@ -160,6 +160,7 @@ const ChallengeIntroPage: React.FC = () => {
   const { subscribe } = useUser();
   const reason =
     (location.state as { reason?: string } | null)?.reason || '';
+  const continueJourney = reason === 'continue-journey';
   const returnTo =
     (location.state as { returnTo?: string } | null)?.returnTo || '/sail/basement';
   const [step, setStep] = useState(0);
@@ -269,7 +270,6 @@ const ChallengeIntroPage: React.FC = () => {
   };
 
   const join = () => {
-    startSevenDayChallenge();
     track('challenge_intro_join');
     setPayError('');
     setShowParentGate(true);
@@ -287,7 +287,6 @@ const ChallengeIntroPage: React.FC = () => {
       join();
       return;
     }
-    if (current.event === 'challenge_intro_start') startSevenDayChallenge();
     track(current.event);
     setStep((n) => n + 1);
   };
@@ -369,6 +368,7 @@ const ChallengeIntroPage: React.FC = () => {
     try {
       const result = await purchase('annual');
       if (result.success) {
+        startSevenDayChallenge();
         subscribe();
         navigate(returnTo, { replace: true });
         return;
@@ -579,6 +579,14 @@ const ChallengeIntroPage: React.FC = () => {
             </div>
           )}
 
+          {continueJourney && (
+            <p
+              className="mb-3 rounded-2xl bg-white/95 px-4 py-3 text-center text-[0.95rem] font-black leading-snug"
+              style={{ color: NAVY, fontFamily: '"Nunito", sans-serif' }}
+            >
+              Start your free trial to continue your journey.
+            </p>
+          )}
           {payError && (
             <p
               className="mb-3 text-center text-sm font-bold"

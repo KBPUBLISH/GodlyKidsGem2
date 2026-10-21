@@ -513,6 +513,8 @@ const OnboardingTutorial: React.FC = () => {
         return null;
 
       case 'paywall':
+        // Adam's skip opens the free-book challenge. Do not cover it with create account.
+        if (location.pathname === '/onboarding/welcome') return null;
         // NEW FLOW: Check if user has account first
         // If no account, show account creation modal
         // After account creation, continue to onboarding flow

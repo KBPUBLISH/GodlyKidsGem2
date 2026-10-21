@@ -1,4 +1,5 @@
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import { hasPremiumAccess } from './freeTierAccess';
 import { storyHasTryIt, type TryItPayload } from './tryItContent';
 
 /** Minimal story fields needed for main-map sequential unlock. */
@@ -61,7 +62,7 @@ export function isStoryPackComplete(
  * - index 0: always unlocked
  * - index i > 0: unlocked only if story i-1 pack beats are complete
  */
-export function isStoryUnlocked(
+export function isStorySequentiallyUnlocked(
   islandId: string,
   stories: MainMapUnlockStory[],
   index: number,
@@ -70,6 +71,23 @@ export function isStoryUnlocked(
   const prev = stories[index - 1];
   if (!prev?._id) return false;
   return isStoryPackComplete(islandId, prev);
+}
+
+/**
+ * Pack 1 stays open. Every later pack stays locked until the free trial starts.
+ */
+export function laterStoryPackNeedsTrial(index: number): boolean {
+  return index > 0 && !hasPremiumAccess();
+}
+
+export function isStoryUnlocked(
+  islandId: string,
+  stories: MainMapUnlockStory[],
+  index: number,
+): boolean {
+  if (!isStorySequentiallyUnlocked(islandId, stories, index)) return false;
+  if (laterStoryPackNeedsTrial(index)) return false;
+  return true;
 }
 
 /** Story fields used when the next pack pops as a cover celebration. */

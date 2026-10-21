@@ -28,6 +28,7 @@ import {
   buildAdamDeckTour,
   hasSeenAdamTour,
   isAdamCharacter,
+  dismissLegacyTutorialForChallenge,
   markAdamTourSeen,
   markTourWrapDone,
   resetAdamTourWrap,
@@ -676,6 +677,7 @@ const CrewPage: React.FC = () => {
     markAdamTourSeen();
     if (reason === 'skip') {
       markTourWrapDone();
+      dismissLegacyTutorialForChallenge();
       setTour(null);
       deckRef.current?.stopTalk(t.character.id);
       navigate('/onboarding/welcome', {

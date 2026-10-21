@@ -382,7 +382,7 @@ const BookReaderPage: React.FC = () => {
         }
     }, [islandSceneReturn, fromDailySession, bookDetailUrl, bookId, navigate]);
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId, skipPuzzles } = useUser();
+    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId, skipPuzzles, setSkipPuzzles } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
@@ -430,6 +430,7 @@ const BookReaderPage: React.FC = () => {
 
     const pageTapWordsComplete = useCallback(
         (page: Page | undefined, tapped?: Set<string>, pageIndex?: number): boolean => {
+            if (skipPuzzles) return true;
             if (!page || page._id === 'the-end-page') return true;
             const contentBoxes = page.content?.textBoxes;
             const boxes =
@@ -443,7 +444,7 @@ const BookReaderPage: React.FC = () => {
                     : tappedInteractiveKeysRef.current);
             return targets.every((t) => keys.has(pageInteractiveTapKey(t.boxIndex, t.wordIndex)));
         },
-        [getTappedKeysForPage],
+        [getTappedKeysForPage, skipPuzzles],
     );
 
     /** Used by TTS auto-advance (async) — must not skip tap-word gating. */
@@ -462,6 +463,7 @@ const BookReaderPage: React.FC = () => {
     }, []);
 
     const nextInteractiveKey = (() => {
+        if (skipPuzzles) return null;
         const targets = collectPageInteractiveTargets(
             getPageTextBoxes(pages[currentPageIndex]),
         );
@@ -521,7 +523,7 @@ const BookReaderPage: React.FC = () => {
     useEffect(() => {
         if (!isBibleMapBook || bibleMapScrollBoot.current) return;
         bibleMapScrollBoot.current = true;
-        if (window.matchMedia('(max-width: 639px)').matches) setScrollState('max');
+        if (window.matchMedia('(max-width: 639px)').matches) setScrollState('mid');
     }, [isBibleMapBook]);
     
     // Character overlay state (for showing kid's character in the book)
@@ -6082,6 +6084,43 @@ const BookReaderPage: React.FC = () => {
                         {ttsMode === 'auto' ? 'AUTO' : 'OFF'}
                     </span>
                 </button>
+
+                {isBibleMapBook && (
+                    <button
+                        type="button"
+                        onClick={() => setSkipPuzzles(!skipPuzzles)}
+                        className="flex flex-col items-center gap-1"
+                        aria-pressed={!skipPuzzles}
+                        title={skipPuzzles ? 'Puzzle game off — tap to turn it on' : 'Puzzle game on — tap to turn it off'}
+                    >
+                        <div className={`
+                            relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner
+                            ${skipPuzzles
+                                ? 'bg-gray-400'
+                                : 'bg-gradient-to-r from-amber-400 to-amber-500'
+                            }
+                        `}>
+                            <div className={`
+                                absolute top-0.5 w-5 h-5 rounded-full shadow-md
+                                transition-all duration-300 ease-in-out
+                                bg-white border-2
+                                ${skipPuzzles
+                                    ? 'left-0.5 border-gray-500'
+                                    : 'left-6 border-amber-600'
+                                }
+                            `} />
+                        </div>
+                        <span className={`
+                            text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm
+                            ${skipPuzzles
+                                ? 'bg-gray-500 text-white'
+                                : 'bg-amber-500 text-white'
+                            }
+                        `}>
+                            {skipPuzzles ? 'OFF' : 'PUZZLE'}
+                        </span>
+                    </button>
+                )}
             </div>
             )}
 

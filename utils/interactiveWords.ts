@@ -253,10 +253,12 @@ export function bibleMapScrollBandPct(
 ): { mid: number; max: number } {
     const n = Math.max(0, Math.floor(Number(wordCount) || 0));
     if (options?.mobile) {
-        if (n <= 10) return { mid: 36, max: 44 };
-        if (n <= 22) return { mid: 46, max: 54 };
-        if (n <= 40) return { mid: 54, max: 62 };
-        return { mid: 60, max: 70 };
+        // Phone opens on mid. Keep short pages snug so the paper doesn't
+        // sit half-empty under one or two lines.
+        if (n <= 16) return { mid: 24, max: 30 };
+        if (n <= 28) return { mid: 32, max: 38 };
+        if (n <= 45) return { mid: 40, max: 48 };
+        return { mid: 48, max: 58 };
     }
     if (n <= 12) return { mid: 24, max: 28 };
     if (n <= 24) return { mid: 30, max: 34 };

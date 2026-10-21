@@ -23,6 +23,16 @@ export function hasSeenAdamTour(): boolean {
   }
 }
 
+/** Skip Adam's tour should open the free-book challenge, not the old create-account step. */
+export function dismissLegacyTutorialForChallenge(): void {
+  try {
+    localStorage.setItem('godlykids_tutorial_complete', 'true');
+    localStorage.removeItem('godlykids_tutorial_step');
+  } catch {
+    /* private mode */
+  }
+}
+
 export function markAdamTourSeen(): void {
   try {
     localStorage.setItem(TOUR_KEY, '1');

@@ -100,8 +100,8 @@ export type ScrollState = 'hidden' | 'mid' | 'max';
 
 /** Resolve scroll band heights; legacy pages may only have scrollHeight. */
 function resolveScrollHeights(page: PageData): { max: number; mid: number } {
-    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
-    const mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 85;
+    const mid = page.scrollMidHeight ?? Math.max(50, max - 25);
     return { max, mid };
 }
 

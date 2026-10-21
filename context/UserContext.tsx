@@ -56,6 +56,10 @@ interface UserContextType {
   spendCoins: (amount: number, reason?: string) => boolean;
   coinTransactions: CoinTransaction[];
   
+  // Reading Settings
+  skipPuzzles: boolean;
+  setSkipPuzzles: (skip: boolean) => void;
+  
   // Referral System
   referralCode: string;
   redeemedCodes: string[];
@@ -157,6 +161,8 @@ const UserContext = createContext<UserContextType>({
   addCoins: () => {},
   spendCoins: () => false,
   coinTransactions: [],
+  skipPuzzles: false,
+  setSkipPuzzles: () => {},
   referralCode: '',
   redeemedCodes: [],
   redeemCode: () => ({ success: false, message: '' }),
@@ -280,6 +286,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [coins, setCoins] = useState(saved?.coins ?? 500); // Default 500 coins for new users
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
+  const [skipPuzzles, setSkipPuzzles] = useState<boolean>(saved?.skipPuzzles ?? false); // Default: puzzles enabled
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);
   const [ownedItems, setOwnedItems] = useState<string[]>(saved?.ownedItems ?? ['f1', 'anim1', 'bg1']); // anim1 is default breathe, bg1 is default background
@@ -769,6 +776,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hatScale,
       savedCharacters,
       isSubscribed,
+      skipPuzzles,
       parentAvatarData,
       parentEconomyData
     };
@@ -1639,6 +1647,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addCoins,
       spendCoins,
       coinTransactions,
+      skipPuzzles,
+      setSkipPuzzles,
       referralCode,
       redeemedCodes,
       redeemCode,

@@ -18,7 +18,7 @@ import { useTheme, AppTheme } from '../context/ThemeContext';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
+  const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser, skipPuzzles, setSkipPuzzles } = useUser();
   const { sfxEnabled, toggleSfx, musicEnabled, toggleMusic, musicVolume, setMusicVolume, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -375,6 +375,39 @@ const SettingsPage: React.FC = () => {
                             className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${notificationsEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
                         >
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${notificationsEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            {/* Reading Settings */}
+            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Reading Settings</h3>
+                
+                <div className="space-y-5">
+                    {/* Skip Puzzles Toggle */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-[#5c2e0b]">
+                            <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
+                                <BookOpen size={18} />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="font-bold block">Skip Puzzles</span>
+                                <span className="text-xs text-[#8B4513]/75 leading-tight block">
+                                    Auto-read text without interactive word puzzles
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                playBack();
+                                setSkipPuzzles(!skipPuzzles);
+                            }}
+                            className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${skipPuzzles ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                            aria-pressed={skipPuzzles}
+                        >
+                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${skipPuzzles ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
                     </div>
                 </div>

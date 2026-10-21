@@ -11,6 +11,10 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const axios = require('axios');
 const Book = require('../models/Book');
+const { processCoverImage } = require('../utils/imageProcessing');
+
+// Long-lived cache for immutable cover assets (paths are timestamp-unique).
+const COVER_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 // Configure ffmpeg binary (bundled via @ffmpeg-installer/ffmpeg)
 let ffmpegAvailable = false;
@@ -218,16 +222,19 @@ const extractAudioFromVideo = (videoBuffer, originalFilename) => {
 };
 
 // Upload buffer to GCS and return public URL
-const uploadBufferToGCS = (buffer, filePath, contentType) => {
+const uploadBufferToGCS = (buffer, filePath, contentType, options = {}) => {
     return new Promise((resolve, reject) => {
         if (!bucket) {
             reject(new Error('GCS not configured'));
             return;
         }
         
+        const metadata = { contentType };
+        if (options.cacheControl) metadata.cacheControl = options.cacheControl;
+
         const blob = bucket.file(filePath);
         const blobStream = blob.createWriteStream({
-            metadata: { contentType },
+            metadata,
             resumable: false
         });
         
@@ -371,7 +378,7 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
     // Structure: books/{bookId}/{type}/filename
     // Special case: if bookId is "games", use games/{type}/filename
     // Special case: if bookId is "lessons", use lessons/{lessonId}/{type}/filename
-    // type can be: cover, pages, scroll, audio, game-cover, video, thumbnail
+    // type can be: cover, pages, scroll, audio, game-cover, game-logo, video, thumbnail
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -405,6 +412,12 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
         return `lessons/${lessonId}/${type}/${finalFilename}`;
     }
 
+    // Special handling for karaoke folder
+    if (bookId === 'karaoke' || bookId?.startsWith('karaoke/')) {
+        const songId = bookId.replace('karaoke/', '').replace('karaoke', '') || 'temp';
+        return `karaoke/${songId}/${type}/${finalFilename}`;
+    }
+
     return `books/${bookId}/${type}/${finalFilename}`;
 };
 
@@ -434,14 +447,17 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'thumbnail', 'character', 'image-sequence'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, thumbnail, character, image-sequence' });
+            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence' });
             }
             
             // Special handling for lessons
             if (bookId === 'lessons' || bookId.startsWith('lessons/')) {
                 const lessonId = req.query.lessonId || bookId.replace('lessons/', '').replace('lessons', '') || 'temp';
                 filePath = generateFilePath(`lessons/${lessonId}`, type, req.file.originalname);
+            } else if (bookId === 'karaoke' || bookId.startsWith('karaoke/')) {
+                const songId = req.query.songId || bookId.replace('karaoke/', '').replace('karaoke', '') || 'temp';
+                filePath = generateFilePath(`karaoke/${songId}`, type, req.file.originalname);
             } else {
                 // Generate organized file path for books
                 filePath = generateFilePath(bookId, type, req.file.originalname, pageNumber);
@@ -456,6 +472,44 @@ router.post('/image', upload.single('file'), async (req, res) => {
             // Fallback to simple structure for backward compatibility
             filePath = `images/${Date.now()}_${req.file.originalname}`;
             console.log('Using fallback structure (no bookId/type):', filePath);
+        }
+
+        // Optimize cover art: convert to WebP and generate a small thumbnail
+        // variant. Both book covers and playlist/audiobook covers use type=cover.
+        if (type === 'cover' && req.file.mimetype?.startsWith('image/')) {
+            try {
+                const variants = await processCoverImage(req.file.buffer, filePath);
+                const fullVariant = variants.find((v) => v.variant === 'full');
+                const originalSize = req.file.buffer.length;
+
+                if (bucket && process.env.GCS_BUCKET_NAME) {
+                    await Promise.all(
+                        variants.map((v) =>
+                            uploadBufferToGCS(v.buffer, v.path, v.contentType, {
+                                cacheControl: COVER_CACHE_CONTROL,
+                            })
+                        )
+                    );
+                    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fullVariant.path}`;
+                    console.log(
+                        `🖼️ Cover optimized to WebP: ${(originalSize / 1024).toFixed(0)}KB → ` +
+                        `${(fullVariant.buffer.length / 1024).toFixed(0)}KB (+ thumb)`
+                    );
+                    return res.status(200).json({ url: publicUrl, path: fullVariant.path, optimized: true });
+                }
+
+                // Local fallback: write every variant to disk.
+                let fullUrl = null;
+                for (const v of variants) {
+                    const u = await saveFileLocally({ buffer: v.buffer }, v.path, req);
+                    if (v.variant === 'full') fullUrl = u;
+                }
+                console.log(`🖼️ Cover optimized to WebP (local): ${fullVariant.path}`);
+                return res.status(200).json({ url: fullUrl, path: fullVariant.path, optimized: true });
+            } catch (optErr) {
+                console.warn('⚠️ Cover optimization failed, uploading original:', optErr.message);
+                // fall through to the standard upload path below
+            }
         }
 
         // Check if GCS is configured
@@ -492,6 +546,105 @@ router.post('/image', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Upload error:', error);
         res.status(500).json({ message: error.message });
+    }
+});
+
+// Chunked upload: get signed URL for one chunk (avoids ERR_INSUFFICIENT_RESOURCES)
+// POST body: { bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId, songId? }
+router.post('/signed-url-chunk', async (req, res) => {
+    try {
+        const { bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId, songId } = req.body;
+        if (!bookId || !type || !contentType || !filename || chunkIdx == null || !totalChunks || !sessionId) {
+            return res.status(400).json({ message: 'bookId, type, contentType, filename, chunkIdx, totalChunks, sessionId required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video or audio' });
+        }
+        const safeSession = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '');
+        const tempPath = `tmp/chunk-${safeSession}-${chunkIdx}`;
+        const safeContentType = /^[a-z0-9][a-z0-9+.-]*\/[a-z0-9][a-z0-9+.-]*$/i.test(contentType)
+            ? contentType : 'application/octet-stream';
+        const [uploadUrl] = await bucket.file(tempPath).getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 60 * 60 * 1000,
+            contentType: safeContentType,
+        });
+        res.json({ uploadUrl, tempObjectName: tempPath });
+    } catch (err) {
+        console.error('Signed URL chunk error:', err);
+        res.status(500).json({ message: err.message || 'Failed to generate signed URL' });
+    }
+});
+
+// Chunked upload: compose chunks into final file
+// POST body: { bookId, type, filename, tempObjectNames, sessionId, songId? }
+router.post('/compose-chunks', async (req, res) => {
+    try {
+        const { bookId, type, filename, tempObjectNames, sessionId, songId } = req.body;
+        if (!bookId || !type || !filename || !Array.isArray(tempObjectNames) || tempObjectNames.length === 0) {
+            return res.status(400).json({ message: 'bookId, type, filename, tempObjectNames required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video or audio' });
+        }
+        const effectiveBookId = (bookId === 'karaoke' && songId) ? `karaoke/${songId}` : bookId;
+        const filePath = generateFilePath(effectiveBookId, type, filename);
+        const destFile = bucket.file(filePath);
+        const sourceFiles = tempObjectNames.map((name) => bucket.file(name));
+        if (sourceFiles.length === 1) {
+            await sourceFiles[0].copy(destFile);
+            await sourceFiles[0].delete().catch((e) => console.warn('Chunk delete:', e.message));
+        } else {
+            await bucket.combine(sourceFiles, destFile);
+            await Promise.all(sourceFiles.map((f) => f.delete().catch((e) => console.warn('Chunk delete:', e.message))));
+        }
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+        console.log('Composed chunks:', { filePath, chunks: tempObjectNames.length });
+        res.json({ url: publicUrl });
+    } catch (err) {
+        console.error('Compose chunks error:', err);
+        res.status(500).json({ message: err.message || 'Failed to compose file' });
+    }
+});
+
+// Get signed URL for direct browser-to-GCS upload (avoids ERR_INSUFFICIENT_RESOURCES on large files)
+// POST body: { bookId, type, contentType, filename, songId? }
+// Returns: { uploadUrl, publicUrl } - browser PUTs file to uploadUrl, then uses publicUrl
+router.post('/signed-url', async (req, res) => {
+    try {
+        const { bookId, type, contentType, filename, songId } = req.body;
+        if (!bookId || !type || !contentType || !filename) {
+            return res.status(400).json({ message: 'bookId, type, contentType, filename required' });
+        }
+        if (!bucket || !process.env.GCS_BUCKET_NAME) {
+            return res.status(503).json({ message: 'GCS not configured' });
+        }
+        if (!['video', 'audio', 'cover'].includes(type)) {
+            return res.status(400).json({ message: 'type must be video, audio, or cover' });
+        }
+        const effectiveBookId = (bookId === 'karaoke' && songId) ? `karaoke/${songId}` : bookId;
+        const filePath = generateFilePath(effectiveBookId, type, filename);
+        const safeContentType = /^[a-z0-9][a-z0-9+.-]*\/[a-z0-9][a-z0-9+.-]*$/i.test(contentType)
+            ? contentType : 'application/octet-stream';
+        const [uploadUrl] = await bucket.file(filePath).getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 60 * 60 * 1000,
+            contentType: safeContentType,
+        });
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+        console.log('Signed URL for direct upload:', { filePath, type });
+        res.json({ uploadUrl, publicUrl });
+    } catch (err) {
+        console.error('Signed URL error:', err);
+        res.status(500).json({ message: err.message || 'Failed to generate signed URL' });
     }
 });
 
@@ -668,8 +821,10 @@ router.post('/video', (req, res, next) => {
                 console.log('Video uploaded successfully to GCS:', publicUrl);
                 
                 // Auto-extract audio for page background videos AND video sequences
-                // This allows video sound effects to play alongside TTS on iOS
-                const shouldExtractAudio = bookId && (type === 'pages' || type === 'video' || type === 'sequence');
+                // This allows video sound effects to play alongside TTS on iOS.
+                // Standalone music videos play their own soundtrack via <video>, so skip
+                // the extra FFmpeg pass (it only slows the upload down and produces an unused file).
+                const shouldExtractAudio = bookId && bookId !== 'music-videos' && (type === 'pages' || type === 'video' || type === 'sequence');
                 let backgroundAudioUrl = null;
                 
                 if (shouldExtractAudio) {
@@ -772,6 +927,10 @@ router.post('/audio', upload.single('file'), async (req, res) => {
             // Special handling for playlists
             if (bookId === 'playlists') {
                 filePath = `playlists/audio/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            } else if (bookId === 'karaoke') {
+                // Karaoke: bookId=karaoke&type=audio&songId=xyz -> karaoke/xyz/audio/...
+                const songId = req.query.songId || 'temp';
+                filePath = generateFilePath(`karaoke/${songId}`, 'audio', req.file.originalname);
             } else {
                 // Generate organized file path for books
                 filePath = generateFilePath(bookId, 'audio', req.file.originalname);

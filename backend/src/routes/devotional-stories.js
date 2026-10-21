@@ -45,16 +45,26 @@ router.post('/preview-voice', async (req, res) => {
         
         const result = await generateElevenLabsTTS(previewText, {
             voiceId,
+            storagePath: 'devotional-stories/previews',
+            filenamePrefix: `preview_${voiceId.slice(0, 8)}`,
             stability: 0.5,
             similarityBoost: 0.75,
             style: 0.2,
-            skipStorage: true // Return base64 directly; avoids GCS uniform bucket-level ACL errors
+            returnBase64: true // Skip GCS so we don't call makePublic() (fails with uniform bucket-level access)
         });
         
-        res.json({ audioBase64: result.audioBase64 });
+        if (result.audioBase64) {
+            return res.json({ audioBase64: result.audioBase64 });
+        }
+        res.json({ audioUrl: result.url });
     } catch (err) {
         console.error('Error generating voice preview:', err);
-        res.status(500).json({ error: 'Failed to generate preview' });
+        const status = err.response?.status;
+        const message = err.message || 'Failed to generate preview';
+        res.status(status && status >= 400 && status < 600 ? status : 500).json({
+            error: message,
+            code: err.response?.data?.detail?.code || (err.response?.status === 401 ? 'UNAUTHORIZED' : undefined)
+        });
     }
 });
 
@@ -382,7 +392,7 @@ async function generatePersonalizedCover(storyId, childName, coverPrompt, charac
         // Create prompt that incorporates the story context
         const enhancedPrompt = `${coverPrompt.replace(/\{childName\}/g, childName)}. 
         Children's book cover style, vibrant colors, whimsical, age-appropriate, 
-        inspiring, Christian faith theme, warm lighting, magical atmosphere.`;
+        inspiring, warm lighting, magical atmosphere.`;
         
         const response = await fetch(
             `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
@@ -466,9 +476,10 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         const styleDescriptions = {
             minecraft: 'Minecraft blocky pixel art style, cubic shapes, 3D voxel',
             lego: 'LEGO minifigure style, yellow skin, plastic look, brick aesthetic',
-            cartoon: 'Cartoon animated style, big expressive eyes, Disney-like',
+            cartoon: 'Anime style, big expressive eyes, Disney-like',
             illustrated: 'Children\'s book illustration style, soft watercolor, storybook',
-            disney: 'Disney/Pixar 3D animation style, expressive, cinematic lighting'
+            disney: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes',
+            anime: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation, big expressive eyes'
         };
         
         const styleDesc = styleDescriptions[styleId] || styleDescriptions.illustrated;
@@ -479,11 +490,11 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
         // Build the prompt for scene generation with child's character.
         // [1] references the subject reference image (required by Imagen API).
         const enhancedPrompt = `A child named ${childName} [1] in a Bible story scene. ${scenePrompt}. 
-        The child [1] is the main character in this scene. ${styleDesc}.
+        The child [1] is the main character in this scene—depict them only from reference [1]; do not add hat or headphones unless visible in the reference. Any other characters (e.g. biblical figures) must not be given the child's modern accessories (no headphones, caps on other figures). ${styleDesc}.
         Story context: ${storyContext}
         Children's book illustration style, warm inviting colors, soft lighting, 
-        suitable for ages 4-12, peaceful atmosphere, Christian faith theme.
-        Wide scene showing environment with the child [1] as focal point.`;
+        suitable for ages 4-12, peaceful atmosphere.
+        Wide scene showing environment with the child [1] as focal point. Only include biblical characters that are explicitly mentioned in the scene prompt—do not add Jesus, prophets, or angels unless they are specifically part of this scene description.`;
         
         console.log(`🎨 Generating personalized scene with style: ${styleId}`);
         
@@ -509,7 +520,7 @@ async function generatePersonalizedSceneImage(storyId, childName, selfieBase64, 
                             },
                             referenceType: 'REFERENCE_TYPE_SUBJECT',
                             subjectImageConfig: {
-                                subjectDescription: `A child named ${childName}, transform into ${styleDesc}`,
+                                subjectDescription: `The person in this photo (${childName}). Match their exact appearance; depict only clothing and accessories visible in the photo—do not add hat or headphones unless they appear in the photo. Transform into ${styleDesc}.`,
                                 subjectType: 'SUBJECT_TYPE_PERSON'
                             }
                         }]
@@ -726,8 +737,8 @@ router.post('/:id/generate-scene', async (req, res) => {
         
         const enhancedPrompt = `${basePrompt}. 
         Children's book illustration style, beautiful warm colors, inviting scene, 
-        Bible story setting, soft lighting, suitable for children ages 4-12, 
-        no text overlays, peaceful atmosphere, Christian faith theme.`;
+        soft lighting, suitable for children ages 4-12, 
+        no text overlays, peaceful atmosphere. Only include biblical characters that are explicitly mentioned in the base prompt—do not add Jesus, prophets, or angels unless they are specifically named in the story.`;
         
         console.log(`🎨 Generating scene image for story "${story.title}"...`);
         console.log(`📝 Prompt: ${enhancedPrompt.slice(0, 200)}...`);

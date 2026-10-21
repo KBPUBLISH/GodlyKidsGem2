@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2, Crown } from 'lucide-react';
+import { ChevronLeft, Pause, Play, SkipBack, SkipForward, Music, Heart, RotateCcw, ListPlus, BookOpen, Share2, Crown, Video, X } from 'lucide-react';
 import { favoritesService } from '../services/favoritesService';
 import { getApiBaseUrl } from '../services/apiService';
 import { playCountService } from '../services/playCountService';
@@ -126,6 +126,7 @@ const PlaylistPlayerPage: React.FC = () => {
     const [playCount, setPlayCount] = useState(0);
     const [isLiked, setIsLiked] = useState(false);
     const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
+    const [showVideo, setShowVideo] = useState(false);
     const hasIncrementedPlayCountRef = useRef(false);
     const [audioLevel, setAudioLevel] = useState(0); // For dynamic pulse intensity
 
@@ -218,6 +219,19 @@ const PlaylistPlayerPage: React.FC = () => {
         
         // Toggle play/pause
         togglePlayPause();
+    };
+
+    const handleWatchVideo = () => {
+        // Music videos are a members-only perk
+        if (!isSubscribed) {
+            navigate('/paywall');
+            return;
+        }
+        // Pause the audio so it doesn't play over the video's own soundtrack
+        if (isPlaying) {
+            togglePlayPause();
+        }
+        setShowVideo(true);
     };
 
     const handleLike = () => {
@@ -356,6 +370,7 @@ const PlaylistPlayerPage: React.FC = () => {
 
     const currentTrack = activePlaylist.items[currentTrackIndex];
     const coverImage = currentTrack.coverImage || activePlaylist.coverImage;
+    const videoUrl = currentTrack.videoUrl;
 
     return (
         <div className="flex flex-col h-full w-full relative overflow-hidden">
@@ -533,6 +548,18 @@ const PlaylistPlayerPage: React.FC = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* Watch Music Video - members-only perk */}
+                    {videoUrl && (
+                        <button
+                            onClick={handleWatchVideo}
+                            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#3E1F07] font-bold text-sm shadow-lg border-b-4 border-[#CC8400] active:translate-y-0.5 active:border-b-0 transition-all hover:brightness-105"
+                        >
+                            <Video size={18} strokeWidth={2.5} />
+                            Watch Music Video
+                            {!isSubscribed && <Crown size={16} className="text-[#5c2e0b]" fill="#5c2e0b" />}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -645,6 +672,36 @@ const PlaylistPlayerPage: React.FC = () => {
                 />
             )}
             
+            {/* Music Video Overlay - members-only */}
+            {showVideo && videoUrl && (
+                <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black animate-in fade-in duration-200">
+                    <button
+                        onClick={() => setShowVideo(false)}
+                        className="absolute top-4 right-4 z-10 w-11 h-11 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center text-white active:scale-90 transition-transform"
+                        aria-label="Close video"
+                    >
+                        <X size={24} strokeWidth={2.5} />
+                    </button>
+                    <div className="absolute top-6 left-5 right-16 z-10 text-left pointer-events-none">
+                        <p className="text-white font-black text-lg leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
+                            {currentTrack.title}
+                        </p>
+                        <p className="text-white/70 text-xs font-bold uppercase tracking-wider drop-shadow">
+                            {currentTrack.author || activePlaylist.author}
+                        </p>
+                    </div>
+                    <video
+                        src={videoUrl}
+                        controls
+                        autoPlay
+                        playsInline
+                        controlsList="nodownload"
+                        onEnded={() => setShowVideo(false)}
+                        className="w-full h-full object-contain bg-black"
+                    />
+                </div>
+            )}
+
             {/* Premium Preview Limit Modal */}
             {previewLimitReached && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">

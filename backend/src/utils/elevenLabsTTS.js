@@ -55,8 +55,7 @@ const VOICE_OPTIONS = [
  * @param {number} options.stability - Voice stability (0-1, default 0.5)
  * @param {number} options.similarityBoost - Voice clarity (0-1, default 0.75)
  * @param {number} options.style - Style exaggeration (0-1, default 0)
- * @param {boolean} options.skipStorage - If true, return audioBase64 instead of uploading to GCS (avoids ACL issues)
- * @returns {Promise<{url: string, duration: number}|{audioBase64: string, duration: number}>}
+ * @returns {Promise<{url: string, duration: number}>}
  */
 async function generateElevenLabsTTS(text, options = {}) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -82,7 +81,7 @@ async function generateElevenLabsTTS(text, options = {}) {
         stability = 0.5,
         similarityBoost = 0.75,
         style = 0.2, // Slight style for more expressive narration
-        skipStorage = false, // When true, return base64 instead of GCS upload (for previews; avoids uniform bucket ACL errors)
+        returnBase64 = false, // If true, skip GCS and return base64 (e.g. for previews; avoids makePublic with uniform bucket-level access)
     } = options;
     
     // Clean text for TTS (remove markdown, keep punctuation)
@@ -129,51 +128,52 @@ async function generateElevenLabsTTS(text, options = {}) {
         const wordCount = cleanText.split(/\s+/).length;
         const estimatedDuration = Math.ceil((wordCount / 150) * 60);
         
-        // For previews: return base64 directly to avoid GCS upload (uniform bucket-level access disables per-object ACLs)
-        if (skipStorage) {
-            return {
-                audioBase64: audioBuffer.toString('base64'),
-                duration: estimatedDuration,
-                voiceId
-            };
-        }
-        
-        // Save to GCS
-        if (bucket) {
-            const hash = crypto.createHash('md5')
-                .update(cleanText + voiceId + Date.now())
-                .digest('hex')
-                .slice(0, 12);
-            const filename = `${storagePath}/${filenamePrefix}_${hash}.mp3`;
-            
-            const blob = bucket.file(filename);
-            await blob.save(audioBuffer, {
-                metadata: {
-                    contentType: 'audio/mpeg',
-                    cacheControl: 'public, max-age=86400'
+        // Save to GCS (skip when returnBase64 requested, e.g. previews - avoids makePublic() with uniform bucket-level access)
+        if (bucket && !returnBase64) {
+            try {
+                const hash = crypto.createHash('md5')
+                    .update(cleanText + voiceId + Date.now())
+                    .digest('hex')
+                    .slice(0, 12);
+                const filename = `${storagePath}/${filenamePrefix}_${hash}.mp3`;
+                const blob = bucket.file(filename);
+                await blob.save(audioBuffer, {
+                    metadata: {
+                        contentType: 'audio/mpeg',
+                        cacheControl: 'public, max-age=86400'
+                    }
+                });
+                await blob.makePublic();
+                const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+                console.log(`✅ ElevenLabs TTS saved to: ${url}`);
+                return { url, duration: estimatedDuration, voiceId };
+            } catch (gcsErr) {
+                const isUniformBucketError = gcsErr?.message?.includes('uniform bucket-level access') || gcsErr?.code === 400;
+                if (isUniformBucketError) {
+                    console.warn('⚠️ GCS makePublic not allowed (uniform bucket-level access); returning base64');
+                    const audioBase64 = audioBuffer.toString('base64');
+                    return { url: null, audioBase64, duration: estimatedDuration, voiceId };
                 }
-            });
-            // With uniform bucket-level access, do NOT call makePublic() - per-object ACLs are disabled.
-            // Ensure the bucket allows public read at bucket level for these URLs to be accessible.
-            
-            const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-            console.log(`✅ ElevenLabs TTS saved to: ${url}`);
-            
-            return {
-                url,
-                duration: estimatedDuration,
-                voiceId
-            };
-        } else {
-            throw new Error('GCS bucket not configured');
+                throw gcsErr;
+            }
         }
+        // No GCS or returnBase64: return audio as base64 so preview can still work
+        const audioBase64 = audioBuffer.toString('base64');
+        console.log('✅ ElevenLabs TTS generated (no GCS, returning base64)');
+        return {
+            url: null,
+            audioBase64,
+            duration: estimatedDuration,
+            voiceId
+        };
         
     } catch (error) {
         if (error.response) {
-            console.error('❌ ElevenLabs API Error:', error.response.status, error.response.data?.toString());
-            
-            // Try fallback voice if the specified voice fails
-            if (voiceId !== ELEVENLABS_VOICES['Rachel'] && error.response.status === 401) {
+            const status = error.response.status;
+            console.error('❌ ElevenLabs API Error:', status, error.response.data?.toString?.());
+            // Retry with Rachel on 401 (bad key for this voice), 404 (voice not found/revoked), 429 (rate limit)
+            const useFallback = voiceId !== ELEVENLABS_VOICES['Rachel'] && [401, 404, 429].includes(status);
+            if (useFallback) {
                 console.log('⚠️ Trying fallback voice (Rachel)...');
                 return generateElevenLabsTTS(text, {
                     ...options,

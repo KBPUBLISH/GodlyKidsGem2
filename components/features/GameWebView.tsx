@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAudio } from '../../context/AudioContext';
+import { usePreventPullToRefresh } from '../../hooks/usePreventPullToRefresh';
 
 interface GameWebViewProps {
   url: string;
@@ -10,6 +11,7 @@ interface GameWebViewProps {
 }
 
 const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
+  usePreventPullToRefresh(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -75,7 +77,10 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
   };
 
   return (
-    <div className={`fixed inset-0 z-[100] bg-black flex flex-col ${hasMiniPlayer ? 'pb-20' : ''}`}>
+    <div
+      className={`fixed inset-0 z-[100] bg-black flex flex-col overscroll-none overflow-hidden ${hasMiniPlayer ? 'pb-20' : ''}`}
+      style={{ overscrollBehavior: 'none' }}
+    >
       {/* Header */}
       <div className="bg-[#1a103c] text-white px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -136,7 +141,8 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
         <iframe
           ref={iframeRef}
           src={url}
-          className="flex-1 w-full border-0"
+          className="flex-1 w-full min-h-0 border-0 overscroll-none"
+          style={{ overscrollBehavior: 'none' }}
           onLoad={handleLoad}
           onError={handleError}
           allow="fullscreen; autoplay; encrypted-media; picture-in-picture; speaker; microphone; web-share"

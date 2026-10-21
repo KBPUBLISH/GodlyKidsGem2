@@ -7,7 +7,7 @@ interface SelfieCaptureProps {
   onCapture: (imageBase64: string) => void;
   onClose: () => void;
   childName?: string;
-  /** When set, overlays this image (e.g. porthole frame) so the user frames their face in the circular window */
+  /** Optional port-window/porthole overlay image (e.g. circular frame); user positions face in the center */
   frameOverlayImageUrl?: string;
 }
 
@@ -210,14 +210,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         </div>
 
         {/* Camera View / Captured Image */}
-        <div
-          className="relative aspect-square bg-black"
-          style={frameOverlayImageUrl ? {
-            backgroundImage: 'url(/assets/images/create-story-style-background.png)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          } : undefined}
-        >
+        <div className="relative aspect-square bg-black">
           {/* Hidden canvas for capturing */}
           <canvas ref={canvasRef} className="hidden" />
 
@@ -231,66 +224,63 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
             </div>
           ) : state === 'captured' && capturedImage ? (
             <>
-              {frameOverlayImageUrl ? (
+              <img
+                src={capturedImage}
+                alt="Captured selfie"
+                className="w-full h-full object-cover"
+              />
+              {/* Wood + port window overlay on review (match capture view when using porthole) */}
+              {frameOverlayImageUrl && (
                 <>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-[78%] h-[78%] rounded-full overflow-hidden bg-black">
-                      <img
-                        src={capturedImage}
-                        alt="Captured selfie"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </div>
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <img
-                      src={frameOverlayImageUrl}
-                      alt=""
-                      className="w-full h-full object-contain"
-                      aria-hidden
-                    />
-                  </div>
+                  <div
+                    className="absolute inset-0 pointer-events-none bg-cover bg-center"
+                    style={{
+                      backgroundImage: 'url(/assets/images/create-story-style-background.webp)',
+                      WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                      maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                    }}
+                    aria-hidden
+                  />
+                  <img
+                    src={frameOverlayImageUrl}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 w-full h-full object-contain object-center pointer-events-none"
+                  />
                 </>
-              ) : (
-                <img
-                  src={capturedImage}
-                  alt="Captured selfie"
-                  className="w-full h-full object-cover"
-                />
               )}
             </>
           ) : (
             <>
-              {frameOverlayImageUrl ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-[78%] h-[78%] rounded-full overflow-hidden bg-black">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+              />
+
+              {/* Wood texture outside the port window (only when using porthole overlay) */}
+              {frameOverlayImageUrl && (
+                <div
+                  className="absolute inset-0 pointer-events-none bg-cover bg-center"
+                  style={{
+                    backgroundImage: 'url(/assets/images/create-story-style-background.webp)',
+                    WebkitMaskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                    maskImage: 'radial-gradient(circle at center, transparent 58%, black 58%)',
+                  }}
+                  aria-hidden
                 />
               )}
-
-              {/* Camera overlay guide: porthole frame or default circle + corners */}
+              
+              {/* Camera overlay: port-window image when provided, else simple circle + corner guides */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 {frameOverlayImageUrl ? (
                   <img
                     src={frameOverlayImageUrl}
                     alt=""
-                    className="w-full h-full object-contain"
                     aria-hidden
+                    className="w-full h-full object-contain object-center"
                   />
                 ) : (
                   <>
@@ -365,7 +355,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
           {/* Tip */}
           {state !== 'captured' && (
             <p className="text-center text-white/60 text-sm">
-              {frameOverlayImageUrl ? "Position your face in the porthole and smile!" : "Position your face in the circle and smile!"}
+              Position your face in the circle and smile!
             </p>
           )}
         </div>

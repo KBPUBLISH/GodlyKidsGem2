@@ -3,6 +3,7 @@ import { Book, FeaturedEpisode, AmazonBook } from '../types';
 import { isValidBookId } from '../utils/bookUtils';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
+import NotificationService from './notificationService';
 
 // ============================================
 // LocalStorage-backed caching to survive WebView restarts
@@ -67,6 +68,12 @@ export const getApiBaseUrl = (): string => {
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 };
 
+/** Base URL for monthly-book routes; always includes /api so path is .../api/monthly-book/... */
+export const getMonthlyBookBaseUrl = (): string => {
+  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  return base.endsWith('/api') ? base : `${base}/api`;
+};
+
 // Helper to ensure cover URL is absolute
 const normalizeCoverUrl = (url: string | undefined | null): string => {
   if (!url || url.trim() === '') return '';
@@ -128,8 +135,16 @@ const transformBook = (apiBook: any): Book => {
     apiBook.recommended_age ||
     '0+';
 
+  const resolvedIdRaw = apiBook.id || apiBook._id;
+  const resolvedId =
+    resolvedIdRaw != null && resolvedIdRaw !== ''
+      ? String(resolvedIdRaw)
+      : String(Math.random());
+
   return {
-    id: apiBook.id || apiBook._id || String(apiBook.id || apiBook._id || Math.random()),
+    id: resolvedId,
+    /** Mirrors Mongo `_id`; some carousels still navigate with `book._id`. */
+    _id: resolvedId,
     title: apiBook.title || apiBook.name || 'Untitled',
     coverUrl: normalizeCoverUrl(rawCoverUrl),
     level: String(level),
@@ -206,9 +221,8 @@ export const ApiService = {
       const baseUrl = getApiBaseUrl();
       const token = authService.getToken();
 
-      // Use the correct endpoint for local backend
-      // baseUrl already includes /api/ (e.g., http://localhost:5001/api/)
-      const endpoint = `${baseUrl}books`;
+      // Exclude kid-created (Create Your Story) books so they only appear in that user's My Books.
+      const endpoint = `${baseUrl}books?excludeGeneratedMonthly=1`;
       console.log('🔍 Fetching books from API:', endpoint);
       console.log('🔑 Has auth token:', !!token);
 
@@ -276,7 +290,7 @@ export const ApiService = {
           const alternativeEndpoints = [
             `${baseUrl}v3/books/by-categories`, // User endpoint from API docs
             `${baseUrl}v3/books/by-dynamic-categories`, // Alternative user endpoint
-            `${baseUrl}books`,
+            `${baseUrl}books?excludeGeneratedMonthly=1`,
             `${baseUrl}v1/books`,
             `${baseUrl}user/books`,
             `${baseUrl}my-books`,
@@ -494,11 +508,7 @@ export const ApiService = {
   },
 
   getFeaturedContent: async (): Promise<Array<Book | Playlist | AmazonBook>> => {
-    const cacheKey = 'featured_content';
-    const cached = getCached<Array<Book | Playlist | AmazonBook>>(cacheKey);
-    // Only use cache if it has at least 2 items (prevents stale cache on mobile)
-    if (cached && cached.length >= 2) return cached;
-
+    // No cache: portal edits must show up in the app immediately on next load
     try {
       const [featuredBooks, featuredPlaylists, featuredEpisodes, featuredAmazonBooks] = await Promise.all([
         ApiService.getFeaturedBooks(),
@@ -536,8 +546,6 @@ export const ApiService = {
 
       // Sort by featuredOrder (lower = first)
       combined.sort((a, b) => ((a as any).featuredOrder || 0) - ((b as any).featuredOrder || 0));
-      
-      setCache(cacheKey, combined);
 
       return combined;
     } catch (error) {
@@ -546,12 +554,34 @@ export const ApiService = {
     }
   },
 
-  // Get featured episodes (individual playlist items marked as featured)
-  getFeaturedEpisodes: async (): Promise<FeaturedEpisode[]> => {
-    const cacheKey = 'featured_episodes';
-    const cached = getCached<FeaturedEpisode[]>(cacheKey);
-    if (cached) return cached;
+  getFeaturedAudioContent: async (): Promise<any[]> => {
+    try {
+      const [playlists, episodes] = await Promise.all([
+        ApiService.getFeaturedPlaylists(),
+        ApiService.getFeaturedEpisodes(),
+      ]);
+      const combined: any[] = [
+        ...playlists.map(p => ({ ...p, _itemType: 'playlist' as const })),
+        ...episodes.map(e => ({
+          ...e,
+          _id: `episode_${e.playlist._id}_${e.itemIndex}`,
+          _itemType: 'episode' as const,
+          title: e.title,
+          coverImage: e.coverImage || e.playlist?.coverImage,
+          coverUrl: e.coverImage || e.playlist?.coverImage,
+          _playlistId: e.playlist._id,
+          _trackIndex: e.itemIndex,
+        })),
+      ];
+      combined.sort((a, b) => (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0));
+      return combined;
+    } catch (error) {
+      console.warn("Failed to fetch featured audio content:", error);
+      return [];
+    }
+  },
 
+  getFeaturedEpisodes: async (): Promise<FeaturedEpisode[]> => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}playlists/featured-episodes`, {
@@ -561,7 +591,6 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result);
         console.log(`🎵 Featured episodes loaded: ${result.length} items`);
         return result;
       }
@@ -572,12 +601,8 @@ export const ApiService = {
     }
   },
 
-  // Get featured Amazon books for carousel
+  // Get featured Amazon books for carousel (no cache so portal edits show immediately)
   getFeaturedAmazonBooks: async (): Promise<AmazonBook[]> => {
-    const cacheKey = 'featured_amazon_books';
-    const cached = getCached<AmazonBook[]>(cacheKey);
-    if (cached) return cached;
-
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}amazon-books/featured`, {
@@ -587,7 +612,6 @@ export const ApiService = {
       if (response.ok) {
         const data = await response.json();
         const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result);
         console.log(`📚 Featured Amazon books loaded: ${result.length} items`);
         return result;
       }
@@ -643,7 +667,8 @@ export const ApiService = {
 
       if (response.ok) {
         const data = await response.json();
-        const result = Array.isArray(data) ? data : [];
+        const raw = Array.isArray(data) ? data : [];
+        const result = raw.map(transformBook);
         console.log(`📚 Trending books loaded: ${result.length} items`);
         return result;
       }
@@ -770,13 +795,16 @@ export const ApiService = {
     try {
       const baseUrl = getApiBaseUrl();
 
-      // Get or generate device info
+      // Single canonical device id (web uses godlykids_device_id; legacy key device_id)
       const getDeviceId = (): string => {
-        let deviceId = localStorage.getItem('device_id');
+        let deviceId =
+          localStorage.getItem('godlykids_device_id') ||
+          localStorage.getItem('device_id');
         if (!deviceId) {
           deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          localStorage.setItem('device_id', deviceId);
         }
+        localStorage.setItem('godlykids_device_id', deviceId);
+        localStorage.setItem('device_id', deviceId);
         return deviceId;
       };
 
@@ -872,15 +900,43 @@ export const ApiService = {
         if (data.user) {
           authService.setUser(data.user);
           console.log('✅ User data stored:', data.user);
-          
-          // Link user ID to DeSpia native OneSignal SDK
-          const userId = data.user._id || data.user.id;
+
+          const loginEmail = (data.user.email || credentials?.email || '').toLowerCase().trim();
+          if (loginEmail) {
+            localStorage.setItem('godlykids_user_email', loginEmail);
+          }
+
+          // Link device profile to email (merges web Stripe on device id into email account)
+          const deviceId = getDeviceId();
+          if (deviceId && loginEmail) {
+            try {
+              await fetchWithTimeout(`${baseUrl}app-user/link-email`, {
+                method: 'POST',
+                body: JSON.stringify({ deviceId, email: loginEmail }),
+              });
+            } catch (linkErr) {
+              console.warn('⚠️ link-email on login failed (non-fatal):', linkErr);
+            }
+          }
+
+          // Apply server-side premium (web Stripe / AppUser) immediately on mobile sign-in
+          if (data.isPremium || data.subscriptionRestored || data.user.isPremium) {
+            localStorage.setItem('godlykids_premium', 'true');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+            }
+            console.log('✅ Premium subscription restored from server on login');
+          }
+
+          // Link same ID to OneSignal that we use for create-your-story (email/deviceId)
+          const userId = authService.getUserIdForBackend();
           if (userId) {
             DespiaService.setOneSignalUserId(userId);
+            await NotificationService.setExternalUserId(userId);
           }
         }
 
-        // Trigger books reload by dispatching event
+        // Trigger books reload and subscription re-check
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('authTokenUpdated'));
         }
@@ -889,7 +945,9 @@ export const ApiService = {
           success: true,
           token: token,
           refreshToken: refreshToken,
-          user: data.user
+          user: data.user,
+          isPremium: !!(data.isPremium || data.subscriptionRestored || data.user?.isPremium),
+          subscriptionRestored: !!(data.subscriptionRestored || data.isPremium || data.user?.isPremium),
         };
       } else {
         // Handle error response
@@ -1105,25 +1163,34 @@ export const ApiService = {
     }
   },
 
-  // Get book by ID
-  getBookById: async (id: string): Promise<Book | null> => {
+  // Get book by ID. Optional userId (or email/deviceId) so backend can return isUserCreated for Create Your Story books.
+  // Optional shareToken: when opening a shared link, backend returns allowSharedRead so recipient can read without subscription.
+  getBookById: async (id: string, userId?: string | null, shareToken?: string | null): Promise<Book | null> => {
     try {
       const baseUrl = getApiBaseUrl();
-      // Add cache-busting timestamp to ensure fresh data
-      const cacheBuster = `?_t=${Date.now()}`;
-      console.log(`🔍 Fetching book by ID: ${baseUrl}books/${id}${cacheBuster}`);
+      const params = new URLSearchParams({ _t: String(Date.now()) });
+      if (userId) params.set('userId', userId);
+      if (shareToken) params.set('share', shareToken);
+      const query = params.toString();
+      const url = `${baseUrl}books/${id}${query ? `?${query}` : ''}`;
+      console.log(`🔍 Fetching book by ID: ${url}`);
 
-      const response = await fetchWithTimeout(`${baseUrl}books/${id}${cacheBuster}`, {
+      const response = await fetchWithTimeout(url, {
         method: 'GET',
       });
 
       if (response.ok) {
         const data = await response.json();
         console.log(`✅ Book data received for ID ${id}:`, data);
-        // Transform the book but preserve the full raw data structure
         const transformed = transformBook(data);
-        // Attach the raw data to preserve files.audio and other nested structures
         (transformed as any).rawData = data;
+        if (data.isUserCreated === true) (transformed as any).isUserCreated = true;
+        if (data.createdForChildName != null) (transformed as any).createdForChildName = data.createdForChildName;
+        if (data.createdForAvatarUrl != null) (transformed as any).createdForAvatarUrl = data.createdForAvatarUrl;
+        if (data.createdForSelfieUrl != null) (transformed as any).createdForSelfieUrl = data.createdForSelfieUrl;
+        if (data.createdWithStyleId != null) (transformed as any).createdWithStyleId = data.createdWithStyleId;
+        if (Array.isArray(data.createdForCharacters)) (transformed as any).createdForCharacters = data.createdForCharacters;
+        if (data.allowSharedRead === true) (transformed as any).allowSharedRead = true;
         return transformed;
       }
 
@@ -1131,6 +1198,50 @@ export const ApiService = {
       return null;
     } catch (error) {
       console.warn(`❌ Failed to fetch book ${id}:`, error);
+      return null;
+    }
+  },
+
+  // Get monthly book credits used this calendar month. Returns { usedThisMonth, limit? }. Backend verifies subscription; use limit when present.
+  getMonthlyBookCredits: async (): Promise<{ usedThisMonth: number; limit?: number } | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const monthlyBase = baseUrl.replace(/\/api\/?$/, '') + '/api/monthly-book';
+      const userId = authService.getUserIdForBackend();
+      if (!userId) return null;
+      const url = `${monthlyBase}/credits?userId=${encodeURIComponent(userId)}`;
+      const response = await fetchWithTimeout(url);
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data.success || typeof data.usedThisMonth !== 'number') return null;
+      return { usedThisMonth: data.usedThisMonth, limit: typeof data.limit === 'number' ? data.limit : undefined };
+    } catch (error) {
+      console.warn('Failed to get monthly book credits:', error);
+      return null;
+    }
+  },
+
+  // Get share link for a Create Your Story book (owner only). Returns shareToken; build URL as /book/:bookId?share=:shareToken
+  getBookShareLink: async (bookId: string): Promise<{ shareUrl: string; shareToken: string } | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const monthlyBase = baseUrl.replace(/\/api\/?$/, '') + '/api/monthly-book';
+      const userId = authService.getUserIdForBackend();
+      if (!userId) return null;
+      const response = await fetchWithTimeout(`${monthlyBase}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, userId }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data.success || !data.shareToken) return null;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const path = `/book/${bookId}?share=${encodeURIComponent(data.shareToken)}`;
+      const shareUrl = origin ? `${origin}${path}` : path;
+      return { shareUrl, shareToken: data.shareToken };
+    } catch (error) {
+      console.warn('Failed to get share link:', error);
       return null;
     }
   },
@@ -1180,11 +1291,11 @@ export const ApiService = {
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching books by category: ${category}`);
 
-      // Try different endpoint variations for category filtering
+      // Try different endpoint variations for category filtering (exclude kid-created books)
       const categoryEndpoints = [
-        `${baseUrl}books?category=${encodeURIComponent(category)}`,
+        `${baseUrl}books?category=${encodeURIComponent(category)}&excludeGeneratedMonthly=1`,
         `${baseUrl}books/category/${encodeURIComponent(category)}`,
-        `${baseUrl}books?genre=${encodeURIComponent(category)}`,
+        `${baseUrl}books?genre=${encodeURIComponent(category)}&excludeGeneratedMonthly=1`,
         `${baseUrl}categories/${encodeURIComponent(category)}/books`,
       ];
 
@@ -1292,6 +1403,37 @@ export const ApiService = {
         return null;
       }
       console.error('TTS Error:', error);
+      return null;
+    }
+  },
+
+  /** One HTTP request: synthesize multiple text boxes (sequential narration). Uses same caches as singles. */
+  generateTTSBatch: async (
+    items: Array<{ text: string; voiceId: string; textBoxIndex: number }>,
+    bookId?: string,
+    languageCode?: string,
+    pageNumber?: number
+  ): Promise<Array<{ textBoxIndex: number; audioUrl: string; alignment: any }> | null> => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const n = Math.max(items.length, 1);
+      const response = await fetchWithTimeout(`${baseUrl}tts/generate-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, bookId, languageCode, pageNumber }),
+        timeout: Math.min(120000 + n * 45000, 600000),
+      });
+      if (response.ok) {
+        const body = await response.json();
+        return Array.isArray(body.results) ? body.results : null;
+      }
+      console.error('TTS Batch failed:', await response.text());
+      return null;
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return null;
+      }
+      console.error('TTS Batch error:', error);
       return null;
     }
   },
@@ -1761,25 +1903,58 @@ export const ApiService = {
     }
   },
 
-  // Games API - Get games for Daily Tasks & IQ Games section
-  getDailyTaskGames: async (): Promise<any[]> => {
-    const cacheKey = 'daily_task_games';
-    const cached = getCached<any[]>(cacheKey);
-    if (cached) return cached;
+  /** Clear cached game lists (portal URL updates must show immediately in the app). */
+  invalidateGamesCache: (): void => {
+    clearCacheByPattern('games');
+    try {
+      sessionStorage.removeItem('godlykids_home_games');
+    } catch {
+      // ignore
+    }
+  },
+
+  // Games API - Get all enabled games (not cached — URLs change in portal often)
+  getEnabledGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetchWithTimeout(`${baseUrl}games/enabled`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch enabled games:', error);
+      return [];
+    }
+  },
+
+  // Games API - Get games for Daily Tasks & IQ Games section (not cached)
+  getDailyTaskGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
 
     try {
       const baseUrl = getApiBaseUrl();
       console.log('🎮 Fetching daily task games from:', `${baseUrl}games/daily-tasks`);
       const response = await fetchWithTimeout(`${baseUrl}games/daily-tasks`, {
         method: 'GET',
+        cache: 'no-store',
       });
 
       if (response.ok) {
         const data = await response.json();
         console.log('🎮 Daily task games:', data);
-        const result = Array.isArray(data) ? data : [];
-        setCache(cacheKey, result);
-        return result;
+        return Array.isArray(data) ? data : [];
       }
 
       console.warn('⚠️ Failed to fetch daily task games:', response.status);

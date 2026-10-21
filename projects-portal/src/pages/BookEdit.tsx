@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Upload, X, Music, Gamepad2, Globe, Trash2, Video, Volume2, Gift } from 'lucide-react';
+import { Plus, Upload, X, Music, Gamepad2, Globe, Trash2, Video, Volume2, Gift, Star } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import ContentAnalytics from '../components/ContentAnalytics';
 
@@ -38,6 +38,7 @@ const BookEdit: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
     const [audioFiles, setAudioFiles] = useState<Array<{ url: string; filename: string; uploadedAt?: string }>>([]);
+    const [defaultAudioIndex, setDefaultAudioIndex] = useState<number>(0);
     const [audioUploadVolume, setAudioUploadVolume] = useState<number>(0.4); // 40% default attenuation on upload
     const [uploadingAudio, setUploadingAudio] = useState(false);
     const [reprocessingAudioIndex, setReprocessingAudioIndex] = useState<number | null>(null);
@@ -79,6 +80,7 @@ const BookEdit: React.FC = () => {
     // Book type and featured character (Kids Monthly Book)
     const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
     const [featuredCharacterId, setFeaturedCharacterId] = useState<string>('');
+    const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
     const [characters, setCharacters] = useState<Array<{ _id: string; internalTag: string; displayName: string }>>([]);
     // Kid-created books from this template (read-only list)
     const [booksFromTemplate, setBooksFromTemplate] = useState<Array<{ bookId: string; title: string; coverImageUrl?: string; childName: string; createdAt: string }>>([]);
@@ -112,12 +114,14 @@ const BookEdit: React.FC = () => {
                     setSelectedCategories([b.category]);
                 }
                 
-                // Load audio files
+                // Load audio files (max 3) and default track
                 if (b.files && b.files.audio && Array.isArray(b.files.audio)) {
-                    setAudioFiles(b.files.audio);
+                    setAudioFiles(b.files.audio.slice(0, 3));
                 } else {
                     setAudioFiles([]);
                 }
+                const defIdx = b.files?.defaultAudioIndex ?? 0;
+                setDefaultAudioIndex(Math.max(0, Math.min(2, defIdx)));
                 
                 // Load associated games
                 if (b.games && Array.isArray(b.games)) {
@@ -162,6 +166,7 @@ const BookEdit: React.FC = () => {
                 // Book type and featured character
                 setBookType(b.bookType || 'standard');
                 setFeaturedCharacterId(b.featuredCharacterId?._id || b.featuredCharacterId || '');
+                setReaderLayout(b.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe');
             } catch (err) {
                 console.error('Failed to fetch book:', err);
             } finally {
@@ -343,7 +348,10 @@ const BookEdit: React.FC = () => {
             alert('Please select an audio file');
             return;
         }
-
+        if (audioFiles.length >= 3) {
+            alert('Maximum 3 background music tracks. Remove one to add another.');
+            return;
+        }
         if (!bookId) {
             alert('Book ID is required');
             return;
@@ -362,13 +370,13 @@ const BookEdit: React.FC = () => {
                 }
             );
             
-            // Add new audio file to the list
+            // Add new audio file to the list (max 3 tracks)
             const newAudio = {
                 url: response.data.url,
                 filename: response.data.filename || file.name,
                 uploadedAt: new Date().toISOString(),
             };
-            setAudioFiles([...audioFiles, newAudio]);
+            setAudioFiles(prev => prev.length >= 3 ? prev : [...prev, newAudio]);
         } catch (error: any) {
             console.error('Audio upload failed:', error);
             let errorMessage = 'Failed to upload audio file';
@@ -401,7 +409,12 @@ const BookEdit: React.FC = () => {
     };
 
     const handleRemoveAudio = (index: number) => {
-        setAudioFiles(audioFiles.filter((_, i) => i !== index));
+        setAudioFiles(prev => prev.filter((_, i) => i !== index));
+        setDefaultAudioIndex(prev => {
+            if (prev === index) return 0;
+            if (prev > index) return Math.max(0, prev - 1);
+            return prev;
+        });
     };
 
     const handleReprocessAudio = async (index: number) => {
@@ -513,6 +526,7 @@ const BookEdit: React.FC = () => {
                 files: {
                     coverImage: coverImage || null,
                     audio: audioFiles,
+                    defaultAudioIndex: Math.max(0, Math.min(defaultAudioIndex, audioFiles.length - 1)),
                 },
                 games: selectedGames,
                 bookGames: bookGames,
@@ -526,6 +540,7 @@ const BookEdit: React.FC = () => {
                 goalTags: goalTags, // Learning goal tags for daily session matching
                 bookType: bookType,
                 featuredCharacterId: bookType === 'kids_monthly' && featuredCharacterId ? featuredCharacterId : null,
+                readerLayout: readerLayout,
             };
             console.log('Updating book with payload:', payload);
             await apiClient.put(`/api/books/${bookId}`, payload);
@@ -708,6 +723,58 @@ const BookEdit: React.FC = () => {
                     )}
                 </div>
                 <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Reader Layout</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+                            <button
+                                type="button"
+                                onClick={() => setReaderLayout('side_swipe')}
+                                className={`text-left rounded-lg border-2 p-4 transition ${
+                                    readerLayout === 'side_swipe'
+                                        ? 'border-indigo-500 bg-indigo-50'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">📖</span>
+                                    <span className="font-semibold text-gray-800">Side Swipe (Regular)</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Classic horizontal page-turn book with parchment text overlays.</p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setReaderLayout('swipe_up'); setOrientation('portrait'); }}
+                                className={`text-left rounded-lg border-2 p-4 transition ${
+                                    readerLayout === 'swipe_up'
+                                        ? 'border-pink-500 bg-pink-50'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">🎬</span>
+                                    <span className="font-semibold text-gray-800">Swipe Up (Vertical Story)</span>
+                                </div>
+                                <p className="text-xs text-gray-600">TikTok-style vertical feed. Each page is a full-screen text or media card. Portrait recommended.</p>
+                            </button>
+                        </div>
+                        {readerLayout === 'swipe_up' && (
+                            <>
+                                <p className="text-xs text-pink-700 mt-2">
+                                    In Swipe Up books, each page in the page editor gets a "Page Kind" toggle (Text or Media).
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/books/preview-swipe/${bookId}`)}
+                                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-lg text-sm font-medium shadow-sm transition"
+                                >
+                                    <span>▶</span> Preview Swipe Up (no TTS)
+                                </button>
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    Opens a phone-shaped preview using the book's current draft pages — verifies snap-scroll, animation, and video auto-advance. TTS is muted in preview.
+                                </p>
+                            </>
+                        )}
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Book type</label>
                         <select
@@ -955,7 +1022,7 @@ const BookEdit: React.FC = () => {
                         Background Music
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                        Upload audio files to play as background music in the book reader. The first file will be used by default.
+                        Upload up to 3 audio tracks for background music. Select one as the main track (plays by default). In Create Your Story, users can choose which track they want for their story.
                     </p>
 
                     {/* Upload Volume Attenuation */}
@@ -996,10 +1063,19 @@ const BookEdit: React.FC = () => {
                                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setDefaultAudioIndex(index)}
+                                            className={`p-1 rounded transition-colors flex-shrink-0 ${defaultAudioIndex === index ? 'text-amber-500' : 'text-gray-400 hover:text-amber-400'}`}
+                                            title={defaultAudioIndex === index ? 'Main track (plays by default)' : 'Set as main track'}
+                                        >
+                                            <Star className={`w-5 h-5 ${defaultAudioIndex === index ? 'fill-current' : ''}`} />
+                                        </button>
                                         <Music className="w-5 h-5 text-indigo-600 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-gray-900 truncate">
                                                 {audio.filename}
+                                                {defaultAudioIndex === index && <span className="ml-1 text-amber-600 text-xs">(main)</span>}
                                             </p>
                                             {audio.uploadedAt && (
                                                 <p className="text-xs text-gray-500">
@@ -1037,8 +1113,12 @@ const BookEdit: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* Upload Audio Button */}
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-400 transition-colors">
+                    {/* Upload Audio Button - disabled when 3 tracks */}
+                    <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                        audioFiles.length >= 3
+                            ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                            : 'border-gray-300 hover:border-indigo-400'
+                    }`}>
                         <input
                             ref={audioInputRef}
                             type="file"
@@ -1046,17 +1126,18 @@ const BookEdit: React.FC = () => {
                             onChange={handleAudioSelect}
                             className="hidden"
                             id="audio-upload"
+                            disabled={audioFiles.length >= 3}
                         />
                         <label
-                            htmlFor="audio-upload"
-                            className="cursor-pointer flex flex-col items-center gap-2"
+                            htmlFor={audioFiles.length >= 3 ? undefined : 'audio-upload'}
+                            className={`flex flex-col items-center gap-2 ${audioFiles.length >= 3 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                         >
-                            <Music className={`w-8 h-8 ${uploadingAudio ? 'text-indigo-500 animate-pulse' : 'text-gray-400'}`} />
+                            <Music className={`w-8 h-8 ${uploadingAudio ? 'text-indigo-500 animate-pulse' : audioFiles.length >= 3 ? 'text-gray-300' : 'text-gray-400'}`} />
                             <span className="text-sm text-gray-600">
-                                {uploadingAudio ? 'Uploading...' : 'Click to upload audio file'}
+                                {uploadingAudio ? 'Uploading...' : audioFiles.length >= 3 ? 'Maximum 3 tracks' : 'Click to upload audio file'}
                             </span>
                             <span className="text-xs text-gray-500">
-                                MP3, WAV, M4A up to 50MB
+                                MP3, WAV, M4A up to 50MB {audioFiles.length > 0 && `(${audioFiles.length}/3)`}
                             </span>
                         </label>
                     </div>

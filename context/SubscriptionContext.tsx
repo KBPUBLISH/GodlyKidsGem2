@@ -22,9 +22,13 @@ interface SubscriptionContextType {
   
   // Actions
   checkPremiumStatus: () => Promise<boolean>;
+  /** Check premium without updating state (use for paywall gate to avoid re-render/layout shift) */
+  getPremiumStatus: () => Promise<boolean>;
+  /** Check premium via backend only (no localStorage). Use for Create Your Story gate so stale cache cannot bypass paywall. */
+  getPremiumStatusStrict: () => Promise<boolean>;
   purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
-  startReverseTrial: () => Promise<{ success: boolean; error?: string }>;
+  startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
   markReverseTrialConverted: () => Promise<void>;
   
@@ -53,7 +57,7 @@ const getAllUserIds = (): string[] => {
   const user = authService.getUser();
   if (user) {
     // Email is most important - subscriptions are often linked by email
-    if (user.email) ids.push(user.email);
+    if (user.email) ids.push(user.email.toLowerCase().trim());
     // MongoDB ID
     if ((user as any)._id) ids.push((user as any)._id);
     if ((user as any).id && (user as any).id !== (user as any)._id) ids.push((user as any).id);
@@ -64,7 +68,9 @@ const getAllUserIds = (): string[] => {
   if (legacyUserStr) {
     try {
       const legacyUser = JSON.parse(legacyUserStr);
-      if (legacyUser.email && !ids.includes(legacyUser.email)) ids.push(legacyUser.email);
+      if (legacyUser.email && !ids.includes(legacyUser.email.toLowerCase().trim())) {
+        ids.push(legacyUser.email.toLowerCase().trim());
+      }
       if (legacyUser._id && !ids.includes(legacyUser._id)) ids.push(legacyUser._id);
     } catch {
       // ignore
@@ -73,7 +79,10 @@ const getAllUserIds = (): string[] => {
   
   // Email stored separately
   const storedEmail = localStorage.getItem('godlykids_user_email');
-  if (storedEmail && !ids.includes(storedEmail)) ids.push(storedEmail);
+  if (storedEmail) {
+    const normalized = storedEmail.toLowerCase().trim();
+    if (!ids.includes(normalized)) ids.push(normalized);
+  }
 
   // Device ID as fallback
   const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
@@ -104,14 +113,16 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   });
 
   // Check subscription status from localStorage and backend (NO automatic restore - that shows UI)
-  const checkSubscriptionFromAllSources = useCallback(async (): Promise<boolean> => {
+  const checkSubscriptionFromAllSources = useCallback(async (options?: { skipLocalCache?: boolean }): Promise<boolean> => {
     console.log('🔍 Checking subscription status...');
     
-    // 1. Check localStorage first (fastest)
-    const localPremium = localStorage.getItem('godlykids_premium') === 'true';
-    if (localPremium) {
-      console.log('✅ Premium found in localStorage');
-      return true;
+    // 1. Check localStorage first (fastest) — skipped after login so web Stripe subs are re-fetched by email
+    if (!options?.skipLocalCache) {
+      const localPremium = localStorage.getItem('godlykids_premium') === 'true';
+      if (localPremium) {
+        console.log('✅ Premium found in localStorage');
+        return true;
+      }
     }
     
     // 1.5. Check for active reverse trial in localStorage
@@ -140,8 +151,9 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
           if (data.isPremium) {
             console.log(`✅ Premium confirmed by backend for: ${userId}`);
             localStorage.setItem('godlykids_premium', 'true');
-            // NOTE: Don't dispatch event here - caller will update state directly
-            // Dispatching events here caused infinite loops (stack overflow)
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+            }
             return true;
           }
         }
@@ -188,8 +200,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     // When auth token changes (login/logout), re-check subscription automatically.
     const handleAuthChange = async () => {
       try {
-        const hasPremium = await checkSubscriptionFromAllSources();
+        const hasPremium = await checkSubscriptionFromAllSources({ skipLocalCache: true });
         setIsPremium(hasPremium);
+        if (hasPremium && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: true } }));
+        }
       } catch {
         // ignore
       }
@@ -318,7 +333,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     };
   }, [isInitialized, isPremium, checkSubscriptionFromAllSources]);
 
-  // Check premium status from all sources
+  // Check premium status from all sources (updates state)
   const checkPremiumStatus = useCallback(async (): Promise<boolean> => {
     try {
       const hasPremium = await checkSubscriptionFromAllSources();
@@ -329,6 +344,33 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       return false;
     }
   }, [checkSubscriptionFromAllSources]);
+
+  // Get premium status without updating state (avoids re-render; use for paywall gate)
+  const getPremiumStatus = useCallback((): Promise<boolean> => {
+    return checkSubscriptionFromAllSources().catch(() => false);
+  }, [checkSubscriptionFromAllSources]);
+
+  // Backend-only premium check (no localStorage). Use for Create Your Story so stale cache cannot bypass paywall.
+  const getPremiumStatusStrict = useCallback(async (): Promise<boolean> => {
+    const userIds = getAllUserIds();
+    const apiBaseUrl = getApiBaseUrl();
+    if (userIds.length === 0) return false;
+    for (const userId of userIds) {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.isPremium) return true;
+        }
+      } catch {
+        // continue to next identifier
+      }
+    }
+    return false;
+  }, []);
 
   // Purchase a subscription
   const purchase = useCallback(async (plan: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
@@ -423,7 +465,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   // Start a reverse trial
-  const startReverseTrial = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const startReverseTrial = useCallback(async (options?: { trialDurationHours?: number }): Promise<{ success: boolean; error?: string }> => {
     try {
       const userIds = getAllUserIds();
       const apiBaseUrl = getApiBaseUrl();
@@ -437,32 +479,35 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       }
       
       const email = userIds.find(id => id.includes('@'));
+      const trialDurationHours = options?.trialDurationHours;
       
-      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none' });
+      console.log('🎁 Starting reverse trial with:', { deviceId, email: email || 'none', trialDurationHours: trialDurationHours || 168 });
       
       const response = await fetch(`${apiBaseUrl}/api/app-user/start-reverse-trial`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, email }),
+        body: JSON.stringify({ deviceId, email, ...(trialDurationHours ? { trialDurationHours } : {}) }),
       });
       
       const data = await response.json();
       
       if (data.success) {
+        const effectiveDurationHours = data.trialDurationHours || trialDurationHours || 168;
+        const fallbackMs = effectiveDurationHours * 60 * 60 * 1000;
+        
         // Safely parse trial end date first
         let trialEndDate: Date | null = null;
         try {
           if (data.trialEndDate) {
             trialEndDate = new Date(data.trialEndDate);
-            // Check for Invalid Date
             if (isNaN(trialEndDate.getTime())) {
-              trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback: 7 days from now
+              trialEndDate = new Date(Date.now() + fallbackMs);
             }
           } else {
-            trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default: 7 days from now
+            trialEndDate = new Date(Date.now() + fallbackMs);
           }
         } catch {
-          trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fallback on error
+          trialEndDate = new Date(Date.now() + fallbackMs);
         }
         
         // Update local state and localStorage
@@ -473,10 +518,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
         }
         setIsPremium(true);
         
+        const daysRemaining = data.daysRemaining ?? Math.max(0, Math.ceil(effectiveDurationHours / 24));
         setReverseTrial({
           hasReverseTrial: true,
           isActive: true,
-          daysRemaining: 7,
+          daysRemaining,
           trialEndDate,
           eligible: false,
         });
@@ -521,6 +567,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     isNativeApp,
     reverseTrial,
     checkPremiumStatus,
+    getPremiumStatus,
+    getPremiumStatusStrict,
     purchase,
     restorePurchases,
     startReverseTrial,

@@ -13,6 +13,23 @@ const pageSchema = new mongoose.Schema({
         required: true,
     },
 
+    // Page kind for swipe_up (vertical feed) reader layout.
+    // - 'media': full-bleed image/video card (default; matches behavior of side_swipe pages)
+    // - 'text':  text-forward card with optional background image/video for style
+    // For side_swipe books this field is informational only and does not change rendering.
+    pageKind: {
+        type: String,
+        enum: ['text', 'media'],
+        default: 'media',
+    },
+
+    // For swipe_up Media pages with a video: auto-scroll to next page when video ends.
+    // No effect on side_swipe books or text pages.
+    videoAutoAdvance: {
+        type: Boolean,
+        default: false,
+    },
+
     // Feature flags
     isColoringPage: {
         type: Boolean,
@@ -130,6 +147,9 @@ const pageSchema = new mongoose.Schema({
         filename: { type: String },
         order: { type: Number, required: true },
         audioUrl: { type: String }, // Auto-extracted audio for this video (iOS audio layering)
+        /** Optional playback trim relative to uploaded file (seconds) */
+        trimStartSec: { type: Number },
+        trimEndSec: { type: Number },
         uploadedAt: { type: Date, default: Date.now },
     }],
     // Flag to use video sequence instead of single background video
@@ -144,14 +164,14 @@ const pageSchema = new mongoose.Schema({
     }],
     // Flag to use image sequence instead of single background image
     useImageSequence: { type: Boolean, default: false },
-    // Duration each image shows (in seconds) — default 10s for Ken Burns–style effect
-    imageSequenceDuration: { type: Number, default: 10 },
+    // Duration each image shows (in seconds)
+    imageSequenceDuration: { type: Number, default: 3 },
     // Animation effect for image sequence: 'none', 'panLeft', 'panRight', 'panUp', 'panDown', 'zoomIn', 'zoomOut', 'kenBurns'
     imageSequenceAnimation: { type: String, default: 'kenBurns' },
-    // Single background image animation (for pages with one image, e.g. kids monthly generated pages)
+    // Single background image animation (e.g. Kids Monthly generated pages): same options as image sequence
     backgroundImageAnimation: { type: String, default: 'kenBurns' },
     backgroundImageAnimationDuration: { type: Number, default: 10 },
-    
+
     // Legacy fields (for backward compatibility)
     imageUrl: { type: String },
     audioUrl: { type: String },
@@ -164,7 +184,14 @@ const pageSchema = new mongoose.Schema({
     scrollOffsetY: { type: Number, default: 0 }, // Vertical offset from bottom in percentage (positive = higher)
     scrollOffsetX: { type: Number, default: 0 }, // Horizontal offset from center in percentage (positive = right)
     scrollWidth: { type: Number, default: 100 }, // Width of scroll as percentage (100 = full width)
+    scrollOpacity: { type: Number, default: 100 }, // 0–100: transparency of scroll overlay (100 = opaque)
     soundEffectUrl: { type: String }, // URL for sound effect bubble audio
+    /**
+     * Optional trim for single background videos (ignored for images).
+     * Seconds relative to uploaded file — readers clamp playback inside [start, end).
+     */
+    backgroundTrimStartSec: { type: Number },
+    backgroundTrimEndSec: { type: Number },
     // Background audio - extracted from video or separate ambient audio that loops with the page
     // This plays as a separate <audio> element so it can layer with TTS (unlike video audio on iOS)
     backgroundAudioUrl: { type: String },

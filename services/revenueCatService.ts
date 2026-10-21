@@ -20,9 +20,11 @@ const WEB_BILLING_ENABLED = true;
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
 /**
- * Product identifiers sent to RevenueCat (and thus to Google Play on Android / App Store on iOS).
- * Must exactly match RevenueCat Dashboard → Products (and Google Play product IDs).
+ * Product identifiers sent to RevenueCat.
+ * iOS (App Store) and Android (Google Play) use different product IDs — each platform must use its own.
  */
+
+/** Default / web — used when platform is not iOS or Android native. */
 export const PRODUCT_IDS = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
@@ -30,16 +32,23 @@ export const PRODUCT_IDS = {
 };
 
 /**
- * Android: Use the SAME identifiers as RevenueCat so the product matches.
- * RevenueCat Dashboard shows: godlykidsmonthly:monthly, yearlymember:yearly, lifetime.
- * Google Play has subscriptions "godlykidsmonthly" and "yearlymember" with base plans;
- * the full format (subscriptionId:basePlanId) is required for RevenueCat to resolve the product.
- * Fallback short form (PRODUCT_IDS_ANDROID_LEGACY) only if your RevenueCat products are configured that way.
+ * iOS (App Store): Product IDs from App Store Connect / RevenueCat.
+ * Must exactly match RevenueCat → App Store (e.g. Monthly Member, Yearly Member).
+ */
+export const PRODUCT_IDS_IOS: Record<string, string> = {
+  MONTHLY: 'kbpublish.godlykids.monthly',
+  ANNUAL: 'kbpublish.godlykids.yearly',
+  LIFETIME: 'Lifetimepurchase', // Matches App Store Connect product identifier
+};
+
+/**
+ * Android (Google Play): Subscription IDs with base plan (subscriptionId:basePlanId).
+ * Must exactly match RevenueCat → Google Play and Play Console.
  */
 export const PRODUCT_IDS_ANDROID = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
-  LIFETIME: 'lifetime',
+  LIFETIME: 'lifetime', // Matches Google Play product identifier
 };
 
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
@@ -124,6 +133,24 @@ let purchaseResolve: ((value: { success: boolean; error?: string }) => void) | n
 let purchaseTimeout: ReturnType<typeof setTimeout> | null = null;
 let purchasePollInterval: ReturnType<typeof setInterval> | null = null;
 let purchaseSuccessHandled = false; // Guard against multiple callbacks
+/** Set when Despia/RC reports store success but no entitlement — keep webhook polling. */
+let purchaseSoftEntitlementMiss = false;
+
+/**
+ * RevenueCat/Despia returns this when the Store charge succeeded but the product
+ * is not attached to an entitlement (e.g. lifetime not linked to "premium").
+ * The purchase DID go through — do not treat as a hard failure; wait for webhook.
+ */
+const isEntitlementConfigError = (message?: string | null): boolean => {
+  if (!message || typeof message !== 'string') return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes('no active entitlement') ||
+    m.includes('no entitlements') ||
+    m.includes('without any entitlements') ||
+    (m.includes('entitlement') && m.includes('not active'))
+  );
+};
 
 // Clean up any pending purchase state
 const cleanupPurchaseState = () => {
@@ -196,9 +223,22 @@ const setupPurchaseListener = () => {
   });
 
   window.addEventListener('despia-purchase-failed', (event: any) => {
-    console.log('❌ DeSpia purchase failed event received');
+    const message = event?.detail?.message || event?.detail?.error || 'Purchase failed';
+    console.log('❌ DeSpia purchase failed event received:', message);
+
+    // Store charged but product not on an entitlement — keep polling webhook
+    if (isEntitlementConfigError(message) && purchaseResolve) {
+      console.warn(
+        '⚠️ RevenueCat: purchase succeeded but no active entitlements. ' +
+          'Usually the lifetime product is not attached to the "premium" entitlement. ' +
+          'Continuing to poll backend webhook…'
+      );
+      purchaseSoftEntitlementMiss = true;
+      return;
+    }
+
     if (purchaseResolve) {
-      purchaseResolve({ success: false, error: event?.detail?.message || 'Purchase failed' });
+      purchaseResolve({ success: false, error: message });
       purchaseResolve = null;
     }
     cleanupPurchaseState();
@@ -222,9 +262,19 @@ const setupPurchaseListener = () => {
         console.log('📱✅ Purchase complete message received:', data);
         handlePurchaseSuccess();
       } else if (data?.type === 'revenuecat_purchase_failed' || data?.type === 'despia_purchase_failed') {
+        const message = data?.error || data?.message || 'Purchase failed';
         console.log('❌ Purchase failed message received:', data);
+
+        if (isEntitlementConfigError(message) && purchaseResolve) {
+          console.warn(
+            '⚠️ RevenueCat: purchase succeeded but no active entitlements. Continuing webhook poll…'
+          );
+          purchaseSoftEntitlementMiss = true;
+          return;
+        }
+
         if (purchaseResolve) {
-          purchaseResolve({ success: false, error: data?.error || 'Purchase failed' });
+          purchaseResolve({ success: false, error: message });
           purchaseResolve = null;
         }
         cleanupPurchaseState();
@@ -288,8 +338,10 @@ export const RevenueCatService = {
    * @param quickMode - if true, returns success quickly after triggering Apple sheet (optimistic)
    */
   purchase: async (productId: 'annual' | 'monthly' | 'lifetime', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
-    const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
-    const ids = isAndroid ? PRODUCT_IDS_ANDROID : PRODUCT_IDS;
+    const ua = navigator.userAgent.toLowerCase();
+    const isAndroid = ua.includes('android');
+    const isIOS = (ua.includes('iphone') || ua.includes('ipad')) && (ua.includes('despia') || ua.includes('wkwebview'));
+    const ids = isAndroid ? PRODUCT_IDS_ANDROID : isIOS ? PRODUCT_IDS_IOS : PRODUCT_IDS;
     const rcProductId = productId === 'lifetime'
       ? ids.LIFETIME
       : productId === 'annual'
@@ -298,7 +350,7 @@ export const RevenueCatService = {
     const userId = getUserId();
     
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
-    console.log('   Platform:', isAndroid ? 'Android' : 'iOS');
+    console.log('   Platform:', isAndroid ? 'Android' : isIOS ? 'iOS' : 'Web/default');
     console.log('   Product:', rcProductId);
     console.log('   User ID:', userId);
     console.log('   isNativeApp:', isNativeApp());
@@ -308,6 +360,8 @@ export const RevenueCatService = {
     // This prevents stale localStorage from granting instant premium
     console.log('🧹 Clearing any existing premium status before purchase...');
     localStorage.removeItem('godlykids_premium');
+    purchaseSoftEntitlementMiss = false;
+    purchaseSuccessHandled = false;
     
     if (!isNativeApp()) {
       // Web-based billing via RevenueCat Web SDK
@@ -337,32 +391,26 @@ export const RevenueCatService = {
         
         let resolved = false;
         let pollCount = 0;
-        const maxPolls = 60; // 60 seconds max wait - RevenueCat webhooks can be slow
-        const minWaitBeforeCheck = 2; // 2 seconds to let Apple sheet appear
-        
-        // Poll faster initially (every 500ms for first 15 seconds), then slower
-        const getPollInterval = () => pollCount < 30 ? 500 : 1000;
+        const maxWaitSeconds = 90; // 90s — users may need time for Face ID, double-click, etc.
+        const minWaitBeforeCheck = 2;
         
         const doPoll = async () => {
           pollCount++;
-          const elapsedSeconds = pollCount * 0.5; // Approximate seconds (500ms intervals initially)
+          // First 30 polls at 500ms = 15s, then 1s each
+          const elapsedSeconds = pollCount <= 30
+            ? pollCount * 0.5
+            : 15 + (pollCount - 30);
           
-          // Don't check for the first second - let Apple sheet appear
           if (elapsedSeconds < minWaitBeforeCheck) {
-            if (pollCount === 1) {
-              console.log('⏳ Apple payment sheet appearing...');
-            }
             schedulePoll();
             return;
           }
           
-          // Check if already resolved by event listener
           if (purchaseResolve !== resolve) {
             cleanupPurchaseState();
             return;
           }
           
-          // Check if already handled by DeSpia callback
           if (purchaseSuccessHandled && !resolved) {
             resolved = true;
             console.log('✅ Purchase already handled by callback');
@@ -372,7 +420,6 @@ export const RevenueCatService = {
             return;
           }
           
-          // Check localStorage first (fastest)
           const localPremium = localStorage.getItem('godlykids_premium') === 'true';
           if (localPremium && !resolved) {
             resolved = true;
@@ -383,39 +430,40 @@ export const RevenueCatService = {
             return;
           }
           
-          // Poll backend for webhook confirmation
           try {
-            const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(userId)}`);
-            const data = await response.json();
-            
-            if (data.isPremium && !resolved) {
-              resolved = true;
-              console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds');
-              localStorage.setItem('godlykids_premium', 'true');
-              cleanupPurchaseState();
-              resolve({ success: true });
-              purchaseResolve = null;
-              return;
+            // Poll every known identifier — purchase may be under email or device ID
+            const idsToCheck = [userId];
+            const email = localStorage.getItem('godlykids_user_email');
+            const deviceId = localStorage.getItem('godlykids_device_id');
+            if (email && !idsToCheck.includes(email)) idsToCheck.push(email);
+            if (deviceId && !idsToCheck.includes(deviceId)) idsToCheck.push(deviceId);
+
+            for (const id of idsToCheck) {
+              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}`);
+              const data = await response.json();
+              if (data.isPremium && !resolved) {
+                resolved = true;
+                console.log('✅ Premium confirmed by backend webhook after', elapsedSeconds.toFixed(1), 'seconds for', id);
+                localStorage.setItem('godlykids_premium', 'true');
+                cleanupPurchaseState();
+                resolve({ success: true });
+                purchaseResolve = null;
+                return;
+              }
             }
             
-            // Log progress every 5 seconds
-            if (Math.floor(elapsedSeconds) % 5 === 0 && elapsedSeconds > 1) {
+            if (Math.floor(elapsedSeconds) % 10 === 0 && elapsedSeconds > 1) {
               console.log(`⏳ Waiting for payment confirmation... (${elapsedSeconds.toFixed(0)}s)`);
             }
           } catch (error) {
-            // Network error - just continue polling
-            if (Math.floor(elapsedSeconds) % 5 === 0) {
-              console.log(`⚠️ Backend check failed, continuing...`);
-            }
+            // Network error — continue polling
           }
           
-          // Timeout after maxPolls (30 seconds)
-          if (elapsedSeconds >= maxPolls && !resolved) {
+          if (elapsedSeconds >= maxWaitSeconds && !resolved) {
             resolved = true;
             cleanupPurchaseState();
-            console.log('⏱️ Polling timeout after', maxPolls, 'seconds');
+            console.log('⏱️ Polling timeout after', maxWaitSeconds, 'seconds');
             
-            // Final check of localStorage
             const finalPremium = localStorage.getItem('godlykids_premium') === 'true';
             if (finalPremium) {
               console.log('✅ Premium found in final check');
@@ -423,28 +471,37 @@ export const RevenueCatService = {
               purchaseResolve = null;
               return;
             }
+
+            // Despia said "no active entitlements" — store likely charged; don't call it cancelled
+            if (purchaseSoftEntitlementMiss) {
+              console.warn(
+                '⚠️ Timed out after entitlement-config miss. Payment may have succeeded — user should Restore Purchases.'
+              );
+              resolve({
+                success: false,
+                error:
+                  'Your payment may have gone through, but premium did not unlock automatically. Please tap Restore Purchases. If access is still missing, email hello@kbpublish.org with your purchase receipt.',
+              });
+              purchaseResolve = null;
+              purchaseSoftEntitlementMiss = false;
+              return;
+            }
             
-            // Not premium yet - tell user it's still processing
-            console.log('⚠️ Payment still processing - user may need to wait or restore');
-            resolve({ 
-              success: false, 
-              error: 'Payment is processing. If you completed the payment, please wait a moment or tap "Restore Purchases".' 
-            });
+            // DeSpia doesn't reliably fire cancel callbacks, so a timeout most likely
+            // means the user dismissed the Apple/Google payment sheet.
+            resolve({ success: false, error: 'Purchase cancelled' });
             purchaseResolve = null;
             return;
           }
           
-          // Schedule next poll
           schedulePoll();
         };
         
-        // Schedule a poll with variable interval (faster at first)
         const schedulePoll = () => {
-          const interval = pollCount < 30 ? 500 : 1000; // 500ms for first 15s, then 1s
+          const interval = pollCount < 30 ? 500 : 1000;
           purchasePollInterval = setTimeout(doPoll, interval) as unknown as ReturnType<typeof setInterval>;
         };
         
-        // Start polling
         schedulePoll();
       });
     }

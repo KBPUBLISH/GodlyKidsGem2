@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Crown, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
+import { DEFAULT_BOOK_COVER } from '../utils/placeholderImage';
 
-// Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+// Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
+const DEFAULT_COVER = DEFAULT_BOOK_COVER;
 
 // Mock Data for demonstration purposes, matching the visual request
 const MOCK_CHAPTER_DETAILS = {

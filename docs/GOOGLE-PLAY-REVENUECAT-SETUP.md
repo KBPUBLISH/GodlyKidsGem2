@@ -129,9 +129,21 @@ Your backend already has a webhook at:
 1. **RevenueCat** → **Project settings** → **Webhooks** (or **Integrations**).
 2. **Add webhook**:
    - **URL:** `https://backendgk2-0.onrender.com/api/webhooks/revenuecat` (or your production backend URL).  
-   - **Events:** at least `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `RESTORE`.  
+   - **Events:** at least `INITIAL_PURCHASE`, `RENEWAL`, `NON_RENEWING_PURCHASE` (lifetime), `CANCELLATION`, `EXPIRATION`, `RESTORE`.  
 3. **Save**.  
 This lets your backend (and app) know when a Google Play subscription is purchased, renewed, or cancelled.
+
+---
+
+## 6b. RevenueCat: Entitlements (required)
+
+DeSpia/RevenueCat unlocks access via **entitlements**, not product IDs alone. The app expects entitlement id **`premium`**.
+
+1. **RevenueCat** → **Entitlements** → create **`premium`** if it does not exist.
+2. Attach every paid product to it:
+   - Monthly / yearly (iOS + Android identifiers)
+   - Lifetime: iOS `Lifetimepurchase`, Android `lifetime`
+3. Without this, the store charge can succeed and appear in RevenueCat while the app shows **"no active entitlements"**.
 
 ---
 
@@ -175,13 +187,20 @@ After this, purchases on the Android app (via your existing purchase flow) shoul
   3. App is signed with the same key as used in Play Console (or your upload key is configured).
   4. Products are **active** and available in the user's country.
 
+- **"Purchase error: no active entitlements":**  
+  The App Store / Play charge succeeded and RevenueCat shows the transaction, but the product is **not attached to an entitlement**.  
+  1. **RevenueCat Dashboard** → **Entitlements** → open `premium` (create it if missing).  
+  2. Attach **both** lifetime products: iOS `Lifetimepurchase` and Android `lifetime` (plus monthly/yearly).  
+  3. Save. New purchases will unlock `premium`; existing buyers may need **Restore Purchases** or a manual grant via `backend/grant-lifetime-by-email.js`.  
+  Without this link, DeSpia/RevenueCat reports success at the store but `CustomerInfo.entitlements.active` is empty — which is exactly the error users see.
+
 - **Purchases not showing in RevenueCat:**  
   Check package name, service account permissions, and that product IDs match exactly (including case).
 
 - **Webhook not firing:**  
-  Confirm URL is HTTPS and returns 200; check RevenueCat webhook logs and your backend logs.
+  Confirm URL is HTTPS and returns 200; check RevenueCat webhook logs and your backend logs. Include **`NON_RENEWING_PURCHASE`** (lifetime / one-time) in addition to `INITIAL_PURCHASE`, `RENEWAL`, etc.
 
 - **App says “no premium” after purchase:**  
-  Confirm webhook is updating your backend and that the app polls or receives updates (e.g. `godlykids_premium` in localStorage after webhook runs).
+  Confirm webhook is updating your backend and that the app polls or receives updates (e.g. `godlykids_premium` in localStorage after webhook runs). For lifetime buyers stuck without access, run `node grant-lifetime-by-email.js <email>` on the backend host, then have them Restore Purchases.
 
 For RevenueCat + Google Play details: [RevenueCat – Google Play Setup](https://www.revenuecat.com/docs/getting-started/installation/android#google-play-setup).

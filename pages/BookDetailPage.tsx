@@ -1,28 +1,32 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2 } from 'lucide-react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Heart, BookOpen, Crown, PlayCircle, Headphones, Disc, Lock, Globe, Bookmark, Plus, ArrowLeft, Share2, Loader2 } from 'lucide-react';
 import { useBooks } from '../context/BooksContext';
 import { useUser } from '../context/UserContext';
 import { Book } from '../types';
 import { readingProgressService } from '../services/readingProgressService';
 import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ApiService } from '../services/apiService';
+import { ApiService, getMonthlyBookBaseUrl } from '../services/apiService';
 import { readCountService } from '../services/readCountService';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { favoritesService } from '../services/favoritesService';
 import { libraryService } from '../services/libraryService';
 import { analyticsService } from '../services/analyticsService';
 import { pinnedColoringService } from '../services/pinnedColoringService';
+import { authService } from '../services/authService';
 import GameWebView from '../components/features/GameWebView';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import CommentSection from '../components/features/CommentSection';
+import { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
 
-// Default placeholder image
-const DEFAULT_COVER = 'https://via.placeholder.com/400x400/8B4513/FFFFFF?text=Book+Cover';
+import { DEFAULT_BOOK_COVER } from '../utils/placeholderImage';
+
+// Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
+const DEFAULT_COVER = DEFAULT_BOOK_COVER;
 
 // Mock Chapters Data for Audio Books
 const AUDIO_CHAPTERS = [
@@ -49,7 +53,9 @@ const AUDIO_CHAPTERS = [
 const BookDetailPage: React.FC = () => {
   const { id: rawId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get('share') || undefined;
+
   // Clean the ID - when shared, extra text might be appended after the ID
   // MongoDB ObjectIds are 24 hex characters
   const id = useMemo(() => {
@@ -75,7 +81,7 @@ const BookDetailPage: React.FC = () => {
   const [imageError, setImageError] = useState(false);
   const [savedPageIndex, setSavedPageIndex] = useState<number | null>(null);
   const [bookGames, setBookGames] = useState<Array<{ _id?: string; title: string; url: string; coverImage?: string; description?: string }>>([]);
-  const [associatedGames, setAssociatedGames] = useState<Array<{ gameId: string; name: string; url?: string; coverImage?: string; gameType?: 'modal' | 'webview' }>>([]);
+  const [associatedGames, setAssociatedGames] = useState<Array<{ gameId: string; name: string; url?: string; coverImage?: string; logo?: string; gameType?: 'modal' | 'webview' }>>([]);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [selectedGame, setSelectedGame] = useState<{ title: string; url: string } | null>(null);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
@@ -89,7 +95,29 @@ const BookDetailPage: React.FC = () => {
   const [bookDetailsLoaded, setBookDetailsLoaded] = useState<boolean>(false); // Prevent race condition on premium check
   const [pinnedDrawing, setPinnedDrawing] = useState<{ pageRef: string; pageId: string; dataUrl: string; backgroundUrl?: string } | null>(null);
   const [showDrawingModal, setShowDrawingModal] = useState(false);
-  
+  const [showCharacterExpandModal, setShowCharacterExpandModal] = useState(false);
+  const [expandedCharacterIndex, setExpandedCharacterIndex] = useState<number | null>(null);
+
+  // Generation in progress (Create Your Story) — show overlay with progress and retry
+  const [genStatus, setGenStatus] = useState<{
+    customMonthlyBookId: string;
+    progressPage: number;
+    progressTotalPages: number;
+  } | null>(null);
+  const [genRetrying, setGenRetrying] = useState(false);
+  const [retryCooldownTick, setRetryCooldownTick] = useState(0);
+
+  const GEN_RETRY_COOLDOWN_MS = 120000; // 2 minutes between retry clicks
+  const retryCooldownKey = genStatus ? `godlykids_gen_retry_${genStatus.customMonthlyBookId}` : '';
+  const lastRetryAt = retryCooldownKey ? parseInt(localStorage.getItem(retryCooldownKey) || '0', 10) : 0;
+  const retryCooldownRemaining = lastRetryAt ? Math.max(0, GEN_RETRY_COOLDOWN_MS - (Date.now() - lastRetryAt)) : 0;
+
+  useEffect(() => {
+    if (retryCooldownRemaining <= 0) return;
+    const t = setInterval(() => setRetryCooldownTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [retryCooldownRemaining, retryCooldownTick]);
+
   // Voice reward info
   const [rewardVoice, setRewardVoice] = useState<{ voiceId: string; name: string; characterImage?: string } | null>(null);
   
@@ -135,21 +163,28 @@ const BookDetailPage: React.FC = () => {
         }
       }
       
-      // If not found in context and we have an ID, try fetching directly from API
-      // This handles the case where user navigates directly (e.g., from welcome screen)
+      // If not found in context and we have an ID, try list first then fetch by ID
+      // List excludes kid-created books; after "Create Your Story" we need getBookById.
       if (id && !book) {
         try {
           console.log('📖 Book not in context, fetching from API:', id);
           const allBooks = await ApiService.getBooks();
-          const found = allBooks.find(b => b.id === id);
+          let found = allBooks.find(b => b.id === id);
+          if (!found) {
+            // Not in catalog (e.g. newly created custom/monthly book) — fetch by ID with userId so backend can set isUserCreated; shareToken allows shared-link access
+            const userId = authService.getUserIdForBackend();
+            found = await ApiService.getBookById(id, userId, shareToken || null);
+            if (found) console.log('✅ Found book by ID (e.g. Create Your Story):', found.title);
+          } else {
+            console.log('✅ Found book from API list:', found.title);
+          }
           if (found) {
-            console.log('✅ Found book from API:', found.title);
             setBook(found);
-            
+
             if (id) {
               analyticsService.bookView(id, found.title);
             }
-            
+
             if (currentLanguage !== 'en') {
               translateText(found.title).then(setTranslatedTitle);
               if (found.description) {
@@ -178,7 +213,80 @@ const BookDetailPage: React.FC = () => {
     };
     
     findOrFetchBook();
-  }, [id, books, book]);
+  }, [id, books, book, shareToken]);
+
+  // Discover if this book is still generating (from state or by-book API)
+  useEffect(() => {
+    if (!id || !book) return;
+    const state = location.state as { customMonthlyBookId?: string; isGenerating?: boolean } | null;
+    if (state?.customMonthlyBookId && state?.isGenerating) {
+      // We have state from Library — fetch status once to populate genStatus (polling is in next effect)
+      const fetchStatus = async () => {
+        try {
+          const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/status/${state.customMonthlyBookId}`);
+          const data = await res.json().catch(() => ({}));
+          if (data.success && data.status !== 'completed' && data.status !== 'failed') {
+            setGenStatus({
+              customMonthlyBookId: state.customMonthlyBookId!,
+              progressPage: data.progressPage ?? 0,
+              progressTotalPages: data.progressTotalPages ?? 0,
+            });
+          }
+        } catch {
+          // ignore
+        }
+      };
+      fetchStatus();
+      return;
+    }
+    // No state — check by-book API in case user landed directly on /book/:id
+    const checkByBook = async () => {
+      try {
+        const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/by-book/${id}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.inProgress && data.customMonthlyBookId) {
+          setGenStatus({
+            customMonthlyBookId: data.customMonthlyBookId,
+            progressPage: data.progressPage ?? 0,
+            progressTotalPages: data.progressTotalPages ?? 0,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkByBook();
+  }, [id, book, location.state]);
+
+  // Poll generation status when we have customMonthlyBookId
+  useEffect(() => {
+    if (!genStatus?.customMonthlyBookId) return;
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/status/${genStatus.customMonthlyBookId}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+          if (data.status === 'completed' || data.status === 'failed') {
+            setGenStatus(null);
+            return;
+          }
+          setGenStatus((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  progressPage: data.progressPage ?? 0,
+                  progressTotalPages: data.progressTotalPages ?? 0,
+                }
+              : null
+          );
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const interval = setInterval(fetchStatus, 2500);
+    return () => clearInterval(interval);
+  }, [genStatus?.customMonthlyBookId]);
 
   // Load pinned coloring drawing ("fridge") for this book
   useEffect(() => {
@@ -253,8 +361,8 @@ const BookDetailPage: React.FC = () => {
       setBookDetailsLoaded(false);
 
       try {
-        // Fetch full book data from API
-        const fullBook = await ApiService.getBookById(id);
+        const userId = authService.getUserIdForBackend();
+        const fullBook = await ApiService.getBookById(id, userId, shareToken || null);
         
         // Store members-only status for UI display (don't redirect - show locked button instead)
         const bookIsMembersOnly = (fullBook as any)?.isMembersOnly === true;
@@ -329,7 +437,7 @@ const BookDetailPage: React.FC = () => {
     };
 
     fetchBookDetails();
-  }, [id]);
+  }, [id, shareToken]);
 
   // Load read count and favorite count
   useEffect(() => {
@@ -429,17 +537,24 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
-  // Handle share book with cover image
+  // Handle share book. For Create Your Story books, use share link so recipient can read without subscription.
   const handleShare = async () => {
     if (!book) return;
-    
-    // Share link goes directly to the book page in the web app
-    // Deep link format (no hash) - allows universal links to open directly in app
-    const shareUrl = `https://app.godlykids.com/book/${id}`;
     const shareTitle = translatedTitle || book.title;
     const shareText = `📚 Check out "${shareTitle}" on GodlyKids!\n\n${translatedDescription || book.description || 'A wonderful book for kids!'}`.trim();
-    
-    // Use Web Share API - URL only (clean share without image attachments)
+
+    let shareUrl: string;
+    if ((book as any).isUserCreated && id) {
+      const link = await ApiService.getBookShareLink(id);
+      if (link?.shareUrl) {
+        shareUrl = link.shareUrl;
+      } else {
+        shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/book/${id}` : `https://app.godlykids.com/book/${id}`;
+      }
+    } else {
+      shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/book/${id}` : `https://app.godlykids.com/book/${id}`;
+    }
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -449,18 +564,15 @@ const BookDetailPage: React.FC = () => {
         });
         console.log('📤 Book shared successfully');
       } catch (err) {
-        // User cancelled or share failed - that's ok
         if ((err as Error).name !== 'AbortError') {
           console.log('📤 Share cancelled or failed:', err);
         }
       }
     } else {
-      // Fallback: Copy link to clipboard
       try {
         await navigator.clipboard.writeText(`${shareText}\n\n🔗 ${shareUrl}`);
-        alert('📋 Link copied to clipboard! Share it with your friends.');
+        alert('📋 Link copied to clipboard! Share it with family or friends—they can read it without a subscription.');
       } catch (err) {
-        // Final fallback: prompt user
         prompt('Copy this link to share:', shareUrl);
       }
     }
@@ -473,17 +585,26 @@ const BookDetailPage: React.FC = () => {
     return bookCompletionService.isBookCompleted(id);
   };
 
+  // Build reader URL so shared-link token is preserved when opening the book
+  const readUrl = (opts?: { page?: number; coloring?: string }) => {
+    const params = new URLSearchParams();
+    if (shareToken) params.set('share', shareToken);
+    if (opts?.page != null) params.set('page', String(opts.page));
+    if (opts?.coloring) params.set('coloring', opts.coloring);
+    const q = params.toString();
+    return q ? `/read/${id}?${q}` : `/read/${id}`;
+  };
+
   const handleContinue = () => {
     if (id && savedPageIndex !== null && savedPageIndex >= 0) {
       // Navigate with page number to resume from saved progress
-      // Use page number instead of continue=true for more reliable navigation
       const pageNum = savedPageIndex + 1; // Convert 0-based index to 1-based page number
       console.log(`📖 Continue reading: navigating to page ${pageNum} (savedPageIndex: ${savedPageIndex})`);
-      navigate(`/read/${id}?page=${pageNum}`);
+      navigate(readUrl({ page: pageNum }));
     } else {
       // No saved progress, just start from beginning
       console.log('📖 No saved progress, starting from beginning');
-      navigate(`/read/${id}`);
+      navigate(readUrl());
     }
   };
 
@@ -505,7 +626,49 @@ const BookDetailPage: React.FC = () => {
 
   return (
     // Opaque background to hide panorama
-    <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#fdf6e3]">
+    <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#fdf6e3] relative">
+
+      {/* Generation in progress overlay — same layout as BookDetailPage, loading over the content */}
+      {genStatus && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 px-6">
+          <div className="rounded-2xl overflow-hidden border-2 border-amber-400/40 bg-gradient-to-b from-amber-900/90 to-amber-950/90 shadow-xl max-w-sm w-full p-6 text-center">
+            <Loader2 className="w-16 h-16 text-amber-300 animate-spin mx-auto mb-4" aria-hidden />
+            <p className="text-amber-200 font-bold text-lg mb-1">
+              Page {genStatus.progressPage + 1} of {genStatus.progressTotalPages} in progress
+            </p>
+            <p className="text-amber-200/80 text-sm mb-4">
+              {genStatus.progressPage > 0 ? `${genStatus.progressPage} page${genStatus.progressPage === 1 ? '' : 's'} done. ` : ''}
+              Creating your story...
+            </p>
+            <button
+              type="button"
+              disabled={genRetrying || retryCooldownRemaining > 0}
+              onClick={async () => {
+                if (retryCooldownRemaining > 0) return;
+                localStorage.setItem(retryCooldownKey, String(Date.now()));
+                setRetryCooldownTick((n) => n + 1);
+                setGenRetrying(true);
+                try {
+                  const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/retry/${genStatus.customMonthlyBookId}`, { method: 'POST' });
+                  const data = await res.json().catch(() => ({}));
+                  if (data.success) {
+                    setGenStatus((prev) => prev ? { ...prev, progressPage: prev.progressPage } : null);
+                  }
+                } finally {
+                  setGenRetrying(false);
+                }
+              }}
+              className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
+            >
+              {genRetrying
+                ? 'Retrying…'
+                : retryCooldownRemaining > 0
+                  ? `Try again in ${Math.ceil(retryCooldownRemaining / 1000)}s`
+                  : 'Generation stuck? Tap to resume from next page'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TOP SECTION - WOOD BACKGROUND */}
       {/* Full width, removed margins and top rounded corners */}
@@ -530,21 +693,32 @@ const BookDetailPage: React.FC = () => {
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E")` }}></div>
 
-        {/* Header Icons */}
-        <div className="relative z-20 flex justify-between items-center px-4 pt-6 pb-2">
+        {/* Header: Back + Share (prominent for Create Your Story) */}
+        <div className="relative z-20 flex justify-between items-center gap-3 px-4 pt-6 pb-2">
           {/* Back Button */}
-          <button onClick={handleBack} className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg">
+          <button onClick={handleBack} className="w-10 h-10 flex-shrink-0 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg">
             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2.5} />
           </button>
 
-          {/* Share Button */}
-          <button 
-            onClick={handleShare} 
-            className="w-10 h-10 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg"
-            title="Share this book"
-          >
-            <Share2 className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </button>
+          {/* Share: prominent pill for Create Your Story, else icon only */}
+          {(book as any).isUserCreated ? (
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-amber-500/95 hover:bg-amber-400 border-2 border-amber-700/50 text-[#5c2e0b] font-display font-bold text-sm shadow-lg transform transition-all active:scale-95 min-w-0"
+              title="Share your story with family—they can read without a subscription"
+            >
+              <Share2 className="w-5 h-5 flex-shrink-0" strokeWidth={2.5} />
+              <span className="whitespace-nowrap">Share your story with family</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleShare}
+              className="w-10 h-10 flex-shrink-0 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center transform transition-all active:scale-95 hover:bg-black/60 border border-white/20 shadow-lg"
+              title="Share this book"
+            >
+              <Share2 className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </button>
+          )}
         </div>
 
         {/* Main Content Area - Swaps based on type */}
@@ -562,6 +736,203 @@ const BookDetailPage: React.FC = () => {
             <div className="absolute top-3 right-4 text-white/90 text-2xl animate-pulse filter drop-shadow-md">✦</div>
             <div className="absolute bottom-3 left-4 text-white/80 text-xl animate-pulse delay-700 filter drop-shadow-md">✨</div>
           </div>
+
+          {/* Featuring [childname] or "X & Y" with avatar(s) (Kids Monthly) — click to expand character images */}
+          {(book as any).isUserCreated && (() => {
+            const chars = (book as any).createdForCharacters as Array<{ name: string; characterImageUrl?: string | null }> | undefined;
+            const multi = chars && chars.length > 1;
+            if (multi) {
+              const names = chars.map((c) => c.name || '').filter(Boolean);
+              const featuringText = names.length === 2
+                ? `${names[0]} & ${names[1]}`
+                : names.length === 3
+                  ? `${names[0]}, ${names[1]} & ${names[2]}`
+                  : names.join(', ');
+              return (
+                <button
+                  type="button"
+                  onClick={() => { setExpandedCharacterIndex(null); setShowCharacterExpandModal(true); }}
+                  className="inline-flex items-center gap-3 px-3 py-2 rounded-full bg-amber-500/90 text-[#5c2e0b] font-display font-bold text-sm shadow-md hover:bg-amber-500 transition-colors cursor-pointer border-0"
+                  aria-label={`Featuring ${featuringText}. Click to view larger character images.`}
+                >
+                  <div className="flex -space-x-2">
+                    {chars.slice(0, 3).map((c, i) => (
+                      <div key={i} className="w-10 h-10 rounded-full overflow-hidden bg-[#5c2e0b]/20 flex-shrink-0 border-2 border-[#5c2e0b]/40">
+                        {c.characterImageUrl ? (
+                          <img src={c.characterImageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-lg" aria-hidden>👤</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <span>Featuring {featuringText}</span>
+                </button>
+              );
+            }
+            return (
+              <button
+                type="button"
+                onClick={() => { setExpandedCharacterIndex(null); setShowCharacterExpandModal(true); }}
+                className="inline-flex items-center gap-3 px-3 py-2 rounded-full bg-amber-500/90 text-[#5c2e0b] font-display font-bold text-sm shadow-md hover:bg-amber-500 transition-colors cursor-pointer border-0"
+                aria-label={`Featuring ${(book as any).createdForChildName || 'your child'}. Click to view larger character image.`}
+              >
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-[#5c2e0b]/20 flex-shrink-0 border-2 border-[#5c2e0b]/40">
+                  {(book as any).createdForAvatarUrl ? (
+                    <img
+                      src={(book as any).createdForAvatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-lg" aria-hidden>👤</div>
+                  )}
+                </div>
+                <span>Featuring {(book as any).createdForChildName || 'your child'}</span>
+              </button>
+            );
+          })()}
+
+          {/* Before & After (selfie → character) — visible on details so family/kids see it when opening shared link */}
+          {(book as any).isUserCreated && ((book as any).createdForSelfieUrl || (book as any).createdForAvatarUrl || ((book as any).createdForCharacters && (book as any).createdForCharacters[0]?.characterImageUrl)) && (
+            <div className="w-full max-w-sm flex items-center justify-center gap-2 sm:gap-3 py-2">
+              <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 -rotate-3 max-h-[72px] sm:max-h-[88px] aspect-square bg-[#5c2e0b]/10">
+                {(book as any).createdForSelfieUrl ? (
+                  <img src={(book as any).createdForSelfieUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <img src="/assets/images/create-story-kid-photo.webp" alt="" className="w-full h-full object-cover" />
+                )}
+              </div>
+              <img src="/assets/images/create-story-arrow.webp" alt="" className="max-h-10 sm:max-h-12 w-auto object-contain flex-shrink-0" aria-hidden />
+              <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 rotate-3 max-h-[72px] sm:max-h-[88px] aspect-square bg-[#5c2e0b]/20">
+                {((book as any).createdForCharacters && (book as any).createdForCharacters[0]?.characterImageUrl) ? (
+                  <img src={(book as any).createdForCharacters[0].characterImageUrl} alt="" className="w-full h-full object-cover object-center" />
+                ) : (book as any).createdForAvatarUrl ? (
+                  <img src={(book as any).createdForAvatarUrl} alt="" className="w-full h-full object-cover object-center" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl" aria-hidden>👤</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Modal: expanded character images when user clicks "Featuring" badge */}
+          {showCharacterExpandModal && (book as any).isUserCreated && (() => {
+            const chars = (book as any).createdForCharacters as Array<{ name: string; characterImageUrl?: string | null }> | undefined;
+            const multi = chars && chars.length >= 1;
+            const list = multi ? chars : [{ name: (book as any).createdForChildName || 'Your child', characterImageUrl: (book as any).createdForAvatarUrl || null }];
+            const expanded = expandedCharacterIndex !== null && list[expandedCharacterIndex];
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+                onClick={() => {
+                  if (expandedCharacterIndex !== null) setExpandedCharacterIndex(null);
+                  else setShowCharacterExpandModal(false);
+                }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Character images"
+              >
+                <div
+                  className="bg-[#f3e5ab] rounded-2xl shadow-xl max-w-md w-full p-6 border-2 border-[#5c2e0b]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-[#5c2e0b] font-display font-bold text-lg mb-4 text-center">
+                    {list.length === 1 ? 'Character' : 'Characters'}
+                  </p>
+                  {/* Before & after with same wood arrow as story creation flow (use saved selfie when available) */}
+                  <div className="flex items-end justify-center gap-2 sm:gap-3 mb-4">
+                    <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 -rotate-6 max-h-[80px] sm:max-h-[96px] aspect-square bg-[#5c2e0b]/10">
+                      {(book as any).createdForSelfieUrl ? (
+                        <img
+                          src={(book as any).createdForSelfieUrl}
+                          alt=""
+                          aria-hidden
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src="/assets/images/create-story-kid-photo.webp"
+                          alt=""
+                          aria-hidden
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <img
+                      src="/assets/images/create-story-arrow.webp"
+                      alt=""
+                      aria-hidden
+                      className="max-h-[48px] sm:max-h-[56px] w-auto object-contain flex-shrink-0"
+                    />
+                    <div className="rounded-xl overflow-hidden border-2 border-[#5c2e0b]/40 shadow flex-shrink-0 rotate-6 max-h-[80px] sm:max-h-[96px] aspect-square bg-[#5c2e0b]/20">
+                      {list[0]?.characterImageUrl ? (
+                        <img src={list[0].characterImageUrl} alt="" className="w-full h-full object-cover object-center" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-3xl" aria-hidden>👤</div>
+                      )}
+                    </div>
+                  </div>
+                  {expanded ? (
+                    <>
+                      <div
+                        className="w-full max-w-sm mx-auto rounded-xl overflow-hidden bg-[#5c2e0b]/20 border-2 border-[#5c2e0b]/40 cursor-pointer"
+                        onClick={() => setExpandedCharacterIndex(null)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && setExpandedCharacterIndex(null)}
+                        aria-label="Tap to close expanded view"
+                      >
+                        {expanded.characterImageUrl ? (
+                          <img src={expanded.characterImageUrl} alt={expanded.name || ''} className="w-full h-auto max-h-[70vh] object-contain" />
+                        ) : (
+                          <div className="aspect-square flex items-center justify-center text-6xl" aria-hidden>👤</div>
+                        )}
+                      </div>
+                      <span className="block mt-3 text-[#5c2e0b] font-display font-bold text-base text-center">{expanded.name || `Character ${expandedCharacterIndex! + 1}`}</span>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCharacterIndex(null)}
+                        className="mt-3 w-full py-2 rounded-full bg-[#5c2e0b]/80 text-[#f3e5ab] font-display font-bold text-sm"
+                      >
+                        Back
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className={`grid gap-4 ${list.length === 1 ? 'grid-cols-1' : list.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                        {list.map((c, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => c.characterImageUrl && setExpandedCharacterIndex(i)}
+                            className="flex flex-col items-center p-0 border-0 bg-transparent cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-[#5c2e0b] focus:ring-offset-2 rounded-xl"
+                            aria-label={`View ${c.name || `Character ${i + 1}`} larger`}
+                          >
+                            <div className="w-32 h-32 rounded-xl overflow-hidden bg-[#5c2e0b]/20 border-2 border-[#5c2e0b]/40 flex-shrink-0">
+                              {c.characterImageUrl ? (
+                                <img src={c.characterImageUrl} alt={c.name || ''} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-4xl" aria-hidden>👤</div>
+                              )}
+                            </div>
+                            <span className="mt-2 text-[#5c2e0b] font-display font-bold text-sm">{c.name || `Character ${i + 1}`}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCharacterExpandModal(false)}
+                        className="mt-4 w-full py-2 rounded-full bg-[#5c2e0b] text-[#f3e5ab] font-display font-bold text-sm"
+                      >
+                        Close
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Premium Badge for Members Only Content - Only show if user is NOT subscribed */}
           {isMembersOnly && !isSubscribed && (
@@ -795,7 +1166,7 @@ const BookDetailPage: React.FC = () => {
                 ) : isLocked ? (
                   // Locked state - allow 3-page preview, then show paywall in reader
                   <button
-                    onClick={() => navigate(`/read/${id}`)}
+                    onClick={() => navigate(readUrl())}
                     className="flex-1 bg-gradient-to-b from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB733] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#B8860B] border-2 border-[#B8860B] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none flex items-center justify-center gap-2"
                   >
                     <BookOpen size={20} />
@@ -806,7 +1177,7 @@ const BookDetailPage: React.FC = () => {
                   // Normal unlocked state
                   <>
                     <button
-                      onClick={() => navigate(`/read/${id}`)}
+                      onClick={() => navigate(readUrl())}
                       className="flex-1 bg-[#FCEBB6] hover:bg-[#fff5cc] text-[#5c2e0b] font-display font-bold text-xl py-3 rounded-2xl shadow-[0_4px_0_#D4B483] border-2 border-[#D4B483] active:translate-y-[4px] active:shadow-none transition-all text-center leading-none"
                     >
                       {t('read')}
@@ -835,8 +1206,10 @@ const BookDetailPage: React.FC = () => {
                       >
                         <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#70380d] to-transparent"></div>
 
-                        <div className="w-20 h-14 bg-[#87CEEB] rounded-lg overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
-                          {game.coverImage ? (
+                        <div className="w-20 h-14 bg-[#87CEEB] rounded-xl overflow-hidden relative shrink-0 border-2 border-white/10 shadow-inner z-10">
+                          {game.logo ? (
+                            <img src={game.logo} className="w-full h-full object-cover" alt={game.name} />
+                          ) : game.coverImage ? (
                             <img src={game.coverImage} className="w-full h-full object-cover" alt={game.name} />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -949,7 +1322,7 @@ const BookDetailPage: React.FC = () => {
                                     analyticsService.gameOpen(game._id || `book_game_${index}`, game.title, id);
                                     setSelectedGame({ title: game.title, url: game.url });
                                   } else {
-                                    navigate(`/read/${id}`);
+                                    navigate(readUrl());
                                   }
                                 }}
                                 className={`${isUnlocked
@@ -992,27 +1365,29 @@ const BookDetailPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Save to Library Button */}
-              <button
-                onClick={handleSaveToLibrary}
-                type="button"
-                className={`w-full max-w-sm bg-gradient-to-b ${isInLibrary 
-                  ? 'from-[#6da34d] to-[#5a8a3f] hover:from-[#7db85b] hover:to-[#6a9a4f]' 
-                  : 'from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d]'
-                } text-[#f3e5ab] font-display font-bold text-lg py-2.5 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2 relative z-20 pointer-events-auto`}
-              >
-                {isInLibrary ? (
-                  <>
-                    <Bookmark size={18} fill="currentColor" />
-                    <span>{t('savedToLibrary') || 'Saved to Library'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus size={18} />
-                    <span>{t('saveToLibrary') || 'Save to Library'}</span>
-                  </>
-                )}
-              </button>
+              {/* Save to Library Button - hidden for Kids created books (they're already in the user's story) */}
+              {!(book as any).isUserCreated && (
+                <button
+                  onClick={handleSaveToLibrary}
+                  type="button"
+                  className={`w-full max-w-sm bg-gradient-to-b ${isInLibrary 
+                    ? 'from-[#6da34d] to-[#5a8a3f] hover:from-[#7db85b] hover:to-[#6a9a4f]' 
+                    : 'from-[#8B4513] to-[#5c2e0b] hover:from-[#A0522D] hover:to-[#70380d]'
+                  } text-[#f3e5ab] font-display font-bold text-lg py-2.5 rounded-full shadow-[0_4px_0_#3e1f07,0_8px_15px_rgba(0,0,0,0.4)] border-2 border-[#a05f2c] active:translate-y-[4px] active:shadow-[0_0_0_#3e1f07] transition-all text-center flex items-center justify-center gap-2 relative z-20 pointer-events-auto`}
+                >
+                  {isInLibrary ? (
+                    <>
+                      <Bookmark size={18} fill="currentColor" />
+                      <span>{t('savedToLibrary') || 'Saved to Library'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={18} />
+                      <span>{t('saveToLibrary') || 'Save to Library'}</span>
+                    </>
+                  )}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -1026,6 +1401,15 @@ const BookDetailPage: React.FC = () => {
           <h1 className="text-2xl font-display font-extrabold text-[#3E1F07] mb-1 leading-tight">
             {book.title}
           </h1>
+          {(book as any).isUserCreated && (book as any).createdWithStyleId && (
+            <p className="text-[#8B4513] font-semibold text-sm opacity-90 mb-1">
+              In {(() => {
+                const styleId = String((book as any).createdWithStyleId).toLowerCase();
+                const style = CHARACTER_STYLES.find(s => s.id === styleId);
+                return style ? style.name : styleId;
+              })()} style
+            </p>
+          )}
           <p className="text-[#8B4513] font-semibold text-sm opacity-90">
             By: {book.author || "Kingdom Builders Publishing"}
           </p>
@@ -1091,7 +1475,7 @@ const BookDetailPage: React.FC = () => {
                   onClick={() => {
                     if (!id) return;
                     // Allow access - the book reader handles 3-page preview limit
-                    navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
+                    navigate(readUrl({ coloring: pinnedDrawing.pageRef }));
                   }}
                   className="bg-[#6da34d] hover:bg-[#7db85b] text-white text-sm font-bold py-2 px-5 rounded-full shadow-[0_3px_0_#3d5c2b] active:translate-y-[3px] active:shadow-none transition-all border border-[#ffffff20] flex items-center gap-2"
                 >
@@ -1159,7 +1543,7 @@ const BookDetailPage: React.FC = () => {
                     setShowDrawingModal(false);
                     if (!id) return;
                     // Allow access - the book reader handles 3-page preview limit
-                    navigate(`/read/${id}?coloring=${encodeURIComponent(pinnedDrawing.pageRef)}`);
+                    navigate(readUrl({ coloring: pinnedDrawing.pageRef }));
                   }}
                   className="mt-4 w-full bg-[#6da34d] hover:bg-[#7db85b] text-white font-bold py-3 rounded-xl shadow-[0_4px_0_#3d5c2b] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                 >

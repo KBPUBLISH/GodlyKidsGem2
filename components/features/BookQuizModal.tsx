@@ -49,6 +49,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
     const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number>>(new Map());
     const [quizSubmitted, setQuizSubmitted] = useState(false);
     const [results, setResults] = useState<any>(null);
+    const [showReview, setShowReview] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [ageGroup, setAgeGroup] = useState<string>('');
@@ -223,6 +224,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
         setSelectedAnswers(new Map());
         setQuizSubmitted(false);
         setResults(null);
+        setShowReview(false);
         setError(null);
         onClose();
     };
@@ -321,6 +323,91 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                                     ? `You have ${results.attemptsRemaining} attempt${results.attemptsRemaining > 1 ? 's' : ''} remaining!`
                                     : 'You\'ve completed all your quiz attempts!'}
                             </p>
+
+                            {questions.length > 0 && (
+                                <button
+                                    onClick={() => setShowReview(prev => !prev)}
+                                    className="bg-white/60 text-[#5D4037] px-6 py-2 rounded-xl font-bold border-2 border-[#8B4513] hover:bg-white transition-all mb-6 flex items-center gap-2"
+                                >
+                                    {showReview ? 'Hide My Answers' : 'See Which Ones I Missed'}
+                                    {showReview ? <ChevronLeft className="w-4 h-4 rotate-90" /> : <ChevronRight className="w-4 h-4 rotate-90" />}
+                                </button>
+                            )}
+
+                            {showReview && (
+                                <div className="w-full text-left space-y-4 mb-6">
+                                    {questions.map((q, qIndex) => {
+                                        const correctIndex = q.options.findIndex(opt => opt.isCorrect);
+                                        const childAnswer = selectedAnswers.get(qIndex) ?? results?.results?.[qIndex]?.userAnswer ?? -1;
+                                        const gotItRight = childAnswer === correctIndex;
+                                        return (
+                                            <div
+                                                key={qIndex}
+                                                className={`rounded-xl p-4 border-2 ${
+                                                    gotItRight
+                                                        ? 'bg-[#E8F5E9] border-[#4CAF50]'
+                                                        : 'bg-[#FFEBEE] border-[#E53935]'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-2 mb-3">
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                                        gotItRight ? 'bg-[#4CAF50]' : 'bg-[#E53935]'
+                                                    }`}>
+                                                        {gotItRight
+                                                            ? <Check className="w-5 h-5 text-white" />
+                                                            : <X className="w-5 h-5 text-white" />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-[#8B4513] text-xs font-bold uppercase tracking-wide">
+                                                            Question {qIndex + 1} · {gotItRight ? 'Correct!' : 'Oops!'}
+                                                        </p>
+                                                        <p className="text-[#3E2723] font-bold leading-snug">
+                                                            {q.question}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {q.options.map((option, optIndex) => {
+                                                        const isCorrectOption = optIndex === correctIndex;
+                                                        const isChildWrongPick = optIndex === childAnswer && !gotItRight;
+                                                        return (
+                                                            <div
+                                                                key={optIndex}
+                                                                className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                                                                    isCorrectOption
+                                                                        ? 'bg-[#4CAF50]/15 text-[#2E7D32] font-bold'
+                                                                        : isChildWrongPick
+                                                                        ? 'bg-[#E53935]/15 text-[#C62828] font-bold line-through'
+                                                                        : 'text-[#5D4037]'
+                                                                }`}
+                                                            >
+                                                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border flex-shrink-0 ${
+                                                                    isCorrectOption
+                                                                        ? 'bg-[#4CAF50] border-[#2E7D32] text-white'
+                                                                        : isChildWrongPick
+                                                                        ? 'bg-[#E53935] border-[#C62828] text-white'
+                                                                        : 'bg-[#d4c59a] border-[#8B4513] text-[#5D4037]'
+                                                                }`}>
+                                                                    {String.fromCharCode(65 + optIndex)}
+                                                                </span>
+                                                                <span className="flex-1">{option.text}</span>
+                                                                {isCorrectOption && <Check className="w-4 h-4 text-[#2E7D32] flex-shrink-0" />}
+                                                                {isChildWrongPick && <X className="w-4 h-4 text-[#C62828] flex-shrink-0" />}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {!gotItRight && (
+                                                    <p className="text-[#2E7D32] text-xs font-bold mt-2 flex items-center gap-1">
+                                                        <Check className="w-3.5 h-3.5" />
+                                                        The right answer was "{q.options[correctIndex]?.text}"
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
 
                             <button
                                 onClick={handleClose}

@@ -117,15 +117,26 @@ export const MOCK_BOOKS: Book[] = [
   }
 ];
 
+/**
+ * Feature flag: show Create Your Story (Kids Monthly) in Library and Home.
+ * Override with VITE_FEATURE_CREATE_YOUR_STORY=false to disable.
+ */
+export const FEATURE_CREATE_YOUR_STORY =
+  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_CREATE_YOUR_STORY !== undefined
+    ? (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === 'true' || (import.meta as any).env.VITE_FEATURE_CREATE_YOUR_STORY === true
+    : true;
+
 // API Base URL - can be overridden with VITE_API_BASE_URL environment variable
 export const API_BASE_URL =
   typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
     ? (import.meta as any).env.VITE_API_BASE_URL
     : "http://localhost:5001/api/";
 
-/** Feature flag: Create Your Story (Kids Monthly). On in dev and when served from localhost (preview); in production set VITE_SHOW_CREATE_YOUR_STORY=true to show. */
-export const FEATURE_CREATE_YOUR_STORY =
-  typeof import.meta !== "undefined" &&
-  ((import.meta as any).env?.DEV === true ||
-    (import.meta as any).env?.VITE_SHOW_CREATE_YOUR_STORY === "true" ||
-    (typeof window !== "undefined" && /^localhost$|^127\.0\.0\.1$/.test(window.location.hostname)));
+/** Build karaoke share URL for a recording. Uses production URL when origin is opaque (WebView/Despia). */
+export const getKaraokeShareUrl = (recordingId: string): string => {
+  const base =
+    typeof window !== 'undefined' && window.location?.origin && /^https?:\/\//.test(window.location.origin)
+      ? window.location.origin + (window.location.pathname || '/')
+      : 'https://app.godlykids.com/';
+  return `${base.replace(/\/$/, '')}#/karaoke/share/${recordingId}`;
+};

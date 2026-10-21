@@ -55,7 +55,7 @@ const appUserSchema = new mongoose.Schema({
     },
     subscriptionPlan: {
         type: String,
-        enum: ['monthly', 'annual', null],
+        enum: ['monthly', 'annual', 'lifetime', null],
     },
     
     // Reverse Trial (7-day free premium when closing paywall)

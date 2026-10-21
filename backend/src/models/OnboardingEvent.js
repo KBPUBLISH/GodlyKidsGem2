@@ -85,6 +85,13 @@ const onboardingEventSchema = new mongoose.Schema({
             'reverse_trial_converted',  // User subscribed during/after reverse trial
             'reverse_trial_churned',    // User declined after reverse trial
             'reverse_trial_expired_subscribe_clicked', // User clicked subscribe on expired trial modal
+            'reverse_trial_offer_accepted',  // User accepted the reverse trial offer
+            'reverse_trial_offer_declined',  // User declined the reverse trial offer
+            
+            // Paywall exit-intent 24h trial events
+            'paywall_exit_trial_offered',    // Exit popup shown when user tried to leave paywall
+            'paywall_exit_trial_accepted',   // User accepted the 24h free trial from exit popup
+            'paywall_exit_trial_declined',   // User declined the 24h free trial from exit popup
             
             // Reverse trial onboarding screens
             'reverse_trial_screen_1_viewed',
@@ -102,6 +109,25 @@ const onboardingEventSchema = new mongoose.Schema({
             
             // First lesson paywall
             'first_lesson_paywall_shown', // Paywall shown after first lesson
+
+            // Lifetime offer popup (after paywall close / 1 min on app / app reopen)
+            'lifetime_popup_shown',
+            'lifetime_popup_clicked',
+            'lifetime_popup_dismissed',
+
+            // Dive into the Bible / Create Your Story (book building) funnel
+            'book_building_started',
+            'book_building_step_1_complete',
+            'book_building_step_2_started',
+            'book_building_character_generated',
+            'book_building_step_2_complete',
+            'book_building_step_3_started',
+            'book_building_step_3_complete',
+            'book_building_step_4_started',
+            'book_building_step_4_complete',
+            'book_building_book_created',
+            'book_building_book_completed',
+            'layout_rating_submitted',
         ],
     },
     
@@ -109,6 +135,7 @@ const onboardingEventSchema = new mongoose.Schema({
     metadata: {
         step: Number,
         planType: String,           // 'annual' | 'monthly' | 'lifetime'
+        source: String,             // 'create-your-story' | 'onboarding-first-time-user' | etc.
         kidsCount: Number,
         voiceSelected: String,
         priorities: [String],       // Discipleship goals selected
@@ -127,6 +154,7 @@ const onboardingEventSchema = new mongoose.Schema({
         duration: Number,           // Session duration in seconds/minutes
         coinsEarned: Number,        // Coins earned for a specific step
         stepType: String,           // Type of step (prayer, devotional, book)
+        rating: Number,             // Layout rating 1-5 for layout_rating_submitted
     },
     
     createdAt: {

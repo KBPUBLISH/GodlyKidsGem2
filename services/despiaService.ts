@@ -110,6 +110,58 @@ export const DespiaService = {
   },
 
   /**
+   * Open an external URL.
+   *
+   * - In Despia native: window.open(url, '_blank') is intercepted by the runtime
+   *   and routed to the native in-app browser, so the user stays inside the app
+   *   (a SFSafariViewController / Chrome Custom Tab — NOT an iframe, so sites that
+   *   block iframe embedding like Amazon still load fine). Only domains explicitly
+   *   whitelisted in Despia project settings are forced out to Safari (for payment
+   *   compliance). CRITICAL: do NOT pass a window-features string here — on iOS
+   *   WKWebView, window.open(url, '_blank', 'noopener,noreferrer') is treated as a
+   *   popup and handed off to the system browser, which kicks the user OUT of the app.
+   *   Ref: https://npm.despia.com/default-guide/native-features/external-link-handling
+   * - On web: opens in a new tab with noopener,noreferrer for safety.
+   *
+   * IMPORTANT: must be called synchronously from a user gesture (click handler),
+   * otherwise iOS/Safari pop-up blockers will reject it.
+   */
+  openExternalUrl: (url: string): void => {
+    if (!url) return;
+    try {
+      if (isDespia()) {
+        // Let the Despia runtime intercept and open the in-app browser.
+        window.open(url, '_blank');
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      console.warn('Failed to open external URL, falling back to location.href:', err);
+      try { window.location.href = url; } catch {}
+    }
+  },
+
+  /**
+   * Some sites refuse to be displayed in an iframe via X-Frame-Options /
+   * Content-Security-Policy: frame-ancestors. Returns true for hosts we know
+   * will fail in an in-app iframe so callers can route to the in-app browser.
+   */
+  cannotBeIframed: (url: string): boolean => {
+    if (!url) return false;
+    let host = '';
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+    const blocked = [
+      'amazon.', 'amzn.',
+      'apple.com', 'itunes.apple.com', 'apps.apple.com',
+      'play.google.com',
+      'ebay.', 'walmart.com', 'target.com', 'bestbuy.com',
+      'paypal.com', 'stripe.com', 'checkout.stripe.com',
+      'facebook.com', 'instagram.com', 'youtube.com',
+    ];
+    return blocked.some(p => host.includes(p));
+  },
+
+  /**
    * Social Share Dialog
    * https://npm.despia.com/default-guide/native-features/social-share-dialog
    */
@@ -306,6 +358,88 @@ export const DespiaService = {
     } else {
       console.log('📱 Daily verse notification already scheduled for today');
     }
+  },
+
+  /**
+   * Microphone Recording (standard Web APIs)
+   *
+   * Despia MCP docs do NOT include a native mic recording protocol. Recording uses
+   * the standard Web APIs: getUserMedia + MediaRecorder. These work in Despia's
+   * WebView when the native app has microphone permission (Info.plist / AndroidManifest).
+   *
+   * Use for: Karaoke, voice memos, prayer recording, etc.
+   */
+  recording: {
+    /**
+     * Request mic permission and return a MediaStream, or null if denied.
+     * In Despia: ensure microphone permission is in the native app config.
+     */
+    requestPermission: async (): Promise<MediaStream | null> => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        return stream;
+      } catch (err) {
+        console.warn('Microphone permission denied:', err);
+        return null;
+      }
+    },
+
+    /**
+     * Start recording from the microphone.
+     * Returns { start, stop } where stop() resolves with the audio Blob.
+     */
+    startRecording: async (): Promise<{
+      stream: MediaStream;
+      stop: () => Promise<Blob>;
+    } | null> => {
+      const stream = await DespiaService.recording.requestPermission();
+      if (!stream) return null;
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+        audioBitsPerSecond: 128000,
+      });
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      return new Promise((resolve, reject) => {
+        recorder.onstart = () => {
+          resolve({
+            stream,
+            stop: () =>
+              new Promise<Blob>((res, rej) => {
+                if (recorder.state === 'inactive') {
+                  res(new Blob(chunks, { type: recorder.mimeType }));
+                  return;
+                }
+                recorder.onstop = () => {
+                  stream.getTracks().forEach((t) => t.stop());
+                  res(new Blob(chunks, { type: recorder.mimeType }));
+                };
+                recorder.stop();
+              }),
+          });
+        };
+        recorder.onerror = (e) => {
+          stream.getTracks().forEach((t) => t.stop());
+          rej((e as any)?.error || new Error('Recording failed'));
+        };
+        recorder.start(1000);
+      });
+    },
+
+    /**
+     * Open app settings (useful when mic permission was denied - user can enable manually).
+     * Only available in Despia native.
+     */
+    openSettingsForPermission: (): void => {
+      DespiaService.openSettings();
+    },
   },
 
   /**

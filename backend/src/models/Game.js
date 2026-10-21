@@ -26,6 +26,10 @@ const gameSchema = new mongoose.Schema({
     coverImage: {
         type: String,
     },
+    // Logo image for the game (shown in app with rounded corners)
+    logo: {
+        type: String,
+    },
     // Show in "Daily Tasks & IQ Games" category
     showInDailyTasks: {
         type: Boolean,

@@ -12,16 +12,9 @@ interface TutorialPromptModalProps {
 const TUTORIAL_PROMPT_KEY = 'godlykids_tutorial_prompt_shown';
 
 // Check if the tutorial prompt has been shown before
+// DISABLED: Tutorial design outdated after app layout changes; re-enable when tutorial is updated
 export const shouldShowTutorialPrompt = (): boolean => {
-    // Don't show if tutorial was already completed
-    if (localStorage.getItem('godlykids_tutorial_complete') === 'true') {
-        return false;
-    }
-    // Don't show if prompt was already shown
-    if (localStorage.getItem(TUTORIAL_PROMPT_KEY) === 'true') {
-        return false;
-    }
-    return true;
+    return false;
 };
 
 // Mark tutorial prompt as shown

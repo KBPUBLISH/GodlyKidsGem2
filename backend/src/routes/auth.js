@@ -3,6 +3,20 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
+const AppUser = require('../models/AppUser');
+const { authenticateUser } = require('../middleware/auth');
+
+function escapeRegexEmail(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getProtectedAccountEmails() {
+    const envEmails = process.env.ADMIN_EMAILS;
+    if (envEmails) {
+        return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+    }
+    return ['admin@godlykids.com', 'support@godlykids.com', 'hello@kbpublish.org'];
+}
 
 // Old backend configuration
 const OLD_BACKEND_URL = process.env.OLD_BACKEND_URL || 'https://api.godlykids.kbpublish.org';
@@ -202,6 +216,32 @@ router.post('/migrate-legacy', async (req, res) => {
     } catch (err) {
         console.error('Migration error:', err.message);
         res.status(500).json({ msg: 'Server error during migration' });
+    }
+});
+
+/**
+ * DELETE /api/auth/account
+ * Authenticated user deletes their own login + linked app profile (App Store account-deletion requirement).
+ */
+router.delete('/account', authenticateUser, async (req, res) => {
+    try {
+        const user = req.user;
+        const emailLower = (user.email || '').toLowerCase().trim();
+        if (!emailLower) {
+            return res.status(400).json({ success: false, message: 'No email on account; cannot delete.' });
+        }
+        if (getProtectedAccountEmails().includes(emailLower)) {
+            return res.status(403).json({ success: false, message: 'This account cannot be deleted.' });
+        }
+        await AppUser.deleteMany({
+            email: new RegExp(`^${escapeRegexEmail(emailLower)}$`, 'i'),
+        });
+        await User.findByIdAndDelete(user._id);
+        console.log(`🗑️ User self-service account deleted: ${emailLower}`);
+        return res.json({ success: true, message: 'Account deleted' });
+    } catch (err) {
+        console.error('DELETE /auth/account error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to delete account' });
     }
 });
 

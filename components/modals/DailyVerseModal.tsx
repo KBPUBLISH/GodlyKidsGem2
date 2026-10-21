@@ -59,7 +59,7 @@ const DAILY_VERSES = [
     question: "What are three things you are thankful for that make you joyful?"
   },
   { 
-    text: "For God so loved the world that he gave his only Son", 
+    text: "For God so loved the world that He gave His only Son", 
     ref: "John 3:16", 
     theme: "Salvation",
     question: "Why do you think God loves us so much that He gave us Jesus?"
@@ -107,7 +107,7 @@ const DAILY_VERSES = [
     question: "How would you like your friends to treat you? How can you treat them that way?"
   },
   { 
-    text: "Jesus said let the little children come to me for the kingdom belongs to them", 
+    text: "Jesus said let the little children come to Me for the kingdom belongs to them", 
     ref: "Matthew 19:14", 
     theme: "Jesus' Love",
     question: "How does it feel to know that Jesus wants you to come to Him?"
@@ -195,35 +195,34 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       initializeGame();
-      // Skip intro and go straight to preview countdown
-      setTimeout(() => startGame(), 100);
+      // Show the verse in a self-paced preview so kids and parents can read it
+      // together — as many times as they need — before the words scramble.
+      // (Previously a forced 3s countdown made it impossible for new readers.)
+      setTimeout(() => setGameState('preview'), 100);
     } else {
       setGameState('intro');
     }
   }, [isOpen]);
 
-  const initializeGame = () => {
-    const dailyVerse = getDailyVerse();
-    setVerse(dailyVerse);
-    setGameState('intro');
+  // Reset puzzle progress (mistakes, hints, placed words) without touching the verse.
+  const resetProgress = () => {
     setNextTargetIndex(0);
     setMistakes(0);
     setEarnedStars(0);
     setShowSparkles(false);
     setHintWordId(null);
     setHintsUsed(0);
-    setPreviewCountdown(3);
-    
-    // Split into words
-    const chunks = dailyVerse.text.split(' ').map((text, i) => ({
+  };
+
+  // Split a verse into word chunks and (re)shuffle the order.
+  const buildChunks = (v: { text: string }) => {
+    const chunks = v.text.split(' ').map((text, i) => ({
       id: i,
       text,
-      isPlaced: false
+      isPlaced: false,
     }));
-    
     setWordChunks(chunks);
-    
-    // Shuffle the indices
+
     const indices = chunks.map((_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -232,25 +231,24 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
     setShuffledIndices(indices);
   };
 
+  const initializeGame = () => {
+    const dailyVerse = getDailyVerse();
+    setVerse(dailyVerse);
+    setGameState('intro');
+    setPreviewCountdown(3);
+    resetProgress();
+    buildChunks(dailyVerse);
+  };
+
+  // Scramble the words and begin the puzzle. Triggered manually when the family
+  // is ready, so there is no time pressure while reading the verse.
   const startGame = () => {
     playClick?.();
-    setPreviewCountdown(3);
-    setGameState('preview');
-    
-    // Start countdown
-    let count = 3;
-    const countdownInterval = setInterval(() => {
-      count--;
-      setPreviewCountdown(count);
-      if (count <= 0) {
-        clearInterval(countdownInterval);
-        // Trigger scramble animation
-        setGameState('scrambling');
-        setTimeout(() => {
-          setGameState('playing');
-        }, 800); // Scramble animation duration
-      }
-    }, 1000);
+    resetProgress();
+    setGameState('scrambling');
+    setTimeout(() => {
+      setGameState('playing');
+    }, 800); // Scramble animation duration
   };
 
   const useHint = () => {
@@ -316,8 +314,13 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
 
   const handleRestart = () => {
     playClick?.();
-    initializeGame();
-    setTimeout(() => setGameState('playing'), 100);
+    // Keep the SAME verse, reshuffle it, and return to the readable preview so
+    // the child can read it again before trying once more. (Previously this
+    // picked a brand-new verse and jumped straight to the scrambled board, so
+    // the verse "flashed" and disappeared with no way to reread it.)
+    resetProgress();
+    buildChunks(verse);
+    setGameState('preview');
   };
 
   if (!isOpen) return null;
@@ -386,7 +389,7 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
               </div>
               
               <button
-                onClick={startGame}
+                onClick={() => { playClick?.(); setGameState('preview'); }}
                 className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#5D4E37] to-[#8B6914] text-[#F5E6D3] hover:brightness-110 active:scale-[0.98] transition-all shadow-lg border-2 border-[#D4A574]"
               >
                 Start Puzzle! 🧩
@@ -394,13 +397,13 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
             </div>
           )}
 
-          {/* PREVIEW STATE - Show verse for 3 seconds */}
+          {/* PREVIEW STATE - Read the verse at your own pace, no timer */}
           {gameState === 'preview' && (
             <div className="text-center py-6">
               <div className="text-6xl mb-4">📖</div>
-              <h3 className="text-[#3D2914] font-bold text-2xl mb-2">Memorize the Verse!</h3>
+              <h3 className="text-[#3D2914] font-bold text-2xl mb-2">Read the Verse</h3>
               <p className="text-[#5D4E37] text-base mb-6">
-                Read it carefully before it scrambles...
+                Read it together as many times as you like. Tap the button when you're ready!
               </p>
               
               {/* Full verse display */}
@@ -418,13 +421,13 @@ const DailyVerseModal: React.FC<DailyVerseModalProps> = ({
                 <p className="text-[#8B4513] font-medium text-base mt-4">— {verse.ref}</p>
               </div>
               
-              {/* Countdown */}
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#5D4E37] to-[#8B6914] flex items-center justify-center border-4 border-[#D4A574] shadow-lg">
-                  <span className="text-[#F5E6D3] font-bold text-3xl">{previewCountdown}</span>
-                </div>
-              </div>
-              <p className="text-[#5D4E37] text-sm mt-2">Scrambling in {previewCountdown}...</p>
+              {/* Ready button - family scrambles when they choose */}
+              <button
+                onClick={startGame}
+                className="w-full py-5 rounded-2xl font-bold text-xl bg-gradient-to-r from-[#5D4E37] to-[#8B6914] text-[#F5E6D3] hover:brightness-110 active:scale-[0.98] transition-all shadow-lg border-2 border-[#D4A574]"
+              >
+                I'm Ready — Scramble the Words! 🔀
+              </button>
             </div>
           )}
 

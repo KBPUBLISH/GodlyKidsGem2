@@ -47,9 +47,13 @@ router.post('/', async (req, res) => {
         scrollOffsetY: req.body.scrollOffsetY || 0,
         scrollOffsetX: req.body.scrollOffsetX || 0,
         scrollWidth: req.body.scrollWidth || 100,
+        scrollOpacity: req.body.scrollOpacity != null ? req.body.scrollOpacity : 100,
         soundEffectUrl: req.body.soundEffectUrl,
         backgroundAudioUrl: req.body.backgroundAudioUrl, // Auto-extracted from video for iOS audio layering
         textBoxes: req.body.textBoxes,
+        // Swipe Up (vertical feed) layout: page kind & video auto-advance
+        pageKind: req.body.pageKind === 'text' ? 'text' : 'media',
+        videoAutoAdvance: !!req.body.videoAutoAdvance,
         // Coloring page settings
         isColoringPage: req.body.isColoringPage || false,
         coloringEndModalOnly: req.body.coloringEndModalOnly !== false, // Default to true (end modal only)
@@ -59,6 +63,8 @@ router.post('/', async (req, res) => {
         // Video sequence settings
         videoSequence: req.body.videoSequence || [],
         useVideoSequence: req.body.useVideoSequence || false,
+        backgroundTrimStartSec: req.body.backgroundTrimStartSec,
+        backgroundTrimEndSec: req.body.backgroundTrimEndSec,
         // Image sequence settings
         imageSequence: req.body.imageSequence || [],
         useImageSequence: req.body.useImageSequence || false,
@@ -109,6 +115,9 @@ router.put('/:id', async (req, res) => {
         }
         if (typeof req.body.scrollHeight === 'number') {
             page.scrollHeight = req.body.scrollHeight;
+        }
+        if (typeof req.body.scrollOpacity === 'number' && req.body.scrollOpacity >= 0 && req.body.scrollOpacity <= 100) {
+            page.scrollOpacity = req.body.scrollOpacity;
         }
         // Keep scrollUrl and files.scroll in sync so book reader and generator find scroll from either location
         if (req.body.scrollUrl !== undefined) {

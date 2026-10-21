@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
 import {
     Save,
@@ -24,10 +24,19 @@ import {
     ChevronLeft,
     ChevronRight,
     Film,
+    Scissors,
     Globe,
     Gamepad2,
     Users
 } from 'lucide-react';
+import {
+    APP_BOOK_REF_VIEWPORT_WIDTH,
+    appSideSwipeAuthoredFontSizePx,
+    appSideSwipeFontFamily,
+    appSideSwipeTextShadow,
+    appStoryParagraphExtras,
+    scaleAuthoredFontToCanvas,
+} from '../utils/appBookTypography';
 
 interface TextBox {
     id: string;
@@ -53,6 +62,9 @@ interface VideoSequenceItem {
     order: number;
     file?: File;
     preview?: string;
+    /** Seconds from start of uploaded file — optional playback trim */
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -73,8 +85,16 @@ interface Game {
     gameType: 'modal' | 'webview';
 }
 
+/** Normalize API/template font sizes so controls stay numeric and clamped */
+function coerceTextBoxFontPx(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10);
+    if (!Number.isFinite(n)) return 24;
+    return Math.min(120, Math.max(8, Math.round(n)));
+}
+
 const PageEditor: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
+    const navigate = useNavigate();
 
     // Core State
     const [pageNumber, setPageNumber] = useState<number>(1);
@@ -108,13 +128,17 @@ const PageEditor: React.FC = () => {
     // Video sequence settings (multiple videos that play in order)
     const [useVideoSequence, setUseVideoSequence] = useState(false);
     const [videoSequence, setVideoSequence] = useState<VideoSequenceItem[]>([]);
+
+    /** Optional trim for single background videos (seconds, relative to file). */
+    const [backgroundTrimStartSec, setBackgroundTrimStartSec] = useState<number | undefined>(undefined);
+    const [backgroundTrimEndSec, setBackgroundTrimEndSec] = useState<number | undefined>(undefined);
     
     // Image sequence settings (multiple images that cycle with transitions)
     const [useImageSequence, setUseImageSequence] = useState(false);
     const [imageSequence, setImageSequence] = useState<ImageSequenceItem[]>([]);
-    const [imageSequenceDuration, setImageSequenceDuration] = useState(10); // seconds per image (default 10 for Ken Burns)
+    const [imageSequenceDuration, setImageSequenceDuration] = useState(3); // seconds per image
     const [imageSequenceAnimation, setImageSequenceAnimation] = useState<string>('kenBurns'); // animation effect
-    // Single background image animation (for pages with one image, e.g. kids monthly template)
+    // Single background image animation (Kids Monthly: applied to each generated page image)
     const [backgroundImageAnimation, setBackgroundImageAnimation] = useState<string>('kenBurns');
     const [backgroundImageAnimationDuration, setBackgroundImageAnimationDuration] = useState(10);
 
@@ -142,6 +166,9 @@ const PageEditor: React.FC = () => {
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
     // Kids Monthly Book: optional scene prompt for on-demand background image generation
     const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
+    const [pageKind, setPageKind] = useState<'text' | 'media'>('media');
+    const [videoAutoAdvance, setVideoAutoAdvance] = useState<boolean>(false);
     const [sceneDescription, setSceneDescription] = useState<string>('');
     // Kids Monthly Book: saved characters to reference on this page (for image generation)
     const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>([]);
@@ -151,10 +178,9 @@ const PageEditor: React.FC = () => {
     const [imagePromptFilter, setImagePromptFilter] = useState('');
     const [imagePromptStart, setImagePromptStart] = useState(0);
     const [imagePromptSelectedIndex, setImagePromptSelectedIndex] = useState(0);
+    const [analyzingScenePrompt, setAnalyzingScenePrompt] = useState(false);
     const imagePromptRef = useRef<HTMLTextAreaElement>(null);
     
-    // Analyze scene prompt (AI)
-    const [analyzingScenePrompt, setAnalyzingScenePrompt] = useState(false);
     // TTS Cache clearing
     const [clearingCache, setClearingCache] = useState(false);
     const [cacheCleared, setCacheCleared] = useState(false);
@@ -192,6 +218,7 @@ const PageEditor: React.FC = () => {
                     setCharacterVoices(res.data.characterVoices);
                 }
                 setBookType(res.data.bookType || 'standard');
+                setReaderLayout(res.data.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe');
             } catch (err) {
                 console.error('Failed to fetch book data for character voices:', err);
             }
@@ -258,7 +285,11 @@ const PageEditor: React.FC = () => {
                         if (template.textBoxes && template.textBoxes.length > 0) {
                             const boxesWithIds = template.textBoxes.map((box: any, idx: number) => ({
                                 ...box,
-                                id: `template-${Date.now()}-${idx}`
+                                id: `template-${Date.now()}-${idx}`,
+                                fontFamily: box.fontFamily || 'Comic Sans MS',
+                                fontSize: coerceTextBoxFontPx(box.fontSize),
+                                color: box.color || '#4a3b2a',
+                                width: box.width || 30
                             }));
                             setTextBoxes(boxesWithIds);
                         }
@@ -273,13 +304,25 @@ const PageEditor: React.FC = () => {
         fetchPages();
     }, [bookId]);
 
-    // Cleanup object URLs
+    // Cleanup object URLs — IMPORTANT: split per-preview so changing one doesn't
+    // revoke the other. Previously a single effect with [backgroundPreview, scrollPreview]
+    // would revoke the still-in-use blob when the *other* preview changed (closure
+    // captured both prev values), making freshly uploaded images vanish.
     useEffect(() => {
         return () => {
-            if (backgroundPreview && !backgroundPreview.startsWith('http')) URL.revokeObjectURL(backgroundPreview);
-            if (scrollPreview && !scrollPreview.startsWith('http')) URL.revokeObjectURL(scrollPreview);
+            if (backgroundPreview && backgroundPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(backgroundPreview);
+            }
         };
-    }, [backgroundPreview, scrollPreview]);
+    }, [backgroundPreview]);
+
+    useEffect(() => {
+        return () => {
+            if (scrollPreview && scrollPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(scrollPreview);
+            }
+        };
+    }, [scrollPreview]);
 
     // Add new text box
     const addTextBox = () => {
@@ -446,6 +489,18 @@ const PageEditor: React.FC = () => {
         console.log('🎬 Background type determined:', bgType);
         setBackgroundType(bgType);
 
+        // Optional background video trim (seconds)
+        setBackgroundTrimStartSec(
+            typeof page.backgroundTrimStartSec === 'number' && page.backgroundTrimStartSec > 0
+                ? page.backgroundTrimStartSec
+                : undefined
+        );
+        setBackgroundTrimEndSec(
+            typeof page.backgroundTrimEndSec === 'number' && page.backgroundTrimEndSec > 0
+                ? page.backgroundTrimEndSec
+                : undefined
+        );
+
         // Set background preview if URL exists (check ALL possible locations)
         const bgUrl = page.backgroundUrl || page.files?.background?.url || page.content?.backgroundUrl || page.imageUrl;
         console.log('🖼️ Background URL determined:', bgUrl);
@@ -517,7 +572,7 @@ const PageEditor: React.FC = () => {
                 ...box,
                 id: `${page._id}-${idx}`,
                 fontFamily: box.fontFamily || 'Comic Sans MS',
-                fontSize: box.fontSize || 24,
+                fontSize: coerceTextBoxFontPx(box.fontSize),
                 color: box.color || '#4a3b2a',
                 width: box.width || 30
             }));
@@ -531,6 +586,10 @@ const PageEditor: React.FC = () => {
         // Kids Monthly: scene description for on-demand background image generation
         setSceneDescription(page.sceneDescription || '');
         setReferenceCharacterIds(page.referenceCharacterIds ? page.referenceCharacterIds.map((id: any) => String(id)) : []);
+
+        // Load Swipe Up layout per-page settings
+        setPageKind(page.pageKind === 'text' ? 'text' : 'media');
+        setVideoAutoAdvance(!!page.videoAutoAdvance);
 
         // Load coloring page settings
         setIsColoringPage(page.isColoringPage || false);
@@ -571,6 +630,10 @@ const PageEditor: React.FC = () => {
                 audioUrl: v.audioUrl, // Load auto-extracted audio URL
                 filename: v.filename || `Video ${v.order}`,
                 order: v.order,
+                trimStartSec:
+                    typeof v.trimStartSec === 'number' && v.trimStartSec > 0 ? v.trimStartSec : undefined,
+                trimEndSec:
+                    typeof v.trimEndSec === 'number' && v.trimEndSec > 0 ? v.trimEndSec : undefined,
             }));
             setVideoSequence(loadedVideos);
         } else {
@@ -585,7 +648,7 @@ const PageEditor: React.FC = () => {
             imageSequenceAnimation: page.imageSequenceAnimation
         });
         setUseImageSequence(page.useImageSequence || false);
-        setImageSequenceDuration(page.imageSequenceDuration ?? 10);
+        setImageSequenceDuration(page.imageSequenceDuration || 3);
         setImageSequenceAnimation(page.imageSequenceAnimation || 'kenBurns');
         setBackgroundImageAnimation(page.backgroundImageAnimation ?? 'kenBurns');
         setBackgroundImageAnimationDuration(page.backgroundImageAnimationDuration ?? 10);
@@ -605,15 +668,20 @@ const PageEditor: React.FC = () => {
     };
 
     // Create new page (reset editor)
-    const createNewPage = () => {
+    const createNewPage = (pagesOverride?: any[]) => {
         setEditingPageId(null);
-        const nextPageNum = existingPages.length > 0
-            ? Math.max(...existingPages.map((p: any) => p.pageNumber)) + 1
+        // Prefer fresh list passed by caller (avoids stale closure right after
+        // a save, where setExistingPages hasn't applied yet).
+        const list = pagesOverride ?? existingPages;
+        const nextPageNum = list.length > 0
+            ? Math.max(...list.map((p: any) => p.pageNumber)) + 1
             : 1;
         setPageNumber(nextPageNum);
         setBackgroundType('image');
         setBackgroundFile(null);
         setBackgroundPreview(null);
+        setBackgroundTrimStartSec(undefined);
+        setBackgroundTrimEndSec(undefined);
         setSceneDescription('');
         setReferenceCharacterIds([]);
         setScrollFile(null);
@@ -647,10 +715,8 @@ const PageEditor: React.FC = () => {
         
         // Reset image sequence settings
         setUseImageSequence(false);
-        setImageSequenceDuration(10);
+        setImageSequenceDuration(3);
         setImageSequenceAnimation('kenBurns');
-        setBackgroundImageAnimation('kenBurns');
-        setBackgroundImageAnimationDuration(10);
         imageSequence.forEach(img => {
             if (img.preview) URL.revokeObjectURL(img.preview);
         });
@@ -665,6 +731,9 @@ const PageEditor: React.FC = () => {
                 const boxesWithIds = pageTemplate.textBoxes.map((box: any, idx: number) => ({
                     ...box,
                     id: `new-${Date.now()}-${idx}`,
+                    fontFamily: box.fontFamily || 'Comic Sans MS',
+                    fontSize: coerceTextBoxFontPx(box.fontSize),
+                    color: box.color || '#4a3b2a',
                     width: box.width || 30
                 }));
                 setTextBoxes(boxesWithIds);
@@ -953,6 +1022,12 @@ const PageEditor: React.FC = () => {
                                 filename: video.filename,
                                 order: video.order,
                                 audioUrl: res.data.backgroundAudioUrl, // Auto-extracted audio for iOS layering
+                                ...(video.trimStartSec != null && video.trimStartSec > 0
+                                    ? { trimStartSec: video.trimStartSec }
+                                    : {}),
+                                ...(video.trimEndSec != null && video.trimEndSec > 0
+                                    ? { trimEndSec: video.trimEndSec }
+                                    : {}),
                             });
                             if (res.data.backgroundAudioUrl) {
                                 console.log(`🎬 Auto-extracted audio for video ${video.order}:`, res.data.backgroundAudioUrl);
@@ -968,6 +1043,12 @@ const PageEditor: React.FC = () => {
                             filename: video.filename,
                             order: video.order,
                             audioUrl: (video as any).audioUrl, // Preserve existing audio URL
+                            ...(video.trimStartSec != null && video.trimStartSec > 0
+                                ? { trimStartSec: video.trimStartSec }
+                                : {}),
+                            ...(video.trimEndSec != null && video.trimEndSec > 0
+                                ? { trimEndSec: video.trimEndSec }
+                                : {}),
                         });
                     }
                 }
@@ -1025,6 +1106,20 @@ const PageEditor: React.FC = () => {
                 scrollWidth, // Width as percentage (100 = full width)
                 soundEffectUrl, // Sound effect bubble audio
                 textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
+                // Swipe Up (vertical feed) layout per-page settings
+                pageKind: readerLayout === 'swipe_up' ? pageKind : 'media',
+                videoAutoAdvance: readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' ? videoAutoAdvance : false,
+                // Optional video trim (seconds) — clear when not using a background video
+                ...(backgroundType === 'video' && !useVideoSequence
+                    ? {
+                          ...(backgroundTrimStartSec != null && backgroundTrimStartSec > 0
+                              ? { backgroundTrimStartSec }
+                              : {}),
+                          ...(backgroundTrimEndSec != null && backgroundTrimEndSec > 0
+                              ? { backgroundTrimEndSec }
+                              : {}),
+                      }
+                    : { backgroundTrimStartSec: null, backgroundTrimEndSec: null }),
                 isColoringPage,
                 coloringEndModalOnly: isColoringPage ? coloringEndModalOnly : false, // Only relevant if it's a coloring page
                 // Web View page settings
@@ -1043,8 +1138,8 @@ const PageEditor: React.FC = () => {
                 imageSequence: uploadedImageSequence,
                 imageSequenceDuration,
                 imageSequenceAnimation,
-                backgroundImageAnimation: backgroundImageAnimation || 'kenBurns',
-                backgroundImageAnimationDuration: backgroundImageAnimationDuration ?? 10,
+                backgroundImageAnimation: bookType === 'kids_monthly' ? backgroundImageAnimation : undefined,
+                backgroundImageAnimationDuration: bookType === 'kids_monthly' ? backgroundImageAnimationDuration : undefined,
                 sceneDescription: sceneDescription.trim() || undefined, // Kids Monthly: prompt for on-demand background generation
                 referenceCharacterIds: referenceCharacterIds, // Kids Monthly: characters to reference on this page (empty array to clear)
             };
@@ -1119,8 +1214,9 @@ const PageEditor: React.FC = () => {
                 if (pageNumber === 1 && !pageTemplate && (scrollUrl || textBoxes.length > 0)) {
                     setShowTemplateDialog(true);
                 } else {
-                    // Reset for new page
-                    createNewPage();
+                    // Reset for new page — pass the fresh pages list because
+                    // setExistingPages above hasn't applied to closure yet.
+                    createNewPage(res.data);
                 }
             }
         } catch (err: any) {
@@ -1152,7 +1248,7 @@ const PageEditor: React.FC = () => {
             
             // If we were editing the deleted page, reset to new page
             if (editingPageId === pageId) {
-                createNewPage();
+                createNewPage(res.data);
             }
             
             alert('Page deleted successfully!');
@@ -1300,32 +1396,69 @@ const PageEditor: React.FC = () => {
                         )}
                     </div>
 
+                    {/* Swipe Up: Page Kind toggle */}
+                    {readerLayout === 'swipe_up' && (
+                        <>
+                            <hr className="border-gray-100" />
+                            <div className="space-y-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Page Kind (Swipe Up)</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPageKind('text')}
+                                        className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
+                                            pageKind === 'text'
+                                                ? 'bg-pink-50 border-pink-400 text-pink-800 font-semibold'
+                                                : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        📝 Text page
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPageKind('media')}
+                                        className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
+                                            pageKind === 'media'
+                                                ? 'bg-pink-50 border-pink-400 text-pink-800 font-semibold'
+                                                : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        🎞️ Media page
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    {pageKind === 'text'
+                                        ? 'Full-screen text card. Background image/video is optional and used purely for style. TTS works the same as regular books.'
+                                        : 'Full-screen image or video. No text overlay; user swipes up to advance.'}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => bookId && navigate(`/books/preview-swipe/${bookId}`)}
+                                    className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-md text-xs font-medium shadow-sm transition"
+                                >
+                                    <span>▶</span> Preview Swipe Up (no TTS)
+                                </button>
+                                <p className="text-[11px] text-gray-500">
+                                    Save your page first, then preview to see snap-scroll, fade-in animation, and video auto-advance with the current draft.
+                                </p>
+                            </div>
+                        </>
+                    )}
+
                     <hr className="border-gray-100" />
 
                     {/* Background */}
                     <div className="space-y-3">
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Background</label>
-                        {bookType === 'kids_monthly' && (
-                            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
-                                <p className="font-medium">Template: keep page backgrounds blank</p>
-                                <p className="mt-1 text-amber-800">Images are generated for each kid when they create their book. Leave backgrounds empty here and use the <strong>Image prompt</strong> section below to describe each scene.</p>
-                                {backgroundPreview && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setBackgroundFile(null);
-                                            setBackgroundPreview(null);
-                                        }}
-                                        className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-200 hover:bg-amber-300 text-amber-900 rounded"
-                                    >
-                                        Clear this page&apos;s background (template only)
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {readerLayout === 'swipe_up' && pageKind === 'text' ? 'Background (optional, for style)' : 'Background'}
+                        </label>
                         <div className="flex gap-2 mb-2">
                             <button
-                                onClick={() => setBackgroundType('image')}
+                                onClick={() => {
+                                    setBackgroundType('image');
+                                    setBackgroundTrimStartSec(undefined);
+                                    setBackgroundTrimEndSec(undefined);
+                                }}
                                 className={`flex-1 py-1.5 text-sm rounded border ${backgroundType === 'image' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
                             >
                                 Image
@@ -1350,6 +1483,9 @@ const PageEditor: React.FC = () => {
                                         setBackgroundFile(file);
                                         setBackgroundPreview(URL.createObjectURL(file));
                                     }
+                                    // Allow re-selecting the same file later (DOM input
+                                    // otherwise won't fire change for an unchanged value).
+                                    e.target.value = '';
                                 }}
                             />
                             <label
@@ -1379,6 +1515,8 @@ const PageEditor: React.FC = () => {
                                         e.stopPropagation();
                                         setBackgroundFile(null);
                                         setBackgroundPreview(null);
+                                        setBackgroundTrimStartSec(undefined);
+                                        setBackgroundTrimEndSec(undefined);
                                     }}
                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition shadow-md z-10"
                                     title="Remove background"
@@ -1395,6 +1533,8 @@ const PageEditor: React.FC = () => {
                                 onClick={() => {
                                     setBackgroundFile(null);
                                     setBackgroundPreview(null);
+                                    setBackgroundTrimStartSec(undefined);
+                                    setBackgroundTrimEndSec(undefined);
                                 }}
                                 className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition"
                             >
@@ -1402,43 +1542,81 @@ const PageEditor: React.FC = () => {
                             </button>
                         )}
 
-                        {/* Background image animation (single image or kids monthly generated pages) */}
-                        {backgroundType === 'image' && !useImageSequence && (
-                            <div className="space-y-2 pt-2 border-t border-gray-100">
-                                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">Background image animation</label>
-                                <p className="text-xs text-gray-400">
-                                    Applies to the single background image in the book reader (e.g. kids monthly generated pages). Default 10s Ken Burns.
+                        {/* Optional trim — single background video only (ignored when using video sequence) */}
+                        {backgroundType === 'video' && !useVideoSequence && backgroundPreview && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-2 space-y-1.5">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
+                                    <Scissors className="w-3.5 h-3.5 shrink-0" />
+                                    Trim video (seconds from source file)
+                                </div>
+                                <p className="text-[10px] text-amber-800/90 leading-snug">
+                                    Leave end empty to play to the natural end of the clip. Playback is clamped — the file is not re-encoded.
                                 </p>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-xs text-gray-500">Duration (seconds)</label>
+                                <div className="flex gap-2 flex-wrap items-center">
+                                    <label className="flex flex-col gap-0.5 text-[10px] text-gray-600">
+                                        Start
                                         <input
                                             type="number"
-                                            min={1}
-                                            max={60}
-                                            value={backgroundImageAnimationDuration}
-                                            onChange={(e) => setBackgroundImageAnimationDuration(Math.max(1, Math.min(60, Number(e.target.value) || 10)))}
-                                            className="w-16 px-2 py-1 text-sm border border-gray-200 rounded"
+                                            min={0}
+                                            step={0.1}
+                                            className="w-20 px-1.5 py-1 rounded border border-gray-200 text-xs"
+                                            placeholder="0"
+                                            value={backgroundTrimStartSec ?? ''}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.trim();
+                                                if (!raw) {
+                                                    setBackgroundTrimStartSec(undefined);
+                                                    return;
+                                                }
+                                                const n = parseFloat(raw);
+                                                setBackgroundTrimStartSec(
+                                                    Number.isFinite(n) ? Math.max(0, n) : undefined
+                                                );
+                                            }}
                                         />
-                                    </div>
-                                    <div className="flex-1 min-w-[180px]">
-                                        <select
-                                            value={backgroundImageAnimation}
-                                            onChange={(e) => setBackgroundImageAnimation(e.target.value)}
-                                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded bg-white"
-                                        >
-                                            <option value="kenBurns">Ken Burns (Pan + Zoom)</option>
-                                            <option value="zoomIn">Slow Zoom In</option>
-                                            <option value="zoomOut">Slow Zoom Out</option>
-                                            <option value="panLeft">Pan Left</option>
-                                            <option value="panRight">Pan Right</option>
-                                            <option value="panUp">Pan Up</option>
-                                            <option value="panDown">Pan Down</option>
-                                            <option value="none">No animation (static)</option>
-                                        </select>
-                                    </div>
+                                    </label>
+                                    <label className="flex flex-col gap-0.5 text-[10px] text-gray-600">
+                                        End
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step={0.1}
+                                            className="w-20 px-1.5 py-1 rounded border border-gray-200 text-xs"
+                                            placeholder="…"
+                                            value={backgroundTrimEndSec ?? ''}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.trim();
+                                                if (!raw) {
+                                                    setBackgroundTrimEndSec(undefined);
+                                                    return;
+                                                }
+                                                const n = parseFloat(raw);
+                                                setBackgroundTrimEndSec(
+                                                    Number.isFinite(n) ? Math.max(0, n) : undefined
+                                                );
+                                            }}
+                                        />
+                                    </label>
                                 </div>
                             </div>
+                        )}
+
+                        {/* Swipe Up: video auto-advance (only when this is a Media page with a video background) */}
+                        {readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' && (
+                            <label className="flex items-start gap-2 cursor-pointer bg-pink-50 p-2 rounded-lg border border-pink-200">
+                                <input
+                                    type="checkbox"
+                                    checked={videoAutoAdvance}
+                                    onChange={(e) => setVideoAutoAdvance(e.target.checked)}
+                                    className="w-4 h-4 mt-0.5 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                                />
+                                <div>
+                                    <span className="text-sm text-gray-800 font-medium">Auto-advance when video ends</span>
+                                    <p className="text-xs text-pink-700 mt-0.5">
+                                        When the video finishes playing, automatically scroll the reader to the next page.
+                                    </p>
+                                </div>
+                            </label>
                         )}
 
                         {/* Kids Monthly only: image prompt for on-demand background generation */}
@@ -1458,43 +1636,33 @@ const PageEditor: React.FC = () => {
                                                         .join(' ')
                                                         .trim();
                                                     if (!raw) {
-                                                        alert('Add some page text first, then click Analyze.');
-                                                        return;
-                                                    }
-                                                    if (!bookId) {
-                                                        alert('Book context is needed. Save the page once, then try again.');
+                                                        setSceneDescription('');
+                                                        setImagePromptSuggestionsOpen(false);
                                                         return;
                                                     }
                                                     setAnalyzingScenePrompt(true);
                                                     try {
                                                         const res = await apiClient.post('/api/monthly-book/analyze-scene-prompt', {
                                                             pageText: raw,
-                                                            bookId,
+                                                            bookId: bookId || undefined,
                                                         });
-                                                        const scene = res.data?.sceneDescription?.trim();
-                                                        if (scene) {
-                                                            setSceneDescription(scene);
-                                                            setImagePromptSuggestionsOpen(false);
-                                                        } else {
-                                                            alert('Analysis returned no text. Try "Generate from page text" instead.');
-                                                        }
-                                                    } catch (err: any) {
-                                                        console.error('Analyze scene prompt error:', err);
-                                                        const data = err.response?.data;
-                                                        const msg = data?.error || err.message || 'Analysis failed. Try "Generate from page text".';
-                                                        const details = data?.details ? ` (${String(data.details).slice(0, 150)})` : '';
-                                                        alert(msg + details);
+                                                        const desc = res.data?.sceneDescription?.trim();
+                                                        if (desc) setSceneDescription(desc);
+                                                    } catch (err: unknown) {
+                                                        const msg = err && typeof err === 'object' && 'response' in err
+                                                            ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+                                                            : (err as Error)?.message;
+                                                        console.error('Analyze scene prompt failed:', err);
+                                                        alert(msg || 'Failed to generate scene description. Try "Generate from page text" or type your own.');
                                                     } finally {
                                                         setAnalyzingScenePrompt(false);
                                                     }
+                                                    setImagePromptSuggestionsOpen(false);
                                                 }}
-                                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded transition"
+                                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition disabled:opacity-50"
                                             >
-                                                {analyzingScenePrompt ? (
-                                                    <>Analyzing…</>
-                                                ) : (
-                                                    <>Analyze for image prompt</>
-                                                )}
+                                                {analyzingScenePrompt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                                Describe scene with AI
                                             </button>
                                             <button
                                                 type="button"
@@ -1628,11 +1796,48 @@ const PageEditor: React.FC = () => {
                                         );
                                     })()}
                                     <p className="text-xs text-gray-400">
-                                        <strong>Analyze for image prompt</strong> uses AI to turn this page’s text into a scene description (setting, background) and adds character consistency so the book’s featured character (e.g. Jesus) keeps the same clothes in every scene. <strong>Generate from page text</strong> copies and lightly edits the text ({'{childName}'} / {'{kidname}'} → <code className="bg-gray-100 px-1 rounded">@child</code>). Leave empty to use page text automatically.
+                                        Used when generating a personalized book for a child. Use “Describe scene with AI” to get a scene description from this page’s text, or “Generate from page text” to copy/trim the text ({'{childName}'} → <code className="bg-gray-100 px-1 rounded">@child</code>). Leave empty to use page text automatically.
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar. Type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @child are building a house.” Backgrounds are 9:16 portrait for mobile.
+                                        Type <code className="bg-gray-100 px-1 rounded">@kid</code> or <code className="bg-gray-100 px-1 rounded">@child</code> for the child’s avatar (per child, from their device). Use the popup when you type <code className="bg-gray-100 px-1 rounded">@</code> to pick saved characters (e.g. @Noah, @disneyjesus). E.g. “@disneyjesus and @child are building a house.” Backgrounds are 9:16 portrait for mobile.
                                     </p>
+                                </div>
+
+                                {/* Background image animation (applied to each generated page image in the app) */}
+                                <div className="space-y-2 pt-3">
+                                    <label className="block text-xs font-semibold text-gray-600">Background image animation</label>
+                                    <p className="text-xs text-gray-400">Applied to the generated background image when the child reads the book (Ken Burns = pan + zoom).</p>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600">Effect:</label>
+                                            <select
+                                                value={backgroundImageAnimation}
+                                                onChange={(e) => setBackgroundImageAnimation(e.target.value)}
+                                                className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white"
+                                            >
+                                                <option value="kenBurns">Ken Burns (pan + zoom)</option>
+                                                <option value="zoomIn">Zoom In</option>
+                                                <option value="zoomOut">Zoom Out</option>
+                                                <option value="panLeft">Pan Left</option>
+                                                <option value="panRight">Pan Right</option>
+                                                <option value="panUp">Pan Up</option>
+                                                <option value="panDown">Pan Down</option>
+                                                <option value="none">None (static)</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600">Duration:</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={30}
+                                                value={backgroundImageAnimationDuration}
+                                                onChange={(e) => setBackgroundImageAnimationDuration(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 10)))}
+                                                className="w-14 px-2 py-1 text-sm border border-gray-200 rounded-lg"
+                                            />
+                                            <span className="text-xs text-gray-500">seconds</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Reference characters for this page */}
@@ -1732,8 +1937,9 @@ const PageEditor: React.FC = () => {
                                         {videoSequence.sort((a, b) => a.order - b.order).map((video, index) => (
                                             <div 
                                                 key={video.id}
-                                                className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
+                                                className="flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-gray-200 shadow-sm"
                                             >
+                                                <div className="flex items-center gap-2">
                                                 {/* Order badge */}
                                                 <div className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
                                                     {video.order}
@@ -1817,6 +2023,72 @@ const PageEditor: React.FC = () => {
                                                 >
                                                     <Trash2 className="w-3 h-3" />
                                                 </button>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 pl-8 text-[10px] text-gray-600">
+                                                    <span className="inline-flex items-center gap-1 font-medium text-indigo-800">
+                                                        <Scissors className="w-3 h-3" />
+                                                        Trim (s)
+                                                    </span>
+                                                    <label className="inline-flex items-center gap-1">
+                                                        start
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step={0.1}
+                                                            className="w-16 px-1 py-0.5 rounded border border-gray-200 text-[11px]"
+                                                            placeholder="—"
+                                                            value={video.trimStartSec ?? ''}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value.trim();
+                                                                const n = raw === '' ? undefined : parseFloat(raw);
+                                                                setVideoSequence((prev) =>
+                                                                    prev.map((v) =>
+                                                                        v.id === video.id
+                                                                            ? {
+                                                                                  ...v,
+                                                                                  trimStartSec:
+                                                                                      n !== undefined &&
+                                                                                      Number.isFinite(n)
+                                                                                          ? Math.max(0, n)
+                                                                                          : undefined,
+                                                                              }
+                                                                            : v
+                                                                    )
+                                                                );
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <label className="inline-flex items-center gap-1">
+                                                        end
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step={0.1}
+                                                            className="w-16 px-1 py-0.5 rounded border border-gray-200 text-[11px]"
+                                                            placeholder="—"
+                                                            value={video.trimEndSec ?? ''}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value.trim();
+                                                                const n = raw === '' ? undefined : parseFloat(raw);
+                                                                setVideoSequence((prev) =>
+                                                                    prev.map((v) =>
+                                                                        v.id === video.id
+                                                                            ? {
+                                                                                  ...v,
+                                                                                  trimEndSec:
+                                                                                      n !== undefined &&
+                                                                                      Number.isFinite(n)
+                                                                                          ? Math.max(0, n)
+                                                                                          : undefined,
+                                                                              }
+                                                                            : v
+                                                                    )
+                                                                );
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <span className="text-gray-400">empty end → full clip</span>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -2139,6 +2411,7 @@ const PageEditor: React.FC = () => {
                                         setScrollPreview(URL.createObjectURL(file));
                                         console.log('📜 Selected new scroll file:', file.name);
                                     }
+                                    e.target.value = '';
                                 }}
                             />
                             <label
@@ -2679,6 +2952,104 @@ const PageEditor: React.FC = () => {
                                 </button>
                             </div>
 
+                            {/* Typography (font size visible here — separate from "% box size" below) */}
+                            <div className="space-y-2 p-2 bg-white rounded border border-indigo-200">
+                                <label className="text-xs font-semibold text-gray-600">Typography</label>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Font family</label>
+                                    <select
+                                        value={selectedBox.fontFamily}
+                                        onChange={e => updateTextBox(selectedBox.id, { fontFamily: e.target.value })}
+                                        className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                    >
+                                        <option value="Comic Sans MS">Comic Sans MS</option>
+                                        <option value="Bubblegum Sans">Bubblegum Sans</option>
+                                        <option value="Fredoka One">Fredoka One</option>
+                                        <option value="Baloo 2">Baloo 2</option>
+                                        <option value="Chewy">Chewy</option>
+                                        <option value="Luckiest Guy">Luckiest Guy</option>
+                                        <option value="Bangers">Bangers</option>
+                                        <option value="Pacifico">Pacifico</option>
+                                        <option value="Caveat">Caveat</option>
+                                        <option value="Patrick Hand">Patrick Hand</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Font size (px)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={8}
+                                            max={120}
+                                            step={1}
+                                            value={
+                                                Number.isFinite(selectedBox.fontSize)
+                                                    ? Math.round(selectedBox.fontSize)
+                                                    : 24
+                                            }
+                                            onChange={e =>
+                                                updateTextBox(selectedBox.id, {
+                                                    fontSize: Math.min(
+                                                        120,
+                                                        Math.max(8, Number(e.target.value) || 24),
+                                                    ),
+                                                })
+                                            }
+                                            className="w-20 shrink-0 text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
+                                            aria-label="Font size in pixels"
+                                        />
+                                        <input
+                                            type="range"
+                                            min={8}
+                                            max={120}
+                                            value={
+                                                Number.isFinite(selectedBox.fontSize)
+                                                    ? Math.round(
+                                                          Math.min(120, Math.max(8, selectedBox.fontSize)),
+                                                      )
+                                                    : 24
+                                            }
+                                            onChange={e =>
+                                                updateTextBox(selectedBox.id, {
+                                                    fontSize: parseInt(e.target.value, 10),
+                                                })
+                                            }
+                                            className="flex-1 min-w-0"
+                                            aria-label="Adjust font size"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Text color */}
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-500">Text color</label>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {['#4a3b2a', '#000000', '#ffffff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8', '#a29bfe'].map(color => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                onClick={() => updateTextBox(selectedBox.id, { color })}
+                                                className={`w-8 h-8 rounded border-2 ${selectedBox.color === color ? 'border-indigo-600 scale-110' : 'border-gray-300'} transition-transform`}
+                                                style={{ backgroundColor: color }}
+                                            />
+                                        ))}
+                                    </div>
+                                    <input
+                                        type="color"
+                                        value={
+                                            /^#[0-9A-Fa-f]{6}$/.test(selectedBox.color || '')
+                                                ? selectedBox.color
+                                                : '#4a3b2a'
+                                        }
+                                        onChange={e =>
+                                            updateTextBox(selectedBox.id, { color: e.target.value })
+                                        }
+                                        className="w-full h-8 rounded border"
+                                        title="Pick a text color"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Position Controls */}
                             <div className="space-y-2 p-2 bg-white rounded border border-gray-200">
                                 <label className="text-xs font-semibold text-gray-600">Position</label>
@@ -2709,12 +3080,12 @@ const PageEditor: React.FC = () => {
                                 <p className="text-xs text-gray-400">Lower Y = higher on page. Try Y: 40-45 for top of 60% scroll.</p>
                             </div>
                             
-                            {/* Size Controls */}
+                            {/* Box layout on page (percent of canvas — not font size) */}
                             <div className="space-y-2 p-2 bg-white rounded border border-gray-200">
-                                <label className="text-xs font-semibold text-gray-600">Size (%)</label>
+                                <label className="text-xs font-semibold text-gray-600">Text box on canvas (%)</label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="text-xs text-gray-500">Width</label>
+                                        <label className="text-xs text-gray-500">Width %</label>
                                         <input
                                             type="number"
                                             value={Math.round(selectedBox.width || 30)}
@@ -2725,7 +3096,7 @@ const PageEditor: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-gray-500">Height (0=auto)</label>
+                                        <label className="text-xs text-gray-500">Height % (0 = auto)</label>
                                         <input
                                             type="number"
                                             value={Math.round(selectedBox.height || 0)}
@@ -2740,62 +3111,9 @@ const PageEditor: React.FC = () => {
                                         />
                                     </div>
                                 </div>
-                                <p className="text-xs text-gray-400">Height 0 = auto-size based on text content.</p>
-                            </div>
-
-                            {/* Font Family */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Font</label>
-                                <select
-                                    value={selectedBox.fontFamily}
-                                    onChange={e => updateTextBox(selectedBox.id, { fontFamily: e.target.value })}
-                                    className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-indigo-300 outline-none"
-                                >
-                                    <option value="Comic Sans MS">Comic Sans MS</option>
-                                    <option value="Bubblegum Sans">Bubblegum Sans</option>
-                                    <option value="Fredoka One">Fredoka One</option>
-                                    <option value="Baloo 2">Baloo 2</option>
-                                    <option value="Chewy">Chewy</option>
-                                    <option value="Luckiest Guy">Luckiest Guy</option>
-                                    <option value="Bangers">Bangers</option>
-                                    <option value="Pacifico">Pacifico</option>
-                                    <option value="Caveat">Caveat</option>
-                                    <option value="Patrick Hand">Patrick Hand</option>
-                                </select>
-                            </div>
-
-                            {/* Font Size */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Size: {selectedBox.fontSize}px</label>
-                                <input
-                                    type="range"
-                                    min="12"
-                                    max="72"
-                                    value={selectedBox.fontSize}
-                                    onChange={e => updateTextBox(selectedBox.id, { fontSize: parseInt(e.target.value) })}
-                                    className="w-full"
-                                />
-                            </div>
-
-                            {/* Color */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Text Color</label>
-                                <div className="grid grid-cols-5 gap-2">
-                                    {['#4a3b2a', '#000000', '#ffffff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8', '#a29bfe'].map(color => (
-                                        <button
-                                            key={color}
-                                            onClick={() => updateTextBox(selectedBox.id, { color })}
-                                            className={`w-8 h-8 rounded border-2 ${selectedBox.color === color ? 'border-indigo-600 scale-110' : 'border-gray-300'} transition-transform`}
-                                            style={{ backgroundColor: color }}
-                                        />
-                                    ))}
-                                </div>
-                                <input
-                                    type="color"
-                                    value={selectedBox.color}
-                                    onChange={e => updateTextBox(selectedBox.id, { color: e.target.value })}
-                                    className="w-full h-8 rounded border"
-                                />
+                                <p className="text-xs text-gray-400">
+                                    How wide/tall the hit area is on the page. For letter size, use <strong>Typography → Font size</strong> above.
+                                </p>
                             </div>
 
                             {/* Background Box Toggle */}
@@ -3079,35 +3397,35 @@ const PageEditor: React.FC = () => {
                         const textTop = scrollPreview 
                             ? `max(${box.y}%, ${scrollTopPosition})`
                             : `${box.y}%`;
+
+                        const boxX = typeof box.x === 'number' ? box.x : 0;
+                        const authoredFontPx = scaleAuthoredFontToCanvas(appSideSwipeAuthoredFontSizePx(box), canvasWidth);
                         
                         return (
                         <div
                             key={box.id}
                             onMouseDown={(e) => handleMouseDown(e, box.id)}
-                            className={`absolute cursor-move p-2 z-20 group ${selectedBoxId === box.id ? 'ring-2 ring-indigo-500' : 'hover:ring-1 hover:ring-indigo-300'
+                            className={`absolute cursor-move z-20 group ${selectedBoxId === box.id ? 'ring-2 ring-indigo-500' : 'hover:ring-1 hover:ring-indigo-300'
                                 }`}
                             style={{
-                                left: `${box.x}%`,
+                                // Match kid app margins / width clamp (safe-area resolves to 0 in desktop browsers)
+                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                 top: textTop,
-                                width: `${box.width || 30}%`,
+                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
                                 transform: 'translate(0, 0)', // Remove centering transform to make resizing easier to reason about
                                 textAlign: box.alignment,
-                                color: box.color,
-                                fontFamily: box.fontFamily,
-                                fontSize: `${box.fontSize}px`,
+                                color: box.color || '#4a3b2a',
+                                fontFamily: appSideSwipeFontFamily(box.fontFamily),
+                                fontSize: `${authoredFontPx}px`,
                                 height: 'auto', // Allow height to grow
                                 minHeight: '50px',
+                                padding: box.showBackground === true ? '12px 16px' : '8px',
                                 // Smooth transition when scroll height changes
                                 transition: 'top 0.3s ease-in-out',
-                                // Show background styling preview
+                                // Show background styling preview (same as app reader)
                                 backgroundColor: box.showBackground ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: box.showBackground ? '12px' : '0',
-                                // Text shadow/glow - color controlled by shadowColor setting
-                                textShadow: box.showBackground 
-                                    ? '1px 1px 2px rgba(255,255,255,0.8)'
-                                    : box.shadowColor === 'black'
-                                        ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'
-                                        : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
+                                textShadow: appSideSwipeTextShadow(box),
                             }}
                         >
                             {/* Drag Handle Icon (visible on hover or select) */}
@@ -3128,7 +3446,7 @@ const PageEditor: React.FC = () => {
                                 </div>
                             )}
 
-                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
+                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>{box.text}</p>
                         </div>
                         );
                     })}
@@ -3164,8 +3482,13 @@ const PageEditor: React.FC = () => {
                     )}
                 </div>
 
-                <div className="absolute bottom-4 right-4 text-gray-500 text-xs bg-white/80 px-2 py-1 rounded">
-                    Canvas: {canvasWidth}x{canvasHeight}px
+                <div className="absolute bottom-4 right-4 text-gray-500 text-xs bg-white/80 px-2 py-1 rounded max-w-sm text-right leading-snug">
+                    <div>
+                        Canvas: {canvasWidth}×{canvasHeight}px
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                        Text size scales vs {APP_BOOK_REF_VIEWPORT_WIDTH}px-wide reference viewport (kid app portrait)
+                    </div>
                 </div>
             </div>
 
@@ -3183,7 +3506,7 @@ const PageEditor: React.FC = () => {
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Pages ({existingPages.length})</h3>
                     <button
-                        onClick={createNewPage}
+                        onClick={() => createNewPage()}
                         className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-indigo-700 transition flex items-center gap-1"
                         title="Add New Page"
                     >

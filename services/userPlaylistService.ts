@@ -188,7 +188,7 @@ class UserPlaylistService {
     async getArtStyles(): Promise<ArtStyle[]> {
         // Return static art styles - no need for API call
         return [
-            { id: 'cartoon', name: 'Cartoon', description: 'Fun and colorful cartoon style', prompt: 'cartoon style, vibrant colors, fun' },
+            { id: 'cartoon', name: 'Anime', description: 'Anime style', prompt: 'cartoon style, vibrant colors, fun' },
             { id: 'watercolor', name: 'Watercolor', description: 'Soft watercolor painting', prompt: 'watercolor painting, soft colors, artistic' },
             { id: 'pixel', name: 'Pixel Art', description: 'Retro pixel art style', prompt: 'pixel art, 8-bit, retro gaming' },
             { id: 'storybook', name: 'Storybook', description: 'Classic children\'s book illustration', prompt: 'children\'s book illustration, whimsical, classic' },

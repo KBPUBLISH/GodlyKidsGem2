@@ -38,7 +38,13 @@ const reverseTrialDeviceSchema = new mongoose.Schema({
         index: true,
     },
     
-    // When the trial ended (7 days after start)
+    // Trial duration in hours (default 168 = 7 days; 24 for exit-intent offer)
+    trialDurationHours: {
+        type: Number,
+        default: 168,
+    },
+    
+    // When the trial ended
     trialEndedAt: {
         type: Date,
     },

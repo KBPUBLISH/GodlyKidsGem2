@@ -10,10 +10,11 @@ import { libraryService } from '../services/libraryService';
 import { favoritesService } from '../services/favoritesService';
 import { readingProgressService } from '../services/readingProgressService';
 import { playHistoryService } from '../services/playHistoryService';
-import { getApiBaseUrl } from '../services/apiService';
+import { getApiBaseUrl, getMonthlyBookBaseUrl } from '../services/apiService';
 import { userPlaylistService, UserPlaylist } from '../services/userPlaylistService';
 import { authService } from '../services/authService';
 import { FEATURE_CREATE_YOUR_STORY } from '../constants';
+import { getCoverThumb } from '../utils/coverImage';
 
 const ageOptions = ['All Ages', '3+', '4+', '5+', '6+', '7+', '8+', '9+', '10+'];
 
@@ -34,7 +35,7 @@ interface MyMonthlyBook {
   coverImageUrl: string | null;
   childName?: string;
   createdAt: string;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
+  status: 'pending' | 'generating' | 'completed' | 'failed' | 'archived';
   pageCount?: number;
 }
 
@@ -122,17 +123,22 @@ const LibraryPage: React.FC = () => {
   const fetchMyMonthlyBooksRef = useRef<() => Promise<void>>(null);
   useEffect(() => {
     if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library') return;
-    const user = authService.getUser();
-    const userId = (user as any)?._id || (user as any)?.id || user?.email || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+    const userId = authService.getUserIdForBackend();
     if (!userId) {
       setMyMonthlyBooksLoading(false);
       return;
     }
+    const user = authService.getUser();
+    const email = (user?.email || (typeof localStorage !== 'undefined' && localStorage.getItem('godlykids_user_email')))?.trim?.() || '';
+    const deviceId = (typeof localStorage !== 'undefined' && (localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id')))?.trim?.() || '';
     const fetchMyMonthlyBooks = async () => {
       try {
         setMyMonthlyBooksLoading(true);
-        const base = getApiBaseUrl()?.replace(/\/$/, '') || '';
-        const res = await fetch(`${base}/api/monthly-book/my-books?userId=${encodeURIComponent(userId)}&includeInProgress=1`);
+        const base = getMonthlyBookBaseUrl();
+        const params = new URLSearchParams({ userId, includeInProgress: '1' });
+        if (email && email !== userId) params.set('email', email);
+        if (deviceId && deviceId !== userId && deviceId !== email) params.set('deviceId', deviceId);
+        const res = await fetch(`${base}/monthly-book/my-books?${params.toString()}`);
         const data = await res.json().catch(() => ({}));
         if (data.success && Array.isArray(data.books)) {
           setMyMonthlyBooks(data.books);
@@ -159,7 +165,7 @@ const LibraryPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [location.pathname]);
 
-  // When coming from Create Your Story: refetch My Books so the new book (loading) appears, then scroll to My Books.
+  // When coming from Create Your Story or "Find in Library" on book detail: refetch My Books then scroll to My Books.
   const myBooksSectionRef = useRef<HTMLDivElement>(null);
   const didScrollToMyBooks = useRef(false);
   useEffect(() => {
@@ -169,11 +175,15 @@ const LibraryPage: React.FC = () => {
     }
     if (!FEATURE_CREATE_YOUR_STORY) return;
     const state = location.state as any;
-    if (!state?.fromCreateYourStory && !state?.fromCreating) return;
-    // Refetch so the newly created book appears under My Books (loading state).
+    const shouldScroll = state?.fromCreateYourStory || state?.fromCreating || state?.scrollToMyBooks;
+    if (!shouldScroll) return;
+    // Refetch when coming from create flow so the new book appears; for scrollToMyBooks just scroll
+    if (state?.fromCreateYourStory || state?.fromCreating) {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }
     const refetchT = setTimeout(() => {
       if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
-    }, 600);
+    }, 800);
     if (didScrollToMyBooks.current) return () => clearTimeout(refetchT);
     didScrollToMyBooks.current = true;
     const scrollT = setTimeout(() => {
@@ -184,6 +194,40 @@ const LibraryPage: React.FC = () => {
       clearTimeout(scrollT);
     };
   }, [location.pathname, location.state]);
+
+  // Poll My Books when there are in-progress books or a sessionStorage placeholder so the list updates when a book completes.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || location.pathname !== '/library' || !fetchMyMonthlyBooksRef.current) return;
+    const hasInProgress = myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating');
+    let hasStoredPlaceholder = false;
+    try {
+      const raw = sessionStorage.getItem('godlykids_last_creating_book');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - (parsed?.createdAt || 0);
+        hasStoredPlaceholder = !!parsed?.customMonthlyBookId && age > 0 && age < 2 * 60 * 60 * 1000;
+      }
+    } catch (_) {}
+    if (!hasInProgress && !hasStoredPlaceholder) return;
+    const interval = setInterval(() => {
+      if (fetchMyMonthlyBooksRef.current) fetchMyMonthlyBooksRef.current();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [location.pathname, myMonthlyBooks]);
+
+  // Clear sessionStorage placeholder when the book appears from the API so we don't show a duplicate.
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY || myMonthlyBooks.length === 0) return;
+    try {
+      const raw = sessionStorage.getItem('godlykids_last_creating_book');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const id = parsed?.customMonthlyBookId;
+      if (id && myMonthlyBooks.some((b) => b.customMonthlyBookId === id)) {
+        sessionStorage.removeItem('godlykids_last_creating_book');
+      }
+    } catch (_) {}
+  }, [myMonthlyBooks]);
 
   // Close age dropdown when clicking outside
   useEffect(() => {
@@ -323,7 +367,7 @@ const LibraryPage: React.FC = () => {
               <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-600 relative overflow-hidden">
                 {playlist.coverImage ? (
                   <img
-                    src={playlist.coverImage}
+                    src={getCoverThumb(playlist.coverImage)}
                     alt={playlist.name}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -361,7 +405,7 @@ const LibraryPage: React.FC = () => {
               <div className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
                 {playlist.coverImage ? (
                   <img
-                    src={playlist.coverImage}
+                    src={getCoverThumb(playlist.coverImage)}
                     alt={playlist.title}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     loading="lazy"
@@ -400,14 +444,112 @@ const LibraryPage: React.FC = () => {
       onScroll={handleScroll}
       className="flex flex-col h-full overflow-y-auto no-scrollbar relative"
     >
-      <Header isVisible={isHeaderVisible} title="MY LIBRARY" />
+      {/* Back button */}
+      <div className="sticky top-0 z-30 flex items-center px-3 pt-3 pb-2" style={{ paddingTop: 'calc(var(--safe-area-top, 0px) + 12px)' }}>
+        <button
+          type="button"
+          onClick={() => navigate('/read')}
+          className="flex items-center gap-1 text-white font-semibold text-sm bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <span className="flex-1 text-center text-white font-extrabold text-lg tracking-wide" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>MY LIBRARY</span>
+        <div style={{ width: 65 }} />
+      </div>
 
-      <div className="px-4 pt-28 pb-52">
-        {/* My Books (Create Your Story) - Create your story card styled like Create New Playlist, under My Books */}
+      <div className="px-4 pt-2 pb-52">
+        {/* Search + Age Filter - first at top */}
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search className="text-white/60" size={20} />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Search my library..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-black/30 transition-colors shadow-inner font-display"
+            />
+          </div>
+          
+          {/* Age Filter Dropdown */}
+          <div className="relative" ref={ageDropdownRef}>
+            <button
+              onClick={() => setShowAgeDropdown(!showAgeDropdown)}
+              className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl py-3 px-4 text-white hover:bg-black/30 transition-colors shadow-inner font-display flex items-center gap-1 min-w-[100px] justify-center"
+            >
+              <span className="text-sm">{selectedAge}</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showAgeDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showAgeDropdown && (
+              <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[120px] max-h-[300px] overflow-y-auto">
+                <div className="py-2">
+                  {ageOptions.map((age) => (
+                    <button
+                      key={age}
+                      onClick={() => {
+                        setSelectedAge(age);
+                        setShowAgeDropdown(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors ${
+                        selectedAge === age ? 'bg-white/20 font-bold' : ''
+                      }`}
+                    >
+                      {age}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dive into The Bible - at top of My Library */}
         {FEATURE_CREATE_YOUR_STORY && (
+          <button
+            type="button"
+            onClick={() => navigate('/create-your-story')}
+            className="block w-full max-w-md mx-auto mb-6 p-0 border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-2xl transition-transform active:scale-[0.98]"
+            aria-label="Start Story Adventure - Create your story"
+          >
+            <img
+              src="/assets/images/dive-into-bible-button.webp"
+              alt="Dive into The Bible - Start Story Adventure"
+              className="w-full h-auto block rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]"
+            />
+          </button>
+        )}
+
+        {/* My Books (Create Your Story) */}
+        {FEATURE_CREATE_YOUR_STORY && (() => {
+          const stateCreatingBook = (location.state as any)?.creatingBook as { customMonthlyBookId: string; title: string; coverImageUrl: string | null } | undefined;
+          let storedCreatingBook: { customMonthlyBookId: string; title: string; coverImageUrl: string | null; createdAt: number } | null = null;
+          try {
+            const raw = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('godlykids_last_creating_book');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const age = Date.now() - (parsed.createdAt || 0);
+              if (parsed.customMonthlyBookId && age > 0 && age < 2 * 60 * 60 * 1000) storedCreatingBook = parsed;
+            }
+          } catch (_) {}
+          const fromState = stateCreatingBook?.customMonthlyBookId && !myMonthlyBooks.some((b) => b.customMonthlyBookId === stateCreatingBook.customMonthlyBookId)
+            ? { customMonthlyBookId: stateCreatingBook.customMonthlyBookId, bookId: null, title: stateCreatingBook.title, coverImageUrl: stateCreatingBook.coverImageUrl, status: 'generating' as const, createdAt: new Date().toISOString() }
+            : null;
+          const fromStorage = storedCreatingBook && !myMonthlyBooks.some((b) => b.customMonthlyBookId === storedCreatingBook!.customMonthlyBookId) && (!fromState || fromState.customMonthlyBookId !== storedCreatingBook.customMonthlyBookId)
+            ? { customMonthlyBookId: storedCreatingBook.customMonthlyBookId, bookId: null, title: storedCreatingBook.title, coverImageUrl: storedCreatingBook.coverImageUrl, status: 'generating' as const, createdAt: new Date(storedCreatingBook.createdAt).toISOString() }
+            : null;
+          const displayBooks: MyMonthlyBook[] = [
+            ...(fromState ? [fromState] : []),
+            ...(fromStorage ? [fromStorage] : []),
+            ...myMonthlyBooks.filter((b) => b.status !== 'archived'),
+          ].filter((b, i, arr) => arr.findIndex((x) => x.customMonthlyBookId === b.customMonthlyBookId) === i);
+          return (
           <div className="mb-8" ref={myBooksSectionRef} data-my-books-section>
             <SectionTitle title="My Books" />
-            {myMonthlyBooksLoading ? (
+            {myMonthlyBooksLoading && displayBooks.length === 0 ? (
               <div className="py-6 text-center text-white/60 text-sm">Loading your books...</div>
             ) : (
               <div className="w-screen overflow-x-auto no-scrollbar pb-4 -mx-4">
@@ -428,20 +570,7 @@ const LibraryPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  {myMonthlyBooks.some((b) => b.status === 'pending' || b.status === 'generating') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const creating = myMonthlyBooks.find((b) => b.status === 'pending' || b.status === 'generating');
-                        if (creating) navigate(`/library/creating/${creating.customMonthlyBookId}`);
-                      }}
-                      className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px] text-left rounded-2xl overflow-hidden border-2 border-amber-400/50 bg-amber-500/20 hover:bg-amber-500/30 active:scale-[0.98] transition-all py-3 px-4 flex items-center justify-center gap-2"
-                    >
-                      <Loader2 className="w-5 h-5 text-amber-300 animate-spin shrink-0" />
-                      <span className="text-amber-100 text-sm font-medium text-center">Creating...</span>
-                    </button>
-                  )}
-                  {myMonthlyBooks.map((item) => (
+                  {displayBooks.map((item) => (
                     <div
                       key={item.customMonthlyBookId}
                       className="flex-shrink-0 w-[42vw] md:w-[30vw] lg:w-[23vw] max-w-[200px]"
@@ -457,11 +586,6 @@ const LibraryPage: React.FC = () => {
                             } as any}
                             onClick={(id) => navigate(`/book/${id}`, { state: { from: '/library' } })}
                           />
-                          {item.pageCount != null && item.pageCount > 0 && (
-                            <p className="text-amber-200/90 text-xs text-center mt-1 px-1">
-                              {item.pageCount} {item.pageCount === 1 ? 'page' : 'pages'}
-                            </p>
-                          )}
                         </div>
                       ) : item.status === 'failed' ? (
                         <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-red-400/40">
@@ -478,7 +602,13 @@ const LibraryPage: React.FC = () => {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => navigate(`/library/creating/${item.customMonthlyBookId}`)}
+                          onClick={() => {
+                            if (item.bookId) {
+                              navigate(`/book/${item.bookId}`, { state: { customMonthlyBookId: item.customMonthlyBookId, isGenerating: true } });
+                            } else {
+                              navigate(`/library/creating/${item.customMonthlyBookId}`);
+                            }
+                          }}
                           className="w-full text-left bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
                         >
                           <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">
@@ -510,71 +640,23 @@ const LibraryPage: React.FC = () => {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
-        {/* Search Bar with Age Filter */}
-        <div className="flex gap-2 mb-4">
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-              <Search className="text-white/60" size={20} />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search my library..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/60 focus:outline-none focus:bg-black/30 transition-colors shadow-inner font-display"
-            />
-          </div>
-          
-          {/* Age Filter Dropdown */}
-          <div className="relative" ref={ageDropdownRef}>
-            <button
-              onClick={() => setShowAgeDropdown(!showAgeDropdown)}
-              className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl py-3 px-4 text-white hover:bg-black/30 transition-colors shadow-inner font-display flex items-center gap-1 min-w-[100px] justify-center"
-            >
-              <span className="text-sm">{selectedAge}</span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showAgeDropdown ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {/* Age Dropdown Menu */}
-            {showAgeDropdown && (
-              <div className="absolute top-full right-0 mt-2 bg-black/95 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl z-50 min-w-[120px] max-h-[300px] overflow-y-auto">
-                <div className="py-2">
-                  {ageOptions.map((age) => (
-                    <button
-                      key={age}
-                      onClick={() => {
-                        setSelectedAge(age);
-                        setShowAgeDropdown(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors ${
-                        selectedAge === age ? 'bg-white/20 font-bold' : ''
-                      }`}
-                    >
-                      {age}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* My Playlists */}
+        <section className="mb-6">
+          <SectionTitle 
+            title="My Playlists" 
+            icon="🎶"
+            color="#E040FB"
+          />
+          {renderUserPlaylistRow()}
+        </section>
 
         {isLoading ? (
           <div className="text-white font-display text-center mt-10">Checking backpack...</div>
         ) : (
           <>
-            {/* My Playlists Section - ALWAYS show at the top so users can create playlists */}
-            <section className="mb-6">
-              <SectionTitle 
-                title="My Playlists" 
-                icon="🎶"
-                color="#E040FB"
-              />
-              {renderUserPlaylistRow()}
-            </section>
-
             {/* Favorite Books Section */}
             {filteredFavoriteBooks.length > 0 && (
               <section className="mb-6">

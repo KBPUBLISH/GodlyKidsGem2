@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     TrendingUp, Users, UserPlus, Crown, XCircle, RefreshCw,
     ChevronRight, Calendar, BarChart3, ArrowDownRight, ArrowUpRight,
@@ -129,6 +130,11 @@ interface SurveyData {
     analytics: {
         totalResponses: number;
         dateRange: { start: string; end: string; days: number };
+        layoutRating?: {
+            totalResponses: number;
+            averageScore: number | null;
+            distribution: Record<number, number>;
+        };
         contentPreferences: {
             games: number;
             books: number;
@@ -169,6 +175,149 @@ interface TutorialData {
     dailyTrends: DailyTrend[];
 }
 
+/** Dive into the Bible / Create Your Story book-building funnel & conversion */
+interface BookBuildingData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        totalStarted: number;
+        totalBookCompleted: number;
+        totalBookCreated: number;
+        completionRate: number;
+        paywallShownFromFeature: number;
+        trialClickedFromFeature: number;
+        subscribedFromFeature: number;
+    };
+    funnel: FunnelStep[];
+    dropoffs: TutorialDropoff[];
+    conversion: {
+        paywallShown: number;
+        trialClicked: number;
+        trialStarted: number;
+        subscribed: number;
+        subscriptionStarted: number;
+        totalSubscribed: number;
+    };
+    dailyTrends: {
+        date: string;
+        started: number;
+        step1: number;
+        step4: number;
+        bookCreated: number;
+        bookCompleted: number;
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+        avatars?: number;
+        pages?: number;
+        costDollars?: number;
+        trialStarted?: number;
+    }[];
+    usage?: {
+        totalAvatars: number;
+        totalPages: number;
+        totalCostDollars: number;
+        costCentsPerImage: number;
+        totalTrialsStarted: number;
+    };
+}
+
+/** Global paywall analytics (all sources) */
+interface PaywallPurchaseErrorRow {
+    createdAt: string;
+    userId: string;
+    error: string | null;
+    planType: string | null;
+    source: string | null;
+}
+
+interface PaywallData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        paywallShown: number;
+        trialClicked: number;
+        totalSubscribed: number;
+        conversionRate: number;
+        purchaseError: number;
+        purchaseCancelled: number;
+        paywallClosed: number;
+    };
+    funnel: FunnelStep[];
+    sourceBreakdown: Record<string, {
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+    }>;
+    dailyTrends: {
+        date: string;
+        paywallShown: number;
+        trialClicked: number;
+        subscribed: number;
+        purchaseError: number;
+        purchaseCancelled: number;
+        paywallClosed: number;
+    }[];
+    /** Counts grouped by stored error message (from paywall_purchase_error events) */
+    purchaseErrorBreakdown?: { error: string; count: number }[];
+    /** Most recent purchase error events in the selected period */
+    recentPurchaseErrors?: PaywallPurchaseErrorRow[];
+}
+
+/** Portal display order for Paywall sources cards */
+const PAYWALL_SOURCE_ORDER = ['create-your-story', 'onboarding-first-time-user'] as const;
+
+function paywallSourceSortKey(source: string): number {
+    const idx = (PAYWALL_SOURCE_ORDER as readonly string[]).indexOf(source);
+    return idx === -1 ? 100 : idx;
+}
+
+function labelPaywallSource(source: string): string {
+    const map: Record<string, string> = {
+        'create-your-story': 'Create Your Story',
+        'onboarding-first-time-user': 'Onboarding first time user',
+        general: 'Other / no source',
+    };
+    if (map[source]) return map[source];
+    return source
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+}
+
+interface LessonRetentionData {
+    success: boolean;
+    period: { days: number; startDate: string };
+    summary: {
+        totalUniqueUsers: number;
+        totalCompletions: number;
+        uniqueCompleters: number;
+        completionRate: number;
+        multiDayUsers: number;
+        multiDayPct: number;
+        avgDaysPerUser: number;
+        avgRetention: Record<string, number | null>;
+    };
+    dailyTrends: {
+        date: string;
+        activeUsers: number;
+        completions: number;
+        newUsers: number;
+        returningUsers: number;
+        returningPct: number;
+    }[];
+    weeklyTrends: { weekStart: string; activeUsers: number }[];
+    cohortRetention: (Record<string, number | null> & { date: string; cohortSize: number })[];
+    topLessons: {
+        lessonId: string;
+        title: string;
+        uniqueViewers: number;
+        uniqueCompleters: number;
+        completionRate: number;
+    }[];
+    retentionDays: number[];
+}
+
 // API Base URL
 const getApiBase = () => {
     let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
@@ -181,27 +330,34 @@ const getApiBase = () => {
 const API_BASE = getApiBase();
 
 const OnboardingAnalytics: React.FC = () => {
+    const navigate = useNavigate();
     const [data, setData] = useState<OnboardingData | null>(null);
     const [tutorialData, setTutorialData] = useState<TutorialData | null>(null);
     const [preferencesData, setPreferencesData] = useState<PreferencesData | null>(null);
     const [retentionData, setRetentionData] = useState<RetentionData | null>(null);
     const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
+    const [bookBuildingData, setBookBuildingData] = useState<BookBuildingData | null>(null);
+    const [paywallData, setPaywallData] = useState<PaywallData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'retention' | 'survey'>('onboarding');
+    const [lessonRetentionData, setLessonRetentionData] = useState<LessonRetentionData | null>(null);
+    const [activeTab, setActiveTab] = useState<'onboarding' | 'tutorial' | 'firstLesson' | 'bookBuilding' | 'paywall' | 'retention' | 'lessonRetention' | 'survey'>('onboarding');
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch onboarding, tutorial, preferences, retention, and survey data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes] = await Promise.all([
+            // Fetch onboarding, tutorial, preferences, retention, survey, and book-building data in parallel
+            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes, paywallRes, lessonRetRes] = await Promise.all([
                 fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
                 fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
                 fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
-                fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`), // At least 30 days for retention
+                fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`),
                 fetch(`${API_BASE}/survey/analytics?days=${days}`),
+                fetch(`${API_BASE}/analytics/onboarding/book-building?days=${days}`),
+                fetch(`${API_BASE}/analytics/paywall?days=${days}`),
+                fetch(`${API_BASE}/analytics/lesson-retention?days=${days}`),
             ]);
             
             const onboardingResult = await onboardingRes.json();
@@ -209,6 +365,9 @@ const OnboardingAnalytics: React.FC = () => {
             const preferencesResult = await preferencesRes.json();
             const retentionResult = await retentionRes.json();
             const surveyResult = await surveyRes.json();
+            const bookBuildingResult = await bookBuildingRes.json();
+            const paywallResult = await paywallRes.json();
+            const lessonRetResult = await lessonRetRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);
@@ -224,6 +383,15 @@ const OnboardingAnalytics: React.FC = () => {
             }
             if (surveyResult.success) {
                 setSurveyData(surveyResult);
+            }
+            if (bookBuildingResult.success) {
+                setBookBuildingData(bookBuildingResult);
+            }
+            if (paywallResult.success) {
+                setPaywallData(paywallResult);
+            }
+            if (lessonRetResult.success) {
+                setLessonRetentionData(lessonRetResult);
             }
             
             if (!onboardingResult.success && !tutorialResult.success) {
@@ -287,7 +455,7 @@ const OnboardingAnalytics: React.FC = () => {
                         Track user journey through tutorial-first onboarding flow
                     </p>
                     <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-                        <strong>Flow:</strong> Started → Account Created → Step 1 (Parent) → Step 2 (Family) → Step 3 (Goals) → Step 4 (Features) → Step 5 (Voice) → Step 6 (Paywall Shown) → Step 7 (Exit Paywall) / Step 8 (Start Trial) → Subscribed
+                        <strong>Flow:</strong> Started → … → Paywall Shown → Exit Paywall / Start Trial <strong>Button</strong> Clicked → Subscribed (app-reported) vs Subscribed (RevenueCat). &quot;Start Trial Button Clicked&quot; = in-app tap; &quot;Subscribed (RevenueCat)&quot; = actual trial/subscription activations from RevenueCat.
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -364,6 +532,42 @@ const OnboardingAnalytics: React.FC = () => {
                     </span>
                 </button>
                 <button
+                    onClick={() => setActiveTab('bookBuilding')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'bookBuilding'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        Kids Monthly Books Flow
+                        {bookBuildingData && bookBuildingData.summary.totalStarted > 0 && (
+                            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">
+                                {bookBuildingData.summary.totalStarted}
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('paywall')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'paywall'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <Crown className="w-4 h-4" />
+                        Paywall
+                        {paywallData && paywallData.summary.paywallShown > 0 && (
+                            <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                                {paywallData.summary.conversionRate}%
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
                     onClick={() => setActiveTab('retention')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         activeTab === 'retention'
@@ -377,6 +581,24 @@ const OnboardingAnalytics: React.FC = () => {
                         {retentionData && retentionData.summary.avgRetention.day7 !== null && (
                             <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
                                 D7: {retentionData.summary.avgRetention.day7}%
+                            </span>
+                        )}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('lessonRetention')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === 'lessonRetention'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <span className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        Lesson Retention
+                        {lessonRetentionData && lessonRetentionData.summary.multiDayPct > 0 && (
+                            <span className="bg-teal-100 text-teal-700 text-xs px-2 py-0.5 rounded-full">
+                                {lessonRetentionData.summary.multiDayPct}% recurring
                             </span>
                         )}
                     </span>
@@ -1181,6 +1403,308 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             )}
 
+            {/* ============ BOOK BUILDING (Dive into the Bible) TAB ============ */}
+            {activeTab === 'bookBuilding' && bookBuildingData && (
+            <>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-amber-800 text-sm">
+                <strong>Dive into the Bible</strong> — Create Your Story flow: started → steps 1–4 → book created → book completed. Conversion counts are users who saw the paywall / clicked trial / subscribed <em>from this feature</em> (source: create-your-story).
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Started</div>
+                    <p className="text-2xl font-bold text-gray-900">{bookBuildingData.summary.totalStarted.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Books completed</div>
+                    <p className="text-2xl font-bold text-green-600">{bookBuildingData.summary.totalBookCompleted.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">{bookBuildingData.summary.completionRate}% of started</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Trial clicked (from feature)</div>
+                    <p className="text-2xl font-bold text-blue-600">{bookBuildingData.summary.trialClickedFromFeature.toLocaleString()}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <div className="text-gray-500 text-sm mb-1">Subscribed (from feature)</div>
+                    <p className="text-2xl font-bold text-indigo-600">{bookBuildingData.summary.subscribedFromFeature.toLocaleString()}</p>
+                </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <ChevronRight className="w-5 h-5 text-amber-600" />
+                    Book building funnel
+                </h3>
+                <div className="space-y-3">
+                    {bookBuildingData.funnel.map((step, idx) => {
+                        const isCharLink = step.stepKey === 'char_generated' || step.stepKey === 'step_2' || step.stepKey === 'step_2_started';
+                        return (
+                        <div key={step.stepKey || step.step} className="flex items-center gap-4">
+                            <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
+                                {isCharLink ? (
+                                    <button
+                                        onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                                        className="truncate text-left hover:text-amber-600 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
+                                        title="View kid characters created"
+                                    >
+                                        {step.step}
+                                    </button>
+                                ) : (
+                                    <span className="truncate" title={step.step}>{step.step}</span>
+                                )}
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
+                                <div className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full transition-all duration-500" style={{ width: `${step.rate}%` }} />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-gray-700">{step.count.toLocaleString()} ({step.rate}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    ); })}
+                </div>
+            </div>
+            {bookBuildingData.dropoffs.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <ArrowDownRight className="w-5 h-5 text-red-500" />
+                        Top drop-offs
+                    </h3>
+                    <div className="space-y-2">
+                        {bookBuildingData.dropoffs.map((d, i) => (
+                            <div key={i} className="flex justify-between items-center text-sm">
+                                <span className="text-gray-700">{d.from} → {d.to}</span>
+                                <span className="font-semibold text-red-600">{d.dropped} ({d.dropRate}%)</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Conversion (from Create Your Story paywall)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div><span className="text-gray-500 text-sm">Paywall shown</span><p className="font-bold text-gray-900">{bookBuildingData.conversion.paywallShown}</p></div>
+                    <div><span className="text-gray-500 text-sm">Trial clicked</span><p className="font-bold text-blue-600">{bookBuildingData.conversion.trialClicked}</p></div>
+                    <div><span className="text-gray-500 text-sm">Subscribed (total)</span><p className="font-bold text-green-600">{bookBuildingData.conversion.totalSubscribed}</p></div>
+                </div>
+            </div>
+            {bookBuildingData.usage && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Usage & cost (Create Your Story)</h3>
+                    <p className="text-sm text-gray-500 mb-4">Image cost: {bookBuildingData.usage.costCentsPerImage}¢ per image (avatars + book pages). Totals for selected period.</p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                        <button
+                            onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                            className="bg-gray-50 rounded-lg p-4 text-left hover:bg-gray-100 hover:ring-2 hover:ring-amber-300 transition-all cursor-pointer group"
+                        >
+                            <div className="text-gray-500 text-sm mb-1 group-hover:text-amber-600 transition-colors">Avatars created →</div>
+                            <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalAvatars.toLocaleString()}</p>
+                        </button>
+                        <button
+                            onClick={() => navigate(`/onboarding-analytics/kids-characters?days=${days}`)}
+                            className="bg-amber-50/70 rounded-lg p-4 text-left hover:bg-amber-100 hover:ring-2 hover:ring-amber-300 transition-all cursor-pointer group"
+                        >
+                            <div className="text-gray-500 text-sm mb-1 group-hover:text-amber-600 transition-colors">Character cost →</div>
+                            <p className="text-2xl font-bold text-amber-700">${(bookBuildingData.usage.totalAvatars * bookBuildingData.usage.costCentsPerImage / 100).toFixed(2)}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Avatars × {bookBuildingData.usage.costCentsPerImage}¢</p>
+                        </button>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Pages built</div>
+                            <p className="text-2xl font-bold text-gray-900">{bookBuildingData.usage.totalPages.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Total cost</div>
+                            <p className="text-2xl font-bold text-amber-700">${bookBuildingData.usage.totalCostDollars.toFixed(2)}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-gray-500 text-sm mb-1">Trials started</div>
+                            <p className="text-2xl font-bold text-blue-600">{bookBuildingData.usage.totalTrialsStarted.toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {bookBuildingData.dailyTrends && bookBuildingData.dailyTrends.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mt-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily trend (started vs completed & usage)</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-left text-gray-500 border-b">
+                                    <th className="pb-2 pr-4">Date</th>
+                                    <th className="pb-2 pr-4">Started</th>
+                                    <th className="pb-2 pr-4">Step 4</th>
+                                    <th className="pb-2 pr-4">Book created</th>
+                                    <th className="pb-2 pr-4">Book completed</th>
+                                    <th className="pb-2 pr-4">Avatars</th>
+                                    <th className="pb-2 pr-4">Pages</th>
+                                    <th className="pb-2 pr-4">Cost</th>
+                                    <th className="pb-2 pr-4">Trials started</th>
+                                    <th className="pb-2">Subscribed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {bookBuildingData.dailyTrends.map((d) => (
+                                    <tr key={d.date} className="border-b border-gray-100">
+                                        <td className="py-2 pr-4 font-medium">{formatDate(d.date)}</td>
+                                        <td className="py-2 pr-4">{d.started}</td>
+                                        <td className="py-2 pr-4">{d.step4}</td>
+                                        <td className="py-2 pr-4">{d.bookCreated}</td>
+                                        <td className="py-2 pr-4">{d.bookCompleted}</td>
+                                        <td className="py-2 pr-4">{typeof d.avatars === 'number' ? d.avatars : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.pages === 'number' ? d.pages : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.costDollars === 'number' ? `$${d.costDollars.toFixed(2)}` : '—'}</td>
+                                        <td className="py-2 pr-4">{typeof d.trialStarted === 'number' ? d.trialStarted : '—'}</td>
+                                        <td className="py-2">{d.subscribed}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+            </>
+            )}
+
+            {/* ============ PAYWALL TAB ============ */}
+            {activeTab === 'paywall' && paywallData && (
+            <>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Summary</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><span className="text-gray-500 text-sm">Paywall shown</span><p className="text-2xl font-bold text-gray-900">{paywallData.summary.paywallShown.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Trial clicked</span><p className="text-2xl font-bold text-blue-600">{paywallData.summary.trialClicked.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Subscribed</span><p className="text-2xl font-bold text-green-600">{paywallData.summary.totalSubscribed.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Conversion rate</span><p className="text-2xl font-bold text-purple-600">{paywallData.summary.conversionRate}%</p></div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
+                    <div><span className="text-gray-500 text-sm">Closed</span><p className="font-semibold text-gray-700">{paywallData.summary.paywallClosed.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Cancelled</span><p className="font-semibold text-orange-600">{paywallData.summary.purchaseCancelled.toLocaleString()}</p></div>
+                    <div><span className="text-gray-500 text-sm">Errors</span><p className="font-semibold text-red-600">{paywallData.summary.purchaseError.toLocaleString()}</p></div>
+                </div>
+                {paywallData.summary.purchaseError > 0 && (
+                    <details className="mt-4 pt-4 border-t border-gray-200 group">
+                        <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900 list-none flex items-center gap-2">
+                            <ChevronRight className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" />
+                            Purchase error details
+                            <span className="text-gray-400 font-normal">(messages from app + recent events)</span>
+                        </summary>
+                        <div className="mt-3 space-y-4 pl-1">
+                            {paywallData.purchaseErrorBreakdown && paywallData.purchaseErrorBreakdown.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By message</h4>
+                                    <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-left text-gray-500 border-b bg-gray-50">
+                                                    <th className="py-2 px-3 font-medium">Error message</th>
+                                                    <th className="py-2 px-3 font-medium w-24">Count</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paywallData.purchaseErrorBreakdown.map((row) => (
+                                                    <tr key={row.error} className="border-b border-gray-100 last:border-0">
+                                                        <td className="py-2 px-3 text-gray-800 break-words max-w-xl">{row.error}</td>
+                                                        <td className="py-2 px-3 font-medium text-red-600">{row.count}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                            {paywallData.recentPurchaseErrors && paywallData.recentPurchaseErrors.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent events (up to 50)</h4>
+                                    <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-left text-gray-500 border-b bg-gray-50">
+                                                    <th className="py-2 px-3 font-medium">Time (UTC)</th>
+                                                    <th className="py-2 px-3 font-medium">User</th>
+                                                    <th className="py-2 px-3 font-medium">Source</th>
+                                                    <th className="py-2 px-3 font-medium">Plan</th>
+                                                    <th className="py-2 px-3 font-medium">Message</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paywallData.recentPurchaseErrors.map((row, i) => (
+                                                    <tr key={`${row.userId}-${row.createdAt}-${i}`} className="border-b border-gray-100 last:border-0">
+                                                        <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{new Date(row.createdAt).toISOString().replace('T', ' ').slice(0, 19)}</td>
+                                                        <td className="py-2 px-3 font-mono text-xs text-gray-700 max-w-[140px] truncate" title={row.userId}>{row.userId}</td>
+                                                        <td className="py-2 px-3 text-gray-700">{row.source || '—'}</td>
+                                                        <td className="py-2 px-3 text-gray-700">{row.planType || '—'}</td>
+                                                        <td className="py-2 px-3 text-gray-800 break-words max-w-md">{row.error || '(no message)'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                            {(!paywallData.purchaseErrorBreakdown?.length && !paywallData.recentPurchaseErrors?.length) && (
+                                <p className="text-sm text-gray-500">No stored messages for this period. Deploy the latest API to see breakdowns, or check MongoDB <code className="text-xs bg-gray-100 px-1 rounded">OnboardingEvent</code> for <code className="text-xs bg-gray-100 px-1 rounded">paywall_purchase_error</code>.</p>
+                            )}
+                        </div>
+                    </details>
+                )}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <ChevronRight className="w-5 h-5 text-green-600" />
+                    Paywall funnel
+                </h3>
+                <div className="space-y-3">
+                    {paywallData.funnel.map((step, idx) => (
+                        <div key={step.stepKey || step.step} className="flex items-center gap-4">
+                            <div className="w-44 text-sm font-medium text-gray-700 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
+                                <span className="truncate" title={step.step}>{step.step}</span>
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden relative">
+                                <div className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full transition-all duration-500" style={{ width: `${step.rate}%` }} />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-gray-700">{step.count.toLocaleString()} ({step.rate}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Paywall sources</h3>
+                <p className="text-sm text-gray-500 mb-4">Breakdown by where users encountered the paywall.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {Object.entries(paywallData.sourceBreakdown)
+                        .sort(([a], [b]) => paywallSourceSortKey(a) - paywallSourceSortKey(b) || a.localeCompare(b))
+                        .map(([source, data]) => (
+                        <div key={source} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="font-semibold text-gray-900 mb-2">{labelPaywallSource(source)}</div>
+                            <div className="space-y-1 text-sm">
+                                <div className="flex justify-between"><span className="text-gray-600">Shown:</span><span className="font-medium">{data.paywallShown}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Clicked:</span><span className="font-medium text-blue-600">{data.trialClicked}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Subscribed:</span><span className="font-medium text-green-600">{data.subscribed}</span></div>
+                                <div className="flex justify-between pt-1 border-t border-gray-300"><span className="text-gray-600">Conversion:</span><span className="font-semibold">{data.paywallShown > 0 ? Math.round((data.subscribed / data.paywallShown) * 100) : 0}%</span></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            </>
+            )}
+
+            {activeTab === 'paywall' && !paywallData?.success && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <Crown className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500">No paywall analytics data available for the selected period.</p>
+                </div>
+            )}
+
+            {activeTab === 'bookBuilding' && !bookBuildingData?.success && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No book building data yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Dive into the Bible / Create Your Story events will appear once users start the flow</p>
+                </div>
+            )}
+
             {/* No Data State */}
             {activeTab === 'onboarding' && !data && (
                 <div className="bg-gray-50 rounded-xl p-12 text-center">
@@ -1409,6 +1933,53 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             </div>
 
+            {/* Layout Rating - "How do you like the new layout?" 1-5 */}
+            {surveyData.analytics.layoutRating && surveyData.analytics.layoutRating.totalResponses > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500" />
+                    New Layout Rating
+                </h3>
+                <p className="text-gray-500 text-sm mb-4">&quot;How do you like the new layout?&quot; (1–5)</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                        <p className="text-sm text-gray-500">Total Responses</p>
+                        <p className="text-2xl font-bold text-amber-700">
+                            {surveyData.analytics.layoutRating.totalResponses}
+                        </p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                        <p className="text-sm text-gray-500">Average Score</p>
+                        <p className="text-2xl font-bold text-amber-700">
+                            {surveyData.analytics.layoutRating.averageScore != null
+                                ? `${surveyData.analytics.layoutRating.averageScore.toFixed(1)} / 5`
+                                : '—'}
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-4">
+                    <p className="text-sm text-gray-600 mb-2">Distribution</p>
+                    <div className="flex items-end gap-2 h-24">
+                        {[1, 2, 3, 4, 5].map(score => {
+                            const count = surveyData.analytics.layoutRating!.distribution[score] || 0;
+                            const maxCount = Math.max(...Object.values(surveyData.analytics.layoutRating!.distribution), 1);
+                            const height = (count / maxCount) * 100;
+                            return (
+                                <div key={score} className="flex-1 flex flex-col items-center">
+                                    <span className="text-xs text-gray-500 mb-1">{count}</span>
+                                    <div
+                                        className="w-full rounded-t bg-amber-500 transition-all"
+                                        style={{ height: `${Math.max(height, 4)}%` }}
+                                    />
+                                    <span className="text-xs font-medium mt-2 text-gray-600">{score}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+            )}
+
             {/* Content Preferences */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -1546,6 +2117,172 @@ const OnboardingAnalytics: React.FC = () => {
                 </div>
             </div>
             </>
+            )}
+
+            {/* ============ LESSON RETENTION TAB ============ */}
+            {activeTab === 'lessonRetention' && lessonRetentionData && (
+            <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Unique Lesson Users</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.totalUniqueUsers}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Completions</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.totalCompletions}</p>
+                    <p className="text-xs text-gray-400 mt-1">{lessonRetentionData.summary.uniqueCompleters} unique ({lessonRetentionData.summary.completionRate}%)</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Multi-Day Users</p>
+                    <p className="text-2xl font-bold text-teal-600 mt-1">{lessonRetentionData.summary.multiDayUsers}</p>
+                    <p className="text-xs text-gray-400 mt-1">{lessonRetentionData.summary.multiDayPct}% of lesson users</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Avg Days / User</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{lessonRetentionData.summary.avgDaysPerUser}</p>
+                </div>
+            </div>
+
+            {/* Avg Retention Rates */}
+            {lessonRetentionData.summary.avgRetention && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Lesson Retention (avg across cohorts)</h3>
+                <div className="flex flex-wrap gap-3">
+                    {lessonRetentionData.retentionDays.map(d => {
+                        const val = lessonRetentionData.summary.avgRetention[`day${d}`];
+                        const color = val === null ? 'bg-gray-100 text-gray-400' : val >= 30 ? 'bg-green-100 text-green-700' : val >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+                        return (
+                            <div key={d} className={`rounded-lg px-4 py-3 text-center min-w-[80px] ${color}`}>
+                                <p className="text-xs font-medium opacity-70">Day {d}</p>
+                                <p className="text-xl font-bold">{val !== null ? `${val}%` : '—'}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            )}
+
+            {/* Daily Trends: Active, New vs Returning */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Daily Lesson Users</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-gray-500 border-b">
+                                <th className="pb-2 pr-4">Date</th>
+                                <th className="pb-2 pr-4 text-right">Active</th>
+                                <th className="pb-2 pr-4 text-right">Completions</th>
+                                <th className="pb-2 pr-4 text-right">New</th>
+                                <th className="pb-2 pr-4 text-right">Returning</th>
+                                <th className="pb-2 text-right">Returning %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lessonRetentionData.dailyTrends.slice(-14).map(d => (
+                                <tr key={d.date} className="border-b border-gray-50 hover:bg-gray-50">
+                                    <td className="py-2 pr-4 text-gray-600">{new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                                    <td className="py-2 pr-4 text-right font-medium">{d.activeUsers}</td>
+                                    <td className="py-2 pr-4 text-right">{d.completions}</td>
+                                    <td className="py-2 pr-4 text-right text-blue-600">{d.newUsers}</td>
+                                    <td className="py-2 pr-4 text-right text-teal-600">{d.returningUsers}</td>
+                                    <td className="py-2 text-right">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${d.returningPct >= 40 ? 'bg-green-100 text-green-700' : d.returningPct >= 20 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                            {d.returningPct}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Weekly Active Lesson Users */}
+            {lessonRetentionData.weeklyTrends.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Weekly Active Lesson Users (WAU)</h3>
+                <div className="flex flex-wrap gap-3">
+                    {lessonRetentionData.weeklyTrends.map(w => (
+                        <div key={w.weekStart} className="bg-indigo-50 rounded-lg px-4 py-3 text-center min-w-[100px]">
+                            <p className="text-xs text-indigo-500">{new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                            <p className="text-xl font-bold text-indigo-700">{w.activeUsers}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            )}
+
+            {/* Cohort Retention Table */}
+            {lessonRetentionData.cohortRetention.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Lesson Retention by Cohort</h3>
+                <p className="text-xs text-gray-400 mb-3">Users grouped by the day they first used a lesson. % who returned on Day N.</p>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-gray-500 border-b">
+                                <th className="pb-2 pr-4">Cohort Date</th>
+                                <th className="pb-2 pr-4 text-right">Users</th>
+                                {lessonRetentionData.retentionDays.map(d => (
+                                    <th key={d} className="pb-2 pr-2 text-right">D{d}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lessonRetentionData.cohortRetention.map(c => (
+                                <tr key={c.date} className="border-b border-gray-50 hover:bg-gray-50">
+                                    <td className="py-2 pr-4 text-gray-600">{new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                                    <td className="py-2 pr-4 text-right font-medium">{c.cohortSize}</td>
+                                    {lessonRetentionData.retentionDays.map(d => {
+                                        const val = c[`day${d}`] as number | null;
+                                        const bg = val === null ? '' : val >= 30 ? 'bg-green-100 text-green-700' : val >= 15 ? 'bg-yellow-100 text-yellow-700' : val > 0 ? 'bg-red-50 text-red-600' : 'text-gray-300';
+                                        return (
+                                            <td key={d} className={`py-2 pr-2 text-right text-xs font-medium rounded ${bg}`}>
+                                                {val !== null ? `${val}%` : '—'}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            )}
+
+            {/* Top Lessons */}
+            {lessonRetentionData.topLessons.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Lessons by Engagement</h3>
+                <div className="space-y-3">
+                    {lessonRetentionData.topLessons.map((l, i) => (
+                        <div key={l.lessonId} className="flex items-center gap-3">
+                            <span className="text-gray-400 text-sm w-6 text-right">{i + 1}.</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-700 truncate">{l.title}</p>
+                                <div className="flex gap-3 text-xs text-gray-400 mt-0.5">
+                                    <span>{l.uniqueViewers} viewers</span>
+                                    <span>{l.uniqueCompleters} completers</span>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${l.completionRate >= 60 ? 'bg-green-100 text-green-700' : l.completionRate >= 30 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {l.completionRate}% completion
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            )}
+            </>
+            )}
+
+            {activeTab === 'lessonRetention' && !lessonRetentionData && (
+                <div className="bg-gray-50 rounded-xl p-12 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No lesson retention data available yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Lesson engagement data will appear here once users start interacting with lessons</p>
+                </div>
             )}
 
             {activeTab === 'survey' && !surveyData && (

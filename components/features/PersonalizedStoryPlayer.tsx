@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Pause, SkipForward, Volume2, VolumeX, X, Sparkles, Book, Music } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
+import { attachReliableLoop } from '../../utils/audioLoop';
 
 interface PersonalizedStoryPlayerProps {
     isOpen: boolean;
@@ -35,6 +36,7 @@ const PersonalizedStoryPlayer: React.FC<PersonalizedStoryPlayerProps> = ({
     
     const narrationRef = useRef<HTMLAudioElement>(null);
     const musicRef = useRef<HTMLAudioElement>(null);
+    const musicLoopDetachRef = useRef<(() => void) | null>(null);
     const progressInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Initialize audio elements
@@ -48,10 +50,12 @@ const PersonalizedStoryPlayer: React.FC<PersonalizedStoryPlayerProps> = ({
             
             // Set up background music
             if (musicRef.current && storyData.backgroundMusicUrl) {
+                musicLoopDetachRef.current?.();
                 musicRef.current.src = storyData.backgroundMusicUrl;
                 musicRef.current.volume = 0.2; // Background music at 20% volume
                 musicRef.current.loop = true;
                 musicRef.current.load();
+                musicLoopDetachRef.current = attachReliableLoop(musicRef.current, true);
             }
         }
         
@@ -63,6 +67,8 @@ const PersonalizedStoryPlayer: React.FC<PersonalizedStoryPlayerProps> = ({
             if (narrationRef.current) {
                 narrationRef.current.pause();
             }
+            musicLoopDetachRef.current?.();
+            musicLoopDetachRef.current = null;
             if (musicRef.current) {
                 musicRef.current.pause();
             }

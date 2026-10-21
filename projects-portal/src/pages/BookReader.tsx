@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient, getMediaUrl } from '../services/apiClient';
-import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, ChevronDown } from 'lucide-react';
+import {
+    appSideSwipeAuthoredFontSizePx,
+    appSideSwipeFontFamily,
+    appSideSwipeTextShadow,
+    appStoryParagraphExtras,
+} from '../utils/appBookTypography';
+import { ChevronLeft, ChevronRight, X, Play, Square, Volume2, VolumeX, ChevronDown } from 'lucide-react';
+import TrimmedPlaybackVideo from '../components/TrimmedPlaybackVideo';
+import { removeEmotionalCues } from '../utils/readAlongText';
 
 interface Voice {
     voice_id: string;
@@ -26,6 +34,8 @@ interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -39,6 +49,8 @@ interface Page {
     pageNumber: number;
     backgroundUrl?: string;
     backgroundType?: 'image' | 'video';
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     scrollUrl?: string;
     scrollHeight?: number;
     scrollMidHeight?: number;
@@ -69,6 +81,47 @@ interface Page {
     imageSequenceAnimation?: string; // animation effect type
 }
 
+type WordTiming = { word: string; start: number; end: number };
+
+/** Mirrors kid app timing lookup (handles gaps between alignment words). */
+function findWordIndexAtTime(currentTime: number, words: WordTiming[]): number {
+    if (!words?.length) return -1;
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (currentTime >= w.start && currentTime < w.end) return i;
+    }
+    if (currentTime < words[0].start) return 0;
+    if (currentTime >= words[words.length - 1].end) return words.length - 1;
+    for (let i = 0; i < words.length - 1; i++) {
+        const cw = words[i];
+        const nw = words[i + 1];
+        if (currentTime >= cw.end && currentTime < nw.start) {
+            const gapMidpoint = (cw.end + nw.start) / 2;
+            return currentTime >= gapMidpoint ? i + 1 : i;
+        }
+    }
+    return words.length - 1;
+}
+
+function mapAlignIndexToDisplay(alignIdx: number, alignLen: number, displayLen: number): number {
+    if (displayLen <= 0) return -1;
+    if (alignIdx < 0) return 0;
+    if (alignLen <= 0) return Math.min(displayLen - 1, alignIdx);
+    if (alignLen === displayLen) return Math.min(displayLen - 1, alignIdx);
+    const r = alignLen > 1 ? alignIdx / (alignLen - 1) : 0;
+    return Math.min(displayLen - 1, Math.max(0, Math.round(r * Math.max(displayLen - 1, 0))));
+}
+
+function buildEvenWordTiming(displayCount: number, durationSec: number): WordTiming[] {
+    if (displayCount <= 0 || durationSec <= 0) return [];
+    const w = durationSec / displayCount;
+    return Array.from({ length: displayCount }, (_, i) => ({
+        word: '',
+        start: i * w,
+        end: (i + 1) * w,
+    }));
+}
+
 const BookReader: React.FC = () => {
     const { bookId } = useParams<{ bookId: string }>();
     const navigate = useNavigate();
@@ -87,6 +140,8 @@ const BookReader: React.FC = () => {
     // Video sequence state
     const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
     const videoRef = useRef<HTMLVideoElement>(null);
+    /** Page background / sequence videos autoplay muted; user can unmute (browser requires a tap). */
+    const [pageVideoSoundOn, setPageVideoSoundOn] = useState(false);
     
     // TTS State
     const [voices, setVoices] = useState<Voice[]>([]);
@@ -97,6 +152,28 @@ const BookReader: React.FC = () => {
     const [currentTextBoxIndex, setCurrentTextBoxIndex] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const allTextBoxesRef = useRef<TextBox[]>([]);
+    const highlightIntervalRef = useRef<number | null>(null);
+    const alignWordsRef = useRef<WordTiming[]>([]);
+    const displayWordCountRef = useRef(0);
+
+    const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+    /** True while "play page" is chaining multiple text boxes (matches kid app single-box focus). */
+    const [sequentialReadActive, setSequentialReadActive] = useState(false);
+    /** Alignment timing available for the active clip (mirror kid app gated read-along). */
+    const [readAlongTimingReady, setReadAlongTimingReady] = useState(false);
+
+    const stopHighlightTicker = useCallback(() => {
+        if (highlightIntervalRef.current != null) {
+            window.clearInterval(highlightIntervalRef.current);
+            highlightIntervalRef.current = null;
+        }
+    }, []);
+
+    const tearDownPlayback = useCallback(() => {
+        stopHighlightTicker();
+        setHighlightedWordIndex(-1);
+        setReadAlongTimingReady(false);
+    }, [stopHighlightTicker]);
 
     // Device dimensions
     const deviceStyles = {
@@ -127,17 +204,20 @@ const BookReader: React.FC = () => {
         const fetchVoices = async () => {
             try {
                 const res = await apiClient.get('/api/tts/voices');
-                if (res.data?.voices) {
-                    setVoices(res.data.voices);
+                /** Backend GET /api/tts/voices returns a bare array; some callers wrap as { voices }. */
+                const data = res.data;
+                const list: Voice[] = Array.isArray(data) ? data : (data?.voices ?? []);
+                if (list.length > 0) {
+                    setVoices(list);
                     // Set default voice if none selected
-                    if (!selectedVoice && res.data.voices.length > 0) {
-                        // Try to find a good default narrator voice
-                        const defaultVoice = res.data.voices.find((v: Voice) => 
-                            v.name?.toLowerCase().includes('aria') || 
-                            v.name?.toLowerCase().includes('jessica')
-                        ) || res.data.voices[0];
-                        setSelectedVoice(defaultVoice.voice_id);
-                    }
+                    setSelectedVoice((prev) => {
+                        if (prev) return prev;
+                        const defaultVoice = list.find((v: Voice) =>
+                            v.name?.toLowerCase().includes('aria') ||
+                            v.name?.toLowerCase().includes('jessica'),
+                        ) || list[0];
+                        return defaultVoice.voice_id;
+                    });
                 }
             } catch (err) {
                 console.error('Failed to fetch voices:', err);
@@ -147,6 +227,14 @@ const BookReader: React.FC = () => {
     }, []);
 
     const currentPage = pages[currentPageIndex];
+
+    const pageHasRenderableVideo = useMemo(() => {
+        if (!currentPage) return false;
+        if (currentPage.useVideoSequence && (currentPage.videoSequence?.length ?? 0) > 0) return true;
+        const bgUrl = currentPage.backgroundUrl || currentPage.files?.background?.url;
+        const bgType = currentPage.backgroundType || currentPage.files?.background?.type;
+        return !!(bgUrl && bgType === 'video');
+    }, [currentPage]);
     
     // Reset image/video index when page changes (but preserve scroll state!)
     useEffect(() => {
@@ -154,7 +242,16 @@ const BookReader: React.FC = () => {
         setCurrentVideoIndex(0);
         setImageTransition('none');
         setCurrentTextBoxIndex(0);
-        
+        setHighlightedWordIndex(-1);
+        setSequentialReadActive(false);
+        setReadAlongTimingReady(false);
+        alignWordsRef.current = [];
+        displayWordCountRef.current = 0;
+        if (highlightIntervalRef.current != null) {
+            window.clearInterval(highlightIntervalRef.current);
+            highlightIntervalRef.current = null;
+        }
+
         // Stop any playing audio when changing pages
         if (audioRef.current) {
             audioRef.current.pause();
@@ -172,81 +269,172 @@ const BookReader: React.FC = () => {
         // This allows scroll position to persist across pages like in the app
     }, [currentPageIndex]);
     
-    // Generate TTS for text and play it
+    const generateAndPlayTTSRef = useRef<(t: string, i: number) => Promise<void>>(async () => {});
+    
+    // Generate TTS for text and play it (portal preview: ElevenLabs alignment → kid-style read-along)
     const generateAndPlayTTS = useCallback(async (text: string, textBoxIdx: number) => {
         if (!text || !selectedVoice) return;
-        
+
+        const displayWords = removeEmotionalCues(text.trim()).split(/\s+/).filter(Boolean);
+        displayWordCountRef.current = displayWords.length;
+
         setTtsLoading(true);
         setCurrentTextBoxIndex(textBoxIdx);
-        
+        tearDownPlayback();
+
         try {
             const res = await apiClient.post('/api/tts/generate', {
                 text: text.trim(),
                 voiceId: selectedVoice,
-                bookId: bookId
+                bookId,
+                pageNumber: currentPageIndex + 1,
+                textBoxIndex: textBoxIdx,
             });
-            
-            if (res.data?.audioUrl) {
-                // Stop any existing audio
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                }
-                
-                const audio = new Audio(getMediaUrl(res.data.audioUrl));
-                audioRef.current = audio;
-                
-                audio.onended = () => {
-                    setIsPlaying(false);
-                    // Try to play next text box if there is one
-                    const allBoxes = allTextBoxesRef.current;
-                    const nextIdx = textBoxIdx + 1;
-                    if (nextIdx < allBoxes.length) {
-                        generateAndPlayTTS(allBoxes[nextIdx].text, nextIdx);
-                    }
-                };
-                
-                audio.onerror = () => {
-                    console.error('Audio playback error');
-                    setIsPlaying(false);
-                    setTtsLoading(false);
-                };
-                
-                await audio.play();
-                setIsPlaying(true);
+
+            if (!res.data?.audioUrl) {
+                return;
             }
+
+            const rawWords: unknown[] = Array.isArray(res.data?.alignment?.words)
+                ? res.data.alignment.words
+                : [];
+
+            const parsedTiming: WordTiming[] = rawWords
+                .map((w): WordTiming | null => {
+                    if (!w || typeof w !== 'object') return null;
+                    const word = typeof (w as { word?: string }).word === 'string' ? (w as { word: string }).word : '';
+                    const start = Number((w as { start?: number }).start);
+                    const end = Number((w as { end?: number }).end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+                    return { word, start, end };
+                })
+                .filter((x): x is WordTiming => x !== null);
+
+            // Stop prior audio element
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+
+            const audio = new Audio(getMediaUrl(res.data.audioUrl));
+            audioRef.current = audio;
+
+            const startReadAlongTicker = () => {
+                if (audioRef.current !== audio) return;
+
+                const durationSec = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+
+                let timings = parsedTiming;
+                if (timings.length === 0 && displayWords.length > 0 && durationSec > 0) {
+                    timings = buildEvenWordTiming(displayWords.length, durationSec);
+                }
+                alignWordsRef.current = timings;
+
+                stopHighlightTicker();
+                setReadAlongTimingReady(timings.length > 0 && displayWords.length > 0);
+
+                if (timings.length > 0 && displayWords.length > 0) {
+                    highlightIntervalRef.current = window.setInterval(() => {
+                        const alignWords = alignWordsRef.current;
+                        const displayLen = displayWordCountRef.current;
+                        if (!alignWords.length || !displayLen || !audioRef.current) return;
+                        const rawIdx = findWordIndexAtTime(audioRef.current.currentTime, alignWords);
+                        const mapped = mapAlignIndexToDisplay(
+                            rawIdx,
+                            alignWords.length,
+                            displayLen,
+                        );
+                        setHighlightedWordIndex(mapped);
+                    }, 50);
+                }
+            };
+
+            audio.onloadedmetadata = () => {
+                startReadAlongTicker();
+            };
+            audio.addEventListener('durationchange', startReadAlongTicker);
+
+            audio.onended = () => {
+                stopHighlightTicker();
+                setHighlightedWordIndex(-1);
+                setReadAlongTimingReady(false);
+                audioRef.current = null;
+
+                const allBoxes = allTextBoxesRef.current;
+                const nextIdx = textBoxIdx + 1;
+                if (nextIdx < allBoxes.length) {
+                    void generateAndPlayTTSRef.current(allBoxes[nextIdx].text, nextIdx);
+                } else {
+                    setIsPlaying(false);
+                    setSequentialReadActive(false);
+                }
+            };
+
+            audio.onerror = () => {
+                console.error('Audio playback error');
+                tearDownPlayback();
+                setIsPlaying(false);
+                setSequentialReadActive(false);
+                audioRef.current = null;
+                setTtsLoading(false);
+            };
+
+            await audio.play();
+            setIsPlaying(true);
+            startReadAlongTicker();
         } catch (err) {
             console.error('TTS generation failed:', err);
+            tearDownPlayback();
+            setIsPlaying(false);
+            setSequentialReadActive(false);
         } finally {
             setTtsLoading(false);
         }
-    }, [selectedVoice, bookId]);
-    
+    }, [
+        selectedVoice,
+        bookId,
+        currentPageIndex,
+        tearDownPlayback,
+        stopHighlightTicker,
+    ]);
+
+    generateAndPlayTTSRef.current = generateAndPlayTTS;
+
     // Play all text boxes on current page
     const handlePlay = useCallback(() => {
         if (isPlaying) {
-            // Stop playback
+            tearDownPlayback();
             if (audioRef.current) {
                 audioRef.current.pause();
                 audioRef.current = null;
             }
             setIsPlaying(false);
+            setSequentialReadActive(false);
             return;
         }
-        
-        // Get text boxes for current page
-        const currentPage = pages[currentPageIndex];
-        const contentBoxes = currentPage?.content?.textBoxes;
-        const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : currentPage?.textBoxes;
-        
+
+        const pg = pages[currentPageIndex];
+        const contentBoxes = pg?.content?.textBoxes;
+        const textBoxes = (contentBoxes && contentBoxes.length > 0) ? contentBoxes : pg?.textBoxes;
+
         if (!textBoxes || textBoxes.length === 0) {
             console.log('No text boxes to read');
             return;
         }
-        
-        // Store all text boxes and start playing from first
+
         allTextBoxesRef.current = textBoxes;
-        generateAndPlayTTS(textBoxes[0].text, 0);
-    }, [isPlaying, pages, currentPageIndex, generateAndPlayTTS]);
+        setSequentialReadActive(textBoxes.length > 1);
+        void generateAndPlayTTSRef.current(textBoxes[0].text, 0);
+    }, [isPlaying, pages, currentPageIndex, tearDownPlayback]);
+
+    // Unmount cleanup
+    useEffect(() => () => {
+        tearDownPlayback();
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+    }, [tearDownPlayback]);
     
     // Toggle scroll state: hidden -> mid -> max -> hidden
     const cycleScrollState = useCallback(() => {
@@ -506,15 +694,17 @@ const BookReader: React.FC = () => {
                                 
                                 return (
                                     <div className="relative w-full h-full">
-                                        <video
+                                        <TrimmedPlaybackVideo
                                             ref={videoRef}
                                             key={currentVideo.url}
                                             src={resolveUrl(currentVideo.url)}
                                             className="w-full h-full object-cover"
                                             autoPlay
                                             loop={shouldLoop}
-                                            muted
+                                            muted={!pageVideoSoundOn}
                                             playsInline
+                                            trimStartSec={currentVideo.trimStartSec}
+                                            trimEndSec={currentVideo.trimEndSec}
                                             onEnded={handleVideoEnded}
                                         />
                                         {/* Video sequence indicator */}
@@ -544,13 +734,16 @@ const BookReader: React.FC = () => {
                             // Video background (single video, loops)
                             if (bgType === 'video') {
                                 return (
-                                    <video
+                                    <TrimmedPlaybackVideo
+                                        ref={videoRef}
                                         src={resolveUrl(bgUrl)}
                                         className="w-full h-full object-cover"
                                         autoPlay
                                         loop
-                                        muted
+                                        muted={!pageVideoSoundOn}
                                         playsInline
+                                        trimStartSec={currentPage.backgroundTrimStartSec}
+                                        trimEndSec={currentPage.backgroundTrimEndSec}
                                     />
                                 );
                             }
@@ -604,6 +797,7 @@ const BookReader: React.FC = () => {
                                     // Calculate where scroll starts (from top)
                                     const scrollStartPercent = 100 - currentScrollHeight - scrollOffset + 3;
                                     const boxY = typeof box.y === 'number' ? box.y : 0;
+                                    const boxX = typeof box.x === 'number' ? box.x : 0;
                                     // Ensure text stays inside scroll area
                                     const effectiveTop = scrollUrl ? Math.max(boxY, scrollStartPercent) : boxY;
                                     // Calculate max height to stay within scroll bounds
@@ -612,42 +806,89 @@ const BookReader: React.FC = () => {
                                         ? `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`
                                         : `calc(100% - ${effectiveTop}% - 40px)`;
 
+                                    if (sequentialReadActive && idx !== currentTextBoxIndex) {
+                                        return null;
+                                    }
+
+                                    const cleanedText = removeEmotionalCues(box.text);
+                                    const splitWords = cleanedText.split(/\s+/).filter((w) => w.length > 0);
+                                    const showReadAlong =
+                                        idx === currentTextBoxIndex &&
+                                        readAlongTimingReady &&
+                                        highlightedWordIndex >= 0 &&
+                                        splitWords.length > 0;
+
                                     return (
                                         <div
                                             key={idx}
-                                            className={`absolute pointer-events-auto overflow-y-auto p-2 ${currentTextBoxIndex === idx && isPlaying ? 'ring-2 ring-orange-400 ring-opacity-75' : ''}`}
+                                            className={`
+                                                absolute pointer-events-auto overflow-y-auto transition-all duration-300
+                                                ${idx === currentTextBoxIndex && showReadAlong
+                                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-[1.02]'
+                                                    : ''
+                                                }
+                                                ${currentTextBoxIndex === idx && isPlaying && !showReadAlong
+                                                    ? 'ring-2 ring-orange-400 ring-opacity-75'
+                                                    : ''
+                                                }
+                                            `}
                                             style={{
-                                                left: `${box.x}%`,
+                                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                                 top: `${effectiveTop}%`,
-                                                width: `${box.width || 30}%`,
+                                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
                                                 transform: 'translate(0, 0)',
                                                 textAlign: box.alignment,
                                                 color: box.color || '#4a3b2a',
-                                                // Match app: use Patrick Hand (Google Font) with fallbacks
-                                                fontFamily: box.fontFamily === 'Comic Sans MS' 
-                                                    ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
-                                                    : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
-                                                // Match app: scale up 20% when using Patrick Hand (renders smaller than Comic Sans)
-                                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
-                                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
-                                                    : `${box.fontSize || 24}px`,
+                                                fontFamily: appSideSwipeFontFamily(box.fontFamily),
+                                                fontSize: `${appSideSwipeAuthoredFontSizePx(box)}px`,
                                                 // Calculate max height based on the effective top position
                                                 maxHeight: effectiveMaxHeight,
                                                 overflowY: 'auto',
                                                 WebkitOverflowScrolling: 'touch',
+                                                touchAction: 'pan-y',
                                                 // Background box styling
                                                 backgroundColor: box.showBackground ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                                 borderRadius: box.showBackground ? '12px' : '0',
-                                                padding: box.showBackground ? '12px 16px' : '8px',
-                                                // Text shadow/glow - color controlled by shadowColor setting
-                                                textShadow: box.showBackground 
-                                                    ? '1px 1px 2px rgba(255,255,255,0.8)'
-                                                    : box.shadowColor === 'dark'
-                                                        ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'
-                                                        : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
+                                                padding: box.showBackground === true ? '12px 16px' : '8px',
+                                                textShadow: appSideSwipeTextShadow(box),
+                                                scrollBehavior: 'smooth',
                                             }}
                                         >
-                                            <span style={{ whiteSpace: 'pre-wrap' }}>{box.text}</span>
+                                            <p
+                                                className="gk-readalong-p leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]"
+                                                style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}
+                                            >
+                                                {showReadAlong ? (
+                                                    splitWords.map((word, wIdx) => {
+                                                        const isHighlighted = wIdx === highlightedWordIndex;
+                                                        const isUpcoming =
+                                                            highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
+                                                        const isPast =
+                                                            highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
+                                                        return (
+                                                            <span
+                                                                key={wIdx}
+                                                                data-word-index={wIdx}
+                                                                className={`
+                                                                    gk-readalong-word rounded px-0.5
+                                                                    ${isHighlighted
+                                                                        ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
+                                                                        : isUpcoming
+                                                                            ? 'opacity-[0.42]'
+                                                                            : isPast
+                                                                                ? 'opacity-[0.78]'
+                                                                                : ''
+                                                                    }
+                                                                `}
+                                                            >
+                                                                {word}{' '}
+                                                            </span>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    cleanedText
+                                                )}
+                                            </p>
                                         </div>
                                     );
                                 })}
@@ -717,11 +958,11 @@ const BookReader: React.FC = () => {
                         Page {currentPageIndex + 1} of {pages.length}
                     </div>
                     
-                    {/* Play Button - positioned like in app */}
-                    <div 
-                        className="absolute left-4 pointer-events-auto z-30"
+                    {/* Play + page video sound (background / sequence) */}
+                    <div
+                        className="absolute left-4 pointer-events-auto z-30 flex flex-col gap-2 items-center"
                         style={{
-                            bottom: (!currentPage?.scrollUrl || scrollState === 'hidden') ? '1rem' : '2rem'
+                            bottom: (!currentPage?.scrollUrl || scrollState === 'hidden') ? '1rem' : '2rem',
                         }}
                     >
                         <button
@@ -731,8 +972,8 @@ const BookReader: React.FC = () => {
                             }}
                             disabled={ttsLoading}
                             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                                isPlaying 
-                                    ? 'bg-red-500 hover:bg-red-600' 
+                                isPlaying
+                                    ? 'bg-red-500 hover:bg-red-600'
                                     : 'bg-orange-500 hover:bg-orange-600'
                             } ${ttsLoading ? 'opacity-75 cursor-wait' : ''}`}
                         >
@@ -744,6 +985,37 @@ const BookReader: React.FC = () => {
                                 <Play className="w-6 h-6 text-white ml-1" fill="white" />
                             )}
                         </button>
+
+                        {pageHasRenderableVideo && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPageVideoSoundOn((on) => {
+                                        const next = !on;
+                                        if (next) {
+                                            setTimeout(() => {
+                                                void videoRef.current?.play().catch(() => {});
+                                            }, 0);
+                                        }
+                                        return next;
+                                    });
+                                }}
+                                className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg border border-white/20 transition-all ${
+                                    pageVideoSoundOn
+                                        ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white'
+                                        : 'bg-black/45 hover:bg-black/60 text-white backdrop-blur-sm'
+                                }`}
+                                title={pageVideoSoundOn ? 'Mute page video' : 'Hear page video audio'}
+                                aria-label={pageVideoSoundOn ? 'Mute page video' : 'Unmute page video'}
+                            >
+                                {pageVideoSoundOn ? (
+                                    <Volume2 className="w-5 h-5" />
+                                ) : (
+                                    <VolumeX className="w-5 h-5" />
+                                )}
+                            </button>
+                        )}
                     </div>
                     
                     {/* Voice Selector - top right */}

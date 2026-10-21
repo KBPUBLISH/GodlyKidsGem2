@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+/**
+ * Permanent TTS cache. Entries are never expired by time.
+ * Only removed when: cache clear by book/all (portal), invalid audioUrl (cleanup script), or local→GCS migration.
+ * Keeps ElevenLabs usage down by reusing generated audio.
+ */
 const ttsCacheSchema = new mongoose.Schema({
     textHash: {
         type: String,
@@ -31,7 +36,7 @@ const ttsCacheSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
-        // Permanent cache - no expiration
+        // No TTL index - cache is permanent. Do not add expiration.
     }
 });
 

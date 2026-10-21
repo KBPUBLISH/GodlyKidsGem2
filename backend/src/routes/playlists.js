@@ -375,10 +375,15 @@ router.post('/', async (req, res) => {
         const processedItems = (req.body.items || []).map((item, index) => ({
             title: item.title || '',
             author: item.author || 'Kingdom Builders Publishing',
+            description: item.description || '',
             audioUrl: item.audioUrl || '',
+            videoUrl: (item.videoUrl && item.videoUrl.trim() !== '') ? item.videoUrl : null, // Optional members-only music video
             order: item.order !== undefined ? item.order : index,
             duration: item.duration,
             coverImage: (item.coverImage && item.coverImage.trim() !== '') ? item.coverImage : null, // Convert empty strings to null
+            isMembersOnly: item.isMembersOnly === true,
+            isFeatured: item.isFeatured === true,
+            featuredOrder: item.featuredOrder || 0,
         }));
         
         console.log('📝 Processed items:', JSON.stringify(processedItems, null, 2));
@@ -468,11 +473,14 @@ router.put('/:id', async (req, res) => {
                     title: item.title || '',
                     author: item.author || 'Kingdom Builders Publishing',
                     audioUrl: item.audioUrl || '',
+                    videoUrl: (item.videoUrl && item.videoUrl.trim() !== '') ? item.videoUrl : null, // Optional members-only music video
                     order: item.order !== undefined ? item.order : index,
                     duration: item.duration,
                     coverImage: (item.coverImage && item.coverImage.trim() !== '') ? item.coverImage : null, // Convert empty strings to null
                     description: item.description || '',
                     isMembersOnly: item.isMembersOnly === true, // Preserve members-only flag per item
+                    isFeatured: item.isFeatured === true,
+                    featuredOrder: item.featuredOrder || 0,
                 };
                 console.log(`📝 Item ${index}:`, JSON.stringify(mappedItem, null, 2));
                 return mappedItem;

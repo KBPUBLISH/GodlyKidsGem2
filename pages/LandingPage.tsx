@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
-import { hasCompletedAnySession } from '../services/dailySessionService';
-import CreateAccountModal from '../components/modals/CreateAccountModal';
 import { ApiService } from '../services/apiService';
 import OptimizedImage from '../components/ui/OptimizedImage';
 
@@ -114,7 +112,6 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [isChecking, setIsChecking] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
 
   // Check if user has already completed onboarding
   useEffect(() => {
@@ -151,7 +148,7 @@ const LandingPage: React.FC = () => {
             navigate('/profile', { replace: true });
           } else {
             console.log('👤 User signed in (no kids), redirecting to home...');
-            navigate('/home', { replace: true });
+            navigate('/world', { replace: true });
           }
           return;
         }
@@ -175,22 +172,9 @@ const LandingPage: React.FC = () => {
 
   const handleStartExplore = () => {
     activityTrackingService.trackOnboardingEvent('splash_explore_clicked');
-    
-    // Check if user has completed at least one session but doesn't have an account
-    // If so, require account creation before continuing
-    const hasCompletedFirstLesson = hasCompletedAnySession();
-    const hasAccount = hasUserAccount();
-    
-    if (hasCompletedFirstLesson && !hasAccount) {
-      // Show account creation modal
-      setShowAccountModal(true);
-      return;
-    }
-    
-    // Skip welcome page - go directly to explore
-    localStorage.setItem('godlykids_welcome_seen', 'true');
-    // Go to the explore/home page
-    navigate('/home');
+
+    // Bring user to onboarding flow
+    navigate('/onboarding');
   };
 
   const handleSignIn = () => {
@@ -224,7 +208,7 @@ const LandingPage: React.FC = () => {
         
         {/* Family Image */}
         <img 
-          src="/splash-family.jpg" 
+          src="/splash-family.webp" 
           alt="Parent and child learning together"
           className={`w-full h-full object-cover object-top transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setImageLoaded(true)}
@@ -321,7 +305,7 @@ const LandingPage: React.FC = () => {
         
         {/* Social Proof */}
         <p className="text-[#5A7A8A] text-sm text-center mb-6">
-          Over 1,000+ families use Godly Kids for daily faith lessons
+          Over 10,000 families use Godly Kids for daily faith lessons
         </p>
         
         {/* Start to Explore Button - Wood Theme */}
@@ -344,24 +328,6 @@ const LandingPage: React.FC = () => {
         </button>
       </div>
       
-      {/* Account Creation Modal - shown after first lesson */}
-      {showAccountModal && (
-        <CreateAccountModal
-          isOpen={true}
-          navigateToOnboarding={false}
-          onClose={() => {
-            setShowAccountModal(false);
-          }}
-          onAccountCreated={() => {
-            setShowAccountModal(false);
-            // After creating account, go to explore page
-            navigate('/home');
-          }}
-          onSignIn={() => {
-            navigate('/signin', { state: { returnTo: '/home' } });
-          }}
-        />
-      )}
     </div>
   );
 };

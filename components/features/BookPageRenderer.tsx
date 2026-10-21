@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
+import { attachPlaybackTrim } from '../../utils/playbackTrim';
+import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
 import { Music } from 'lucide-react';
 
 interface TextBox {
@@ -17,11 +19,19 @@ interface TextBox {
     endTime?: number;
 }
 
+/** First playback position inside authored trim (defaults to start of file). */
+function playbackClipStart(trimStartSec?: number | null): number {
+    const n = trimStartSec;
+    return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 interface VideoSequenceItem {
     url: string;
     filename?: string;
     order: number;
     audioUrl?: string; // Auto-extracted audio for this video (iOS audio layering)
+    trimStartSec?: number;
+    trimEndSec?: number;
 }
 
 interface ImageSequenceItem {
@@ -62,19 +72,23 @@ interface PageData {
     scrollOffsetY?: number; // Vertical offset from bottom in percentage (default 0)
     scrollOffsetX?: number; // Horizontal offset from center in percentage (default 0)
     scrollWidth?: number; // Width as percentage (default 100 = full width)
+    scrollOpacity?: number; // 0–100: transparency of scroll overlay (100 = opaque)
     soundEffectUrl?: string;
     // Background audio - extracted video audio or ambient sound that loops with the page
     // Plays as separate <audio> element so it can layer with TTS (unlike video audio on iOS)
     backgroundAudioUrl?: string;
+    /** Optional trim for single background video (paired with layered background audio URL). */
+    backgroundTrimStartSec?: number;
+    backgroundTrimEndSec?: number;
     // Video sequence - multiple videos that play in order
     useVideoSequence?: boolean;
     videoSequence?: VideoSequenceItem[];
     // Image sequence - multiple images that cycle with transitions
     useImageSequence?: boolean;
     imageSequence?: ImageSequenceItem[];
-    imageSequenceDuration?: number; // seconds per image (default 10)
+    imageSequenceDuration?: number; // seconds per image (default 3)
     imageSequenceAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns'; // animation effect
-    // Single background image animation (e.g. kids monthly generated pages)
+    // Single background image animation (e.g. Kids Monthly generated pages)
     backgroundImageAnimation?: 'none' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomIn' | 'zoomOut' | 'kenBurns';
     backgroundImageAnimationDuration?: number; // seconds (default 10)
     // Character overlay settings (from AI or manual)
@@ -84,16 +98,29 @@ interface PageData {
 // Scroll state types
 export type ScrollState = 'hidden' | 'mid' | 'max';
 
+/** Resolve scroll band heights; legacy pages may only have scrollHeight. */
+function resolveScrollHeights(page: PageData): { max: number; mid: number } {
+    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
+    const mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+    return { max, mid };
+}
+
 interface BookPageRendererProps {
     page: PageData;
     activeTextBoxIndex: number | null;
     scrollState: ScrollState;
     onScrollStateChange?: (newState: ScrollState) => void;
+    /** Tap scroll/text area to hide or restore scroll (parent remembers pre-hide state). */
+    onToggleScrollVisibility?: () => void;
     onPlayText?: (text: string, index: number, e: React.MouseEvent) => void;
     highlightedWordIndex?: number;
     wordAlignment?: { words: Array<{ word: string; start: number; end: number }> } | null;
     onVideoTransition?: () => void; // Called when video loops/plays to resume TTS if suspended
-    isTTSPlaying?: boolean; // When true, mute video to prevent audio conflicts on iOS
+    isTTSPlaying?: boolean; // When true, duck layered page video / ambient audio for TTS
+    /** Separate from TTS mute: layered background-video audio (extracted URL). Defaults on. */
+    ambientVideoSoundEnabled?: boolean;
+    /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
+    sequentialMultiBoxTts?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
@@ -104,16 +131,26 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     activeTextBoxIndex,
     scrollState,
     onScrollStateChange,
+    onToggleScrollVisibility,
     onPlayText,
     highlightedWordIndex,
     wordAlignment,
     onVideoTransition,
     isTTSPlaying = false,
+    ambientVideoSoundEnabled,
+    sequentialMultiBoxTts = false,
     characterPoses,
     showCharacterOverlay = false
 }) => {
+    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
+    const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
+    const scrollOffset = page.scrollOffsetY || 0;
+    const motionEnabled = scrollState !== 'hidden';
+
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [layoutReady, setLayoutReady] = useState(false);
     // Refs for text box containers to enable scrolling
     const textBoxRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const soundEffectRef = useRef<HTMLAudioElement | null>(null);
@@ -179,95 +216,173 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         setCurrentImageIndex(0);
     }, [page.id]);
     
+    const clipForBufferA = React.useMemo(() => {
+        if (!sortedVideoSequence.length) return undefined;
+        const idx = activeBuffer === 'A' ? currentVideoIndex : nextVideoIndex;
+        return sortedVideoSequence[idx];
+    }, [sortedVideoSequence, activeBuffer, currentVideoIndex, nextVideoIndex]);
+
+    const clipForBufferB = React.useMemo(() => {
+        if (!sortedVideoSequence.length) return undefined;
+        const idx = activeBuffer === 'B' ? currentVideoIndex : nextVideoIndex;
+        return sortedVideoSequence[idx];
+    }, [sortedVideoSequence, activeBuffer, currentVideoIndex, nextVideoIndex]);
+
     // Background audio - plays extracted video audio or ambient sound as separate <audio> element
     // This allows it to layer with TTS (unlike video audio which conflicts on iOS)
     // Handles both single background video audio AND video sequence audio
     useEffect(() => {
         const audio = backgroundAudioRef.current;
         if (!audio) return;
-        
-        // Determine which audio URL to use
+
+        let detachTrim: (() => void) | undefined;
+
         let audioUrl: string | undefined;
-        let shouldLoop = true;
-        
+        let trimStartSec: number | undefined;
+        let trimEndSec: number | undefined;
+        let shouldSegmentLoopNative = false; // Matches video: loop single clip, advance when sequence has multiple
+
         if (page.useVideoSequence && sortedVideoSequence.length > 0) {
-            // For video sequences, play the audio from the current video in sequence
             const currentVideo = sortedVideoSequence[currentVideoIndex];
             audioUrl = currentVideo?.audioUrl;
-            shouldLoop = false; // Don't loop - will switch to next video's audio when video ends
+            const ts = currentVideo?.trimStartSec;
+            const te = currentVideo?.trimEndSec;
+            trimStartSec = typeof ts === 'number' && ts > 0 ? ts : undefined;
+            trimEndSec = typeof te === 'number' && te > 0 ? te : undefined;
+            shouldSegmentLoopNative = sortedVideoSequence.length === 1;
             console.log(`🔊 Video sequence audio: playing audio for video ${currentVideoIndex + 1}`, audioUrl ? 'has audio' : 'no audio');
         } else if (page.backgroundAudioUrl) {
-            // For single background video, use the extracted audio
             audioUrl = page.backgroundAudioUrl;
-            shouldLoop = true; // Loop for single video
+            const ts = page.backgroundTrimStartSec;
+            const te = page.backgroundTrimEndSec;
+            trimStartSec = typeof ts === 'number' && ts > 0 ? ts : undefined;
+            trimEndSec = typeof te === 'number' && te > 0 ? te : undefined;
+            shouldSegmentLoopNative = true;
         }
-        
+
+        const trimMaybe =
+            (typeof trimStartSec === 'number' && trimStartSec > 0) ||
+            (typeof trimEndSec === 'number' && trimEndSec > 0);
+
+        // Disable native loop when clamps may apply (handled by attachPlaybackTrim + segmentLoop)
+        audio.loop = !trimMaybe && shouldSegmentLoopNative;
+
         if (audioUrl) {
-            // Set up the audio
             if (audio.src !== audioUrl) {
                 audio.src = audioUrl;
-                audio.loop = shouldLoop;
-                audio.volume = 0.7; // Slightly lower volume so TTS is clear
+                audio.volume = 0.7;
                 audio.load();
             }
-            
-            // Play when ready
+
+            detachTrim?.();
+            detachTrim = attachPlaybackTrim(audio, {
+                trimStartSec,
+                trimEndSec,
+                segmentLoop: () => !!shouldSegmentLoopNative,
+            });
+
             const playAudio = () => {
                 audio.play().catch(err => {
                     console.warn('🔊 Background audio autoplay prevented:', err);
                 });
             };
-            
+
             if (audio.readyState >= 3) {
                 playAudio();
             } else {
                 audio.addEventListener('canplaythrough', playAudio, { once: true });
             }
         } else {
-            // No audio for this video/page - stop any playing audio
+            detachTrim?.();
             audio.pause();
             audio.src = '';
         }
-        
-        // Cleanup - stop audio when page changes or unmounts
+
         return () => {
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
+            detachTrim?.();
+            audio.pause();
+            audio.currentTime = 0;
         };
-    }, [page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
-    
-    // Swipe detection for scroll height changes
+    }, [
+        page.id,
+        page.backgroundAudioUrl,
+        page.backgroundTrimStartSec,
+        page.backgroundTrimEndSec,
+        page.useVideoSequence,
+        sortedVideoSequence,
+        currentVideoIndex,
+    ]);
+
+    // Duck or silence layered page video audio when narration plays or viewer turns it off.
+    useEffect(() => {
+        const audio = backgroundAudioRef.current;
+        if (!audio?.src?.trim()) return;
+        const enabled = ambientVideoSoundEnabled !== false;
+        const audible = enabled && !isTTSPlaying;
+        audio.muted = !audible;
+        audio.volume = audible ? 0.7 : 0;
+    }, [ambientVideoSoundEnabled, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
+
+    // iOS/iPad: percentage clip-path and top can mis-measure until the container has a stable size.
+    useLayoutEffect(() => {
+        setLayoutReady(false);
+        const el = containerRef.current;
+        if (!el) {
+            setLayoutReady(true);
+            return;
+        }
+        let raf2 = 0;
+        const raf1 = requestAnimationFrame(() => {
+            void el.offsetHeight;
+            raf2 = requestAnimationFrame(() => setLayoutReady(true));
+        });
+        const ro = new ResizeObserver(() => {
+            void el.offsetHeight;
+            setLayoutReady(true);
+        });
+        ro.observe(el);
+        return () => {
+            cancelAnimationFrame(raf1);
+            if (raf2) cancelAnimationFrame(raf2);
+            ro.disconnect();
+        };
+    }, [page.id, scrollMaxH, scrollMidH]);
+
+    // Swipe detection for scroll height changes (handle + pull-tab only — not whole page)
     const touchStartY = useRef<number>(0);
     const touchEndY = useRef<number>(0);
-    
+
+    const applyScrollPanelGesture = (deltaY: number) => {
+        const minSwipeDistance = 50;
+        if (Math.abs(deltaY) <= minSwipeDistance || !onScrollStateChange) return;
+        if (deltaY > 0) {
+            const newState: ScrollState =
+                scrollState === 'hidden' ? 'mid' : scrollState === 'mid' ? 'max' : 'max';
+            onScrollStateChange(newState);
+        } else {
+            const newState: ScrollState =
+                scrollState === 'max' ? 'mid' : scrollState === 'mid' ? 'hidden' : 'hidden';
+            onScrollStateChange(newState);
+        }
+    };
+
     const handleScrollTouchStart = (e: React.TouchEvent) => {
+        e.stopPropagation();
         touchStartY.current = e.touches[0].clientY;
     };
-    
+
     const handleScrollTouchEnd = (e: React.TouchEvent) => {
+        e.stopPropagation();
         touchEndY.current = e.changedTouches[0].clientY;
-        const deltaY = touchStartY.current - touchEndY.current;
-        const minSwipeDistance = 50; // Minimum distance for a swipe
-        
-        if (Math.abs(deltaY) > minSwipeDistance && onScrollStateChange) {
-            if (deltaY > 0) {
-                // Swipe up - increase scroll height
-                const newState: ScrollState = scrollState === 'hidden' ? 'mid' : scrollState === 'mid' ? 'max' : 'max';
-                onScrollStateChange(newState);
-            } else {
-                // Swipe down - decrease scroll height
-                const newState: ScrollState = scrollState === 'max' ? 'mid' : scrollState === 'mid' ? 'hidden' : 'hidden';
-                onScrollStateChange(newState);
-            }
-        }
+        applyScrollPanelGesture(touchStartY.current - touchEndY.current);
     };
     
     const handleScrollClick = (e: React.MouseEvent) => {
-        // Tap on scroll to toggle visibility (mid <-> hidden)
+        // Tap on scroll to toggle visibility (restore pre-hide state via parent when available)
         e.stopPropagation();
-        if (onScrollStateChange) {
+        if (onToggleScrollVisibility) {
+            onToggleScrollVisibility();
+        } else if (onScrollStateChange) {
             const newState: ScrollState = scrollState === 'hidden' ? 'mid' : 'hidden';
             onScrollStateChange(newState);
         }
@@ -395,7 +510,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             // Single video background
             if (videoRef.current && page.backgroundType === 'video') {
                 console.log('🎬 Page changed - ensuring video plays');
-                videoRef.current.currentTime = 0; // Start from beginning
+                videoRef.current.currentTime = playbackClipStart(page.backgroundTrimStartSec);
                 videoRef.current.play().catch(err => {
                     console.warn('Could not play video on page change:', err);
                 });
@@ -403,7 +518,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             // Video sequence - play buffer A
             if (page.useVideoSequence && videoRefA.current) {
                 console.log('🎬 Page changed - ensuring video sequence plays');
-                videoRefA.current.currentTime = 0;
+                const firstClip = sortedVideoSequence[0];
+                videoRefA.current.currentTime = playbackClipStart(firstClip?.trimStartSec);
                 videoRefA.current.play().catch(err => {
                     console.warn('Could not play video sequence on page change:', err);
                 });
@@ -425,13 +541,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             
             // Switch to the other buffer (which should be preloaded)
             const newActiveBuffer = activeBuffer === 'A' ? 'B' : 'A';
+            const nextClip = sortedVideoSequence[nextIndex];
+            const segStart = playbackClipStart(nextClip?.trimStartSec);
             setActiveBuffer(newActiveBuffer);
             setCurrentVideoIndex(nextIndex);
             
             // Start playing the newly active buffer
             const newActiveRef = newActiveBuffer === 'A' ? videoRefA : videoRefB;
             if (newActiveRef.current) {
-                newActiveRef.current.currentTime = 0;
+                newActiveRef.current.currentTime = segStart;
                 newActiveRef.current.play().catch(err => {
                     console.warn('Could not autoplay next video:', err);
                 });
@@ -460,16 +578,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
 
     return (
         <div
+            ref={containerRef}
             className="w-full h-full relative bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden shadow-2xl"
             style={{
                 // Lock background in place - prevent iOS overscroll/bounce
                 overscrollBehavior: 'none',
-                touchAction: 'pan-x', // Allow horizontal swipes only at container level
+                // Let text boxes own vertical scroll; page turns stay on horizontal swipes in parent
+                touchAction: 'manipulation',
                 position: 'relative',
             }}
             onClick={handleScrollClick}
-            onTouchStart={handleScrollTouchStart}
-            onTouchEnd={handleScrollTouchEnd}
         >
             {/* Hidden audio element for background audio (extracted video audio or ambient sound) */}
             {/* This plays as separate <audio> so it can layer with TTS - unlike video audio on iOS */}
@@ -489,7 +607,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 {page.useVideoSequence && sortedVideoSequence.length > 0 ? (
                     <>
                         {/* Buffer A - current or preloading */}
-                        <video
+                        <TrimmedPlaybackVideo
                             ref={videoRefA}
                             src={bufferAVideoUrl || ''}
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
@@ -498,6 +616,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
+                            trimStartSec={clipForBufferA?.trimStartSec}
+                            trimEndSec={clipForBufferA?.trimEndSec}
                             onEnded={activeBuffer === 'A' ? handleVideoEnded : undefined}
                             onLoadedData={() => {
                                 setBufferAReady(true);
@@ -524,7 +644,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                         />
                         {/* Buffer B - current or preloading */}
-                        <video
+                        <TrimmedPlaybackVideo
                             ref={videoRefB}
                             src={bufferBVideoUrl || ''}
                             className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
@@ -533,6 +653,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             muted // Always muted - use separate sound effects MP3 instead
                             playsInline
                             preload="auto"
+                            trimStartSec={clipForBufferB?.trimStartSec}
+                            trimEndSec={clipForBufferB?.trimEndSec}
                             onEnded={activeBuffer === 'B' ? handleVideoEnded : undefined}
                             onLoadedData={() => {
                                 setBufferBReady(true);
@@ -679,7 +801,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 ) : /* Auto-detect video based on backgroundType OR file extension */
                 (page.backgroundType === 'video' || 
                   (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl))) ? (
-                    <video
+                    <TrimmedPlaybackVideo
                         ref={videoRef}
                         src={page.backgroundUrl}
                         className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
@@ -688,6 +810,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         muted // Always muted - use separate sound effects MP3 instead
                         playsInline
                         preload="auto"
+                        trimStartSec={page.backgroundTrimStartSec}
+                        trimEndSec={page.backgroundTrimEndSec}
                         onLoadedData={() => {
                             if (videoRef.current) {
                                 // Ensure video is playing
@@ -711,15 +835,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     (() => {
                         const bgAnim = page.backgroundImageAnimation ?? 'kenBurns';
                         const bgDuration = page.backgroundImageAnimationDuration ?? 10;
-                        const useAnim = bgAnim && bgAnim !== 'none';
-                        const kenBurnsVariants = ['imageKenBurns1', 'imageKenBurns2', 'imageKenBurns3', 'imageKenBurns4'];
-                        const getBgAnimationStyle = (): React.CSSProperties => {
-                            if (!useAnim) return {};
+                        const useAnimation = bgAnim && bgAnim !== 'none' && bgDuration > 0;
+                        const getSingleImageAnimationStyle = (): React.CSSProperties => {
+                            if (!useAnimation) return {};
                             const base: React.CSSProperties = {
                                 animationDuration: `${bgDuration}s`,
                                 animationTimingFunction: 'ease-in-out',
                                 animationFillMode: 'forwards',
-                                animationIterationCount: 1,
+                                animationIterationCount: 'infinite',
+                                animationDirection: 'alternate',
                             };
                             switch (bgAnim) {
                                 case 'zoomIn': return { ...base, animationName: 'imageZoomIn' };
@@ -728,12 +852,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 case 'panRight': return { ...base, animationName: 'imagePanRight' };
                                 case 'panUp': return { ...base, animationName: 'imagePanUp' };
                                 case 'panDown': return { ...base, animationName: 'imagePanDown' };
-                                case 'kenBurns': return { ...base, animationName: kenBurnsVariants[page.pageNumber % kenBurnsVariants.length] };
+                                case 'kenBurns': return { ...base, animationName: 'imageKenBurns1' };
                                 default: return {};
                             }
                         };
                         return (
-                            <>
+                            <div className="absolute inset-0 w-full h-full overflow-hidden">
                                 <img
                                     src={page.backgroundUrl}
                                     alt={`Page ${page.pageNumber}`}
@@ -741,16 +865,14 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     loading="eager"
                                     style={{
                                         position: 'absolute',
-                                        left: useAnim ? '-5%' : 0,
-                                        top: useAnim ? '-5%' : 0,
-                                        minWidth: useAnim ? '110%' : '100%',
-                                        minHeight: useAnim ? '110%' : '100%',
-                                        width: useAnim ? undefined : '100%',
-                                        height: useAnim ? undefined : '100%',
-                                        ...getBgAnimationStyle(),
+                                        top: 0,
+                                        left: 0,
+                                        minWidth: useAnimation ? '110%' : '100%',
+                                        minHeight: useAnimation ? '110%' : '100%',
+                                        ...(useAnimation ? { left: '-5%', top: '-5%', ...getSingleImageAnimationStyle() } : { width: '100%', height: '100%' }),
                                     }}
                                 />
-                                {useAnim && (
+                                {useAnimation && (
                                     <style>{`
                                         @keyframes imageZoomIn {
                                             from { transform: scale(1) translate(0, 0); }
@@ -780,21 +902,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                             from { transform: scale(1) translate(0, 0); }
                                             to { transform: scale(1.12) translate(-2%, -1%); }
                                         }
-                                        @keyframes imageKenBurns2 {
-                                            from { transform: scale(1.12) translate(2%, 1%); }
-                                            to { transform: scale(1) translate(-1%, 2%); }
-                                        }
-                                        @keyframes imageKenBurns3 {
-                                            from { transform: scale(1) translate(1%, -1%); }
-                                            to { transform: scale(1.1) translate(2%, 1%); }
-                                        }
-                                        @keyframes imageKenBurns4 {
-                                            from { transform: scale(1.1) translate(-1%, 2%); }
-                                            to { transform: scale(1) translate(0, -1%); }
-                                        }
                                     `}</style>
                                 )}
-                            </>
+                            </div>
                         );
                     })()
                 ) : null}
@@ -849,13 +959,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Scroll Image Layer - Three states: hidden, mid, max */}
             {page.scrollUrl && (
                 <div
-                    className="absolute transition-all duration-500 ease-in-out"
+                    className="absolute ease-in-out"
                     style={{ 
                         zIndex: 15, // Between z-10 (gradient) and z-20 (text boxes)
-                        // Use scrollMidHeight/scrollMaxHeight if set, otherwise fallback to defaults
-                        height: scrollState === 'max' 
-                            ? `${page.scrollMaxHeight || 60}%` 
-                            : `${page.scrollMidHeight || 30}%`,
+                        height: `${currentScrollHeightNum}%`,
                         width: `${page.scrollWidth || 100}%`,
                         // Position horizontally: center + offset
                         left: `calc(50% + ${page.scrollOffsetX || 0}%)`,
@@ -863,13 +970,15 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         transform: scrollState === 'hidden' 
                             ? 'translateX(-50%) translateY(100%)' 
                             : 'translateX(-50%)',
-                        bottom: `${page.scrollOffsetY || 0}%` // Apply vertical offset
+                        bottom: `${scrollOffset}%`, // Apply vertical offset
+                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
                     }}
                 >
                     <img
                         src={page.scrollUrl}
                         alt="Scroll background"
                         className="w-full h-full object-fill pointer-events-none"
+                        style={{ opacity: (page.scrollOpacity != null ? page.scrollOpacity : 100) / 100 }}
                     />
                 </div>
             )}
@@ -877,11 +986,10 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Swipe Indicator - Inside the scroll, at the top */}
             {page.scrollUrl && scrollState !== 'hidden' && (
                 <div 
-                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none transition-all duration-500 ease-in-out"
+                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none ease-in-out"
                     style={{
-                        bottom: scrollState === 'max' 
-                            ? `calc(${page.scrollMaxHeight || 60}% + ${page.scrollOffsetY || 0}% - 24px)` 
-                            : `calc(${page.scrollMidHeight || 30}% + ${page.scrollOffsetY || 0}% - 24px)`
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 24px)`,
+                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
                     }}
                 >
                     <div className="flex flex-col items-center gap-0.5 opacity-50">
@@ -893,57 +1001,82 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
 
+            {/* Resize handle — swipe here to expand/shrink panel (not on story text) */}
+            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute left-1/2 z-[22] pointer-events-auto"
+                    style={{
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 6px)`,
+                        width: 'min(72%, 280px)',
+                        height: '44px',
+                        transform: 'translateX(-50%)',
+                        touchAction: 'none',
+                    }}
+                    onTouchStart={handleScrollTouchStart}
+                    onTouchEnd={handleScrollTouchEnd}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Swipe to resize reading panel"
+                />
+            )}
+
+            {/* Pull tab when panel is hidden */}
+            {page.scrollUrl && scrollState === 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute bottom-0 left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
+                    style={{ touchAction: 'none' }}
+                    onTouchStart={handleScrollTouchStart}
+                    onTouchEnd={handleScrollTouchEnd}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleScrollVisibility?.();
+                    }}
+                    aria-label="Swipe up to show reading panel"
+                >
+                    <div className="flex flex-col items-center gap-1 opacity-60">
+                        <div className="w-10 h-1 bg-white rounded-full shadow" />
+                        <span className="text-white/90 text-[9px] font-medium drop-shadow">↑ Show text</span>
+                    </div>
+                </div>
+            )}
+
             {/* Text Boxes Layer - Below swipe zone */}
             {/* Text boxes layer - z-50 to appear above play button (z-40) */}
             {/* When scroll exists, clip text to scroll bounds (top AND bottom) to prevent overflow */}
             <div
                 className="absolute inset-0 pointer-events-none z-50"
                 style={page.scrollUrl ? {
-                    // Clip to the scroll area - text should not appear above OR below it
-                    // inset(top right bottom left) - clips from each edge
                     clipPath: scrollState === 'hidden' 
                         ? 'inset(100% 0 0 0)' // Hide all when scroll is hidden
-                        : `inset(${100 - (scrollState === 'max' ? (page.scrollMaxHeight || 60) : (page.scrollMidHeight || 30)) - (page.scrollOffsetY || 0)}% 0 ${(page.scrollOffsetY || 0) + 5}% 0)`,
-                    transition: 'clip-path 0.5s ease-in-out',
+                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + 5}% 0)`,
+                    transition: layoutReady && motionEnabled ? 'clip-path 0.5s ease-in-out' : 'none',
                 } : {}}
             >
                 {page.textBoxes?.map((box, idx) => {
+                    const tbCount = page.textBoxes?.length ?? 0;
+                    const hideThisBoxSequential =
+                        sequentialMultiBoxTts &&
+                        tbCount > 1 &&
+                        (activeTextBoxIndex === null ? true : idx !== activeTextBoxIndex);
+
                     // Validate box has required position properties
                     const boxX = typeof box.x === 'number' ? box.x : 0;
                     const boxY = typeof box.y === 'number' ? box.y : 0;
                     
-                    // Portal shows 60% scroll height when editing - that's where text was positioned
-                    // The "design" scroll height is the MAX height (what portal shows)
-                    const designScrollHeight = page.scrollMaxHeight || 60; // Portal shows max height when editing
-                    const designScrollTop = 100 - designScrollHeight; // e.g., 40% from top for 60% scroll
-                    const scrollOffset = page.scrollOffsetY || 0;
-                    
-                    // Current scroll height depends on app state (mid/max/hidden)
-                    const currentScrollHeightNum = scrollState === 'max' 
-                        ? (page.scrollMaxHeight || 60) 
-                        : (page.scrollMidHeight || 30);
-                    const currentScrollTop = 100 - currentScrollHeightNum - scrollOffset;
-                    
                     const isActive = activeTextBoxIndex === idx;
                     const shouldHideTextBoxes = page.scrollUrl && scrollState === 'hidden';
                     
-                    // Calculate text position
+                    // Calculate text position (match portal PageEditor: max(boxY, scroll top + buffer))
                     let textTopStyle: string;
                     let textMaxHeightStyle: string;
                     
                     if (page.scrollUrl) {
-                        // Position text inside scroll area with small buffer from top
+                        const scrollTopPosition = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
+                        textTopStyle = `max(${boxY}%, ${scrollTopPosition})`;
                         const scrollStartPercent = 100 - currentScrollHeightNum - scrollOffset + 3;
-                        // Text starts at scroll top + buffer, or boxY if it's lower
-                        const effectiveTop = Math.max(boxY, scrollStartPercent);
-                        textTopStyle = `${effectiveTop}%`;
-                        // Max height: from effectiveTop to bottom of scroll (with buffer)
-                        // Scroll bottom is at scrollOffset% from viewport bottom
-                        // So max height = (100% - scrollOffset% - buffer) - effectiveTop%
-                        const scrollBottomBuffer = scrollOffset + 8; // 8% buffer from scroll bottom
-                        textMaxHeightStyle = `calc(${100 - scrollBottomBuffer}% - ${effectiveTop}%)`;
+                        const effectiveTopPercent = Math.max(boxY, scrollStartPercent);
+                        const scrollBottomBuffer = scrollOffset + 8;
+                        textMaxHeightStyle = `calc(${100 - scrollBottomBuffer}% - ${effectiveTopPercent}%)`;
                     } else {
-                        // No scroll - use boxY position directly
                         textTopStyle = `${boxY}%`;
                         textMaxHeightStyle = `calc(100% - ${boxY}% - 40px)`;
                     }
@@ -956,6 +1089,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
                             data-scroll-container="true"
                             className="absolute pointer-events-auto overflow-y-auto p-2 group"
+                            aria-hidden={hideThisBoxSequential}
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
@@ -976,15 +1110,23 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     : `${box.fontSize || 24}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
+                                overscrollBehavior: 'contain',
+                                WebkitOverflowScrolling: 'touch',
+                                // pan-y: vertical scroll in this box; horizontal swipes bubble to parent for page turn
+                                touchAction: 'pan-y',
                                 // Text shadow/glow for readability - color controlled by shadowColor setting
                                 textShadow: box.shadowColor === 'black'
                                     ? '0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.7), 1px 1px 4px rgba(0,0,0,0.8)'
                                     : '0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.7), 1px 1px 4px rgba(255,255,255,0.8)',
                                 scrollBehavior: 'smooth',
                                 // Only use opacity for smooth hide/show - no translateY to avoid layout jump
-                                opacity: shouldHideTextBoxes ? 0 : 1,
-                                transition: 'opacity 0.4s ease-in-out, top 0.5s ease-in-out',
-                                pointerEvents: shouldHideTextBoxes ? 'none' : 'auto',
+                                opacity: hideThisBoxSequential ? 0 : shouldHideTextBoxes ? 0 : 1,
+                                transition: layoutReady
+                                    ? 'opacity 0.4s ease-in-out, top 0.5s ease-in-out, max-height 0.5s ease-in-out'
+                                    : 'none',
+                                pointerEvents:
+                                    hideThisBoxSequential || shouldHideTextBoxes ? 'none' : 'auto',
+                                ...(hideThisBoxSequential ? { display: 'none' as const } : {}),
                                 // Show background box if user explicitly enabled it
                                 backgroundColor: showBg ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: showBg ? '12px' : '0',
@@ -1012,15 +1154,23 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
                                                 const isHighlighted = wIdx === highlightedWordIndex;
+                                                const isUpcoming =
+                                                    highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
+                                                const isPast =
+                                                    highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
                                                 return (
                                                     <span
                                                         key={wIdx}
                                                         data-word-index={wIdx}
                                                         className={`
-                                                            transition-all duration-150 rounded px-0.5
+                                                            gk-readalong-word rounded px-0.5
                                                             ${isHighlighted
-                                                                ? 'bg-[#FFD700] text-black font-bold scale-110 inline-block shadow-sm'
-                                                                : ''
+                                                                ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
+                                                                : isUpcoming
+                                                                    ? 'opacity-42'
+                                                                    : isPast
+                                                                        ? 'opacity-78'
+                                                                        : ''
                                                             }
                                                         `}
                                                     >

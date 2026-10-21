@@ -16,6 +16,7 @@ interface BookFormData {
     introVideoUrl: string;
     bookType: 'standard' | 'kids_monthly';
     featuredCharacterId: string;
+    readerLayout: 'side_swipe' | 'swipe_up';
 }
 
 interface Category {
@@ -52,6 +53,7 @@ const BookForm: React.FC = () => {
         introVideoUrl: '',
         bookType: 'standard',
         featuredCharacterId: '',
+        readerLayout: 'side_swipe',
     });
     const [characters, setCharacters] = useState<SavedCharacterOption[]>([]);
 
@@ -430,6 +432,49 @@ const BookForm: React.FC = () => {
                                 ))
                             )}
                         </select>
+                    </div>
+                </div>
+
+                {/* Reader Layout */}
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reader Layout
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, readerLayout: 'side_swipe' }))}
+                            className={`text-left rounded-lg border-2 p-4 transition ${
+                                formData.readerLayout === 'side_swipe'
+                                    ? 'border-indigo-500 bg-indigo-50'
+                                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg">📖</span>
+                                <span className="font-semibold text-gray-800">Side Swipe (Regular)</span>
+                            </div>
+                            <p className="text-xs text-gray-600">Classic horizontal page-turn book. Best for stories with full illustrations and parchment text overlays.</p>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({
+                                ...prev,
+                                readerLayout: 'swipe_up',
+                                orientation: 'portrait',
+                            }))}
+                            className={`text-left rounded-lg border-2 p-4 transition ${
+                                formData.readerLayout === 'swipe_up'
+                                    ? 'border-pink-500 bg-pink-50'
+                                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg">🎬</span>
+                                <span className="font-semibold text-gray-800">Swipe Up (Vertical Story)</span>
+                            </div>
+                            <p className="text-xs text-gray-600">TikTok-style vertical feed. Each page is full-screen text or media; user swipes up for the next card. Portrait recommended.</p>
+                        </button>
                     </div>
                 </div>
 

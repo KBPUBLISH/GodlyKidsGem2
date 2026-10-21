@@ -8,9 +8,9 @@ const STYLE_OPTIONS = [
     { id: '', label: '— None —' },
     { id: 'pixar', label: 'Pixar' },
     { id: 'minecraft', label: 'Minecraft' },
-    { id: 'disney', label: 'Disney' },
+    { id: 'disney', label: 'Disney 2D' },
     { id: 'lego', label: 'LEGO' },
-    { id: 'cartoon', label: 'Cartoon' },
+    { id: 'cartoon', label: 'Anime' },
     { id: 'illustrated', label: 'Illustrated' },
 ];
 

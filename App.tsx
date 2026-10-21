@@ -1,13 +1,14 @@
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { FEATURE_CREATE_YOUR_STORY } from './constants';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
+import WorldPage, { PersistentWorldIsland } from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
+import LifetimeOfferModal from './components/features/LifetimeOfferModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
 import SaveProgressModal from './components/modals/SaveProgressModal';
@@ -201,7 +202,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
             // Store the current route so we can restore it properly
             // Skip game routes - they have query params that won't survive force quit
             try {
-              const currentHash = window.location.hash || '#/home';
+              const currentHash = window.location.hash || '#/world';
               if (!currentHash.includes('/game')) {
                 localStorage.setItem('gk_last_route', currentHash);
               }
@@ -569,20 +570,24 @@ if (!(window as any).__GK_APP_BOOTED__) {
 }
 import ListenPage from './pages/ListenPage';
 import ReadPage from './pages/ReadPage';
+import ReadPagePanorama from './pages/ReadPagePanorama';
+import ListenPagePanorama from './pages/ListenPagePanorama';
 import LibraryPage from './pages/LibraryPage';
-import KidsMonthlyPage from './pages/KidsMonthlyPage';
 import BookCreatingPage from './pages/BookCreatingPage';
 import CreateYourStoryPage from './pages/CreateYourStoryPage';
+import { FEATURE_CREATE_YOUR_STORY } from './constants';
 import BookDetailPage from './pages/BookDetailPage';
 import ProfileSelectionPage from './pages/ProfileSelectionPage';
 import CreateProfilePage from './pages/CreateProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import AudioPlayerPage from './pages/AudioPlayerPage';
 import PaywallPage from './pages/PaywallPage';
+import PaywallIntroPage from './pages/PaywallIntroPage';
+import PaywallTrialNotifyPage from './pages/PaywallTrialNotifyPage';
 import PremiumOnboardingPage from './pages/PremiumOnboardingPage';
 import TrialStatsPage from './pages/TrialStatsPage';
 import SettingsPage from './pages/SettingsPage';
-import BookReaderPage from './pages/BookReaderPage';
+import BookReaderRouter from './pages/BookReaderRouter';
 import AudioPage from './pages/AudioPage';
 import PlaylistPlayerPage from './pages/PlaylistPlayerPage';
 import PlaylistDetailPage from './pages/PlaylistDetailPage';
@@ -598,9 +603,13 @@ import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import SharePlaylistPage from './pages/SharePlaylistPage';
 import ShareBookPage from './pages/ShareBookPage';
 import ParentQuizPage from './pages/ParentQuizPage';
-import GivingPage from './pages/GivingPage';
+import GamesPage from './pages/GamesPage';
+import KaraokePage from './pages/KaraokePage';
+import KaraokePlayerPage from './pages/KaraokePlayerPage';
+import KaraokeSharePage from './pages/KaraokeSharePage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
+import MusicVideosPage from './pages/MusicVideosPage';
 
 // Check if user has an account (auth token or email stored)
 const hasUserAccount = (): boolean => {
@@ -631,8 +640,9 @@ const isUserAuthenticated = (): boolean => {
 const TUTORIAL_VALID_ROUTES: Record<string, string[]> = {
   '/welcome': ['welcome_book_tap'],
   '/read': ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3', 'book_end_quiz', 'quiz_in_progress'],
-  '/home': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_give', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
-  '/giving': ['navigate_to_give', 'campaign_highlight', 'give_button_highlight', 'donation_complete'],
+  '/home': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_games', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
+  '/world': ['coins_highlight', 'coins_popup_open', 'report_card_highlight', 'report_card_open', 'shop_highlight', 'shop_open', 'navigate_to_games', 'navigate_to_explore', 'devotional_highlight', 'navigate_to_books', 'navigate_to_audio', 'tutorial_complete', 'explore_pause', 'paywall'],
+  '/games': ['navigate_to_games'],
   '/listen': ['navigate_to_audio', 'audiobook_highlight', 'review_prompt'],
   '/read-page': ['navigate_to_books'], // /read page (book list)
 };
@@ -764,17 +774,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         // Will redirect to onboarding via navigateToOnboarding={true}
       }}
       onSignIn={() => {
-        navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/home' } });
+        navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/world' } });
       }}
     />
   );
 };
 
-// Home page wrapper - shows welcome screen for new users who completed onboarding
-// Also shows save progress prompt for guests who have consumed content
-const HomePageWithWelcomeCheck: React.FC = () => {
+// Explore page wrapper - shows welcome screen for new users, save progress prompt for guests
+// Renders WorldPage (island buttons) as the main explore view
+const WorldPageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isPanorama } = useTheme();
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
@@ -880,10 +891,20 @@ const HomePageWithWelcomeCheck: React.FC = () => {
   if (userCompletedOnboarding && shouldShowWelcome()) {
     return <NewUserWelcomePage />;
   }
-  
+
+  // Show paywall once per day for non-subscribed users
+  const today = new Date().toISOString().split('T')[0];
+  const paywallLastShown = localStorage.getItem('godlykids_paywall_shown_date');
+  const isPremiumUser = localStorage.getItem('godlykids_premium') === 'true';
+  if (!isPremiumUser && paywallLastShown !== today && !tutorialActive) {
+    localStorage.setItem('godlykids_paywall_shown_date', today);
+    navigate('/paywall', { replace: true });
+    return null;
+  }
+
   return (
     <>
-      <HomePage />
+      {isPanorama ? <HomePage /> : <WorldPage />}
       {showSaveProgressModal && (
         <SaveProgressModal
           isOpen={true}
@@ -897,12 +918,10 @@ const HomePageWithWelcomeCheck: React.FC = () => {
           }}
           onSignIn={() => {
             setShowSaveProgressModal(false);
-            navigate('/signin', { state: { returnTo: '/home' } });
+            navigate('/signin', { state: { returnTo: '/world' } });
           }}
         />
       )}
-      {/* CreateAccountModal is NOT shown automatically for new users */}
-      {/* Users explore freely → try content → SaveProgressModal prompts them */}
       {showTrialExpiredModal && (
         <ReverseTrialExpiredModal
           isOpen={true}
@@ -930,6 +949,7 @@ import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
 import OnboardingTutorial from './components/features/OnboardingTutorial';
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 // --- ASSETS & HELPERS ---
 
@@ -984,6 +1004,34 @@ const CloudSVG: React.FC<{ width: number; opacity?: number; flip?: boolean }> = 
   </svg>
 );
 
+const PRELOAD_IMAGES = [
+  '/assets/images/daily-adventure-island.webp',
+  '/assets/images/volcano-island.webp',
+  '/assets/images/wooden-raft.webp',
+  '/assets/images/island-button.webp',
+  '/assets/images/headphone-island.webp',
+  '/assets/images/music-island.webp',
+  '/assets/images/music-note-orange.webp',
+  '/assets/images/music-note-purple.webp',
+  '/assets/images/music-note-yellow.webp',
+  '/assets/images/audio-adventure-button.webp',
+  '/assets/images/scholar-island.webp',
+  '/assets/images/scholar-island-button.webp',
+  '/assets/images/whirlpool.webp',
+  '/assets/images/book-island.webp',
+  '/assets/images/bible-raft.webp',
+];
+
+const AssetPreloader: React.FC = () => {
+  useEffect(() => {
+    PRELOAD_IMAGES.forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, []);
+  return null;
+};
+
 // The Panorama Background Component
 const PanoramaBackground: React.FC = () => {
   const location = useLocation();
@@ -995,18 +1043,18 @@ const PanoramaBackground: React.FC = () => {
     if (path === '/') return 0;
     if (path === '/signin') return 0;
     if (path === '/onboarding') return 0;
-    if (path === '/home') return 1;
+    if (path === '/home' || path === '/world') return 1;
     if (path === '/listen') return 2;
     if (path === '/read') return 3;
-    if (path === '/library' || path === '/kids-monthly') return 4;
-    if (path === '/giving') return 5;
+    if (path === '/library') return 4;
+    if (path === '/games') return 5;
     if (path === '/audio' || path.startsWith('/audio/')) return 2; // Use same as listen
     if (path === '/lessons' || path.startsWith('/lesson/')) return 1; // Use same as home/explore
     if (path.startsWith('/book/')) return 5;
     if (path === '/profile') return 5;
     if (path === '/create-profile') return 5;
     if (path.startsWith('/player/')) return 5;
-    if (path === '/paywall') return 5;
+    if (path === '/paywall' || path === '/paywall/intro' || path === '/paywall/reminder') return 5;
     if (path === '/settings') return 5;
     return 1;
   }, [location.pathname]);
@@ -1029,8 +1077,11 @@ const PanoramaBackground: React.FC = () => {
         Translates horizontally based on current page.
       */}
       <div
-        className="absolute top-0 bottom-0 left-0 w-[600vw] h-full transition-transform duration-1000 ease-in-out will-change-transform"
-        style={{ transform: `translateX(-${activeIndex * 100}vw)` }}
+        className="absolute top-0 bottom-0 left-0 w-[600vw] h-full will-change-transform"
+        style={{
+          transform: `translateX(-${activeIndex * 100}vw)`,
+          transition: 'transform 2.5s cubic-bezier(0.22, 0.61, 0.36, 1)',
+        }}
       >
         {/* ==============================================
              BACKGROUND IMAGE LAYER
@@ -1041,7 +1092,7 @@ const PanoramaBackground: React.FC = () => {
           style={{
             backgroundImage: `url(${equippedBackground})`,
             backgroundSize: 'auto 100%',
-            backgroundPosition: 'left bottom',
+            backgroundPosition: 'left top',
             backgroundRepeat: 'repeat-x'
           }}
         >
@@ -1104,23 +1155,130 @@ const ReferralPromptWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
+const MAIN_NAV_PAGES = ['/world', '/home', '/listen', '/read', '/games'];
+
+const ThemedReadPage: React.FC = () => {
+  const { isPanorama } = useTheme();
+  return isPanorama ? <ReadPagePanorama /> : <ReadPage />;
+};
+
+const ThemedListenPage: React.FC = () => {
+  const { isPanorama } = useTheme();
+  return isPanorama ? <ListenPagePanorama /> : <ListenPage />;
+};
+
+const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
+const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const { isIsland } = useTheme();
+  const prevPathRef = useRef(location.pathname);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | 'expired' | null>(null);
+  const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPathForOfferRef = useRef(location.pathname);
+
+  // --- Lifetime offer popup: first offer (1 minute after user spends time on app) ---
+  const LIFETIME_FIRST_MAIN_PAGE_KEY = 'godlykids_lifetime_first_main_page_at';
+  useEffect(() => {
+    prevPathForOfferRef.current = location.pathname;
+
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (isPremium) return;
+
+    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+    if (stage === 'shown_first' || stage === 'done' || stage === 'offer_expired') return;
+
+    const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
+    if (!isMainPage) return;
+
+    let firstAt = parseInt(sessionStorage.getItem(LIFETIME_FIRST_MAIN_PAGE_KEY) || '0', 10);
+    if (!firstAt) {
+      firstAt = Date.now();
+      sessionStorage.setItem(LIFETIME_FIRST_MAIN_PAGE_KEY, firstAt.toString());
+    }
+    const elapsed = Date.now() - firstAt;
+    const remaining = Math.max(0, 60000 - elapsed);
+
+    if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
+    lifetimeTimerRef.current = setTimeout(() => {
+      if (localStorage.getItem('godlykids_premium') === 'true') return;
+      const currentStage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+      if (currentStage === 'shown_first' || currentStage === 'done') return;
+      if (!localStorage.getItem('godlykids_lifetime_deal_start')) {
+        localStorage.setItem('godlykids_lifetime_deal_start', Date.now().toString());
+      }
+      if (!currentStage || currentStage === 'none') {
+        localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'ready');
+      }
+      setLifetimeOfferVariant('first');
+    }, remaining);
+
+    return () => {
+      if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
+    };
+  }, [location.pathname]);
+
+  // --- Lifetime offer popup: final offer or expired offer (on fresh app open) ---
+  useEffect(() => {
+    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
+    if (isPremium) return;
+    if (sessionStorage.getItem(LIFETIME_OFFER_SESSION_KEY)) return;
+    sessionStorage.setItem(LIFETIME_OFFER_SESSION_KEY, 'true');
+
+    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
+    if (stage === 'offer_expired') {
+      const timer = setTimeout(() => {
+        if (localStorage.getItem('godlykids_premium') === 'true') return;
+        setLifetimeOfferVariant('expired');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    if (stage === 'shown_first') {
+      const timer = setTimeout(() => {
+        if (localStorage.getItem('godlykids_premium') === 'true') return;
+        setLifetimeOfferVariant('final');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Listen for Header timer tap to show the lifetime offer modal at root level
+  useEffect(() => {
+    const handler = () => setLifetimeOfferVariant('first');
+    window.addEventListener('show_lifetime_offer', handler);
+    return () => window.removeEventListener('show_lifetime_offer', handler);
+  }, []);
+
+  // Transition detection runs in useLayoutEffect so the new page starts hidden
+  // before the browser paints — prevents the one-frame flash of incoming content.
+  useLayoutEffect(() => {
+    const wasMainPage = MAIN_NAV_PAGES.includes(prevPathRef.current);
+    const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
+    const pathChanged = prevPathRef.current !== location.pathname;
+    prevPathRef.current = location.pathname;
+
+    if (wasMainPage && isMainPage && pathChanged) {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+      setIsTransitioning(true);
+      fadeTimerRef.current = setTimeout(() => setIsTransitioning(false), 1000);
+    }
+
+    return () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
+  }, [location.pathname]);
+
   useEffect(() => {
     try {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
-      
-      // Track page visit for analytics (how far users get in the app)
       activityTrackingService.trackPageVisit(location.pathname);
-      
-      // DESPIA FIX: Save current route for restoration after soft-close/reopen
-      // This allows us to restore the user to their last location when the app returns from background
-      // SKIP saving game routes - they have query params that won't work after force quit
       if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
-        // Don't save game routes since they require query params
         if (location.pathname.startsWith('/game')) {
           console.log('📱 Despia: Skipping route save for game page');
-          localStorage.removeItem('gk_last_route'); // Clear any previous game route
+          localStorage.removeItem('gk_last_route');
         } else {
           const routeToSave = `#${location.pathname}${location.search || ''}`;
           localStorage.setItem('gk_last_route', routeToSave);
@@ -1139,11 +1297,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isProfile = location.pathname === '/profile';
   const isCreateProfile = location.pathname === '/create-profile';
   const isEditProfile = location.pathname === '/edit-profile';
-  const isPaywall = location.pathname === '/paywall';
+  const isPaywall = location.pathname === '/paywall' || location.pathname === '/paywall/intro' || location.pathname === '/paywall/reminder';
   const isSettings = location.pathname === '/settings';
   const isBookReader = location.pathname.startsWith('/read/');
   const isAudioPage = location.pathname.startsWith('/audio/');
   const isLessonPage = location.pathname.startsWith('/lesson/');
+  const isLessonsPage = location.pathname === '/lessons';
   const isGamePage = location.pathname === '/game';
   const isResetPassword = location.pathname === '/reset-password';
   const isBookSeries = location.pathname.startsWith('/book-series/');
@@ -1156,10 +1315,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDailySession = location.pathname === '/daily-session';
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
   const isTrialStats = location.pathname === '/trial-stats';
-  const isCreateYourStory = location.pathname === '/create-your-story';
+  const isBookCreating = location.pathname.startsWith('/library/creating/');
+  const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats || isCreateYourStory;
+  const isStandalonePage = isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isPremiumOnboarding || isTrialStats;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1170,13 +1330,24 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <div className="relative h-screen w-full overflow-hidden text-white flex flex-col">
 
       <PanoramaBackground />
+      <AssetPreloader />
+
+      {/* Persistent island layer — only mounted in island theme, visibility toggled by route */}
+      {isIsland && (
+        <div style={{ opacity: isTransitioning ? 0 : 1, transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out' }}>
+          <PersistentWorldIsland />
+        </div>
+      )}
 
       {/* Content Wrapper - safe area padding applied here so background is unaffected */}
       <div 
-        className="relative z-10 flex-1 overflow-hidden"
+        className="relative z-10 flex-1 min-h-0 overflow-hidden"
         style={{
           paddingLeft: 'var(--safe-area-left, 0px)',
           paddingRight: 'var(--safe-area-right, 0px)',
+          pointerEvents: (isIsland && (location.pathname === '/world' || location.pathname === '/home')) ? 'none' : 'auto',
+          opacity: isTransitioning ? 0 : 1,
+          transition: isTransitioning ? 'none' : 'opacity 0.4s ease-in-out',
         }}
       >
         {children}
@@ -1186,13 +1357,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MiniPlayer />
 
       {/* Only show BottomNavigation on main tab pages */}
-      {!isLanding && !isSignIn && !isOnboarding && !isWelcome && !isReadyToJumpIn && !isBookDetail && !isPlayer && !isProfile && !isCreateProfile && !isEditProfile && !isPaywall && !isSettings && !isBookReader && !isAudioPage && !isLessonPage && !isGamePage && !isResetPassword && !isBookSeries && !isCreatePlaylist && !isMyPlaylist && !isDailySession && !isPremiumOnboarding && <BottomNavigation />}
+      {(location.pathname === '/world' || location.pathname === '/home' || location.pathname === '/listen' || location.pathname === '/read' || location.pathname === '/games') && <BottomNavigation />}
 
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
+
+      {/* Lifetime offer popup (shown after paywall dismissal) */}
+      {lifetimeOfferVariant && (
+        <LifetimeOfferModal
+          variant={lifetimeOfferVariant}
+          onClose={() => setLifetimeOfferVariant(null)}
+        />
+      )}
       
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
-      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isBookSeries || isCreatePlaylist || isMyPlaylist) && (
+      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating || isKaraokePage) && (
         <div 
           className="w-full bg-transparent pointer-events-none" 
           style={{ height: 'var(--safe-area-bottom, 0px)' }}
@@ -1205,20 +1384,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
   const isDespia = DespiaService.isNative();
-  
-  // Register image cache service worker for better performance
-  useEffect(() => {
-    if ('serviceWorker' in navigator && !isDespia) {
-      navigator.serviceWorker
-        .register('/sw-image-cache.js')
-        .then((registration) => {
-          console.log('✅ Image cache service worker registered:', registration.scope);
-        })
-        .catch((error) => {
-          console.warn('⚠️ Image cache service worker registration failed:', error);
-        });
-    }
-  }, [isDespia]);
 
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
   // When the app regains focus after being in background, we need to ensure React
@@ -1253,7 +1418,7 @@ const App: React.FC = () => {
               console.log('📱 Despia: User not authenticated, going to landing page');
               window.location.hash = '#/';
             } else {
-              const targetRoute = lastRoute || '#/home';
+              const targetRoute = lastRoute || '#/world';
               console.log('📱 Despia: Restoring route to:', targetRoute);
               window.location.hash = targetRoute;
             }
@@ -1272,11 +1437,12 @@ const App: React.FC = () => {
   }, [isDespia]);
 
   // Link user ID to DeSpia native OneSignal SDK on app boot (if already logged in)
+  // Use getUserIdForBackend() so it matches the id we send when creating a book (email/deviceId);
+  // backend sends "your story is ready" to this same id so app users get the notification.
   useEffect(() => {
     if (!isDespia) return;
     
-    const user = authService.getUser();
-    const userId = user?._id || user?.id;
+    const userId = authService.getUserIdForBackend();
     if (userId) {
       console.log('📱 Linking existing user to native OneSignal:', userId);
       DespiaService.setOneSignalUserId(userId);
@@ -1306,6 +1472,8 @@ const App: React.FC = () => {
       try {
         try { (window as any).__GK_TRACE__?.('notifications_init_start'); } catch {}
         await NotificationService.init();
+        const webUserId = authService.getUserIdForBackend();
+        if (webUserId) await NotificationService.setExternalUserId(webUserId);
         try { (window as any).__GK_TRACE__?.('notifications_init_done'); } catch {}
       } catch (e) {
         try { (window as any).__GK_TRACE__?.('notifications_init_error', { message: (e as any)?.message || String(e) }); } catch {}
@@ -1355,6 +1523,7 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <LanguageProvider>
       <AudioProvider>
         <UserProvider>
@@ -1388,38 +1557,48 @@ const App: React.FC = () => {
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
-                  <Route path="/home" element={<HomePageWithWelcomeCheck />} />
-                  <Route path="/listen" element={<ListenPage />} />
-                  <Route path="/read" element={<ReadPage />} />
+                  <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
+                  {/* /home redirects to /world so island buttons are the main explore view */}
+                  <Route path="/home" element={<Navigate to="/world" replace />} />
+                  <Route path="/listen" element={<ThemedListenPage />} />
+                  <Route path="/read" element={<ThemedReadPage />} />
+                  <Route path="/library/creating/:customMonthlyBookId" element={<BookCreatingPage />} />
                   <Route path="/library" element={<LibraryPage />} />
-                  <Route path="/kids-monthly" element={FEATURE_CREATE_YOUR_STORY ? <KidsMonthlyPage /> : <Navigate to="/library" replace />} />
-                  <Route path="/library/creating/:customMonthlyBookId" element={FEATURE_CREATE_YOUR_STORY ? <BookCreatingPage /> : <Navigate to="/library" replace />} />
-                  <Route path="/create-your-story" element={FEATURE_CREATE_YOUR_STORY ? <CreateYourStoryPage /> : <Navigate to="/library" replace />} />
+                  <Route
+                    path="/create-your-story"
+                    element={FEATURE_CREATE_YOUR_STORY ? <CreateYourStoryPage /> : <Navigate to="/world" replace />}
+                  />
                   <Route path="/audio" element={<AudioPage />} />
                   <Route path="/book/:id" element={<BookDetailPage />} />
                   <Route path="/audio/playlist/:playlistId" element={<PlaylistDetailPage />} />
                   <Route path="/book-series/:seriesId" element={<BookSeriesDetailPage />} />
                   
                   {/* CONTENT CONSUMPTION - Allow guests to try content, prompt to save progress later */}
-                  <Route path="/read/:bookId" element={<GuestFriendlyRoute contentType="book"><BookReaderPage /></GuestFriendlyRoute>} />
+                  <Route path="/read/:bookId" element={<GuestFriendlyRoute contentType="book"><BookReaderRouter /></GuestFriendlyRoute>} />
                   <Route path="/player/:bookId/:chapterId" element={<GuestFriendlyRoute contentType="audio"><AudioPlayerPage /></GuestFriendlyRoute>} />
                   <Route path="/audio/playlist/:playlistId/play/:itemIndex" element={<GuestFriendlyRoute contentType="audio"><PlaylistPlayerPage /></GuestFriendlyRoute>} />
                   <Route path="/my-playlist/:id" element={<ProtectedRoute><UserPlaylistPage /></ProtectedRoute>} />
                   <Route path="/create-playlist" element={<ProtectedRoute><CreatePlaylistPage /></ProtectedRoute>} />
                   <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
                   <Route path="/lesson/:lessonId" element={<ProtectedRoute><LessonPlayerPage /></ProtectedRoute>} />
-                  <Route path="/giving" element={<ProtectedRoute><GivingPage /></ProtectedRoute>} />
+                  <Route path="/games" element={<GamesPage />} />
+                  <Route path="/music-videos" element={<MusicVideosPage />} />
+                  <Route path="/karaoke" element={<KaraokePage />} />
+                  <Route path="/karaoke/share/:recordingId" element={<KaraokeSharePage />} />
+                  <Route path="/karaoke/:id" element={<KaraokePlayerPage />} />
                   <Route path="/profile" element={<ProfileSelectionPage />} />
                   <Route path="/create-profile" element={<CreateProfilePage />} />
                   <Route path="/edit-profile" element={<EditProfilePage />} />
+                  <Route path="/paywall/intro" element={<PaywallIntroPage />} />
+                  <Route path="/paywall/reminder" element={<PaywallTrialNotifyPage />} />
                   <Route path="/paywall" element={<PaywallPage />} />
                   <Route path="/premium-onboarding" element={<PremiumOnboardingPage />} />
                   <Route path="/trial-stats" element={<TrialStatsPage />} />
                   <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
                   <Route path="/game" element={<ProtectedRoute><GameWebViewPage /></ProtectedRoute>} />
-                  {/* Catch-all route - redirect to landing if not authenticated, home if authenticated */}
-                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/home" replace /> : <Navigate to="/" replace />} />
+                  {/* Catch-all route - redirect to landing if not authenticated, world (explore) if authenticated */}
+                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/world" replace /> : <Navigate to="/" replace />} />
                 </Routes>
               </Layout>
               </ReferralPromptWrapper>
@@ -1430,6 +1609,7 @@ const App: React.FC = () => {
         </UserProvider>
       </AudioProvider>
       </LanguageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 };

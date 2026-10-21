@@ -10,9 +10,23 @@ const { bucket } = require('../config/storage');
 
 const PLACEHOLDER_PAGE_IMAGE = 'https://picsum.photos/seed/story/800/600';
 
+/** User-selected main character style (e.g. Pixar) — used so the main character stays in that style, not biblical/Jesus style. */
+const MAIN_CHARACTER_STYLE_BY_ID = {
+    pixar: 'Pixar 3D animated style, rounded features, playful, vibrant colors',
+    disney: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, distinct from Pixar 3D',
+    illustrated: "children's book watercolor illustration style, soft colors, whimsical",
+    cartoon: '2D cartoon style, big expressive eyes, simplified features, bright colors',
+    minecraft: 'Minecraft blocky voxel style, square features, pixelated',
+    lego: 'LEGO minifigure style, yellow plastic, simple features',
+    anime: 'Disney 2D animated style, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, distinct from Pixar 3D', // backward compat
+};
+
 /** Cached Google auth token for Imagen (reused across page generations) */
 let _imagenToken = null;
 let _imagenTokenExpiry = 0;
+
+/** Whether we've logged the Vertex image model once (avoid spam) */
+let _vertexImageModelLogged = false;
 
 async function getImagenAccessToken() {
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -47,17 +61,116 @@ function substituteChildName(text, childName) {
 
 /**
  * Recursively substitute {childName} in any string values (e.g. content.text, textBoxes[].text).
+ * Ensures content.textBoxes is populated from root textBoxes (portal legacy) when content.textBoxes is missing so generated pages never lose text.
  */
 function substituteChildNameInPage(pageDoc, childName) {
     const out = JSON.parse(JSON.stringify(pageDoc));
-    if (out.content?.text) out.content.text = substituteChildName(out.content.text, childName);
-    if (Array.isArray(out.content?.textBoxes)) {
-        out.content.textBoxes = out.content.textBoxes.map((box) => ({
+    if (!out.content) out.content = {};
+    if (out.content.text) out.content.text = substituteChildName(out.content.text, childName);
+    const sourceBoxes = Array.isArray(out.content.textBoxes) && out.content.textBoxes.length > 0
+        ? out.content.textBoxes
+        : Array.isArray(out.textBoxes) ? out.textBoxes : [];
+    if (sourceBoxes.length > 0) {
+        out.content.textBoxes = sourceBoxes.map((box) => ({
             ...box,
             text: substituteChildName(box.text, childName),
         }));
     }
     return out;
+}
+
+/**
+ * Get Vertex AI access for Gemini (text adaptation). Returns { accessToken, projectId } or null.
+ */
+async function getVertexForGemini() {
+    const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) return null;
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        const projectId = credentials.project_id;
+        if (!projectId) return null;
+        const token = await getImagenAccessToken();
+        if (!token) return null;
+        return { accessToken: token, projectId };
+    } catch (err) {
+        console.warn('MonthlyBookGenerator: getVertexForGemini error', err.message);
+        return null;
+    }
+}
+
+/**
+ * Adapt a single page text segment for 1–3 characters. For 1 name, substitutes {childName}. For 2–3, calls Gemini to rewrite so all names are included naturally.
+ * @param {string} pageText - Raw template text (may contain {childName})
+ * @param {string[]} characterNames - 1–3 names
+ * @returns {Promise<string>} Adapted text
+ */
+async function adaptPageTextForCharacters(pageText, characterNames) {
+    if (!pageText || typeof pageText !== 'string') return pageText || '';
+    const names = Array.isArray(characterNames) ? characterNames.filter(Boolean) : [];
+    if (names.length === 0) return pageText;
+    if (names.length === 1) {
+        return substituteChildName(pageText, names[0]);
+    }
+    const namesList = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+    const userPrompt = `This is one page of a children's Bible story. The kids in the story are: ${namesList}.
+
+The text below uses {childName} as a placeholder for the kids' names. Replace every {childName} placeholder with the kids' names (${namesList}), naturally varying which kid is mentioned. For two kids, alternate or group them (e.g. "${names[0]} and ${names[1]} walked together"). For three, vary who is mentioned each sentence.
+
+CRITICAL: Do NOT change any other names that already appear in the text. Biblical and story character names (like David, Goliath, Moses, Jesus, Mary, Joseph, Daniel, Jonah, Noah, Esther, Ruth, Abraham, etc.) must remain EXACTLY as written. Only replace {childName} placeholders — never swap a biblical character's name with a kid's name.
+
+Keep the same tone, length, and meaning. Output ONLY the rewritten text, no explanation or quotes.
+
+TEXT TO REWRITE:
+"""
+${pageText.slice(0, 2000)}
+"""`;
+
+    const payload = {
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
+    };
+
+    const vertex = await getVertexForGemini();
+    if (vertex) {
+        const location = (process.env.VERTEX_AI_ANALYZE_SCENE_LOCATION || 'us-central1').trim();
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${vertex.projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash:generateContent`;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${vertex.accessToken}`,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const adapted = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (adapted) return adapted;
+            }
+        } catch (err) {
+            console.warn('MonthlyBookGenerator: adaptPageTextForCharacters Vertex error', err.message);
+        }
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+        try {
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+            );
+            if (response.ok) {
+                const data = await response.json();
+                const adapted = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                if (adapted) return adapted;
+            }
+        } catch (err) {
+            console.warn('MonthlyBookGenerator: adaptPageTextForCharacters Gemini API error', err.message);
+        }
+    }
+
+    return substituteChildName(pageText, names[0]);
 }
 
 /**
@@ -145,10 +258,20 @@ async function expandAtReferencesInScene(sceneDescription, referenceCharacterIds
 
 /**
  * Build scene prompt from page.sceneDescription or page content text + character style.
- * When sceneDescription is set, @Name is expanded to saved character style; @kid/@child flags the child's avatar for reference image.
+ * When sceneDescription is set, @Name is expanded for identity/description; @kid/@child flags the child's avatar for reference image.
+ * When wholeBookStyleDesc is provided (user-selected style, e.g. Pixar), the entire illustration—all characters and environment—uses that style; template/saved character styles are not applied so the whole book is visually consistent.
+ * When characterNames has 2+ entries, the prompt explicitly asks to include all characters in the same scene (so multiple user-added characters appear together).
  * Returns { prompt, hasKidReference }.
  */
-async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
+async function buildScenePrompt(pageDoc, characterStylePrompt, childName, wholeBookStyleDesc, characterNames) {
+    const names = Array.isArray(characterNames) && characterNames.length >= 2
+        ? characterNames.filter(Boolean)
+        : [];
+    const multiCharacterInstruction = names.length >= 2
+        ? ` CRITICAL: Include ALL of these characters in the SAME scene together: ${names.join(', ')}. They are the people in the reference images—show them together in this single illustration, not separately.`
+        : '';
+
+    const useWholeBookStyle = wholeBookStyleDesc && String(wholeBookStyleDesc).trim().length > 0;
     const scene = (pageDoc.sceneDescription || '').trim();
     if (scene) {
         const { text: expandedScene, stylePrompts, hasKidReference } = await expandAtReferencesInScene(
@@ -157,9 +280,11 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
             childName
         );
         const sceneForImage = neutralizeChildLanguageForImagePrompt(expandedScene);
-        const allStyles = [characterStylePrompt, ...stylePrompts].filter(Boolean);
-        const styleBlock = allStyles.join('. ');
-        const prompt = `${sceneForImage}. ${styleBlock}. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+        const styleBlock = useWholeBookStyle
+            ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
+            : [characterStylePrompt, ...stylePrompts].filter(Boolean).join('. ');
+        const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the scene description.";
+        const prompt = `${sceneForImage}. ${styleBlock}.${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image.`;
         return { prompt, hasKidReference };
     }
     const text = pageDoc.content?.text || '';
@@ -167,19 +292,39 @@ async function buildScenePrompt(pageDoc, characterStylePrompt, childName) {
     const combined = (text + ' ' + fromBoxes).trim().slice(0, 200);
     const context = substituteChildName(combined, childName) || 'A gentle storybook scene';
     const contextForImage = neutralizeChildLanguageForImagePrompt(context);
-    const childInScene = childName ? ` Include ${childName} in the scene.` : '';
-    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${characterStylePrompt}.${childInScene} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image.`;
+    const childInScene = names.length >= 2
+        ? ` Include ${names.join(' and ')} in the scene together.`
+        : (childName ? ` Include ${childName} in the scene.` : '');
+    const stylePart = useWholeBookStyle
+        ? `The entire illustration—all characters and the environment—must be rendered in this style: ${String(wholeBookStyleDesc).trim()}.`
+        : characterStylePrompt;
+    const noExtras = "Only depict what is described; do not add objects, props, or symbols (e.g. keys, crowns, scrolls) unless explicitly mentioned. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the scene description.";
+    const rawPrompt = `Scene for a children's story: ${contextForImage}. ${stylePart}.${childInScene}${multiCharacterInstruction} ${noExtras} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image.`;
     const prompt = neutralizeChildLanguageForImagePrompt(rawPrompt);
     return { prompt, hasKidReference: !!childName };
 }
 
 /**
- * Gather all reference images for a page: child character + portal characters (SavedCharacter with referenceImageUrl).
- * Returns [{ base64, label }] in order: child first (if present), then portal characters by referenceCharacterIds.
+ * Gather all reference images for a page: user characters (1–3) or single child + portal characters (SavedCharacter).
+ * Returns [{ base64, label }] in order: user characters first (as "character 1", "character 2", "character 3" or "the child"), then portal characters.
  */
 async function gatherPageReferenceImages(customBook, pageDoc) {
     const refs = [];
-    if (customBook.childCharacterImageUrl) {
+    const characters = customBook.characters && customBook.characters.length > 0 ? customBook.characters.slice(0, 3) : null;
+    if (characters && characters.length > 0) {
+        for (let i = 0; i < characters.length; i++) {
+            const c = characters[i];
+            const url = c && c.characterImageUrl ? c.characterImageUrl : null;
+            if (url) {
+                const base64 = await fetchImageAsBase64(url);
+                if (base64) {
+                    refs.push({ base64, label: characters.length === 1 ? 'the child' : `character ${i + 1}` });
+                } else {
+                    console.warn('MonthlyBookGenerator: Failed to fetch character', i + 1, 'reference image from', url?.slice(0, 80) + '...');
+                }
+            }
+        }
+    } else if (customBook.childCharacterImageUrl) {
         const childBase64 = await fetchImageAsBase64(customBook.childCharacterImageUrl);
         if (childBase64) {
             refs.push({ base64: childBase64, label: 'the child' });
@@ -205,34 +350,51 @@ async function gatherPageReferenceImages(customBook, pageDoc) {
 }
 
 /**
- * All Vertex AI regions that support Gemini 2.5 Flash Image (per Google model endpoint locations).
- * Used as default for round-robin so each page uses a different region's quota (maximizes effective RPM).
+ * Vertex AI image model for page generation.
+ * - gemini-3.1-flash-image (default): GA, global endpoint only (Vertex locations docs).
+ * - gemini-2.5-flash-image: GA, regional + global; used automatically if 3.1 returns 404.
+ * - gemini-3-pro-image: higher quality; global endpoint only.
+ * Override with VERTEX_AI_IMAGE_MODEL.
+ */
+const VERTEX_IMAGE_MODEL = (process.env.VERTEX_AI_IMAGE_MODEL || 'gemini-3.1-flash-image').trim() || 'gemini-3.1-flash-image';
+const VERTEX_IMAGE_FALLBACK_MODEL = 'gemini-2.5-flash-image';
+
+/** Models that Vertex only serves on the global endpoint (regional URLs return 404). */
+const VERTEX_IMAGE_GLOBAL_ONLY_MODELS = new Set([
+    'gemini-3.1-flash-image',
+    'gemini-3.1-flash-lite-image',
+    'gemini-3-pro-image',
+    'gemini-3-pro-image-preview',
+]);
+
+/**
+ * Vertex AI regions that support gemini-2.5-flash-image (Standard PayGo & Provisioned Throughput).
+ * Per model availability: Global, US (7), Europe (6). Use VERTEX_AI_IMAGE_LOCATION=global for global endpoint.
+ * Round-robin across these to spread load and reduce 429s.
  */
 const VERTEX_IMAGE_REGIONS_DEFAULT = [
-    'us-central1', 'us-east1', 'us-east4', 'us-east5', 'us-west1', 'us-west4', 'us-south1',
-    'northamerica-northeast1', 'southamerica-east1',
-    'europe-west1', 'europe-west2', 'europe-west3', 'europe-west4', 'europe-west6', 'europe-west8', 'europe-west9',
-    'europe-north1', 'europe-central2', 'europe-southwest1',
-    'asia-northeast1', 'asia-northeast3', 'asia-southeast1', 'asia-east1', 'asia-east2', 'asia-south1',
-    'australia-southeast1',
-    'me-central1', 'me-central2', 'me-west1',
+    'us-central1', 'us-east1', 'us-east4', 'us-east5', 'us-south1', 'us-west1', 'us-west4',
+    'europe-central2', 'europe-north1', 'europe-southwest1', 'europe-west1', 'europe-west4', 'europe-west8',
 ];
 
 let _vertexRegionsLogged = false;
 
 /**
- * Get Vertex AI endpoint for Gemini 2.5 Flash Image.
- * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint (separate quota, can reduce 429s).
+ * Get Vertex AI endpoint for the configured Gemini image model.
+ * - Global-only models (3.1 flash image, 3 pro image) always use the global endpoint.
+ * - VERTEX_AI_IMAGE_LOCATION=global → use global endpoint.
  * - VERTEX_AI_IMAGE_REGIONS=us-central1,us-east1,... → round-robin across those regions only.
  * - Otherwise round-robin across VERTEX_IMAGE_REGIONS_DEFAULT (all supported regions) to maximize effective RPM.
  * @param {number} pageIndex - Used for round-robin (first attempt).
  * @param {number} [attemptOffset=0] - Added to pageIndex for retries so each retry uses a different region (avoids re-hitting same region's 429).
+ * @param {string} [model] - Model id (defaults to VERTEX_IMAGE_MODEL).
  * @returns {{ baseUrl: string, location: string }}
  */
-function getVertexImageEndpoint(pageIndex, attemptOffset) {
+function getVertexImageEndpoint(pageIndex, attemptOffset, model) {
+    const modelId = (model || VERTEX_IMAGE_MODEL || '').trim();
     const offset = Math.max(0, parseInt(attemptOffset, 10) || 0);
     const loc = (process.env.VERTEX_AI_IMAGE_LOCATION || '').trim().toLowerCase();
-    if (loc === 'global') {
+    if (loc === 'global' || VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(modelId)) {
         return {
             baseUrl: 'https://aiplatform.googleapis.com/v1',
             location: 'global',
@@ -262,14 +424,16 @@ function getVertexImageEndpoint(pageIndex, attemptOffset) {
 }
 
 /**
- * Generate one page image with Vertex Gemini 2.5 Flash Image for all pages (superior consistency).
+ * Generate one page image with the Vertex Gemini flash image model for all pages (superior consistency).
  * Uses child + portal character reference images when available; supports text-only when no refs.
  * attemptOffset: 0 = first try, 1 = first retry (use next region), 2 = second retry (use next region).
+ * modelOverride: optional model id (e.g. fallback to gemini-2.5-flash-image after 404 on 3.1).
  * Returns { imageUrl: string | null, httpStatus: number } so caller can use longer backoff on 429.
  */
-async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset) {
+async function generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset, mainCharacterStyleDesc, wholeBookStyleDesc, modelOverride) {
     const customMonthlyBookId = String(customBook._id);
     const pageNumber = pageIndex + 1;
+    const imageModel = (modelOverride || VERTEX_IMAGE_MODEL).trim() || VERTEX_IMAGE_MODEL;
     const token = await getImagenAccessToken();
     const credentialsJson = process.env.GCS_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     let projectId = null;
@@ -277,38 +441,101 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         projectId = credentialsJson ? JSON.parse(credentialsJson).project_id : null;
     } catch (_) {}
     if (!token || !projectId || !bucket) return { imageUrl: null, httpStatus: 0 };
+    if (!_vertexImageModelLogged) {
+        _vertexImageModelLogged = true;
+        console.log('MonthlyBookGenerator: Vertex image model:', imageModel,
+            VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(imageModel) ? '(global endpoint only)' : '');
+    }
 
-    const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName);
+    const characterNames = (customBook.characters && customBook.characters.length > 0)
+        ? customBook.characters.map((c) => (c && c.name && String(c.name).trim()) || '').filter(Boolean)
+        : [customBook.childName].filter(Boolean);
+    const { prompt } = await buildScenePrompt(pageDoc, characterStylePrompt, customBook.childName, wholeBookStyleDesc, characterNames);
     const referenceImages = await gatherPageReferenceImages(customBook, pageDoc);
 
-    const childRefIncluded = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
-    console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child reference included:', childRefIncluded);
-    if (customBook.childCharacterImageUrl && !childRefIncluded) {
-        console.warn('MonthlyBookGenerator: Page', pageNumber, '— child avatar URL set but reference image missing (fetch may have failed); image may not match user.');
+    const firstLabel = referenceImages.length > 0 ? referenceImages[0].label : '';
+    const childRefIncluded = firstLabel === 'the child' || firstLabel === 'child' || firstLabel === 'character 1';
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'sending', referenceImages.length, 'reference image(s); child/first ref included:', childRefIncluded);
+    const hasUserCharacter = customBook.childCharacterImageUrl || (customBook.characters && customBook.characters.length > 0);
+    if (hasUserCharacter && !childRefIncluded) {
+        console.warn('MonthlyBookGenerator: Page', pageNumber, '— user character(s) set but reference image(s) missing (fetch may have failed); image may not match.');
     }
 
     // Log prompt preview for every page (including Page 1) so it's clear what prompt is used.
     const promptPreview = prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '');
-    const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0);
-    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
+    const { baseUrl, location } = getVertexImageEndpoint(pageIndex, attemptOffset || 0, imageModel);
+    console.log('MonthlyBookGenerator: Page', pageNumber, 'prompt:', promptPreview, 'model:', imageModel, 'location:', location + (attemptOffset ? ` (retry ${attemptOffset})` : ''));
+
+    // When 2–3 refs are all user characters (kids), each must keep ONLY their own appearance—no swapping accessories.
+    const isUserRef = (label) => /^(the child|child|character 1|character 2|character 3)$/i.test(String(label || '').trim());
+    const allRefsAreUserCharacters = referenceImages.length >= 2 && referenceImages.every((r) => isUserRef(r.label));
+    if (allRefsAreUserCharacters) {
+        console.log('MonthlyBookGenerator: Page', pageNumber, '— multiple user characters detected; enforcing per-person accessories (no hat/headphones swap).');
+    }
 
     // Describe reference images so the model does not assume "child" — use age-neutral wording for the main character.
     const refDescription = referenceImages.length
         ? referenceImages.map((r, i) => {
-            const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child');
+            const imgNum = i + 1;
+            if (allRefsAreUserCharacters) {
+                return `Image ${imgNum}: ${r.label} — match this person ONLY from this reference photo. Draw only the face, hair, clothing, and accessories that are visible in THIS image. Do not add hat, cap, headphones, or glasses unless they appear in this photo. Do NOT give this person any accessory (hat, headphones, glasses, etc.) that appears on a different reference image—each person keeps only what is in their own photo.`;
+            }
+            const isFirstPerson = i === 0 && (r.label === 'the child' || r.label === 'child' || r.label === 'character 1');
             return isFirstPerson
-                ? `Image ${i + 1}: the main character (match this person's exact age and appearance from the photo in every scene—if they are an adult with beard or hat, depict an adult with beard or hat; if a child, depict a child; do not age down or change their features)`
-                : `Image ${i + 1}: ${r.label}`;
+                ? `Image ${imgNum}: the main character (match this person's exact age and appearance from the photo—only what is visible in the photo; do not add hat, cap, or headphones if not in the photo; if adult with beard depict adult, if child depict child; do not age down or change their features)`
+                : `Image ${imgNum}: ${r.label} (this is a different character—draw them ONLY from this reference; do NOT give them the main character's hat, headphones, tattoo, watch, or any modern accessory; biblical characters have their own traditional appearance)`;
         }).join('. ')
         : '';
-    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child');
-    // Strong consistency so parents/kids get the same person every page (goal 90–99% for unreviewed books).
+    const firstRefIsPerson = referenceImages.length > 0 && (referenceImages[0].label === 'the child' || referenceImages[0].label === 'child' || referenceImages[0].label === 'character 1');
+    // When user selected a book style (e.g. Pixar), enforce it for the ENTIRE image so we don't get cartoon/Disney 2D instead.
+    const hasWholeBookStyle = wholeBookStyleDesc && String(wholeBookStyleDesc).trim().length > 0;
+    const wholeImageStyleLock = hasWholeBookStyle
+        ? ` CRITICAL — Style: The ENTIRE image (all characters, background, and environment) MUST be rendered in this exact style: "${String(wholeBookStyleDesc).trim()}". Do NOT use a flat 2D cartoon style, 2D Disney animation style, or storybook watercolor illustration style. Use the selected style (e.g. Pixar 3D animated, with rounded volumes and 3D lighting) for the whole scene—consistent from page to page. `
+        : '';
+    const styleClosing = hasWholeBookStyle
+        ? `Render the entire image in the selected style above. Warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. Vertical 9:16 composition. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`
+        : `Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, no text in image. Vertical 9:16 composition. Do not add biblical characters (e.g. Jesus, prophets, angels) unless explicitly named in the prompt.`;
+    // Use user-selected main character style (e.g. Pixar) when provided; otherwise fall back to characterStylePrompt.
+    const styleForMain = (mainCharacterStyleDesc && mainCharacterStyleDesc.trim()) || (characterStylePrompt && characterStylePrompt.trim());
+    const styleLock = styleForMain
+        ? ` The main character (reference Image 1) MUST be drawn in this exact art style: "${styleForMain.trim()}". Do NOT draw the main character in a classical religious, biblical, or traditional Jesus painting style. Keep the main character in the selected style (e.g. Pixar 3D, Disney, illustrated) on every page—do not shift their look toward other characters' style. `
+        : ` Do NOT draw the main character in a classical religious or biblical painting style; keep them in the selected storybook/animation style (e.g. Pixar, Disney, illustrated) on every page. `;
+    const heightConsistency = ` The main character must appear at the SAME height and scale on every page. If the reference photo shows an ADULT, the main character must be drawn at ADULT height (clearly taller than any children in the scene). If the reference shows a child, use child height. Do not make the main character taller, shorter, or a different size from page to page—keep their scale consistent across all scenes. `;
+    // MANDATORY height rule: adults must be same scale—never draw one adult as giant and another as tiny (fixes Jesus/main-character disproportion)
+    const mandatoryHeightRule = referenceImages.length >= 2
+        ? ` CRITICAL — HEIGHT AND SCALE: When the main character (Image 1) is an ADULT and another reference (e.g. Jesus, Joseph) is also an ADULT, BOTH must be drawn at the SAME adult scale. They must be roughly the same height—within normal human variation (e.g. a few inches). NEVER draw Jesus or biblical figures shorter, smaller, or child-sized when the main character is an adult. NEVER draw one adult twice the height of another. If the main character is a child and Jesus is an adult, Jesus must be clearly taller (adult vs child). If both are adults, they MUST appear as two adults of similar size standing together. Do not put Jesus on a stool or elevated surface to compensate—draw him at full adult height. `
+        : '';
+    // When multiple user characters (2–3 refs): keep realistic relative heights—adult taller than child, two adults similar height; no giant/tiny disproportion
+    const multiCharacterHeight = referenceImages.length >= 2
+        ? ` Draw all characters from the reference images at realistic, consistent relative heights. If one reference shows an adult and another a child, the adult must be clearly taller. If both (or all) are adults, draw them at similar height—do not make one character disproportionately large (giant) or small (tiny). Keep natural human proportions and scale between characters. `
+        : '';
     const personConsistencyInstruction = firstRefIsPerson
-        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same age (if the photo shows an adult with beard, hat, or adult features, you MUST depict an adult with those features; if the photo shows a child, depict a child). Do NOT age them down to a child when the reference is an adult. Do NOT remove beard, hat, or adult clothing. Preserve identical appearance on every page. Keep the main character at a consistent scale: same approximate height and size relative to other characters in the scene (e.g. if there is Jesus or another figure, the main character should be a similar scale to them—not much smaller or larger). `
+        ? ` CRITICAL — character consistency: The person in reference Image 1 must look EXACTLY like the photo in every image: same face, same AGE (if adult with beard = draw adult with beard; do NOT turn them into a child), same eye color (e.g. brown eyes stay brown), same hair (including streaks or gray), same clothing, and only the accessories that appear in the reference (if the photo has no hat and no headphones, draw them with no hat and no headphones—do NOT add hats, caps, or headphones unless visible in the reference). Do NOT age them down, change eye color, remove beard, or replace their real outfit with costumes. If the reference is an adult, draw them at adult height (taller than children). Preserve identical appearance on every page.${styleLock}${heightConsistency} `
+        : '';
+    // When multiple user characters: require ALL to appear on every page; never omit one.
+    const numUserRefs = referenceImages.length;
+    const allMustAppearInstruction = allRefsAreUserCharacters && numUserRefs >= 2
+        ? ` MANDATORY: You MUST include every person from the ${numUserRefs} reference images in this scene. All ${numUserRefs} people must be visible in the illustration—do not omit any character. If there are 2 reference images, show 2 people; if 3, show 3 people. Every reference image corresponds to one person who must appear. `
+        : '';
+    // Anti-artifacts for multi-user: no Jesus-like look, keep hat if in reference, no holding extra shoes, height from reference.
+    const multiUserAntiArtifacts = allRefsAreUserCharacters && numUserRefs >= 2
+        ? ` Do NOT draw any of these people in a classical religious, biblical, or Jesus-like style (no long wavy hair, serene beard, or saintly look). Each person must look like a normal modern person matching their reference photo—same face, hair style, and clothing. If a reference photo shows someone wearing a cap or hat, that person MUST be drawn wearing the cap/hat in the scene; do not omit it. Do NOT draw anyone holding or carrying an extra pair of shoes, sneakers, or footwear unless that exact detail is visible in their reference photo; if they are wearing shoes, do not show them holding another pair. Each person's height must match their reference—if the reference shows an adult, draw adult height; if a child, draw child height; do not arbitrarily make one person look like a religious figure or shrink them. `
+        : '';
+    // When multiple reference images: they are DIFFERENT people — do not blend or mix; do not transfer accessories between them.
+    // Hat rule: only the person whose reference shows a hat may wear a hat; never copy one person's hat onto another—never draw the same hat on two people.
+    const hatOnlyOnOwnerInstruction = allRefsAreUserCharacters && numUserRefs >= 2
+        ? ` CRITICAL — Hats and accessories: Look at EACH reference photo. Only the person whose OWN reference photo shows a hat/cap may be drawn wearing a hat. If Reference Image 1 has NO hat, the person from Image 1 must be drawn with NO hat—never give them a hat from another reference. If Reference Image 2 has a hat, ONLY the person from Image 2 may wear that hat—never put the same hat on the person from Image 1 or 3. Never draw identical hats on multiple people. Never copy one character's hat onto another character. Each person gets ONLY what is in their own photo. `
+        : '';
+    const multiPersonInstruction = referenceImages.length >= 2
+        ? allRefsAreUserCharacters
+            ? ` CRITICAL — these reference images are DIFFERENT people (e.g. two or three children). Do NOT blend, combine, or mix their faces or appearances. You MUST include all ${numUserRefs} people in this scene; do not omit any. Each person must look ONLY like their own reference: Image 1 = first person—use ONLY Image 1 for their face, hair, clothing, and accessories (if Image 1 has no cap, do not draw a cap on them; if Image 1 has a cap, ONLY the person from Image 1 may wear a cap—never put that cap on the person from Image 2 or 3). Image 2 = second person—use ONLY Image 2; do NOT give them the first person's hat, cap, headphones, or glasses. Image 3 (if present) = third person—use ONLY Image 3; do NOT give them accessories from Image 1 or 2. Never transfer, swap, or copy accessories (hat, cap, headphones, glasses) from one person to another. A hat/cap belongs only on the person whose reference photo shows a hat/cap; glasses only on the person whose reference shows glasses. Each person keeps exactly what is visible in their own reference photo. NEVER draw the same hat on two different people—only one person can wear a hat, and only if their own reference shows a hat.${hatOnlyOnOwnerInstruction}${multiCharacterHeight} `
+            : ` CRITICAL — these reference images are DIFFERENT people. Do NOT blend, combine, or mix their faces or appearances. Image 1 = the main character (the kid/user): use ONLY Image 1 for that person's face, body, clothing, and accessories. Image 2 and any later images = other characters (e.g. Jesus, Joseph, biblical figures): use ONLY their own reference image for each.${mandatoryHeightRule} Biblical characters (Jesus, Joseph, Moses, etc.) are ADULTS—draw them at adult height, the SAME scale as the main character when Image 1 is an adult. Do NOT draw Jesus or biblical figures small, short, or child-sized; they MUST be similar height to the main character when both are adults. Do NOT put the main character's clothing or accessories (e.g. hat, cap, headphones, tattoo, watch, smartwatch, modern clothes) on Jesus or any other biblical character—only the main character (Image 1) may have these; Jesus and biblical figures must look ONLY like their own reference. Biblical and story characters must keep their own traditional appearance from their reference; only the person from Image 1 may have modern accessories if they appear in Image 1. Do not transfer features (beard, hair, skin, clothing, accessories) from one reference to another.${multiCharacterHeight} `
         : '';
     const geminiPrompt = referenceImages.length
-        ? `${personConsistencyInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: keep the main character's appearance identical to the reference photo (same age, face, hair, clothing) and at a consistent scale/height relative to other characters. Place each character in the scene as described. Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`
-        : `Generate one image: ${prompt} Children's book illustration style, warm inviting colors, soft lighting, suitable for ages 4-12, Christian faith theme, no text in image. Vertical 9:16 composition.`;
+        ? allRefsAreUserCharacters
+            ? `${wholeImageStyleLock}${allMustAppearInstruction}${multiUserAntiArtifacts}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: all ${numUserRefs} people must appear in the scene. Each person (Image 1, Image 2, Image 3) must match ONLY their own reference—same face, hair, clothing, and accessories as in that photo. Do not add hat, cap, or headphones to anyone unless visible in their own reference; if their reference shows a hat, draw the hat on that person only. NEVER copy one person's hat onto another—if only the child's reference has a hat, only the child may wear a hat; the other person(s) must have NO hat. Never put one person's hat, glasses, or accessories on another person. Do not draw anyone holding an extra pair of shoes. Place each character in the scene as described. ${styleClosing}`
+            : `${wholeImageStyleLock}${personConsistencyInstruction}${multiPersonInstruction}Using the provided reference images (${refDescription}), generate one image: ${prompt} Remember: Image 1 (main character) only—same age, eye color, hair, clothing and accessories as in their photo (no hat/headphones unless in photo). Other characters (Image 2+) must look only like their own reference—never give Jesus or biblical figures the main character's hat, headphones, tattoo, watch, smartwatch, or modern clothes; biblical characters have their own traditional appearance from their reference image. Place each character in the scene as described. IMPORTANT: When both the main character and Jesus/biblical figures are adults, they must be drawn at the same adult scale—no giant main character with tiny Jesus, and no tiny main character with giant Jesus. ${styleClosing}`
+        : `Generate one image: ${prompt} ${styleClosing}`;
 
     const parts = [{ text: geminiPrompt }];
     for (const ref of referenceImages) {
@@ -316,7 +543,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
     }
 
     try {
-        const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.5-flash-image:generateContent`;
+        const url = `${baseUrl}/projects/${projectId}/locations/${location}/publishers/google/models/${imageModel}:generateContent`;
         const res = await axios.post(
             url,
             {
@@ -336,7 +563,16 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
             }
         );
         if (res.status !== 200) {
-            console.warn('MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status, res.status === 429 ? '(rate limit)' : '', typeof res.data === 'string' ? res.data.slice(0, 150) : '');
+            const bodyPreview = typeof res.data === 'string'
+                ? res.data.slice(0, 200)
+                : (res.data ? JSON.stringify(res.data).slice(0, 200) : '');
+            console.warn(
+                'MonthlyBookGenerator: Gemini page', pageNumber, 'failed', res.status,
+                res.status === 429 ? '(rate limit)' : '',
+                `model=${imageModel}`,
+                `location=${location}`,
+                bodyPreview
+            );
             return { imageUrl: null, httpStatus: res.status };
         }
         const outParts = res.data.candidates?.[0]?.content?.parts || [];
@@ -360,7 +596,7 @@ async function generatePageImageWithVertexGemini(customBook, pageDoc, characterS
         });
         await blob.makePublic().catch(() => {});
         const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini 2.5 Flash Image', imageUrl);
+        console.log('MonthlyBookGenerator: Generated page', pageNumber, 'with Vertex Gemini image model', imageModel, imageUrl);
         return { imageUrl, httpStatus: 200 };
     } catch (err) {
         const status = err.response?.status;
@@ -393,7 +629,7 @@ function vertexBackoffMs(attempt, is429) {
 }
 
 /**
- * Gemini 2.5 Flash Image uses Standard PayGo (shared capacity). Use exponential backoff on 429
+ * The Gemini flash image model uses Standard PayGo (shared capacity). Use exponential backoff on 429
  * and smooth request rate (delay between pages). See:
  * https://cloud.google.com/vertex-ai/generative-ai/docs/standard-paygo
  * https://cloud.google.com/vertex-ai/generative-ai/docs/provisioned-throughput/error-code-429
@@ -402,11 +638,13 @@ function vertexBackoffMs(attempt, is429) {
 const DELAY_BETWEEN_PAGES_MS = parseInt(process.env.MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS, 10) || 5000;
 
 /**
- * Generate one page background image for Book-based flow. Gemini 2.5 Flash only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
+ * Generate one page background image for Book-based flow. Gemini flash image only; retries up to PAGE_GEMINI_MAX_ATTEMPTS.
  * No Imagen fallback. Uses page.sceneDescription or page text + character style; uploads to GCS and returns URL.
+ * mainCharacterStyleDesc: style for the main character (kid) only.
+ * wholeBookStyleDesc: style for the entire book (all characters + environment); can differ from main character.
  * Throws if all Gemini attempts fail or credentials/GCS missing.
  */
-async function generatePageImageForBook(customBook, pageDoc, characterStylePrompt, pageIndex) {
+async function generatePageImageForBook(customBook, pageDoc, characterStylePrompt, pageIndex, mainCharacterStyleDesc, wholeBookStyleDesc) {
     const pageNumber = pageIndex + 1;
     const token = await getImagenAccessToken();
     if (!token) {
@@ -425,18 +663,40 @@ async function generatePageImageForBook(customBook, pageDoc, characterStylePromp
     }
 
     let lastHttpStatus = 0;
+    let imageModel = VERTEX_IMAGE_MODEL;
     for (let attempt = 1; attempt <= PAGE_GEMINI_MAX_ATTEMPTS; attempt++) {
         const attemptOffset = attempt - 1; // 0 = first try, 1 = first retry (different region), etc.
-        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset);
+        const { imageUrl: geminiUrl, httpStatus } = await generatePageImageWithVertexGemini(
+            customBook, pageDoc, characterStylePrompt, pageIndex, attemptOffset,
+            mainCharacterStyleDesc, wholeBookStyleDesc, imageModel
+        );
         if (geminiUrl) return geminiUrl;
         lastHttpStatus = httpStatus;
+        // 404 usually means wrong endpoint/model (e.g. 3.1 on a regional URL, or project without model access).
+        // Fall back once to gemini-2.5-flash-image (regional) instead of burning all retries on the same 404.
+        if (httpStatus === 404 && imageModel !== VERTEX_IMAGE_FALLBACK_MODEL) {
+            console.warn(
+                'MonthlyBookGenerator: Gemini page', pageNumber,
+                'model', imageModel, 'returned 404; falling back to', VERTEX_IMAGE_FALLBACK_MODEL
+            );
+            imageModel = VERTEX_IMAGE_FALLBACK_MODEL;
+            _vertexImageModelLogged = false; // log the new model once
+            continue;
+        }
         if (attempt < PAGE_GEMINI_MAX_ATTEMPTS) {
             const delayMs = vertexBackoffMs(attempt, httpStatus === 429);
-            console.log('MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt, 'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') + '; exponential backoff: retrying in', delayMs, 'ms (different region)...');
+            const retryHint = VERTEX_IMAGE_GLOBAL_ONLY_MODELS.has(imageModel)
+                ? 'same global endpoint'
+                : 'different region';
+            console.log(
+                'MonthlyBookGenerator: Gemini page', pageNumber, 'attempt', attempt,
+                'failed' + (httpStatus === 429 ? ' (429 rate limit)' : '') +
+                '; exponential backoff: retrying in', delayMs, 'ms (' + retryHint + ')...'
+            );
             await new Promise((r) => setTimeout(r, delayMs));
         }
     }
-    throw new Error('Page ' + pageNumber + ': Gemini 2.5 Flash Image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
+    throw new Error('Page ' + pageNumber + ': Gemini flash image failed after ' + PAGE_GEMINI_MAX_ATTEMPTS + ' attempts (last status ' + lastHttpStatus + ', model ' + imageModel + '). Use exponential backoff; consider MONTHLY_BOOK_DELAY_BETWEEN_PAGES_MS or Provisioned Throughput.');
 }
 
 /**
@@ -506,16 +766,16 @@ async function generateCoverImageForBook(customBook, sourceBook) {
             referenceImage: { bytesBase64Encoded: childImageBase64 },
             referenceType: 'REFERENCE_TYPE_SUBJECT',
             subjectImageConfig: {
-                subjectDescription: `The person in this photo (${childName}). Match their exact age and appearance: if they are an adult (e.g. with beard, hat), depict an adult; if a child, depict a child. Do not age them down. Include them in the scene with ${characterName}.`,
+                subjectDescription: `The person in this photo (${childName}). Match their exact age and appearance: if they are an adult (e.g. with beard), depict an adult; if a child, depict a child. Depict only the clothing and accessories visible in the photo—do not add hat or headphones unless they appear in the photo. Do not age them down. Include them in the scene with ${characterName}.`,
                 subjectType: 'SUBJECT_TYPE_PERSON',
             },
         });
     }
 
     const prompt = templateCoverBase64
-        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Depict the person exactly as in the reference photo—same age (adult or child), same features (beard, hat, etc.); do not age them down. Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
+        ? `Recreate this book cover in the same style and composition. Feature the person [${subjectRefId || 1}] and ${characterName} (${characterStyle}). Depict the person exactly as in the reference photo—same age (adult or child), same features and clothing; do not add hat or headphones unless they appear in the reference; do not age them down. Children's book illustration, Christian faith theme, ages 4-12, no text in image.`
         : subjectRefId
-            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Depict the person exactly as in the reference—same age and appearance (if adult with beard/hat, show adult with beard/hat). Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
+            ? `Children's book cover: The person [${subjectRefId}] and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Depict the person exactly as in the reference—same age and appearance; only show accessories (e.g. hat, headphones) if they appear in the reference photo. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`
             : `Children's book cover: ${childName} and ${characterName} (${characterStyle}) standing together in a warm, magical storybook scene. Both characters visible and friendly, side by side. Children's book illustration style, Christian faith theme, suitable for ages 4-12, no text in image.`;
 
     const instancesPayload = referenceImages.length
@@ -564,9 +824,15 @@ async function generateCoverImageForBook(customBook, sourceBook) {
  * Run monthly book generation from a Book Builder book (sourceBookId).
  * Loads Book + Pages, substitutes {childName}, generates background images, creates new Book.
  */
-async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook) {
+async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook, generationNonce) {
     const character = sourceBook.featuredCharacterId || {};
     const characterStylePrompt = character.stylePrompt || 'children\'s book illustration style';
+    // Main character (kid) style — how the kid is drawn (e.g. Lego); from character creation or book flow.
+    const charStyleId = (custom.characterStyleId || 'illustrated').toLowerCase();
+    const mainCharacterStyleDesc = MAIN_CHARACTER_STYLE_BY_ID[charStyleId] || characterStylePrompt;
+    // Whole-book style — how the entire book (all characters + environment) is drawn (e.g. Pixar); can differ from main character.
+    const bookStyleId = (custom.bookStyleId || custom.characterStyleId || 'illustrated').toLowerCase();
+    const wholeBookStyleDesc = MAIN_CHARACTER_STYLE_BY_ID[bookStyleId] || characterStylePrompt;
 
     const sourcePages = await Page.find({ bookId: sourceBook._id })
         .sort({ pageNumber: 1 })
@@ -584,6 +850,11 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         if (!Number.isNaN(cap) && cap >= 1) pageCount = Math.min(pageCount, cap);
     }
     const pagesToProcess = sourcePages.slice(0, pageCount);
+
+    const characterNames = (custom.characters && custom.characters.length > 0)
+        ? custom.characters.map((c) => (c && c.name && String(c.name).trim()) || '').filter(Boolean)
+        : [custom.childName].filter(Boolean);
+    const multiCharacter = characterNames.length > 1;
 
     const isResume = custom.bookId && (custom.progressPage || 0) >= 1 && (custom.progressTotalPages || 0) > 0;
     let startIndex = 0;
@@ -615,21 +886,34 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const bookIdShort = String(customMonthlyBookId).slice(-8);
 
-    const toPageDoc = (p, bid) => ({
-        bookId: bid,
-        pageNumber: p.pageNumber,
-        content: p.content || {},
-        files: p.files || {},
-        scrollUrl: p.scrollUrl || p.files?.scroll?.url || undefined,
-        isColoringPage: p.isColoringPage || false,
-        coloringEndModalOnly: p.coloringEndModalOnly !== false,
-        isWebViewPage: p.isWebViewPage || false,
-        webView: p.webView || {},
-        backgroundImageAnimation: p.backgroundImageAnimation ?? 'kenBurns',
-        backgroundImageAnimationDuration: p.backgroundImageAnimationDuration ?? 10,
-    });
+    const toPageDoc = (p, bid) => {
+        const content = p.content || {};
+        const textBoxes = (content.textBoxes && content.textBoxes.length > 0) ? content.textBoxes : (p.textBoxes || []);
+        return {
+            bookId: bid,
+            pageNumber: p.pageNumber,
+            content: { ...content, textBoxes },
+            files: p.files || {},
+            scrollUrl: p.scrollUrl || p.files?.scroll?.url || undefined,
+            isColoringPage: p.isColoringPage || false,
+            coloringEndModalOnly: p.coloringEndModalOnly !== false,
+            isWebViewPage: p.isWebViewPage || false,
+            webView: p.webView || {},
+            backgroundImageAnimation: p.backgroundImageAnimation ?? 'kenBurns',
+            backgroundImageAnimationDuration: p.backgroundImageAnimationDuration ?? 10,
+            textBoxes, // root-level so reader fallback (page.textBoxes) works
+        };
+    };
 
     for (let i = startIndex; i < pagesToProcess.length; i++) {
+        // Check if a newer generation (retry) has taken over — if so, stop gracefully
+        if (generationNonce) {
+            const fresh = await CustomMonthlyBook.findById(customMonthlyBookId).select('generationNonce status').lean();
+            if (!fresh || fresh.status === 'completed' || fresh.status === 'failed' || (fresh.generationNonce && fresh.generationNonce !== generationNonce)) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Nonce changed or status terminal — another process took over. Stopping. (ours=${generationNonce}, current=${fresh?.generationNonce})`);
+                return;
+            }
+        }
         const pageNum = i + 1;
         const total = pagesToProcess.length;
         console.log(`MonthlyBookGenerator: [${bookIdShort}] Starting page ${pageNum}/${total} (loop index ${i})`);
@@ -646,12 +930,37 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
         const hasPortalPrompt = portalPrompt.length > 0;
         const preview = hasPortalPrompt ? ` "${portalPrompt.slice(0, 80)}${portalPrompt.length > 80 ? '...' : ''}"` : '';
         console.log(`MonthlyBookGenerator: Page ${pageNum}/${total} ${hasPortalPrompt ? 'using portal scene prompt' : 'using fallback from page text'}${preview}`);
-        const pageWithName = substituteChildNameInPage(pageDoc, custom.childName);
+
+        let pageWithName;
+        if (multiCharacter && characterNames.length > 1) {
+            const out = JSON.parse(JSON.stringify(pageDoc));
+            if (!out.content) out.content = {};
+            const sourceBoxes = Array.isArray(out.content.textBoxes) && out.content.textBoxes.length > 0
+                ? out.content.textBoxes
+                : Array.isArray(out.textBoxes) ? out.textBoxes : [];
+            if (out.content.text) {
+                out.content.text = await adaptPageTextForCharacters(out.content.text, characterNames);
+            }
+            if (sourceBoxes.length > 0) {
+                out.content.textBoxes = await Promise.all(
+                    sourceBoxes.map(async (box) => ({
+                        ...box,
+                        text: await adaptPageTextForCharacters(box.text || '', characterNames),
+                    }))
+                );
+            }
+            pageWithName = out;
+        } else {
+            pageWithName = substituteChildNameInPage(pageDoc, characterNames[0] || custom.childName);
+        }
+
         const backgroundUrl = await generatePageImageForBook(
             custom,
             pageDoc,
             characterStylePrompt,
-            i
+            i,
+            mainCharacterStyleDesc,
+            wholeBookStyleDesc
         );
         // Preserve source page content and files (including scroll) so text and scroll UI are present in the reader
         const pagePayload = {
@@ -687,6 +996,29 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                 || sourceBook.defaultVoiceId
                 || sourceBook.files?.defaultVoiceId
                 || null;
+            // Copy background music from template so generated book has same audio; reader uses files.audio[defaultAudioIndex].url
+            const sourceAudio = Array.isArray(sourceBook.files?.audio) ? sourceBook.files.audio : [];
+            const audioTracks = sourceAudio
+                .filter((t) => t && t.url)
+                .map((t) => ({ url: t.url, filename: t.filename || null, uploadedAt: t.uploadedAt || new Date() }));
+            const musicIdx = Math.max(0, Math.min((custom.backgroundMusicIndex ?? sourceBook.files?.defaultAudioIndex ?? 0), Math.max(0, audioTracks.length - 1)));
+            const defaultAudioIndex = audioTracks.length > 0 ? musicIdx : 0;
+            if (sourceAudio.length > 0 && audioTracks.length === 0) {
+                console.warn('MonthlyBookGenerator: Template book has files.audio but no valid URLs; background music will be missing.');
+            } else if (audioTracks.length > 0) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Copying ${audioTracks.length} background music track(s), default index ${defaultAudioIndex}`);
+            }
+            // Copy characterVoices from template so @Jesus, @Moses, etc. use the correct voices
+            const charVoices = Array.isArray(sourceBook.characterVoices) && sourceBook.characterVoices.length > 0
+                ? sourceBook.characterVoices.map((cv) => ({
+                    characterName: cv.characterName,
+                    voiceId: cv.voiceId,
+                    color: cv.color || undefined,
+                }))
+                : [];
+            if (charVoices.length > 0) {
+                console.log(`MonthlyBookGenerator: [${bookIdShort}] Copying ${charVoices.length} character voice(s):`, charVoices.map((c) => c.characterName).join(', '));
+            }
             book = await Book.create({
                 title: bookTitle,
                 author: sourceBook.author || 'GodlyKids',
@@ -698,11 +1030,14 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
                     coverImage: coverUrl,
                     images: [],
                     videos: [],
-                    audio: [],
+                    audio: audioTracks,
+                    defaultAudioIndex,
                 },
-                showCharacterOverlay: sourceBook.showCharacterOverlay || false,
+                // Create Your Story: characters are already in the generated image; do not overlay a second character/photo
+                showCharacterOverlay: false,
                 defaultVoiceId: narratorVoiceId,
                 defaultNarratorVoiceId: narratorVoiceId,
+                characterVoices: charVoices,
             });
             await Page.create(toPageDoc(pagePayload, book._id));
             await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { bookId: book._id, progressPage: pageNum });
@@ -722,8 +1057,9 @@ async function runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sou
 
     const notificationTitle = '✨ Your story is ready!';
     const notificationMessage = `${custom.childName}, your story is ready to read!`;
+    const notificationUserId = (custom.rawUserId && String(custom.rawUserId).trim()) || (custom.userId && custom.userId.toString());
     await sendNotificationToUser({
-        userId: custom.userId,
+        userId: notificationUserId,
         title: notificationTitle,
         message: notificationMessage,
         url: `/book/${book._id}`,
@@ -750,12 +1086,12 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         console.log('MonthlyBookGenerator: Skipping completed/failed', customMonthlyBookId, custom.status);
         return;
     }
+    const nonce = crypto.randomBytes(8).toString('hex');
     if (custom.status === 'pending' || isResume) {
         if (custom.status === 'pending') {
-            // Claim the job so only one worker processes this book (avoid concurrent runs skipping/duplicating pages)
             const updated = await CustomMonthlyBook.findOneAndUpdate(
                 { _id: customMonthlyBookId, status: 'pending' },
-                { $set: { status: 'generating' } },
+                { $set: { status: 'generating', generationNonce: nonce } },
                 { new: true }
             );
             if (!updated) {
@@ -764,9 +1100,10 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
             }
             custom = updated;
         } else {
-            // Resuming: re-fetch to get latest progressPage
+            // Atomically set our nonce so any previous generation process detects it changed and stops
+            await CustomMonthlyBook.findByIdAndUpdate(customMonthlyBookId, { $set: { generationNonce: nonce } });
             custom = await CustomMonthlyBook.findById(customMonthlyBookId).populate('templateId').lean();
-            console.log('MonthlyBookGenerator: Resuming', customMonthlyBookId, 'from page', custom.progressPage + 1, 'of', custom.progressTotalPages);
+            console.log('MonthlyBookGenerator: Resuming', customMonthlyBookId, 'from page', custom.progressPage + 1, 'of', custom.progressTotalPages, 'nonce', nonce);
         }
     } else {
         console.log('MonthlyBookGenerator: Skipping', customMonthlyBookId, custom.status);
@@ -777,7 +1114,7 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         if (custom.sourceBookId) {
             const sourceBook = await Book.findById(custom.sourceBookId).populate('featuredCharacterId').lean();
             if (!sourceBook) throw new Error('Source book not found');
-            await runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook);
+            await runMonthlyBookGenerationFromBook(customMonthlyBookId, custom, sourceBook, nonce);
             return;
         }
 
@@ -803,6 +1140,13 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
         const bookTitle = `${custom.childName}'s Adventure with ${bibleCharacter.displayName}`;
         const pages = [];
         for (let i = 0; i < pagesToGenerate.length; i++) {
+            if (nonce) {
+                const fresh = await CustomMonthlyBook.findById(customMonthlyBookId).select('generationNonce status').lean();
+                if (!fresh || fresh.status === 'completed' || fresh.status === 'failed' || (fresh.generationNonce && fresh.generationNonce !== nonce)) {
+                    console.log('MonthlyBookGenerator: Template flow — nonce changed, stopping.');
+                    return;
+                }
+            }
             const tp = pagesToGenerate[i];
             const pageText = substituteChildName(tp.text, custom.childName);
             const backgroundUrl = await generatePageImage(custom, tp, bibleCharacter, i);
@@ -855,8 +1199,9 @@ async function runMonthlyBookGeneration(customMonthlyBookId) {
 
         const notificationTitle = '✨ Your story is ready!';
         const notificationMessage = `${custom.childName}, your adventure with ${bibleCharacter.displayName} is ready!`;
+        const notificationUserId = (custom.rawUserId && String(custom.rawUserId).trim()) || (custom.userId && custom.userId.toString());
         await sendNotificationToUser({
-            userId: custom.userId,
+            userId: notificationUserId,
             title: notificationTitle,
             message: notificationMessage,
             url: `/book/${book._id}`,

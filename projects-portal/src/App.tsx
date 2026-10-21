@@ -16,6 +16,7 @@ import PlaylistForm from './pages/PlaylistForm';
 import BookSeries from './pages/BookSeries';
 import BookSeriesForm from './pages/BookSeriesForm';
 import BookReader from './pages/BookReader';
+import SwipeUpPreview from './pages/SwipeUpPreview';
 import PageEditor from './pages/PageEditor';
 import Categories from './pages/Categories';
 import Voices from './pages/Voices';
@@ -30,6 +31,7 @@ import FeaturedContent from './pages/FeaturedContent';
 import NewUserWelcome from './pages/NewUserWelcome';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import OnboardingAnalytics from './pages/OnboardingAnalytics';
+import KidsMonthlyCharactersPage from './pages/KidsMonthlyCharactersPage';
 import Radio from './pages/Radio';
 import RadioHosts from './pages/RadioHosts';
 import RadioLibrary from './pages/RadioLibrary';
@@ -45,6 +47,10 @@ import BackgroundMusicLibrary from './pages/BackgroundMusicLibrary';
 import StoryBackgroundLibrary from './pages/StoryBackgroundLibrary';
 import MonthlyBookTemplates from './pages/MonthlyBookTemplates';
 import MonthlyBookTemplateForm from './pages/MonthlyBookTemplateForm';
+import KaraokeManagement from './pages/KaraokeManagement';
+import KaraokeForm from './pages/KaraokeForm';
+import MusicVideoManagement from './pages/MusicVideoManagement';
+import MusicVideoForm from './pages/MusicVideoForm';
 
 // Godly Hub - Creator Portal
 import CreatorLogin from './pages/CreatorLogin';
@@ -98,6 +104,7 @@ function App() {
             <Route path="books/new" element={<BookForm />} />
             <Route path="books/edit/:bookId" element={<BookEdit />} />
             <Route path="books/read/:bookId" element={<BookReader />} />
+            <Route path="books/preview-swipe/:bookId" element={<SwipeUpPreview />} />
             <Route path="pages/new/:bookId" element={<PageEditor />} />
             <Route path="playlists" element={<Playlists />} />
             <Route path="playlists/new" element={<PlaylistForm />} />
@@ -119,6 +126,7 @@ function App() {
             <Route path="new-user-welcome" element={<NewUserWelcome />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
             <Route path="onboarding-analytics" element={<OnboardingAnalytics />} />
+            <Route path="onboarding-analytics/kids-characters" element={<KidsMonthlyCharactersPage />} />
             <Route path="radio" element={<Radio />} />
             <Route path="radio/hosts" element={<RadioHosts />} />
             <Route path="radio/library" element={<RadioLibrary />} />
@@ -137,6 +145,12 @@ function App() {
             <Route path="monthly-books" element={<MonthlyBookTemplates />} />
             <Route path="monthly-books/new" element={<MonthlyBookTemplateForm />} />
             <Route path="monthly-books/edit/:id" element={<MonthlyBookTemplateForm />} />
+            <Route path="karaoke" element={<KaraokeManagement />} />
+            <Route path="karaoke/new" element={<KaraokeForm />} />
+            <Route path="karaoke/edit/:id" element={<KaraokeForm />} />
+            <Route path="music-videos" element={<MusicVideoManagement />} />
+            <Route path="music-videos/new" element={<MusicVideoForm />} />
+            <Route path="music-videos/edit/:id" element={<MusicVideoForm />} />
             
             {/* Godly Hub Admin */}
             <Route path="hub/creators" element={<HubCreators />} />

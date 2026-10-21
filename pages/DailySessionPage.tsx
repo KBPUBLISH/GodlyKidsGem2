@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Check, ChevronRight, Play, BookOpen, MessageCircle, Camera, Sparkles } from 'lucide-react';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import SessionCelebrationModal from '../components/modals/SessionCelebrationModal';
-import ReverseTrialOfferModal from '../components/modals/ReverseTrialOfferModal';
 import DiscussionQuestionsModal from '../components/modals/DiscussionQuestionsModal';
 import DailyVerseModal from '../components/modals/DailyVerseModal';
 import SelfieCapture from '../components/features/SelfieCapture';
@@ -37,14 +36,14 @@ import { isValidBookId } from '../utils/bookUtils';
 
 // Learning goals options with character block images
 const LEARNING_GOALS = [
-  { id: 'courage', label: 'Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.png' },
-  { id: 'faith', label: 'Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.png' },
-  { id: 'gratitude', label: 'Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.png' },
-  { id: 'love', label: 'Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.png' },
-  { id: 'obedience', label: 'Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.png' },
-  { id: 'self-control', label: 'Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.png' },
-  { id: 'theology', label: 'Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.png' },
-  { id: 'wisdom', label: 'Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.png' },
+  { id: 'courage', label: 'Courage', emoji: '🦁', color: 'from-orange-500 to-red-600', image: '/daily-session/blocks/courage.webp' },
+  { id: 'faith', label: 'Faith', emoji: '🙏', color: 'from-purple-500 to-indigo-600', image: '/daily-session/blocks/faith.webp' },
+  { id: 'gratitude', label: 'Gratitude', emoji: '💝', color: 'from-pink-500 to-rose-600', image: '/daily-session/blocks/gratitude.webp' },
+  { id: 'love', label: 'Love', emoji: '❤️', color: 'from-red-500 to-pink-600', image: '/daily-session/blocks/love.webp' },
+  { id: 'obedience', label: 'Obedience', emoji: '👂', color: 'from-blue-500 to-cyan-600', image: '/daily-session/blocks/obedience.webp' },
+  { id: 'self-control', label: 'Self-Control', emoji: '🎯', color: 'from-green-500 to-emerald-600', image: '/daily-session/blocks/selfcontrol.webp' },
+  { id: 'theology', label: 'Theology', emoji: '✝️', color: 'from-amber-500 to-orange-600', image: '/daily-session/blocks/theology.webp' },
+  { id: 'wisdom', label: 'Wisdom', emoji: '🦉', color: 'from-indigo-500 to-purple-600', image: '/daily-session/blocks/wisdom.webp' },
 ];
 
 // Wing animation CSS
@@ -105,7 +104,7 @@ const DailySessionPage: React.FC = () => {
     updateKid,
     switchProfile,
   } = useUser();
-  const { isPremium, reverseTrial } = useSubscription();
+  const { isPremium } = useSubscription();
   
   // Get current kid's age for age-aware AI content
   const currentKid = kids.find(k => k.id === currentProfileId);
@@ -118,7 +117,6 @@ const DailySessionPage: React.FC = () => {
   const [showPrayerModal, setShowPrayerModal] = useState(false);
   const [showDiscussionModal, setShowDiscussionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [showReverseTrialOffer, setShowReverseTrialOffer] = useState(false);
   const [recommendedBook, setRecommendedBook] = useState<any>(null);
   const [bookContent, setBookContent] = useState<string>(''); // Story text for discussion questions
   const [discussionQuestions, setDiscussionQuestions] = useState<any[]>([]); // Pre-generated questions
@@ -769,30 +767,12 @@ const DailySessionPage: React.FC = () => {
   // Handle celebration close
   const handleCelebrationClose = () => {
     setShowCelebration(false);
-    
-    // Check if this is user's first completed session and they're not premium
     const sessionHistory = getSessionHistory();
     const isFirstSession = sessionHistory.length <= 1; // Current session just got archived
-    const isEligibleForTrial = reverseTrial?.eligible && !isPremium;
-    
     if (isFirstSession && !isPremium) {
-      // Navigate to paywall first - if they dismiss, they'll see reverse trial offer
-      navigate('/paywall', { 
-        state: { 
-          source: 'first_session_complete',
-          showReverseTrialOnClose: isEligibleForTrial,
-          childName: childName
-        } 
-      });
+      navigate('/paywall', { state: { source: 'first_session_complete' } });
       return;
-    } else {
-      navigate('/home');
     }
-  };
-  
-  // Handle reverse trial offer close
-  const handleReverseTrialOfferClose = () => {
-    setShowReverseTrialOffer(false);
     navigate('/home');
   };
 
@@ -1210,10 +1190,10 @@ const DailySessionPage: React.FC = () => {
         {/* Question */}
         <div className="text-center px-6 mb-4">
           <h2 className="text-[#FFD700] font-display font-bold text-xl drop-shadow-lg">
-            {childName ? `What does ${childName} need today?` : 'What would you like to help your child with today?'}
+            {childName ? `What do you want to learn today, ${childName}?` : 'What do you want to learn today?'}
           </h2>
           <p className="text-[#f3e5ab]/70 text-sm mt-2 font-display">
-            Select a learning focus for this session
+            Pick something you'd like to explore!
           </p>
         </div>
 
@@ -1307,7 +1287,7 @@ const DailySessionPage: React.FC = () => {
           // Start the first step - call handleStartStep to show the modal
           handleStartStep();
         }
-      }, 800);
+      }, 1000);
     };
     
     return (
@@ -1453,7 +1433,7 @@ const DailySessionPage: React.FC = () => {
             refreshBooks();
           }
         }
-      }, 800);
+      }, 1000);
     };
     
     return (
@@ -1472,50 +1452,51 @@ const DailySessionPage: React.FC = () => {
 
         {/* Centered Content */}
         <div className="flex-1 flex flex-col items-center justify-center px-8">
-          {bookCountdown !== null ? (
-            // Countdown display
-            <div className="text-center animate-pulse">
-              <div className="text-[180px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none"
-                style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
-              >
-                {bookCountdown}
-              </div>
-            </div>
-          ) : (
-            // Ready button with book info
-            <div className="text-center">
-              {/* Book cover and info */}
-              <div className="mb-6">
-                <p className="text-[#f3e5ab] font-display text-lg mb-4">Story Time</p>
-                
-                {/* Book Cover */}
-                {pendingBookNavigation.coverUrl ? (
-                  <div className="relative mx-auto mb-4 w-32 h-44 rounded-lg overflow-hidden shadow-2xl border-4 border-[#8B5A2B]"
-                    style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-                  >
-                    <img 
-                      src={pendingBookNavigation.coverUrl} 
-                      alt={pendingBookNavigation.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="text-7xl mb-4">📚</div>
-                )}
-                
-                {/* Book Title */}
-                <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto mb-2">
-                  {pendingBookNavigation.title}
-                </p>
-                
-                {/* Reading Time Estimate */}
-                {pendingBookNavigation.pageCount && pendingBookNavigation.pageCount > 0 && (
-                  <p className="text-[#f3e5ab]/70 text-sm">
-                    ~{Math.max(1, Math.ceil(pendingBookNavigation.pageCount * 0.5))} min read • {pendingBookNavigation.pageCount} pages
-                  </p>
-                )}
-              </div>
+          {/* Book cover and info - stays visible during the countdown so it
+              doesn't vanish behind a giant number (kids couldn't see it before). */}
+          <div className="text-center">
+            <div className="mb-6">
+              <p className="text-[#f3e5ab] font-display text-lg mb-4">Story Time</p>
               
+              {/* Book Cover */}
+              {pendingBookNavigation.coverUrl ? (
+                <div className="relative mx-auto mb-4 w-32 h-44 rounded-lg overflow-hidden shadow-2xl border-4 border-[#8B5A2B]"
+                  style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+                >
+                  <img 
+                    src={pendingBookNavigation.coverUrl} 
+                    alt={pendingBookNavigation.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="text-7xl mb-4">📚</div>
+              )}
+              
+              {/* Book Title */}
+              <p className="text-[#FFD700] font-bold text-xl max-w-xs mx-auto mb-2">
+                {pendingBookNavigation.title}
+              </p>
+              
+              {/* Reading Time Estimate */}
+              {pendingBookNavigation.pageCount && pendingBookNavigation.pageCount > 0 && (
+                <p className="text-[#f3e5ab]/70 text-sm">
+                  ~{Math.max(1, Math.ceil(pendingBookNavigation.pageCount * 0.5))} min read • {pendingBookNavigation.pageCount} pages
+                </p>
+              )}
+            </div>
+
+            {bookCountdown !== null ? (
+              // Countdown shown BELOW the book info (book stays on screen)
+              <div className="text-center">
+                <div className="text-[110px] font-display font-bold text-[#FFD700] drop-shadow-2xl leading-none animate-pulse"
+                  style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.5), 0 4px 8px rgba(0,0,0,0.5)' }}
+                >
+                  {bookCountdown}
+                </div>
+                <p className="text-[#f3e5ab]/70 text-base font-display mt-2">Get ready...</p>
+              </div>
+            ) : (
               <button
                 onClick={handleBookReadyClick}
                 className="group transition-all transform hover:scale-105 active:scale-95"
@@ -1531,8 +1512,8 @@ const DailySessionPage: React.FC = () => {
                   Tap to start reading
                 </p>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Avatar - Bottom Right */}
@@ -1612,7 +1593,7 @@ const DailySessionPage: React.FC = () => {
           // Show the prayer modal
           setShowPrayerModal(true);
         }
-      }, 800);
+      }, 1000);
     };
     
     return (
@@ -2015,13 +1996,6 @@ const DailySessionPage: React.FC = () => {
         session={session}
       />
       
-      {/* Reverse Trial Offer Modal - Shows after first session */}
-      <ReverseTrialOfferModal
-        isOpen={showReverseTrialOffer}
-        onClose={handleReverseTrialOfferClose}
-        childName={childName}
-      />
-
       {/* Selfie Capture Modal */}
       <SelfieCapture
         isOpen={showSelfieCapture}

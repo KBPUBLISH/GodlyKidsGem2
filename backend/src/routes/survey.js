@@ -16,6 +16,7 @@ router.post('/submit', async (req, res) => {
             wantsMoreSongs,
             npsScore,
             customFeedback,
+            rating,
             metadata = {}
         } = req.body;
 
@@ -37,6 +38,7 @@ router.post('/submit', async (req, res) => {
             wantsMoreSongs: !!wantsMoreSongs,
             npsScore,
             customFeedback,
+            rating: surveyType === 'layout_rating' ? rating : undefined,
             metadata
         });
 
@@ -74,6 +76,19 @@ router.get('/analytics', async (req, res) => {
 
         // Calculate statistics
         const totalResponses = responses.length;
+
+        // Layout rating (1-5) - for surveyType: layout_rating
+        const layoutRatingResponses = responses.filter(r => r.surveyType === 'layout_rating' && r.rating != null);
+        const layoutRatingScores = layoutRatingResponses.map(r => r.rating);
+        const layoutRatingAvg = layoutRatingScores.length > 0
+            ? (layoutRatingScores.reduce((a, b) => a + b, 0) / layoutRatingScores.length).toFixed(1)
+            : null;
+        const layoutRatingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        layoutRatingResponses.forEach(r => {
+            if (r.rating >= 1 && r.rating <= 5) {
+                layoutRatingDistribution[r.rating] = (layoutRatingDistribution[r.rating] || 0) + 1;
+            }
+        });
         
         // Content preferences
         const contentPreferences = {
@@ -137,6 +152,11 @@ router.get('/analytics', async (req, res) => {
                     start: startDate,
                     end: new Date(),
                     days: parseInt(days)
+                },
+                layoutRating: {
+                    totalResponses: layoutRatingResponses.length,
+                    averageScore: layoutRatingAvg != null ? parseFloat(layoutRatingAvg) : null,
+                    distribution: layoutRatingDistribution,
                 },
                 contentPreferences,
                 nps: {

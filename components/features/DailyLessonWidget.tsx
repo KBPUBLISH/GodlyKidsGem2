@@ -159,7 +159,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
   if (isCompleted) {
     return (
       <div className="-mx-4 -mt-20 mb-6">
-        <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-xl bg-white relative overflow-hidden">
+        <div className="rounded-b-[2.5rem] pb-10 px-8 shadow-xl bg-white relative overflow-hidden" style={{ paddingTop: 'calc(6rem + var(--safe-area-top, 0px))' }}>
           {/* Decorative cloud wave at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30">
             <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">
@@ -210,7 +210,7 @@ const DailyLessonWidget: React.FC<DailyLessonWidgetProps> = ({ onStartLesson }) 
 
   return (
     <div className="-mx-4 -mt-20 mb-6">
-      <div className="rounded-b-[2.5rem] pt-24 pb-10 px-8 shadow-xl bg-white relative overflow-hidden">
+      <div className="rounded-b-[2.5rem] pb-10 px-8 shadow-xl bg-white relative overflow-hidden" style={{ paddingTop: 'calc(6rem + var(--safe-area-top, 0px))' }}>
         {/* Decorative cloud wave at bottom */}
         <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30">
           <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="w-full h-full">

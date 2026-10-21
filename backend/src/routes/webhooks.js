@@ -32,12 +32,19 @@ const isValidObjectId = (id) => {
 
 // Helper to build safe query for finding users by various IDs
 const buildUserQuery = (externalId) => {
+    const normalized = typeof externalId === 'string' && externalId.includes('@')
+        ? externalId.toLowerCase().trim()
+        : externalId;
     const conditions = [
-        { email: externalId },
-        { deviceId: externalId }
+        { email: normalized },
+        { deviceId: normalized }
     ];
-    if (isValidObjectId(externalId)) {
-        conditions.unshift({ _id: externalId });
+    // Case-insensitive email match for legacy records
+    if (typeof normalized === 'string' && normalized.includes('@')) {
+        conditions.push({ email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+    }
+    if (isValidObjectId(normalized)) {
+        conditions.unshift({ _id: normalized });
     }
     return { $or: conditions };
 };
@@ -68,6 +75,7 @@ const findUserInAllCollections = async (externalId) => {
  * RevenueCat sends events like:
  * - INITIAL_PURCHASE
  * - RENEWAL
+ * - NON_RENEWING_PURCHASE (one-time / lifetime purchases)
  * - CANCELLATION
  * - EXPIRATION
  * - etc.
@@ -114,6 +122,7 @@ router.post('/revenuecat', async (req, res) => {
             case 'RENEWAL':
             case 'PRODUCT_CHANGE':
             case 'RESTORE':
+            case 'NON_RENEWING_PURCHASE': // One-time / lifetime purchases (e.g. App Store "Lifetimepurchase")
                 // User has active subscription
                 console.log(`✅ User ${primaryId} has active subscription`);
                 
@@ -157,10 +166,14 @@ router.post('/revenuecat', async (req, res) => {
                     try {
                         const appUser = await AppUser.findOne(buildUserQuery(userId));
                         if (appUser) {
+                            const wasAlreadyActive = appUser.subscriptionStatus === 'active' || appUser.subscriptionStatus === 'trial';
                             appUser.subscriptionStatus = 'active';
                             appUser.subscriptionPlan = productId?.includes('yearly') || productId?.includes('annual') ? 'annual' : 
                                                        /lifetime/i.test(productId || '') ? 'lifetime' : 'monthly';
-                            appUser.subscriptionStartDate = new Date();
+                            // Only set subscriptionStartDate when user first becomes active (so analytics "Subscribed (RevenueCat)" = new activations)
+                            if (!wasAlreadyActive) {
+                                appUser.subscriptionStartDate = new Date();
+                            }
                             appUser.subscriptionEndDate = expirationDate ? new Date(expirationDate) : null;
                             await appUser.save();
                             console.log(`✅ Updated AppUser ${appUser._id} (${appUser.email || appUser.deviceId}) to active subscription`);

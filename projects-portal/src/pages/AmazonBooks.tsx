@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Save, X, Upload, Trash2, Star, Eye, ExternalLink, Video, MessageSquare, Image as ImageIcon, CreditCard } from 'lucide-react';
 import apiClient from '../services/apiClient';
+
+interface Review {
+    _id?: string;
+    author: string;
+    rating: number;
+    text?: string;
+    date?: string;
+}
 
 interface AmazonBook {
     _id?: string;
@@ -10,7 +18,12 @@ interface AmazonBook {
     amazonUrl: string;
     asin?: string;
     price?: string;
+    stripePaymentLinkUrl?: string;
+    stripePriceId?: string;
     coverImage: string;
+    images?: string[];
+    promoVideoUrl?: string;
+    reviews?: Review[];
     category?: string;
     categories?: string[];
     minAge?: number;
@@ -21,6 +34,7 @@ interface AmazonBook {
     badgeText?: string;
     badgeColor?: string;
     clickCount?: number;
+    stripeClickCount?: number;
 }
 
 const BADGE_COLORS = [
@@ -57,7 +71,12 @@ const AmazonBooks: React.FC = () => {
         amazonUrl: '',
         asin: '',
         price: '',
+        stripePaymentLinkUrl: '',
+        stripePriceId: '',
         coverImage: '',
+        images: [],
+        promoVideoUrl: '',
+        reviews: [],
         category: 'Children\'s Books',
         status: 'draft',
         isFeatured: false,
@@ -119,8 +138,12 @@ const AmazonBooks: React.FC = () => {
     };
 
     const handleCreateBook = async () => {
-        if (!newBook.title || !newBook.author || !newBook.amazonUrl || !newBook.coverImage) {
-            alert('Please fill in Title, Author, Amazon URL, and Cover Image');
+        if (!newBook.title || !newBook.author || !newBook.coverImage) {
+            alert('Please fill in Title, Author, and Cover Image');
+            return;
+        }
+        if (!newBook.amazonUrl && !newBook.stripePaymentLinkUrl && !newBook.stripePriceId) {
+            alert('Add at least one purchase method: an Amazon URL, a Stripe Payment Link, or a Stripe Price ID.');
             return;
         }
 
@@ -135,7 +158,12 @@ const AmazonBooks: React.FC = () => {
                 amazonUrl: '',
                 asin: '',
                 price: '',
+                stripePaymentLinkUrl: '',
+                stripePriceId: '',
                 coverImage: '',
+                images: [],
+                promoVideoUrl: '',
+                reviews: [],
                 category: 'Children\'s Books',
                 status: 'draft',
                 isFeatured: false,
@@ -169,6 +197,23 @@ const AmazonBooks: React.FC = () => {
             alert('Failed to upload cover image');
         } finally {
             setUploadingCover(false);
+        }
+    };
+
+    const uploadGalleryFile = async (file: File): Promise<string | null> => {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
+        try {
+            const response = await apiClient.post(
+                `/api/upload/image?bookId=amazon-books&type=cover`,
+                uploadFormData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+            return response.data.url as string;
+        } catch (error) {
+            console.error('Failed to upload gallery image:', error);
+            alert('Failed to upload gallery image');
+            return null;
         }
     };
 
@@ -218,6 +263,29 @@ const AmazonBooks: React.FC = () => {
                     <Plus className="w-4 h-4" />
                     Add Amazon Book
                 </button>
+            </div>
+
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                    <ShoppingCart className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <p className="text-sm font-semibold text-gray-800">
+                            Published books appear live at <span className="text-orange-700">bookstore.godlykids.com</span>
+                        </p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                            Only books with status <span className="font-semibold">Published</span> are visible. Featured books show at the top.
+                        </p>
+                    </div>
+                </div>
+                <a
+                    href="https://bookstore.godlykids.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-100 transition text-sm font-semibold whitespace-nowrap"
+                >
+                    Open bookstore
+                    <ExternalLink className="w-3.5 h-3.5" />
+                </a>
             </div>
 
             {books.length === 0 ? (
@@ -287,15 +355,21 @@ const AmazonBooks: React.FC = () => {
                                     <p className="text-sm text-gray-500 mt-2 line-clamp-2">{book.description}</p>
                                 )}
 
-                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500 flex-wrap">
                                     <Eye className="w-3 h-3" />
                                     <span>{book.clickCount || 0} clicks</span>
-                                    <span className="mx-2">|</span>
+                                    <span className="mx-1">|</span>
                                     <span className={`px-2 py-0.5 rounded-full ${
                                         book.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                                     }`}>
                                         {book.status}
                                     </span>
+                                    {(book.stripePaymentLinkUrl || book.stripePriceId) && (
+                                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 flex items-center gap-1" title={`${book.stripeClickCount || 0} Stripe clicks`}>
+                                            <CreditCard className="w-3 h-3" />
+                                            Stripe
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Actions */}
@@ -329,15 +403,17 @@ const AmazonBooks: React.FC = () => {
                                     >
                                         {book.status === 'published' ? 'Live' : 'Draft'}
                                     </button>
-                                    <a
-                                        href={book.amazonUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
-                                        title="View on Amazon"
-                                    >
-                                        <ExternalLink className="w-3 h-3" />
-                                    </a>
+                                    {book.amazonUrl && (
+                                        <a
+                                            href={book.amazonUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
+                                            title="View on Amazon"
+                                        >
+                                            <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -430,7 +506,7 @@ const AmazonBooks: React.FC = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL *</label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL</label>
                                     <input
                                         type="url"
                                         value={formData.amazonUrl || ''}
@@ -450,6 +526,13 @@ const AmazonBooks: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            <StripeSection
+                                paymentLinkUrl={formData.stripePaymentLinkUrl || ''}
+                                priceId={formData.stripePriceId || ''}
+                                onChange={(patch) => setFormData({ ...formData, ...patch })}
+                                stripeClickCount={formData.stripeClickCount}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Badge Settings</h3>
@@ -483,6 +566,22 @@ const AmazonBooks: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <GallerySection
+                                images={formData.images || []}
+                                onChange={(next) => setFormData({ ...formData, images: next })}
+                                uploadFile={uploadGalleryFile}
+                            />
+
+                            <VideoSection
+                                value={formData.promoVideoUrl || ''}
+                                onChange={(v) => setFormData({ ...formData, promoVideoUrl: v })}
+                            />
+
+                            <ReviewsSection
+                                reviews={formData.reviews || []}
+                                onChange={(next) => setFormData({ ...formData, reviews: next })}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Featured Settings</h3>
@@ -623,7 +722,7 @@ const AmazonBooks: React.FC = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL *</label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amazon URL</label>
                                     <input
                                         type="url"
                                         value={newBook.amazonUrl || ''}
@@ -643,6 +742,12 @@ const AmazonBooks: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            <StripeSection
+                                paymentLinkUrl={newBook.stripePaymentLinkUrl || ''}
+                                priceId={newBook.stripePriceId || ''}
+                                onChange={(patch) => setNewBook({ ...newBook, ...patch })}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Badge Settings</h3>
@@ -676,6 +781,22 @@ const AmazonBooks: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <GallerySection
+                                images={newBook.images || []}
+                                onChange={(next) => setNewBook({ ...newBook, images: next })}
+                                uploadFile={uploadGalleryFile}
+                            />
+
+                            <VideoSection
+                                value={newBook.promoVideoUrl || ''}
+                                onChange={(v) => setNewBook({ ...newBook, promoVideoUrl: v })}
+                            />
+
+                            <ReviewsSection
+                                reviews={newBook.reviews || []}
+                                onChange={(next) => setNewBook({ ...newBook, reviews: next })}
+                            />
 
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-700 mb-3">Featured Settings</h3>
@@ -734,3 +855,260 @@ const AmazonBooks: React.FC = () => {
 };
 
 export default AmazonBooks;
+
+/* ----------------------- Shared form sub-components ----------------------- */
+
+interface GalleryProps {
+    images: string[];
+    onChange: (next: string[]) => void;
+    uploadFile: (file: File) => Promise<string | null>;
+}
+
+const GallerySection: React.FC<GalleryProps> = ({ images, onChange, uploadFile }) => {
+    const [uploading, setUploading] = useState(false);
+
+    const handleFiles = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        try {
+            const next = [...images];
+            for (const file of Array.from(files)) {
+                const url = await uploadFile(file);
+                if (url) next.push(url);
+            }
+            onChange(next);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeAt = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-sky-600" />
+                Gallery images
+                <span className="text-xs font-normal text-gray-500">shown on the bookstore detail page</span>
+            </h3>
+
+            {images.length > 0 && (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-3">
+                    {images.map((url, idx) => (
+                        <div key={`${url}-${idx}`} className="relative group">
+                            <img src={url} alt={`Gallery ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-300" />
+                            <button
+                                type="button"
+                                onClick={() => removeAt(idx)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Remove image"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg p-3 text-sm text-gray-600 hover:border-sky-400 cursor-pointer transition-colors">
+                <Upload className={`w-4 h-4 ${uploading ? 'text-sky-500 animate-pulse' : 'text-gray-400'}`} />
+                <span>{uploading ? 'Uploading…' : 'Upload one or more images'}</span>
+                <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                        void handleFiles(e.target.files);
+                        e.currentTarget.value = '';
+                    }}
+                />
+            </label>
+        </div>
+    );
+};
+
+interface StripeSectionProps {
+    paymentLinkUrl: string;
+    priceId: string;
+    onChange: (patch: { stripePaymentLinkUrl?: string; stripePriceId?: string }) => void;
+    stripeClickCount?: number;
+}
+
+const StripeSection: React.FC<StripeSectionProps> = ({ paymentLinkUrl, priceId, onChange, stripeClickCount }) => {
+    const priceIdLooksValid = !priceId || /^price_[A-Za-z0-9]+$/.test(priceId.trim());
+    const linkLooksValid =
+        !paymentLinkUrl || /^https:\/\/(buy\.)?stripe\.com\//.test(paymentLinkUrl.trim());
+
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-indigo-600" />
+                Stripe checkout
+                <span className="text-xs font-normal text-gray-500">optional — sell direct without Amazon</span>
+                {typeof stripeClickCount === 'number' && stripeClickCount > 0 && (
+                    <span className="ml-auto text-xs font-normal text-gray-500">
+                        {stripeClickCount} Stripe clicks
+                    </span>
+                )}
+            </h3>
+
+            <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                Use <strong>one</strong> of the two fields below. If both are filled, the Payment Link takes precedence.
+                Create these in the <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Stripe Dashboard</a> under Products.
+            </p>
+
+            <div className="space-y-3">
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Payment Link URL
+                        <span className="text-xs font-normal text-gray-500 ml-2">simplest — paste from Stripe</span>
+                    </label>
+                    <input
+                        type="url"
+                        value={paymentLinkUrl}
+                        onChange={(e) => onChange({ stripePaymentLinkUrl: e.target.value })}
+                        placeholder="https://buy.stripe.com/…"
+                        className={`w-full px-4 py-2 border rounded-lg ${linkLooksValid ? 'border-gray-300' : 'border-red-400'}`}
+                    />
+                    {!linkLooksValid && (
+                        <p className="text-xs text-red-600 mt-1">Expected a URL like https://buy.stripe.com/…</p>
+                    )}
+                </div>
+
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Price ID
+                        <span className="text-xs font-normal text-gray-500 ml-2">advanced — creates a fresh checkout each time</span>
+                    </label>
+                    <input
+                        type="text"
+                        value={priceId}
+                        onChange={(e) => onChange({ stripePriceId: e.target.value.trim() })}
+                        placeholder="price_1Abc123…"
+                        className={`w-full px-4 py-2 border rounded-lg font-mono text-sm ${priceIdLooksValid ? 'border-gray-300' : 'border-red-400'}`}
+                    />
+                    {!priceIdLooksValid && (
+                        <p className="text-xs text-red-600 mt-1">
+                            That doesn't look like a Price ID. It should start with <code className="bg-gray-100 px-1 rounded">price_</code>. Don't paste a Product ID (<code className="bg-gray-100 px-1 rounded">prod_…</code>) — grab the Price ID from inside the product.
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const VideoSection: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+    return (
+        <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <Video className="w-4 h-4 text-sky-600" />
+                Promo video URL
+                <span className="text-xs font-normal text-gray-500">YouTube, Vimeo, or direct .mp4</span>
+            </h3>
+            <input
+                type="url"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            />
+            {value && (
+                <p className="text-xs text-gray-500 mt-1">
+                    Plays inside the book detail page. Leave blank to hide the video section.
+                </p>
+            )}
+        </div>
+    );
+};
+
+interface ReviewsProps {
+    reviews: Review[];
+    onChange: (next: Review[]) => void;
+}
+
+const ReviewsSection: React.FC<ReviewsProps> = ({ reviews, onChange }) => {
+    const update = (idx: number, patch: Partial<Review>) => {
+        onChange(reviews.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    };
+    const remove = (idx: number) => onChange(reviews.filter((_, i) => i !== idx));
+    const add = () =>
+        onChange([
+            ...reviews,
+            { author: '', rating: 5, text: '', date: new Date().toISOString() },
+        ]);
+
+    return (
+        <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-sky-600" />
+                    Reviews
+                    <span className="text-xs font-normal text-gray-500">shown on the bookstore detail page</span>
+                </h3>
+                <button
+                    type="button"
+                    onClick={add}
+                    className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-1"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add review
+                </button>
+            </div>
+
+            {reviews.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">No reviews yet. Add the first one to build trust.</p>
+            ) : (
+                <div className="space-y-3">
+                    {reviews.map((r, idx) => (
+                        <div key={idx} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <input
+                                    type="text"
+                                    value={r.author}
+                                    onChange={(e) => update(idx, { author: e.target.value })}
+                                    placeholder="Reviewer name (e.g. Sarah M.)"
+                                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm sm:col-span-2"
+                                />
+                                <div className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                        <button
+                                            type="button"
+                                            key={n}
+                                            onClick={() => update(idx, { rating: n })}
+                                            className="focus:outline-none"
+                                            title={`${n} star${n > 1 ? 's' : ''}`}
+                                        >
+                                            <Star
+                                                className={`w-4 h-4 ${n <= r.rating ? 'text-amber-500' : 'text-gray-300'}`}
+                                                fill={n <= r.rating ? 'currentColor' : 'none'}
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <textarea
+                                value={r.text || ''}
+                                onChange={(e) => update(idx, { text: e.target.value })}
+                                placeholder="What did they say about the book?"
+                                rows={2}
+                                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                            <div className="flex justify-end mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => remove(idx)}
+                                    className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};

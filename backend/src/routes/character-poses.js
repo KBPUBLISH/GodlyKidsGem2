@@ -79,10 +79,10 @@ const STYLE_BASES = {
         emoji: '🧱'
     },
     cartoon: {
-        base: 'cute 2D cartoon character, big expressive eyes, simplified features, animated style',
+        base: 'cute 2D cartoon character, big expressive eyes, simplified features, animated style', // UI label: Anime
         suffix: 'clean lines, bright colors, transparent background, PNG',
         negativePrompt: 'realistic, 3D, photograph, scary, complex shading, background',
-        displayName: 'Cartoon',
+        displayName: 'Anime',
         emoji: '🎨'
     },
     illustrated: {
@@ -93,10 +93,17 @@ const STYLE_BASES = {
         emoji: '📚'
     },
     disney: {
-        base: 'Disney/Pixar 3D animated style character, big sparkling eyes, smooth features, magical glow, rounded features',
-        suffix: 'enchanting atmosphere, vibrant colors, transparent background, PNG',
-        negativePrompt: 'realistic, photograph, scary, dark, villainous, flat, background',
-        displayName: 'Disney/Pixar',
+        base: 'Disney 2D animated style character, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, smooth lines',
+        suffix: 'vibrant colors, transparent background, PNG',
+        negativePrompt: 'realistic, photograph, 3D render, Pixar style, scary, dark, villainous, background',
+        displayName: 'Disney 2D',
+        emoji: '✨'
+    },
+    anime: {
+        base: 'Disney 2D animated style character, flat or cel-shaded, not 3D—classic hand-drawn animation look, big expressive eyes, smooth lines',
+        suffix: 'vibrant colors, transparent background, PNG',
+        negativePrompt: 'realistic, photograph, 3D render, Pixar style, scary, dark, villainous, background',
+        displayName: 'Disney 2D',
         emoji: '✨'
     }
 };
@@ -281,7 +288,7 @@ router.get('/definitions', (req, res) => {
  * 
  * Body:
  * - selfieBase64: Base64 encoded selfie image
- * - styleId: Character style (minecraft, lego, cartoon, illustrated, disney, pixar)
+ * - styleId: Character style (minecraft, lego, cartoon, illustrated, disney, pixar; anime supported as alias for Disney 2D)
  * - kidId: Child's profile ID
  * - kidName: Child's name (for logging)
  */

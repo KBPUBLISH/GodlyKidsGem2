@@ -3,11 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import WoodButton from '../ui/WoodButton';
-import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Activity, Save, User, ZoomIn, ZoomOut, Mic, ImageIcon } from 'lucide-react';
+import { X, ShoppingBag, Check, Trash2, Crown, Wrench, Play, Pause, ArrowUpToLine, ArrowDownToLine, MoveHorizontal, RotateCcw, RotateCw, ArrowLeftRight, Save, User, ZoomIn, ZoomOut, Mic, Volume2 } from 'lucide-react';
 import { useUser, ShopItem, SavedCharacter } from '../../context/UserContext';
 import AvatarCompositor from '../avatar/AvatarCompositor';
+import AvatarPartImage from '../avatar/AvatarPartImage';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
-import { ApiService } from '../../services/apiService';
+import { getShopThumbUrl, isAvatarPngPath } from '../../utils/avatarImageUrl';
+import { ApiService, getMonthlyBookBaseUrl } from '../../services/apiService';
+import { authService } from '../../services/authService';
 import { filterVisibleVoices } from '../../services/voiceManagementService';
 import CoinHistoryModal from './CoinHistoryModal';
 import { useLanguage } from '../../context/LanguageContext';
@@ -16,35 +19,9 @@ interface ShopModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: ShopTab;
+    /** Open directly in avatar builder mode (wrench / part positioning UI). */
+    initialBuilderMode?: boolean;
     hideCloseButton?: boolean; // Hide X button during tutorial
-}
-
-/** Resolve public avatar asset URL so it works with Vite base path (e.g. deployed to subpath). */
-function getAvatarAssetUrl(path: string): string {
-    if (!path || !path.startsWith('/')) return path;
-    const base = (typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL) || '/';
-    const baseNorm = base.endsWith('/') ? base.slice(0, -1) : base;
-    return baseNorm + path;
-}
-
-/** Renders an image with a fallback icon when the asset fails to load (missing file or wrong base path). */
-function ShopImageWithFallback({ src, alt, className }: { src: string; alt?: string; className?: string }) {
-    const [failed, setFailed] = useState(false);
-    if (failed || !src) {
-        return (
-            <div className={`flex items-center justify-center bg-[#eecaa0]/30 ${className || ''}`} title={alt || 'Image'}>
-                <ImageIcon className="w-8 h-8 text-[#8B4513]/50" />
-            </div>
-        );
-    }
-    return (
-        <img
-            src={src}
-            alt={alt || ''}
-            className={className}
-            onError={() => setFailed(true)}
-        />
-    );
 }
 
 // --- SHOP DATA ---
@@ -128,6 +105,28 @@ const SHOP_RIGHT_WINGS: ShopItem[] = generateShopItems(30, 'rightArm', '/avatars
 
 const SHOP_ARMS: ShopItem[] = [...SHOP_LEFT_WINGS, ...SHOP_RIGHT_WINGS];
 
+// Wings are designed as matched left+right pairs (e.g. wing-left-1 + wing-right-2).
+// Listing all 30 lefts then all 30 rights put a design's two halves 30 tiles apart,
+// so kids thought they could only add one wing. We present ONE tile per design that
+// owns/equips BOTH halves together as a coordinated pair.
+export interface WingPairItem extends ShopItem {
+  pairValue: string; // matching right-wing value (item.value holds the left wing)
+  pairId: string;    // matching right-wing id
+}
+
+const SHOP_WING_PAIRS: WingPairItem[] = SHOP_LEFT_WINGS.map((left, i) => {
+  const right = SHOP_RIGHT_WINGS[i];
+  return {
+    ...left,
+    type: 'leftArm',
+    pairValue: right.value,
+    pairId: right.id,
+  };
+});
+
+const isWingPair = (item: ShopItem): item is WingPairItem =>
+  (item as WingPairItem).pairValue !== undefined;
+
 // New file-based feet/legs (30 feet: 9 non-premium [3 free], 21 premium)
 const SHOP_LEGS: ShopItem[] = generateShopItems(30, 'legs', '/avatars/feet/feet-', 'f');
 
@@ -146,10 +145,27 @@ const SHOP_ANIMATIONS: ShopItem[] = [
     { id: 'anim6', name: 'Spin', price: 600, type: 'animation', value: 'anim-spin', isPremium: true },
 ];
 
+// Per-move preview metadata: a distinct kid-friendly emoji whose tile animates with the
+// real motion CSS class (defined in AvatarCompositor) so each move looks unique and previews itself.
+const ANIMATION_PREVIEWS: Record<string, { emoji: string; previewClass: string }> = {
+    'anim-breathe': { emoji: '😌', previewClass: 'anim-breathe' },
+    'anim-wiggle': { emoji: '🪱', previewClass: 'anim-wiggle' },
+    'anim-jiggle': { emoji: '🍮', previewClass: 'anim-jiggle' },
+    'anim-bounce': { emoji: '🏀', previewClass: 'anim-bounce' },
+    'anim-sway': { emoji: '🌴', previewClass: 'anim-sway' },
+    'anim-wobble': { emoji: '🐧', previewClass: 'anim-wobble' },
+    'anim-shake': { emoji: '📳', previewClass: 'anim-shake' },
+    'anim-hop': { emoji: '🐰', previewClass: 'anim-hop' },
+    'anim-float': { emoji: '🎈', previewClass: 'anim-float' },
+    'anim-pulse': { emoji: '⚡', previewClass: 'anim-pulse' },
+    'anim-heartbeat': { emoji: '❤️', previewClass: 'anim-heartbeat' },
+    'anim-spin': { emoji: '🌀', previewClass: 'anim-rotate' },
+};
+
 // Background themes - purchasable with gold coins
 const SHOP_BACKGROUNDS: ShopItem[] = [
     // Default (free - already owned by everyone)
-    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.jpg' },
+    { id: 'bg1', name: 'Ocean Paradise', price: 0, type: 'background', value: '/assets/images/panorama-background.webp' },
     // Purchasable backgrounds (non-premium - anyone can buy with coins)
     { id: 'bg6', name: 'Tropical Beach', price: 250, type: 'background', value: '/assets/images/bg-beach.jpg' },
     { id: 'bg7', name: 'Golden Sunrise', price: 300, type: 'background', value: '/assets/images/bg-sunrise.jpg' },
@@ -162,23 +178,63 @@ const SHOP_BACKGROUNDS: ShopItem[] = [
 
 type ShopTab = 'head' | 'hat' | 'body' | 'arms' | 'legs' | 'moves' | 'voices' | 'backgrounds' | 'saves';
 
-const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hideCloseButton = false }) => {
+type VoiceShopItem = ShopItem & { characterImage?: string; previewUrl?: string };
+
+const VOICE_PREVIEW_TEXT = 'Hello Godly Kid! Are you ready for an adventure?';
+
+const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, initialBuilderMode = false, hideCloseButton = false }) => {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'head');
-    const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+    const [availableVoices, setAvailableVoices] = useState<VoiceShopItem[]>([]);
     const [loadingVoices, setLoadingVoices] = useState(false);
+    const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
     const [isMenuMinimized, setIsMenuMinimized] = useState(false);
     const [isBuilderMode, setIsBuilderMode] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [previewAnimation, setPreviewAnimation] = useState<string | null>(null);
     const [selectedPart, setSelectedPart] = useState<'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat' | null>(null);
     const [isSavedFeedback, setIsSavedFeedback] = useState(false);
     const [showScrollHint, setShowScrollHint] = useState(false);
     const [showCoinHistory, setShowCoinHistory] = useState(false);
+    const [showHatHint, setShowHatHint] = useState(false);
+    const hatHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const menuContainerRef = useRef<HTMLDivElement>(null);
+    const drawerHandleRef = useRef<HTMLDivElement>(null);
     const touchStartY = useRef<number>(0);
     const touchStartTime = useRef<number>(0);
+    const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+    const voicePreviewCacheRef = useRef<Record<string, string>>({});
+    const voicePreviewRevokeRef = useRef<string | null>(null);
+
+    const handleDrawerTouchStart = (e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+        touchStartTime.current = Date.now();
+    };
+
+    const handleDrawerTouchEnd = (e: React.TouchEvent) => {
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaY = touchStartY.current - touchEndY;
+        const timeDelta = Date.now() - touchStartTime.current;
+
+        if (timeDelta < 300 && Math.abs(deltaY) > 50) {
+            if (deltaY > 0) {
+                setIsMenuMinimized(false);
+            } else {
+                setIsMenuMinimized(true);
+                if (selectedPart) setSelectedPart(null);
+            }
+        }
+    };
+
+    const toggleDrawerMinimized = () => {
+        setIsMenuMinimized((prev) => {
+            const next = !prev;
+            if (next && selectedPart) setSelectedPart(null);
+            return next;
+        });
+    };
     
     // Wrapper for onClose that dispatches event for referral prompt
     const handleClose = () => {
@@ -187,12 +243,60 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         onClose();
     };
 
+    useEffect(() => {
+        return () => {
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+        };
+    }, []);
+
     // Update tab when initialTab changes
     useEffect(() => {
         if (initialTab) {
             setActiveTab(initialTab);
         }
     }, [initialTab]);
+
+    // Parrot Island / deep links: land in builder mode when the shop opens
+    useEffect(() => {
+        if (isOpen && initialBuilderMode) {
+            setIsBuilderMode(true);
+            setSelectedPart('head');
+            setIsMenuMinimized(false);
+        }
+    }, [isOpen, initialBuilderMode]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setIsBuilderMode(false);
+            setSelectedPart(null);
+            setPreviewAnimation(null);
+            stopVoicePreview();
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (activeTab !== 'voices') {
+            stopVoicePreview();
+        }
+        if (activeTab !== 'moves') {
+            setPreviewAnimation(null);
+        }
+    }, [activeTab]);
+
+    const stopVoicePreview = () => {
+        if (voiceAudioRef.current) {
+            voiceAudioRef.current.pause();
+            voiceAudioRef.current.src = '';
+            voiceAudioRef.current = null;
+        }
+        if (voicePreviewRevokeRef.current) {
+            URL.revokeObjectURL(voicePreviewRevokeRef.current);
+            voicePreviewRevokeRef.current = null;
+        }
+        setPreviewingVoiceId(null);
+    };
+
+    useEffect(() => () => stopVoicePreview(), []);
 
     // Fetch voices when voices tab is active
     useEffect(() => {
@@ -226,7 +330,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                 // Convert to ShopItem format
                 // All voices cost coins - premium just unlocks ACCESS to buy the other 70%
-                const voiceItems: ShopItem[] = visibleVoices.map((voice, index) => {
+                const voiceItems: VoiceShopItem[] = visibleVoices.map((voice, index) => {
                     // First 30% are available to all users, rest require premium subscription to purchase
                     const isFreeTier = index < freeTierCount;
 
@@ -237,7 +341,8 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         type: 'voice',
                         value: voice.voice_id,
                         isPremium: !isFreeTier, // Premium-only if not in first 30% (requires subscription to BUY)
-                        characterImage: voice.characterImage, // Add character image
+                        characterImage: voice.characterImage,
+                        previewUrl: voice.preview_url,
                     };
                 });
                 setAvailableVoices(voiceItems);
@@ -300,17 +405,39 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         return () => container.removeEventListener('scroll', handleScroll);
     }, [showScrollHint]);
 
+    // Warm-cache WebP thumbs for the active tab (first screenful) on iPhone
+    useEffect(() => {
+        if (!isOpen || activeTab === 'saves') return;
 
+        const items =
+            activeTab === 'head' ? SHOP_AVATARS
+            : activeTab === 'hat' ? SHOP_HATS
+            : activeTab === 'body' ? SHOP_BODIES
+            : activeTab === 'arms' ? SHOP_WING_PAIRS
+            : activeTab === 'legs' ? SHOP_LEGS
+            : activeTab === 'moves' ? SHOP_ANIMATIONS
+            : activeTab === 'voices' ? availableVoices
+            : activeTab === 'backgrounds' ? SHOP_BACKGROUNDS
+            : [];
+
+        items.slice(0, 12).forEach((item) => {
+            if (isAvatarPngPath(item.value)) {
+                const img = new Image();
+                img.decoding = 'async';
+                img.src = getShopThumbUrl(item.value);
+            }
+        });
+    }, [isOpen, activeTab, availableVoices]);
 
     const {
         coins,
         purchaseItem,
+        purchaseVoice,
         equipItem,
         unequipItem,
         isOwned,
         isSubscribed,
         isVoiceUnlocked,
-        unlockVoice,
         equippedFrame,
         equippedAvatar,
         equippedHat,
@@ -340,24 +467,52 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
     if (!isOpen) return null;
 
-    const handleBuy = (item: ShopItem) => {
-        // For voices, use the unlock system
+    const handleBuy = async (item: ShopItem) => {
         if (item.type === 'voice') {
-            if (coins >= item.price) {
-                // Deduct coins and unlock voice
-                purchaseItem(item); // This handles coin deduction
-                unlockVoice(item.value); // Unlock the voice
-                console.log(`🎤 Voice unlocked via shop: ${item.name}`);
+            const success = purchaseVoice(item);
+            if (!success) return;
+            // Persist to backend so unlock survives refresh and syncs across devices
+            const userId = authService.getUserIdForBackend();
+            if (userId) {
+                try {
+                    const base = getMonthlyBookBaseUrl();
+                    const res = await fetch(`${base}/voices/unlock`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId, voiceId: item.value }),
+                    });
+                    const data = await res.json();
+                    if (!data.success && !data.alreadyUnlocked) {
+                        console.warn('Shop: voice unlock API failed', data);
+                    }
+                } catch (err) {
+                    console.warn('Shop: voice unlock API error', err);
+                }
             }
         } else {
-            purchaseItem(item);
+            const success = purchaseItem(item);
+            if (success) {
+                handleEquip(item);
+            }
         }
     };
 
     const handleEquip = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            // Equip both halves so the wings always come as a matching pair.
+            equipItem('leftArm', item.value);
+            equipItem('rightArm', item.pairValue);
+            return;
+        }
         equipItem(item.type, item.value);
         if (item.type === 'animation') {
-            setIsPlaying(true); // Auto play preview
+            setPreviewAnimation(null);
+            setIsPlaying(true);
+        }
+        if (item.type === 'hat') {
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+            setShowHatHint(true);
+            hatHintTimerRef.current = setTimeout(() => setShowHatHint(false), 4000);
         }
     };
 
@@ -365,63 +520,128 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         unequipItem(type);
     };
 
+    // Unequip helper that removes both halves when the item is a wing pair.
+    const handleUnequipItem = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            unequipItem('leftArm');
+            unequipItem('rightArm');
+            return;
+        }
+        unequipItem(item.type);
+    };
+
     const handleQuickSave = () => {
         saveCurrentCharacter();
         setIsPlaying(false); // Stop animation on save to prevent weirdness
+        setSelectedPart(null); // Dismiss builder controls so drawer handle stays reachable
         setIsSavedFeedback(true);
         setTimeout(() => setIsSavedFeedback(false), 1500);
     };
 
     const isBodyEquipped = !!equippedBody;
 
+    const handleVoicePreview = async (item: VoiceShopItem) => {
+        const voiceId = item.value;
+        if (previewingVoiceId === voiceId) {
+            stopVoicePreview();
+            return;
+        }
+        stopVoicePreview();
+        setPreviewingVoiceId(voiceId);
+
+        try {
+            let audioUrl = item.previewUrl || voicePreviewCacheRef.current[voiceId];
+            if (!audioUrl) {
+                const base = getMonthlyBookBaseUrl();
+                const res = await fetch(`${base}/devotional-stories/preview-voice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voiceId, text: VOICE_PREVIEW_TEXT }),
+                });
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    audioUrl = data.audioUrl ?? (data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : undefined);
+                    if (audioUrl) voicePreviewCacheRef.current[voiceId] = audioUrl;
+                }
+            }
+            if (!audioUrl) {
+                const result = await ApiService.generateTTS(VOICE_PREVIEW_TEXT, voiceId);
+                audioUrl = result?.audioUrl;
+                if (audioUrl) voicePreviewCacheRef.current[voiceId] = audioUrl;
+            }
+            if (!audioUrl) throw new Error('No preview audio');
+
+            let playUrl = audioUrl;
+            if (audioUrl.startsWith('data:audio/mpeg;base64,')) {
+                try {
+                    const base64 = audioUrl.slice(audioUrl.indexOf(',') + 1);
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+                    voicePreviewRevokeRef.current = playUrl = URL.createObjectURL(blob);
+                } catch {
+                    // fallback to data URL
+                }
+            }
+
+            const audio = new Audio(playUrl);
+            voiceAudioRef.current = audio;
+            audio.onended = () => stopVoicePreview();
+            audio.onerror = () => stopVoicePreview();
+            await audio.play();
+        } catch (err) {
+            console.warn('Shop voice preview failed:', err);
+            stopVoicePreview();
+        }
+    };
+
+    const handleVoiceBuy = (item: VoiceShopItem) => {
+        if (isVoiceUnlocked(item.value)) return;
+
+        if (item.isPremium && !isSubscribed) {
+            handleClose();
+            navigate('/paywall');
+            return;
+        }
+
+        const voicePrice = item.price > 0 ? item.price : 200;
+        if (coins >= voicePrice) {
+            handleBuy({ ...item, price: voicePrice });
+        } else {
+            setShowCoinHistory(true);
+        }
+    };
+
     const handleCardClick = (item: ShopItem) => {
-        // For voices, check if already unlocked
         if (item.type === 'voice') {
-            const voiceUnlocked = isVoiceUnlocked(item.value);
-            if (voiceUnlocked) {
-                // Already unlocked, do nothing
-                return;
-            }
-            
-            // Check if user can purchase this voice
-            if (item.isPremium && !isSubscribed) {
-                // Premium-only voice and user isn't subscribed - go to paywall
-                handleClose();
-                navigate('/paywall');
-                return;
-            }
-            
-            // User can purchase - check if they have enough coins
-            // All voices cost coins (even for premium users)
-            const voicePrice = item.price > 0 ? item.price : 200; // Default price for premium voices
-            if (coins >= voicePrice) {
-                handleBuy({ ...item, price: voicePrice });
-            } else {
-                // Not enough coins - redirect to Gold Coins page to earn more
-                setShowCoinHistory(true);
-            }
+            handleVoicePreview(item as VoiceShopItem);
+            return;
+        }
+
+        // Tapping a move previews it live on the avatar (even before buying); WEAR/buy button equips it
+        if (item.type === 'animation') {
+            setPreviewAnimation(item.value);
+            setIsPlaying(true);
             return;
         }
         
-        // Non-voice items
+        // Non-voice items (animations handled above via the preview branch)
         if (isOwned(item.id)) {
             if (isEquipped(item)) {
-                // Animations cannot be unequipped to null, only swapped
-                if (item.type !== 'animation') {
-                    handleUnequip(item.type);
-                }
+                handleUnequipItem(item);
             } else {
                 const isLimb = ['leftArm', 'rightArm', 'legs'].includes(item.type);
                 if (isLimb && !isBodyEquipped) return;
                 handleEquip(item);
             }
         } else if (item.isPremium && !isSubscribed) {
-            // Premium item requires subscription
             handleClose();
             navigate('/paywall');
         } else if (coins < item.price && item.price > 0) {
-            // Not enough coins - redirect to Gold Coins page to earn more via referrals
             setShowCoinHistory(true);
+        } else {
+            handleBuy(item);
         }
     };
 
@@ -430,7 +650,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             case 'head': return SHOP_AVATARS;
             case 'hat': return SHOP_HATS;
             case 'body': return SHOP_BODIES;
-            case 'arms': return SHOP_ARMS;
+            case 'arms': return SHOP_WING_PAIRS;
             case 'legs': return SHOP_LEGS;
             case 'moves': return SHOP_ANIMATIONS;
             case 'voices': return availableVoices;
@@ -441,6 +661,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
     };
 
     const isEquipped = (item: ShopItem) => {
+        if (isWingPair(item)) {
+            return equippedLeftArm === item.value && equippedRightArm === item.pairValue;
+        }
         switch (item.type) {
             case 'avatar': return equippedAvatar === item.value;
             case 'hat': return equippedHat === item.value;
@@ -457,11 +680,14 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
     // --- BUILDER CONTROLS LOGIC ---
     const handlePartClick = (part: 'leftArm' | 'rightArm' | 'legs' | 'head' | 'body' | 'hat') => {
-        // Auto-enable builder mode and select part when clicking on avatar
         if (!isBuilderMode) {
             setIsBuilderMode(true);
         }
         setSelectedPart(part);
+        if (part === 'hat' && showHatHint) {
+            setShowHatHint(false);
+            if (hatHintTimerRef.current) clearTimeout(hatHintTimerRef.current);
+        }
     };
 
     const updateOffset = (axis: 'x' | 'y', delta: number) => {
@@ -518,7 +744,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
         
         // For voices, check if unlocked; for other items, check premium status
         const isVoice = item.type === 'voice';
+        const voiceItem = isVoice ? (item as VoiceShopItem) : null;
         const voiceUnlocked = isVoice ? isVoiceUnlocked(item.value) : false;
+        const isPreviewingVoice = isVoice && previewingVoiceId === item.value;
         // For voices: locked = premium-only voice AND user is not subscribed (can't even buy it)
         // Premium users can BUY all voices, but don't get them automatically
         // Non-premium users can only BUY the 30% that aren't marked isPremium
@@ -542,19 +770,35 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 </svg>
                             </div>
                         ) : (
-                            <ShopImageWithFallback src={getAvatarAssetUrl(item.value)} alt={item.name} className="w-full h-full object-cover" />
+                            <AvatarPartImage
+                                src={item.value}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                thumb
+                                loading="lazy"
+                            />
                         )
                     )}
                     {item.type === 'animation' && (
-                        <div className="flex flex-col items-center justify-center text-[#8B4513]">
-                            <Activity size={32} className="animate-pulse" />
-                        </div>
+                        <>
+                            <span
+                                className={`text-4xl leading-none select-none ${ANIMATION_PREVIEWS[item.value]?.previewClass ?? 'anim-breathe'}`}
+                                style={{ display: 'inline-block' }}
+                            >
+                                {ANIMATION_PREVIEWS[item.value]?.emoji ?? '✨'}
+                            </span>
+                            {!isLocked && (
+                                <div className="absolute bottom-1 right-1 bg-black/50 rounded-full p-1">
+                                    <Play size={12} className="text-white" fill="currentColor" />
+                                </div>
+                            )}
+                        </>
                     )}
                     {item.type === 'voice' && (
                         <>
-                            {(item as any).characterImage ? (
+                            {voiceItem?.characterImage ? (
                                 <img
-                                    src={(item as any).characterImage}
+                                    src={voiceItem.characterImage}
                                     alt={item.name}
                                     className="w-full h-full object-cover rounded-lg"
                                 />
@@ -563,11 +807,45 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                     <Mic size={32} className="text-[#8B4513]" />
                                 </div>
                             )}
+                            {isPreviewingVoice && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
+                                    <div className="w-8 h-8 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {!isPreviewingVoice && !isLocked && (
+                                <div className="absolute bottom-1 right-1 bg-black/50 rounded-full p-1">
+                                    <Volume2 size={12} className="text-white" />
+                                </div>
+                            )}
                         </>
                     )}
-                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && (
+                    {isWingPair(item) && (
+                        <div className="flex items-center justify-center w-full h-full">
+                            <AvatarPartImage
+                                src={item.value}
+                                alt="left wing"
+                                className="h-full w-1/2 object-contain scale-150"
+                                thumb
+                                loading="lazy"
+                            />
+                            <AvatarPartImage
+                                src={item.pairValue}
+                                alt="right wing"
+                                className="h-full w-1/2 object-contain scale-150"
+                                thumb
+                                loading="lazy"
+                            />
+                        </div>
+                    )}
+                    {(['hat', 'body', 'leftArm', 'rightArm', 'legs'].includes(item.type)) && !isWingPair(item) && (
                         item.value.startsWith('/') ? (
-                            <ShopImageWithFallback src={getAvatarAssetUrl(item.value)} alt={item.name || item.type} className="w-full h-full object-contain p-1" />
+                            <AvatarPartImage
+                                src={item.value}
+                                alt={item.name || item.type}
+                                className="w-full h-full object-contain p-1"
+                                thumb
+                                loading="lazy"
+                            />
                         ) : AVATAR_ASSETS[item.value] ? (
                             <svg viewBox="0 0 100 100" className="w-full h-full p-2 overflow-visible">
                                 {AVATAR_ASSETS[item.value]}
@@ -575,9 +853,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         ) : null
                     )}
                     {item.type === 'background' && (
-                        <ShopImageWithFallback
-                            src={item.value.startsWith('/') ? getAvatarAssetUrl(item.value) : item.value}
-                            alt={item.name}
+                        <img 
+                            src={item.value} 
+                            alt={item.name} 
                             className="w-full h-full object-cover rounded-lg"
                         />
                     )}
@@ -611,19 +889,27 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                 ) : (owned || (isVoice && voiceUnlocked)) ? (
                     <div className="flex w-full gap-1">
                         {isVoice ? (
-                            // Voices show "Unlocked" status
-                            <button
-                                disabled
-                                className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner"
-                            >
-                                <Check size={12} />
-                                <span>{t('unlocked').toUpperCase()}</span>
-                            </button>
+                            <>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleVoicePreview(voiceItem!); }}
+                                    className="flex-1 bg-[#f3e5ab] hover:bg-[#fff5cc] text-[#5c2e0b] font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-[#d4a373] shadow-[0_2px_0_#d4a373] active:translate-y-[2px]"
+                                >
+                                    <Volume2 size={12} />
+                                    <span>{isPreviewingVoice ? 'PLAYING' : 'PREVIEW'}</span>
+                                </button>
+                                <button
+                                    disabled
+                                    className="flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner"
+                                >
+                                    <Check size={12} />
+                                    <span>{t('unlocked').toUpperCase()}</span>
+                                </button>
+                            </>
                         ) : equipped ? (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (item.type !== 'animation') handleUnequip(item.type);
+                                    if (item.type !== 'animation') handleUnequipItem(item);
                                 }}
                                 disabled={item.type === 'animation'} // Can't unequip animation, must swap
                                 className={`flex-1 bg-[#2e7d32] text-white font-bold text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-white/20 shadow-inner ${item.type !== 'animation' ? 'hover:bg-[#d32f2f] group-hover:content-["UNEQUIP"]' : ''}`}
@@ -653,6 +939,10 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         className={`text-[10px] py-1.5 ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : coins < item.price ? 'bg-gradient-to-r from-[#FFD700]/80 to-[#B8860B]/80 animate-pulse' : ''}`}
                         onClick={(e) => { 
                             e.stopPropagation(); 
+                            if (isVoice) {
+                                handleVoiceBuy(voiceItem!);
+                                return;
+                            }
                             // If not enough coins, redirect to Gold Coins page to earn more
                             if (coins < item.price && !isDisabled) {
                                 setShowCoinHistory(true);
@@ -662,7 +952,9 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         }}
                         disabled={isDisabled}
                     >
-                        {isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : coins < item.price ? `GET COINS` : `${item.price} ${t('gold')}`}
+                        {isVoice
+                            ? (coins < item.price ? 'GET COINS' : `${item.price} ${t('gold')}`)
+                            : isDisabled ? t('needBody').toUpperCase() : item.price === 0 ? t('free').toUpperCase() : coins < item.price ? `GET COINS` : `${item.price} ${t('gold')}`}
                     </WoodButton>
                 )}
             </div>
@@ -740,38 +1032,36 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
             <div className="relative w-full max-w-md h-[90vh] bg-[#f3e5ab] rounded-3xl border-4 border-[#8B4513] shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-5 overflow-hidden flex flex-col">
 
                 {/* Header */}
-                <div className="bg-[#5c2e0b] p-4 flex justify-between items-center border-b-4 border-[#3E1F07] relative z-10 shadow-md shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#8B4513] rounded-full flex items-center justify-center border-2 border-[#CD853F] shadow-md">
-                            <ShoppingBag size={20} className="text-[#FFD700]" />
-                        </div>
-                        <div className="leading-tight">
-                            <h2 className="font-display font-bold text-white text-lg tracking-wide">Builder Shop</h2>
-                            <span className="text-[#eecaa0] text-[10px] font-bold uppercase tracking-wider">Create your monster!</span>
-                        </div>
-                    </div>
+                <div className="bg-[#5c2e0b] px-3 py-2 flex justify-between items-center border-b-2 border-[#3E1F07] relative z-10 shadow-md shrink-0">
+                    <h2 className="font-display font-bold text-white text-sm tracking-wide">Builder Shop</h2>
 
                     <button 
                         onClick={() => setShowCoinHistory(true)}
-                        className="flex items-center gap-2 bg-black/40 hover:bg-black/50 px-3 py-1.5 rounded-full border border-[#FFD700]/30 shadow-inner transition-colors cursor-pointer active:scale-95"
+                        className="flex items-center gap-1.5 bg-black/40 hover:bg-black/50 px-2.5 py-1 rounded-full border border-[#FFD700]/30 shadow-inner transition-colors cursor-pointer active:scale-95"
                         title="View coin history & earn more"
                     >
-                        <div className="w-5 h-5 rounded-full bg-[#FFD700] border border-[#B8860B] flex items-center justify-center text-[#B8860B] font-bold text-[10px]">$</div>
-                        <span className="text-[#FFD700] font-bold font-display text-lg">{coins}</span>
+                        <div className="w-4 h-4 rounded-full bg-[#FFD700] border border-[#B8860B] flex items-center justify-center text-[#B8860B] font-bold text-[8px]">$</div>
+                        <span className="text-[#FFD700] font-bold font-display text-sm">{coins}</span>
                     </button>
 
                     {!hideCloseButton && (
-                        <button onClick={handleClose} className="ml-2 text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
-                            <X size={24} />
+                        <button onClick={handleClose} className="text-[#eecaa0] hover:text-white active:scale-95 transition-transform">
+                            <X size={20} />
                         </button>
                     )}
                 </div>
 
                 {/* Preview Area (Live updates) */}
                 <div
-                    className={`w-full relative shrink-0 shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${isMenuMinimized ? 'flex-1' : 'h-[20rem] shrink-0'}`}
+                    className={`w-full relative shadow-inner overflow-hidden flex flex-col items-center transition-all duration-500 ease-in-out bg-cover bg-center ${
+                        isBuilderMode && selectedPart
+                            ? 'flex-1 min-h-0 shrink'
+                            : isMenuMinimized
+                                ? 'flex-1 min-h-0'
+                                : 'h-[16rem] shrink-0'
+                    }`}
                     style={{ backgroundImage: `url('/assets/images/dressing-room.jpg')` }}
-                    onClick={() => setIsMenuMinimized(!isMenuMinimized)}
+                    onClick={isBuilderMode && selectedPart ? undefined : toggleDrawerMinimized}
                 >
 
                     {/* Toolbar: Builder Mode & Play */}
@@ -822,9 +1112,26 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
 
                     {/* The Compositor */}
                     <div
-                        className={`w-40 h-40 relative z-20 transition-all duration-500 ease-in-out mt-10 ${isMenuMinimized ? 'scale-125 mt-20' : ''}`}
+                        className="w-40 h-40 relative z-20"
+                        style={{
+                            transition: 'all 0.5s ease-in-out',
+                            transform: isBuilderMode && selectedPart
+                                ? 'scale(0.8)'
+                                : isMenuMinimized
+                                    ? 'scale(1.25) translateY(-1.75rem)'
+                                    : 'scale(0.5)',
+                            marginTop: isBuilderMode && selectedPart
+                                ? '4rem'
+                                : isMenuMinimized
+                                    ? 'auto'
+                                    : '2rem',
+                            marginBottom: isBuilderMode && selectedPart
+                                ? 'auto'
+                                : isMenuMinimized
+                                    ? 'auto'
+                                    : '0',
+                        }}
                     >
-                        {/* Wrapper now only sizes; Compositor handles frame */}
                         <div className="w-full h-full relative">
                             <AvatarCompositor
                                 headUrl={equippedAvatar}
@@ -833,7 +1140,7 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 leftArm={equippedLeftArm}
                                 rightArm={equippedRightArm}
                                 legs={equippedLegs}
-                                animationStyle={equippedAnimation} // Pass equipped animation
+                                animationStyle={previewAnimation ?? equippedAnimation}
                                 leftArmRotation={equippedLeftArmRotation}
                                 rightArmRotation={equippedRightArmRotation}
                                 legsRotation={equippedLegsRotation}
@@ -853,56 +1160,53 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 hatScale={hatScale}
                                 onPartClick={handlePartClick}
                                 isAnimating={isPlaying}
-                                frameClass={equippedFrame} // Pass frame
+                                frameClass={equippedFrame}
                             />
+                            {showHatHint && equippedHat && (
+                                <div
+                                    className="absolute z-30 pointer-events-none"
+                                    style={{ top: '8%', left: '50%', transform: 'translateX(-50%)' }}
+                                >
+                                    <div className="flex flex-col items-center animate-bounce">
+                                        <span className="text-3xl" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+                                            👆
+                                        </span>
+                                        <span className="text-[10px] font-bold text-white bg-black/60 rounded-full px-2 py-0.5 mt-1 whitespace-nowrap">
+                                            Tap hat to move
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        {/* Tip */}
-                        {isBuilderMode && !selectedPart && (
-                            <div className="absolute -bottom-12 left-0 right-0 text-center animate-bounce">
-                                <span className="text-[#FFD700] text-[10px] font-bold bg-black/60 px-2 py-1 rounded-full">
-                                    Tap parts to edit!
-                                </span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                {/* Menu Container - Swipeable */}
-                <div 
-                    ref={menuContainerRef}
-                    className={`flex flex-col bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl -mt-6 relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
-                    onTouchStart={(e) => {
-                        touchStartY.current = e.touches[0].clientY;
-                        touchStartTime.current = Date.now();
-                    }}
-                    onTouchEnd={(e) => {
-                        const touchEndY = e.changedTouches[0].clientY;
-                        const deltaY = touchStartY.current - touchEndY;
-                        const timeDelta = Date.now() - touchStartTime.current;
-                        
-                        // Only trigger if it's a quick swipe (under 300ms) and significant distance (over 50px)
-                        if (timeDelta < 300 && Math.abs(deltaY) > 50) {
-                            if (deltaY > 0) {
-                                // Swiped UP - expand the menu (show items)
-                                setIsMenuMinimized(false);
-                            } else {
-                                // Swiped DOWN - minimize the menu (hide items)
-                                setIsMenuMinimized(true);
-                            }
-                        }
-                    }}
+                {/* Drawer + shop menu — hidden while adjusting a part so controls aren't clipped */}
+                {!(isBuilderMode && selectedPart) && (
+                <>
+                {/* Drawer handle */}
+                <div
+                    ref={drawerHandleRef}
+                    className="relative z-[60] -mt-6 shrink-0 bg-[#f3e5ab] border-t-4 border-[#8B4513] rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.15)]"
+                    onTouchStart={handleDrawerTouchStart}
+                    onTouchEnd={handleDrawerTouchEnd}
                 >
-
-                    {/* Handle Bar - Visual indicator for swiping */}
                     <div
-                        className="w-full h-9 flex flex-col items-center justify-center cursor-pointer shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl"
-                        onClick={() => setIsMenuMinimized(!isMenuMinimized)}
+                        className="w-full h-9 flex flex-col items-center justify-center cursor-pointer shrink-0 hover:bg-black/5 transition-colors rounded-t-3xl touch-none"
+                        onClick={toggleDrawerMinimized}
                     >
-                        <div className={`w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300`}></div>
+                        <div className="w-12 h-1.5 rounded-full bg-[#8B4513]/30 transition-all duration-300" />
                         <span className="text-[8px] text-[#8B4513]/40 font-bold mt-1">
                             {isMenuMinimized ? '↑ SWIPE UP' : '↓ SWIPE DOWN'}
                         </span>
                     </div>
+                </div>
+
+                {/* Menu Container - tabs + items */}
+                <div 
+                    ref={menuContainerRef}
+                    className={`flex flex-col bg-[#f3e5ab] relative z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ease-in-out ${isMenuMinimized ? 'h-auto shrink-0' : 'flex-1 min-h-0'}`}
+                >
 
                     {/* Tabs Scroller - Updated visual cues */}
                     <div className="relative w-full border-b border-[#8B4513]/20 bg-[#eecaa0]/30 shrink-0">
@@ -965,7 +1269,6 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                     <div 
                         className={`overflow-y-auto overscroll-contain p-4 bg-[#f3e5ab] relative transition-all duration-500 ${isMenuMinimized ? 'h-0 p-0 opacity-0 pointer-events-none' : 'flex-1 opacity-100'}`}
                         style={{ WebkitOverflowScrolling: 'touch' }}
-                        onTouchStart={(e) => e.stopPropagation()} // Prevent menu swipe when scrolling items
                     >
                         {activeTab === 'saves' ? (
                             <div className="flex flex-col gap-4 pb-20">
@@ -1000,63 +1303,66 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                         )}
                     </div>
                 </div>
+                </>
+                )}
 
-                {/* Builder Controls Overlay */}
+                {/* Builder part adjustment controls — in flex flow (not absolute) so nothing is clipped */}
                 {isBuilderMode && selectedPart && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-[#2b1d13] border-t-4 border-[#8B4513] p-6 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                    <div
+                        className="shrink-0 bg-[#2b1d13] border-t-4 border-[#8B4513] px-3 pt-3 rounded-t-3xl z-50 animate-in slide-in-from-bottom-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+                        style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))' }}
+                    >
 
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2">
-                                <div className="bg-[#FFD700] w-2 h-6 rounded-full"></div>
-                                <span className="text-white font-display font-bold text-lg uppercase tracking-wider">
+                                <div className="bg-[#FFD700] w-2 h-5 rounded-full"></div>
+                                <span className="text-white font-display font-bold text-sm uppercase tracking-wider">
                                     Adjust {selectedPart === 'legs' ? 'Legs' : selectedPart === 'leftArm' ? 'Left Wing' : selectedPart === 'rightArm' ? 'Right Wing' : selectedPart === 'head' ? 'Head' : selectedPart === 'hat' ? 'Hat' : 'Body'}
                                 </span>
                             </div>
                             <button
                                 onClick={() => setSelectedPart(null)}
-                                className="bg-white/10 p-2 rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-colors"
+                                className="bg-white/10 p-1.5 rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-colors"
                             >
-                                <X size={20} />
+                                <X size={18} />
                             </button>
                         </div>
 
-                        <div className="flex justify-between items-start gap-2 px-2">
-                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                    <button onClick={() => updateOffset('x', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} className="rotate-180" /></button>
-                                    <button onClick={() => updateOffset('x', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={16} /></button>
-                                    <button onClick={() => updateOffset('y', -2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={16} /></button>
-                                    <button onClick={() => updateOffset('y', 2)} className="w-10 h-10 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={16} /></button>
+                        <div className="overflow-x-auto overscroll-x-contain -mx-1 px-1">
+                        <div className="flex justify-center items-start gap-2 min-w-max mx-auto pb-1">
+                            <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Move</span>
+                                <div className="grid grid-cols-2 gap-0.5">
+                                    <button onClick={() => updateOffset('x', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} className="rotate-180" /></button>
+                                    <button onClick={() => updateOffset('x', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><MoveHorizontal size={14} /></button>
+                                    <button onClick={() => updateOffset('y', -2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowUpToLine size={14} /></button>
+                                    <button onClick={() => updateOffset('y', 2)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><ArrowDownToLine size={14} /></button>
                                 </div>
                             </div>
 
-                            {/* Rotation Controls (Not for Head/Body) */}
                             {selectedPart !== 'head' && selectedPart !== 'body' && (
                                 <>
-                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                                    <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                        <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
-                                        <div className="flex gap-1 items-center">
-                                            <button onClick={() => updateRotation(-5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCcw size={18} /></button>
-                                            <button onClick={() => updateRotation(5)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCw size={18} /></button>
+                                    <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                        <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Rotate</span>
+                                        <div className="flex gap-0.5 items-center">
+                                            <button onClick={() => updateRotation(-5)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCcw size={14} /></button>
+                                            <button onClick={() => updateRotation(5)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center"><RotateCw size={14} /></button>
                                         </div>
                                     </div>
                                 </>
                             )}
 
-                            {/* Scale Controls (All Parts) */}
-                            <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                            <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                            <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
-                                <div className="flex gap-1 items-center">
-                                    <button onClick={() => updateScale(-1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Smaller"><ZoomOut size={18} /></button>
-                                    <button onClick={() => updateScale(1)} className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Bigger"><ZoomIn size={18} /></button>
+                            <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Scale</span>
+                                <div className="flex gap-0.5 items-center">
+                                    <button onClick={() => updateScale(-1)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Smaller"><ZoomOut size={14} /></button>
+                                    <button onClick={() => updateScale(1)} className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" title="Make Bigger"><ZoomIn size={14} /></button>
                                 </div>
-                                {/* Display current scale percentage */}
-                                <span className="text-[10px] text-[#eecaa0] font-bold">
+                                <span className="text-[9px] text-[#eecaa0] font-bold">
                                     {(() => {
                                         let currentScale = 1;
                                         if (selectedPart === 'leftArm') currentScale = leftArmScale;
@@ -1070,36 +1376,35 @@ const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, initialTab, hide
                                 </span>
                             </div>
 
-                            {/* Spread Controls (Legs Only) */}
                             {selectedPart === 'legs' && (
                                 <>
-                                    <div className="w-px h-20 bg-white/10 flex-shrink-0"></div>
+                                    <div className="w-px h-16 bg-white/10 flex-shrink-0"></div>
 
-                                    <div className="flex flex-col gap-1 items-center flex-shrink-0">
-                                        <span className="text-[10px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Spread</span>
-                                        <div className="flex gap-1 items-center">
+                                    <div className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                                        <span className="text-[9px] text-[#eecaa0]/60 font-bold uppercase tracking-wider">Spread</span>
+                                        <div className="flex gap-0.5 items-center">
                                             <button 
                                                 onClick={() => setLegsSpread(Math.max(0.7, legsSpread - 0.05))} 
-                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
                                                 title="Closer Together"
                                             >
-                                                <ArrowLeftRight size={18} className="scale-x-75" />
+                                                <ArrowLeftRight size={14} className="scale-x-75" />
                                             </button>
                                             <button 
                                                 onClick={() => setLegsSpread(Math.min(1.5, legsSpread + 0.05))} 
-                                                className="w-11 h-11 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
+                                                className="w-8 h-8 bg-[#3E1F07] rounded-lg text-[#eecaa0] hover:bg-[#5c2e0b] active:scale-95 border-b-2 border-[#2a1505] flex items-center justify-center" 
                                                 title="Further Apart"
                                             >
-                                                <ArrowLeftRight size={18} className="scale-x-125" />
+                                                <ArrowLeftRight size={14} className="scale-x-125" />
                                             </button>
                                         </div>
-                                        {/* Display current spread percentage */}
-                                        <span className="text-[10px] text-[#eecaa0] font-bold">
+                                        <span className="text-[9px] text-[#eecaa0] font-bold">
                                             {Math.round(legsSpread * 100)}%
                                         </span>
                                     </div>
                                 </>
                             )}
+                        </div>
                         </div>
                     </div>
                 )}

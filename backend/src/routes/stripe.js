@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { grantPremiumAccess, collectPremiumIds } = require('../utils/premiumAccess');
 
 // Initialize Stripe with secret key
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -83,8 +84,8 @@ router.post('/create-checkout-session', async (req, res) => {
           userId: userId || 'anonymous',
           plan: plan,
         },
-        // 7-day free trial
-        trial_period_days: 7,
+        // 14-day free trial
+        trial_period_days: 14,
       };
     }
 
@@ -150,34 +151,21 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const session = event.data.object;
       console.log('✅ Checkout completed:', session.id);
       
-      // Get user ID from metadata
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
-      
-      if (userId && userId !== 'anonymous') {
-        // Update user's premium status in database
+      const customerEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase().trim();
+      // Grant to BOTH metadata id (device/email from checkout) AND Stripe receipt email so mobile login by email works
+      const premiumIds = collectPremiumIds(userId, customerEmail);
+
+      if (premiumIds.length > 0) {
         try {
-          const User = require('../models/User');
-          const AppUser = require('../models/AppUser');
-          
-          // Update User collection
-          await User.findOneAndUpdate(
-            { $or: [{ email: userId }, { _id: userId }] },
-            { isPremium: true, subscriptionPlan: plan },
-            { upsert: false }
-          );
-          
-          // Update AppUser collection
-          await AppUser.findOneAndUpdate(
-            { $or: [{ email: userId.toLowerCase() }, { deviceId: userId }] },
-            { isPremium: true, subscriptionPlan: plan },
-            { upsert: false }
-          );
-          
-          console.log(`✅ Updated premium status for user: ${userId}`);
+          await grantPremiumAccess(premiumIds, plan);
+          console.log(`✅ Updated premium for identifiers: ${premiumIds.join(', ')}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);
         }
+      } else {
+        console.warn('⚠️ Checkout completed but no userId or customer email to grant premium');
       }
       break;
     }
@@ -192,17 +180,18 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         try {
           const User = require('../models/User');
           const AppUser = require('../models/AppUser');
-          
+          const normalizedUserId = typeof userId === 'string' && userId.includes('@') ? userId.toLowerCase().trim() : userId;
+
           await User.findOneAndUpdate(
-            { $or: [{ email: userId }, { _id: userId }] },
+            { $or: [{ email: normalizedUserId }, { _id: userId }] },
             { isPremium: false }
           );
-          
+
           await AppUser.findOneAndUpdate(
-            { $or: [{ email: userId.toLowerCase() }, { deviceId: userId }] },
-            { isPremium: false }
+            { $or: [{ email: normalizedUserId }, { deviceId: userId }] },
+            { subscriptionStatus: 'cancelled' }
           );
-          
+
           console.log(`✅ Removed premium status for user: ${userId}`);
         } catch (dbError) {
           console.error('❌ Database update error:', dbError);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image } from 'lucide-react';
+import { Book, BookOpen, Music, Layout as LayoutIcon, Home, Tag, Volume2, Gamepad2, Video, LogOut, Bell, Music2, Star, CalendarDays, BarChart3, Library, Sparkles, TrendingUp, Radio, Mail, Heart, Users, ClipboardCheck, ShoppingCart, BookHeart, Disc, Image, Mic, Film } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -22,12 +22,13 @@ const Layout: React.FC = () => {
         { path: '/featured', icon: Star, label: 'Featured' },
         { path: '/new-user-welcome', icon: Sparkles, label: 'New User Welcome' },
         { path: '/books', icon: Book, label: 'Books' },
+        { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Book Character Design' },
         { path: '/book-series', icon: Library, label: 'Book Series' },
         { path: '/playlists', icon: Music, label: 'Playlists' },
+        { path: '/music-videos', icon: Film, label: 'Music Videos' },
         { path: '/lessons', icon: Video, label: 'Lessons' },
         { path: '/lessons/calendar', icon: CalendarDays, label: 'Lesson Calendar' },
         { path: '/devotional-stories', icon: BookHeart, label: 'Devotional Stories' },
-        { path: '/monthly-books', icon: BookOpen, label: 'Kids Monthly Book Character Design' },
         { path: '/background-music', icon: Disc, label: 'Story Music Library' },
         { path: '/story-backgrounds', icon: Image, label: 'Story Backgrounds' },
         { path: '/categories', icon: Tag, label: 'Categories' },
@@ -35,8 +36,9 @@ const Layout: React.FC = () => {
         { path: '/games', icon: Gamepad2, label: 'Games' },
         { path: '/amazon-books', icon: ShoppingCart, label: 'Amazon Book Store' },
         { path: '/notifications', icon: Bell, label: 'Notifications' },
-        { path: '/music', icon: Music2, label: 'Music' },
+        { path: '/music', icon: Music2, label: 'App & UI Music' },
         { path: '/radio', icon: Radio, label: 'Radio Station' },
+        { path: '/karaoke', icon: Mic, label: 'Karaoke' },
         { path: '/email-subscribers', icon: Mail, label: 'Email Subscribers' },
         { path: '/campaigns', icon: Heart, label: 'Giving Campaigns' },
         // Godly Hub

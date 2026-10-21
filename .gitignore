@@ -23,6 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
+# macOS AppleDouble / resource-fork metadata files
+._*
+.AppleDouble
+.LSOverride
+
 # Environment variables
 .env
 .env.local

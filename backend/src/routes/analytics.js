@@ -1,11 +1,27 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const AppUser = require('../models/AppUser');
 const User = require('../models/User');
 const OnboardingEvent = require('../models/OnboardingEvent');
+const CustomMonthlyBook = require('../models/CustomMonthlyBook');
+const Page = require('../models/Page');
 const TutorialEvent = require('../models/TutorialEvent');
 const EmailSubscriber = require('../models/EmailSubscriber');
 const GamePlayEvent = require('../models/GamePlayEvent');
+const { authenticateAdmin } = require('../middleware/auth');
+
+function escapeRegexForEmail(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getProtectedAdminEmails() {
+    const envEmails = process.env.ADMIN_EMAILS;
+    if (envEmails) {
+        return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+    }
+    return ['admin@godlykids.com', 'support@godlykids.com', 'hello@kbpublish.org'];
+}
 
 /**
  * GET /api/analytics/users
@@ -301,6 +317,8 @@ router.get('/users', async (req, res) => {
             };
         });
 
+        const authIdStringSet = new Set(authUsers.map((a) => String(a._id)));
+
         // Format users for display
         const formattedUsers = allUsers.map(user => {
             // Find tutorial progress for this user (match by email or deviceId)
@@ -334,8 +352,20 @@ router.get('/users', async (req, res) => {
             // Anonymous users are "returning" if they have activity beyond their first session
             const isReturningAnonymous = accountType === 'anonymous' && hasActivity && (user.stats?.totalSessions || 0) > 1;
             
+            const uid = String(user._id);
+            const resolvedSource =
+                user.source === 'auth' || user.source === 'app'
+                    ? user.source
+                    : authIdStringSet.has(uid)
+                      ? 'auth'
+                      : 'app';
+
+            const subStatus = user.subscriptionStatus || 'free';
+            /** Email/password login (User row) but still on free tier — never started 14-day trial / subscription. */
+            const loginNoTrialYet = resolvedSource === 'auth' && subStatus === 'free';
+
             return {
-            id: user._id,
+            id: uid,
             email: user.email || 'Anonymous',
             username: user.username,
             deviceId: user.deviceId,
@@ -362,7 +392,8 @@ router.get('/users', async (req, res) => {
             tutorialLastStep: tutorialData.lastStep,
             farthestPage: user.stats?.farthestPageReached || '/',
             // Account info
-            subscriptionStatus: user.subscriptionStatus || 'free',
+            subscriptionStatus: subStatus,
+            loginNoTrialYet,
             platform: user.platform || 'unknown',
             referralCode: user.referralCode,
             referralCount: user.referralCount || 0,
@@ -387,13 +418,21 @@ router.get('/users', async (req, res) => {
             // Sortable timestamps (milliseconds) for frontend sorting
             createdAtMs: safeDate(user.createdAt),
             lastActiveAtMs: safeDate(user.lastActiveAt),
-            source: user.source, // 'auth' = has login account, 'app' = anonymous/app-only
+            source: resolvedSource, // 'auth' = has login account, 'app' = anonymous/app-only
         };
         });
 
         // Count by source (use statsUsers for time-range stats)
         const authUserCount = statsUsers.filter(u => u.source === 'auth').length;
         const appOnlyUserCount = statsUsers.filter(u => u.source === 'app').length;
+
+        /** Login (User) accounts still on free tier — did not start 14-day trial / paid subscription. */
+        const loginNeverStartedTrialStats = statsUsers.filter(
+            (u) => u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free'
+        ).length;
+        const loginNeverStartedTrialAllTime = mergedUsers.filter(
+            (u) => u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free'
+        ).length;
         
         // Count by account type from formatted users
         const emailAccountCount = formattedUsers.filter(u => u.accountType === 'email').length;
@@ -445,8 +484,12 @@ router.get('/users', async (req, res) => {
             summary: {
                 totalUsers: statsUsers.length,
                 totalUsersAllTime: allUsers.length, // Always include all-time count
-                authUsers: authUserCount,      // Users with login accounts
-                anonymousUsers: appOnlyUserCount, // Anonymous/app-only users
+                authUsers: authUserCount,      // Users with login accounts (may be time-filtered)
+                anonymousUsers: appOnlyUserCount, // Anonymous/app-only users (may be time-filtered)
+                loginAccountsAllTime: mergedUsers.filter((u) => u.source === 'auth').length,
+                appOnlyAccountsAllTime: mergedUsers.filter((u) => u.source === 'app').length,
+                loginAccountsNeverStartedTrial: loginNeverStartedTrialStats,
+                loginAccountsNeverStartedTrialAllTime: loginNeverStartedTrialAllTime,
                 totalCoins,
                 totalKids,
                 totalSessions,
@@ -725,10 +768,17 @@ router.get('/onboarding', async (req, res) => {
         const skipped = eventCounts['skip_clicked'] || 0;
         const completed = eventCounts['onboarding_complete'] || 0;
         
-        // Total subscribed (from various events)
-        const totalSubscribed = subscribed + subscriptionStarted + trialStarted;
+        // Total subscribed (from app-reported events only - not RevenueCat)
+        const totalSubscribedApp = subscribed + subscriptionStarted + trialStarted;
+
+        // RevenueCat-backed: users who actually started a subscription in this period (webhook set subscriptionStartDate)
+        const subscribedRevenueCat = await AppUser.countDocuments({
+            subscriptionStatus: { $in: ['active', 'trial'] },
+            subscriptionStartDate: { $gte: startDate },
+        });
         
         // Build funnel data - Account first, then onboarding steps, then paywall
+        // Labels clarify: "Start Trial Button Clicked" = in-app tap, not trial activation; "Subscribed (app)" vs "Subscribed (RevenueCat)"
         const funnel = [
             { step: 'Started', count: started, rate: 100 },
             { step: 'Account Created', count: accountCreated || step6, rate: started > 0 ? Math.round(((accountCreated || step6) / started) * 100) : 0 },
@@ -739,8 +789,9 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Step 5 (Voice)', count: step5, rate: started > 0 ? Math.round((step5 / started) * 100) : 0 },
             { step: 'Paywall Shown', count: paywallShown, rate: started > 0 ? Math.round((paywallShown / started) * 100) : 0 },
             { step: 'Exit Paywall (X)', count: paywallClosed, rate: paywallShown > 0 ? Math.round((paywallClosed / paywallShown) * 100) : 0 },
-            { step: 'Start Trial Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
-            { step: 'Subscribed', count: totalSubscribed, rate: started > 0 ? Math.round((totalSubscribed / started) * 100) : 0 },
+            { step: 'Start Trial Button Clicked', count: paywallTrialClicked, rate: paywallShown > 0 ? Math.round((paywallTrialClicked / paywallShown) * 100) : 0 },
+            { step: 'Subscribed (app-reported)', count: totalSubscribedApp, rate: started > 0 ? Math.round((totalSubscribedApp / started) * 100) : 0 },
+            { step: 'Subscribed (RevenueCat)', count: subscribedRevenueCat, rate: started > 0 ? Math.round((subscribedRevenueCat / started) * 100) : 0 },
         ];
         
         // Detailed paywall funnel breakdown
@@ -753,7 +804,8 @@ router.get('/onboarding', async (req, res) => {
             { step: 'Purchase Started', count: paywallPurchaseStarted, rate: paywallParentGatePassed > 0 ? Math.round((paywallPurchaseStarted / paywallParentGatePassed) * 100) : 0 },
             { step: 'Purchase Error', count: paywallPurchaseError, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseError / paywallPurchaseStarted) * 100) : 0 },
             { step: 'Purchase Cancelled', count: paywallPurchaseCancelled, rate: paywallPurchaseStarted > 0 ? Math.round((paywallPurchaseCancelled / paywallPurchaseStarted) * 100) : 0 },
-            { step: 'Subscribed', count: totalSubscribed, rate: paywallPurchaseStarted > 0 ? Math.round((totalSubscribed / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Subscribed (app-reported)', count: totalSubscribedApp, rate: paywallPurchaseStarted > 0 ? Math.round((totalSubscribedApp / paywallPurchaseStarted) * 100) : 0 },
+            { step: 'Subscribed (RevenueCat)', count: subscribedRevenueCat, rate: paywallPurchaseStarted > 0 ? Math.round((subscribedRevenueCat / paywallPurchaseStarted) * 100) : 0 },
         ];
         
         // Daily trends (last 14 days)
@@ -768,7 +820,7 @@ router.get('/onboarding', async (req, res) => {
                 date: dayStr,
                 started: dayData['onboarding_started'] || 0,
                 completed: dayData['onboarding_complete'] || 0,
-                subscribed: (dayData['subscription_started'] || 0) + (dayData['trial_started'] || 0),
+                subscribed: (dayData['subscription_started'] || 0) + (dayData['trial_started'] || 0) + (dayData['subscribed'] || 0),
                 skipped: dayData['skip_clicked'] || 0,
             });
         }
@@ -881,6 +933,385 @@ router.get('/onboarding', async (req, res) => {
 });
 
 /**
+ * GET /api/analytics/onboarding/book-building
+ * Dive into the Bible / Create Your Story funnel and conversion analytics
+ * Query params: days (default 30)
+ */
+router.get('/onboarding/book-building', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const events = await OnboardingEvent.find({
+            createdAt: { $gte: startDate },
+            $or: [
+                { event: /^book_building_/ },
+                { event: { $in: ['paywall_shown', 'paywall_trial_clicked', 'paywall_parent_gate_shown', 'paywall_parent_gate_passed', 'paywall_purchase_started', 'paywall_purchase_error', 'paywall_purchase_cancelled', 'paywall_closed', 'subscribed', 'subscription_started', 'trial_started'] }, 'metadata.source': 'create-your-story' },
+            ],
+        }).lean();
+
+        const eventCounts = {};
+        const eventsByDay = {};
+        events.forEach((e) => {
+            eventCounts[e.event] = (eventCounts[e.event] || 0) + 1;
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!eventsByDay[day]) eventsByDay[day] = {};
+            eventsByDay[day][e.event] = (eventsByDay[day][e.event] || 0) + 1;
+        });
+
+        // Funnel: book building steps (landed vs completed for each step)
+        const started = eventCounts['book_building_started'] || 0;
+        const step1 = eventCounts['book_building_step_1_complete'] || 0;
+        const step2Started = eventCounts['book_building_step_2_started'] || 0;
+        const charGenerated = eventCounts['book_building_character_generated'] || 0;
+        const step2 = eventCounts['book_building_step_2_complete'] || 0;
+        const step3Started = eventCounts['book_building_step_3_started'] || 0;
+        const step3 = eventCounts['book_building_step_3_complete'] || 0;
+        const step4Started = eventCounts['book_building_step_4_started'] || 0;
+        const step4 = eventCounts['book_building_step_4_complete'] || 0;
+        const bookCreated = eventCounts['book_building_book_created'] || 0;
+        const bookCompleted = eventCounts['book_building_book_completed'] || 0;
+
+        const pct = (n) => started > 0 ? Math.round((n / started) * 100) : 0;
+        const funnel = [
+            { step: 'Started', stepKey: 'started', count: started, rate: 100 },
+            { step: 'Step 1 (Name & story)', stepKey: 'step_1', count: step1, rate: pct(step1) },
+            { step: 'Step 2 landed (Character)', stepKey: 'step_2_started', count: step2Started || step1, rate: pct(step2Started || step1) },
+            { step: 'Character generated', stepKey: 'char_generated', count: charGenerated, rate: pct(charGenerated) },
+            { step: 'Step 2 complete', stepKey: 'step_2', count: step2, rate: pct(step2) },
+            { step: 'Step 3 (Voice & music)', stepKey: 'step_3', count: step3, rate: pct(step3) },
+            { step: 'Step 4 (Create clicked)', stepKey: 'step_4', count: step4, rate: pct(step4) },
+            { step: 'Book created (API)', stepKey: 'book_created', count: bookCreated, rate: pct(bookCreated) },
+            { step: 'Book completed', stepKey: 'book_completed', count: bookCompleted, rate: pct(bookCompleted) },
+        ];
+
+        const dropoffs = [];
+        for (let i = 1; i < funnel.length; i++) {
+            const prev = funnel[i - 1];
+            const curr = funnel[i];
+            const dropped = prev.count - curr.count;
+            if (dropped > 0 && prev.count > 0) {
+                dropoffs.push({
+                    from: prev.step,
+                    to: curr.step,
+                    dropped,
+                    dropRate: Math.round((dropped / prev.count) * 100),
+                });
+            }
+        }
+        dropoffs.sort((a, b) => b.dropRate - a.dropRate);
+
+        // Conversion: from Create Your Story paywall
+        const paywallShown = events.filter((e) => e.event === 'paywall_shown' && e.metadata?.source === 'create-your-story').length;
+        const trialClicked = events.filter((e) => e.event === 'paywall_trial_clicked' && e.metadata?.source === 'create-your-story').length;
+        const trialStarted = events.filter((e) => e.event === 'trial_started' && e.metadata?.source === 'create-your-story').length;
+        const subscribed = events.filter((e) => e.event === 'subscribed' && e.metadata?.source === 'create-your-story').length;
+        const subscriptionStarted = events.filter((e) => e.event === 'subscription_started' && e.metadata?.source === 'create-your-story').length;
+        const totalSubscribed = trialStarted + subscribed + subscriptionStarted;
+
+        const byDay = {};
+        events.forEach((e) => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!byDay[day]) byDay[day] = { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, trialStarted: 0, subscribed: 0 };
+            if (e.event === 'book_building_started') byDay[day].started++;
+            if (e.event === 'book_building_step_1_complete') byDay[day].step1++;
+            if (e.event === 'book_building_step_4_complete') byDay[day].step4++;
+            if (e.event === 'book_building_book_created') byDay[day].bookCreated++;
+            if (e.event === 'book_building_book_completed') byDay[day].bookCompleted++;
+            if (e.event === 'paywall_shown' && e.metadata?.source === 'create-your-story') byDay[day].paywallShown++;
+            if (e.event === 'paywall_trial_clicked' && e.metadata?.source === 'create-your-story') byDay[day].trialClicked++;
+            if (e.event === 'trial_started' && e.metadata?.source === 'create-your-story') byDay[day].trialStarted++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event) && e.metadata?.source === 'create-your-story') byDay[day].subscribed++;
+        });
+
+        // Usage & cost: avatars created (1 + extra characters per CustomMonthlyBook), pages built (Page docs for kid-created books), $0.04/image
+        const COST_CENTS_PER_IMAGE = 4;
+        const generatedBookIds = await CustomMonthlyBook.find({ bookId: { $exists: true, $ne: null } }).distinct('bookId').lean();
+        const avatarAgg = await CustomMonthlyBook.aggregate([
+            { $match: { createdAt: { $gte: startDate } } },
+            { $project: { date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, n: { $add: [1, { $size: { $ifNull: ['$characters', []] } }] } } },
+            { $group: { _id: '$date', avatars: { $sum: '$n' } } },
+        ]);
+        const pagesAgg = generatedBookIds.length > 0
+            ? await Page.aggregate([
+                { $match: { bookId: { $in: generatedBookIds.map(id => new mongoose.Types.ObjectId(id)) }, createdAt: { $gte: startDate } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, pages: { $sum: 1 } } },
+            ])
+            : [];
+        const avatarsByDay = Object.fromEntries((avatarAgg || []).map((r) => [r._id, r.avatars]));
+        const pagesByDay = Object.fromEntries((pagesAgg || []).map((r) => [r._id, r.pages]));
+        let totalAvatars = 0;
+        let totalPages = 0;
+        const dailyTrends = [];
+        const numDays = Math.min(days, 90);
+        for (let i = numDays - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+            const d = byDay[dayStr] || { started: 0, step1: 0, step4: 0, bookCreated: 0, bookCompleted: 0, paywallShown: 0, trialClicked: 0, trialStarted: 0, subscribed: 0 };
+            const avatars = avatarsByDay[dayStr] || 0;
+            const pages = pagesByDay[dayStr] || 0;
+            totalAvatars += avatars;
+            totalPages += pages;
+            const imagesToday = avatars + pages;
+            const costDollars = Math.round((imagesToday * COST_CENTS_PER_IMAGE) / 100 * 100) / 100;
+            dailyTrends.push({ date: dayStr, ...d, avatars, pages, costDollars, trialStarted: d.trialStarted });
+        }
+        const totalImages = totalAvatars + totalPages;
+        const totalCostDollars = Math.round((totalImages * COST_CENTS_PER_IMAGE) / 100 * 100) / 100;
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalStarted: started,
+                totalBookCompleted: bookCompleted,
+                totalBookCreated: bookCreated,
+                completionRate: started > 0 ? Math.round((bookCompleted / started) * 100) : 0,
+                paywallShownFromFeature: paywallShown,
+                trialClickedFromFeature: trialClicked,
+                subscribedFromFeature: totalSubscribed,
+            },
+            funnel,
+            dropoffs: dropoffs.slice(0, 6),
+            conversion: {
+                paywallShown,
+                trialClicked,
+                trialStarted,
+                subscribed,
+                subscriptionStarted,
+                totalSubscribed,
+            },
+            dailyTrends,
+            usage: {
+                totalAvatars,
+                totalPages,
+                totalCostDollars,
+                costCentsPerImage: COST_CENTS_PER_IMAGE,
+                totalTrialsStarted: events.filter((e) => e.event === 'trial_started' && e.metadata?.source === 'create-your-story').length,
+            },
+        });
+    } catch (error) {
+        console.error('Book building analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch book building analytics', error: error.message });
+    }
+});
+
+/**
+ * GET /api/analytics/paywall
+ * Global paywall funnel and conversion analytics (all sources)
+ * Query params: days (default 30)
+ */
+router.get('/paywall', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // Fetch all paywall-related events
+        const events = await OnboardingEvent.find({
+            createdAt: { $gte: startDate },
+            event: { 
+                $in: [
+                    'paywall_shown', 
+                    'paywall_trial_clicked', 
+                    'paywall_account_required',
+                    'paywall_parent_gate_shown', 
+                    'paywall_parent_gate_passed',
+                    'paywall_purchase_started',
+                    'paywall_purchase_error',
+                    'paywall_purchase_cancelled',
+                    'paywall_closed',
+                    'subscribed',
+                    'trial_started',
+                    'subscription_started'
+                ]
+            },
+        }).lean();
+
+        // Count events
+        const eventCounts = {};
+        events.forEach(e => {
+            eventCounts[e.event] = (eventCounts[e.event] || 0) + 1;
+        });
+
+        const paywallShown = eventCounts['paywall_shown'] || 0;
+        const trialClicked = eventCounts['paywall_trial_clicked'] || 0;
+        const accountRequired = eventCounts['paywall_account_required'] || 0;
+        const gateShown = eventCounts['paywall_parent_gate_shown'] || 0;
+        const gatePassed = eventCounts['paywall_parent_gate_passed'] || 0;
+        const purchaseStarted = eventCounts['paywall_purchase_started'] || 0;
+        const purchaseError = eventCounts['paywall_purchase_error'] || 0;
+        const purchaseCancelled = eventCounts['paywall_purchase_cancelled'] || 0;
+        const paywallClosed = eventCounts['paywall_closed'] || 0;
+        const subscribed = eventCounts['subscribed'] || 0;
+        const trialStarted = eventCounts['trial_started'] || 0;
+        const subscriptionStarted = eventCounts['subscription_started'] || 0;
+
+        const totalSubscribed = subscribed + trialStarted + subscriptionStarted;
+
+        const pct = (n) => paywallShown > 0 ? Math.round((n / paywallShown) * 100) : 0;
+
+        // Funnel steps
+        const funnel = [
+            { step: 'Paywall shown', stepKey: 'paywall_shown', count: paywallShown, rate: 100 },
+            { step: 'Start Trial clicked', stepKey: 'trial_clicked', count: trialClicked, rate: pct(trialClicked) },
+            { step: 'Account check passed', stepKey: 'account_passed', count: trialClicked - accountRequired, rate: pct(trialClicked - accountRequired) },
+            { step: 'Parent gate shown', stepKey: 'gate_shown', count: gateShown, rate: pct(gateShown) },
+            { step: 'Parent gate passed', stepKey: 'gate_passed', count: gatePassed, rate: pct(gatePassed) },
+            { step: 'Purchase started', stepKey: 'purchase_started', count: purchaseStarted, rate: pct(purchaseStarted) },
+            { step: 'Subscribed', stepKey: 'subscribed', count: totalSubscribed, rate: pct(totalSubscribed) },
+        ];
+
+        // Breakdown by source
+        const sourceBreakdown = {};
+        events.forEach(e => {
+            const source = e.metadata?.source || 'general';
+            if (!sourceBreakdown[source]) {
+                sourceBreakdown[source] = {
+                    paywallShown: 0,
+                    trialClicked: 0,
+                    subscribed: 0,
+                };
+            }
+            if (e.event === 'paywall_shown') sourceBreakdown[source].paywallShown++;
+            if (e.event === 'paywall_trial_clicked') sourceBreakdown[source].trialClicked++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event)) sourceBreakdown[source].subscribed++;
+        });
+
+        // Daily trends
+        const byDay = {};
+        events.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!byDay[day]) {
+                byDay[day] = { 
+                    paywallShown: 0, 
+                    trialClicked: 0, 
+                    subscribed: 0,
+                    purchaseError: 0,
+                    purchaseCancelled: 0,
+                    paywallClosed: 0,
+                };
+            }
+            if (e.event === 'paywall_shown') byDay[day].paywallShown++;
+            if (e.event === 'paywall_trial_clicked') byDay[day].trialClicked++;
+            if (['subscribed', 'trial_started', 'subscription_started'].includes(e.event)) byDay[day].subscribed++;
+            if (e.event === 'paywall_purchase_error') byDay[day].purchaseError++;
+            if (e.event === 'paywall_purchase_cancelled') byDay[day].purchaseCancelled++;
+            if (e.event === 'paywall_closed') byDay[day].paywallClosed++;
+        });
+
+        const dailyTrends = Object.keys(byDay).sort().map(date => ({
+            date,
+            ...byDay[date],
+        }));
+
+        const purchaseErrorEvents = events.filter((e) => e.event === 'paywall_purchase_error');
+        const breakdownMap = {};
+        purchaseErrorEvents.forEach((e) => {
+            const raw = e.metadata?.error;
+            const label = typeof raw === 'string' && raw.trim() ? raw.trim() : '(no message)';
+            breakdownMap[label] = (breakdownMap[label] || 0) + 1;
+        });
+        const purchaseErrorBreakdown = Object.entries(breakdownMap)
+            .map(([error, count]) => ({ error, count }))
+            .sort((a, b) => b.count - a.count);
+
+        const recentPurchaseErrors = [...purchaseErrorEvents]
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 50)
+            .map((e) => ({
+                createdAt: e.createdAt,
+                userId: e.userId,
+                error: typeof e.metadata?.error === 'string' ? e.metadata.error : null,
+                planType: e.metadata?.planType || null,
+                source: e.metadata?.source || null,
+            }));
+
+        res.json({
+            success: true,
+            period: {
+                days,
+                startDate: startDate.toISOString().split('T')[0],
+            },
+            summary: {
+                paywallShown,
+                trialClicked,
+                totalSubscribed,
+                conversionRate: pct(totalSubscribed),
+                purchaseError,
+                purchaseCancelled,
+                paywallClosed,
+            },
+            funnel,
+            sourceBreakdown,
+            dailyTrends,
+            purchaseErrorBreakdown,
+            recentPurchaseErrors,
+        });
+    } catch (error) {
+        console.error('Paywall analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch paywall analytics', error: error.message });
+    }
+});
+
+/**
+ * GET /api/analytics/onboarding/kids-characters
+ * List kid characters from Create Your Story / Kids Monthly books (CustomMonthlyBook).
+ * Query params: days (default 30)
+ */
+router.get('/onboarding/kids-characters', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const books = await CustomMonthlyBook.find({ createdAt: { $gte: startDate } })
+            .select('childName childCharacterImageUrl childSelfieUrl characters createdAt')
+            .sort({ createdAt: -1 })
+            .limit(500)
+            .lean();
+
+        const characters = [];
+        for (const b of books) {
+            if (b.childCharacterImageUrl) {
+                characters.push({
+                    name: b.childName || 'Unknown',
+                    imageUrl: b.childCharacterImageUrl,
+                    selfieUrl: b.childSelfieUrl || null,
+                    bookId: b._id,
+                    createdAt: b.createdAt,
+                    type: 'main',
+                });
+            }
+            (b.characters || []).forEach((c) => {
+                if (c.characterImageUrl) {
+                    characters.push({
+                        name: c.name || 'Character',
+                        imageUrl: c.characterImageUrl,
+                        selfieUrl: null,
+                        bookId: b._id,
+                        createdAt: b.createdAt,
+                        type: 'extra',
+                    });
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            total: characters.length,
+            characters,
+        });
+    } catch (error) {
+        console.error('Kids characters analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch kids characters', error: error.message });
+    }
+});
+
+/**
  * POST /api/analytics/admin/add-coins
  * Add coins to a user by email (admin only)
  */
@@ -925,6 +1356,86 @@ router.post('/admin/add-coins', async (req, res) => {
             success: false, 
             message: 'Failed to add coins',
             error: error.message 
+        });
+    }
+});
+
+/**
+ * DELETE /api/analytics/admin/users/:id?source=auth|app
+ * Remove a user record from the User (login) and/or AppUser collection.
+ * Requires admin JWT or X-Admin-Key when ADMIN_API_KEY is set.
+ */
+router.delete('/admin/users/:id', authenticateAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { source } = req.query;
+
+        if (!['auth', 'app'].includes(source)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Query param source must be "auth" or "app" (matches dashboard row)',
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user id' });
+        }
+
+        const protectedEmails = getProtectedAdminEmails();
+
+        if (source === 'auth') {
+            const authUser = await User.findById(id);
+            if (!authUser) {
+                return res.status(404).json({ success: false, message: 'Login user not found' });
+            }
+            const emailLower = authUser.email.toLowerCase();
+            if (protectedEmails.includes(emailLower)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Cannot delete a protected admin account',
+                });
+            }
+            await User.findByIdAndDelete(id);
+            await AppUser.deleteMany({
+                email: new RegExp(`^${escapeRegexForEmail(emailLower)}$`, 'i'),
+            });
+            return res.json({
+                success: true,
+                message: 'Login account removed; linked app profile deleted if present',
+            });
+        }
+
+        const appUser = await AppUser.findById(id);
+        if (!appUser) {
+            return res.status(404).json({ success: false, message: 'App user not found' });
+        }
+        const em = (appUser.email || '').trim().toLowerCase();
+        if (em && protectedEmails.includes(em)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Cannot delete a protected account',
+            });
+        }
+        if (em) {
+            const hasAuth = await User.findOne({
+                email: new RegExp(`^${escapeRegexForEmail(em)}$`, 'i'),
+            });
+            if (hasAuth) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'This email has a login (User) record. Delete that row first (it removes the app profile too).',
+                });
+            }
+        }
+        await AppUser.findByIdAndDelete(id);
+        return res.json({ success: true, message: 'App user removed' });
+    } catch (error) {
+        console.error('Admin delete user error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete user',
+            error: error.message,
         });
     }
 });
@@ -985,58 +1496,65 @@ router.get('/content', async (req, res) => {
                     $group: {
                         _id: '$contentId',
                         totalPagesRead: { $sum: '$pagesViewed' },
-                        avgPagesRead: { $avg: '$pagesViewed' },
-                        readingSessions: { $sum: { $cond: [{ $ne: ['$isEngagementUpdate', true] }, 1, 0] } },
-                        avgCompletion: { $avg: '$completionPercent' },
+                        readingSessions: { $sum: 1 },
+                        completions: { $sum: { $cond: [{ $gte: ['$completionPercent', 90] }, 1, 0] } },
+                        avgCompletion: { $avg: { $cond: [{ $gt: ['$completionPercent', 0] }, '$completionPercent', null] } },
                         maxCompletion: { $max: '$completionPercent' },
                     }
                 }
             ]);
             
             // Create a map of reading metrics by book ID
+            // avgPagesRead = totalPagesRead / sessions (consistent: 47 total pages ÷ 5 sessions = 9.4 avg)
             const readingMetricsMap = new Map();
             readingMetricsAgg.forEach(e => {
+                const sessions = e.readingSessions || 0;
+                const total = e.totalPagesRead || 0;
+                const avgPages = sessions > 0 ? total / sessions : 0;
                 readingMetricsMap.set(e._id.toString(), {
-                    totalPagesRead: e.totalPagesRead || 0,
-                    avgPagesRead: Math.round((e.avgPagesRead || 0) * 10) / 10, // Round to 1 decimal
-                    readingSessions: e.readingSessions || 0,
+                    totalPagesRead: total,
+                    avgPagesRead: Math.round(avgPages * 10) / 10,
+                    readingSessions: sessions,
+                    completions: e.completions || 0,
                     avgCompletion: Math.round(e.avgCompletion || 0),
                     maxCompletion: Math.round(e.maxCompletion || 0),
                 });
             });
-            
+
+            // Unified logic: use PlayEvent for sessions/pages; Book counts as fallback for "all" time.
+            // PlayEvent has 30-day TTL so "all" time Book.viewCount/readCount may exceed PlayEvent totals.
             if (startDate) {
-                // Merge with book data for time-filtered view
+                // Time-filtered: all metrics from PlayEvent (only data we have for the window)
                 results.books = books.map(book => {
                     const stats = readingMetricsMap.get(book._id.toString()) || { 
-                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, completions: 0, avgCompletion: 0, maxCompletion: 0 
                     };
                     return {
                         ...book,
-                        // For time-filtered view, use play event counts
                         viewCount: stats.readingSessions,
-                        readCount: stats.readingSessions,
+                        readCount: stats.completions,
                         averageCompletionRate: stats.avgCompletion,
-                        // New reading metrics
                         totalPagesRead: stats.totalPagesRead,
                         avgPagesRead: stats.avgPagesRead,
                         readingSessions: stats.readingSessions,
-                        // Keep other counts as-is (they're cumulative)
-                        likeCount: 0, // Would need separate event tracking
-                        favoriteCount: 0,
+                        likeCount: book.likeCount || 0,
+                        favoriteCount: book.favoriteCount || 0,
                     };
                 });
             } else {
-                // All time - use stored counts but add reading metrics
+                // All time: Book counts (viewCount, readCount) + PlayEvent pages (last 30d due to TTL)
                 results.books = books.map(book => {
                     const stats = readingMetricsMap.get(book._id.toString()) || { 
-                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, avgCompletion: 0, maxCompletion: 0 
+                        totalPagesRead: 0, avgPagesRead: 0, readingSessions: 0, completions: 0, avgCompletion: 0, maxCompletion: 0 
                     };
                     return {
                         ...book,
+                        viewCount: book.viewCount || 0,
+                        readCount: book.readCount || 0,
                         totalPagesRead: stats.totalPagesRead,
                         avgPagesRead: stats.avgPagesRead,
                         readingSessions: stats.readingSessions,
+                        averageCompletionRate: stats.avgCompletion || book.averageCompletionRate || 0,
                     };
                 });
             }
@@ -1985,6 +2503,184 @@ router.get('/retention', async (req, res) => {
             message: 'Failed to fetch retention analytics',
             error: error.message 
         });
+    }
+});
+
+/**
+ * GET /api/analytics/lesson-retention
+ * Lesson-specific retention: DAU, recurring vs first-time users, cohort retention, top lessons.
+ * Query params: days (default 30)
+ */
+router.get('/lesson-retention', async (req, res) => {
+    try {
+        const AnalyticsEvent = require('../models/AnalyticsEvent');
+        const days = parseInt(req.query.days) || 30;
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - days);
+
+        const lessonEvents = await AnalyticsEvent.find({
+            eventType: { $in: ['lesson_view', 'lesson_complete'] },
+            createdAt: { $gte: startDate },
+        }).select('userId eventType targetId targetTitle createdAt').lean();
+
+        // --- Daily Active Lesson Users (DAU) + recurring vs first-time ---
+        // Track first-ever lesson date per user (across all time, not just window)
+        const allTimeLessonUsers = await AnalyticsEvent.aggregate([
+            { $match: { eventType: { $in: ['lesson_view', 'lesson_complete'] } } },
+            { $group: { _id: '$userId', firstLessonDate: { $min: '$createdAt' } } },
+        ]);
+        const userFirstLessonDate = new Map();
+        allTimeLessonUsers.forEach(u => userFirstLessonDate.set(u._id, u.firstLessonDate));
+
+        const dailyMap = {};
+        const userLessonDays = {};
+
+        lessonEvents.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!dailyMap[day]) dailyMap[day] = { viewers: new Set(), completers: new Set(), newUsers: new Set(), returningUsers: new Set() };
+            dailyMap[day].viewers.add(e.userId);
+            if (e.eventType === 'lesson_complete') dailyMap[day].completers.add(e.userId);
+
+            if (!userLessonDays[e.userId]) userLessonDays[e.userId] = new Set();
+            userLessonDays[e.userId].add(day);
+        });
+
+        // Classify new vs returning per day
+        Object.entries(dailyMap).forEach(([day, data]) => {
+            data.viewers.forEach(userId => {
+                const firstDate = userFirstLessonDate.get(userId);
+                const firstDay = firstDate ? firstDate.toISOString().split('T')[0] : day;
+                if (firstDay === day) {
+                    data.newUsers.add(userId);
+                } else {
+                    data.returningUsers.add(userId);
+                }
+            });
+        });
+
+        const dailyTrends = Object.entries(dailyMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, d]) => ({
+                date,
+                activeUsers: d.viewers.size,
+                completions: d.completers.size,
+                newUsers: d.newUsers.size,
+                returningUsers: d.returningUsers.size,
+                returningPct: d.viewers.size > 0 ? Math.round((d.returningUsers.size / d.viewers.size) * 100) : 0,
+            }));
+
+        // --- Lesson-specific cohort retention ---
+        // Group users by the first day they did a lesson (within window)
+        const windowUserFirstDay = {};
+        lessonEvents.forEach(e => {
+            const day = e.createdAt.toISOString().split('T')[0];
+            if (!windowUserFirstDay[e.userId] || day < windowUserFirstDay[e.userId]) {
+                windowUserFirstDay[e.userId] = day;
+            }
+        });
+
+        const retentionDays = [1, 3, 7, 14, 30];
+        const cohortByDay = {};
+        Object.entries(windowUserFirstDay).forEach(([userId, firstDay]) => {
+            if (!cohortByDay[firstDay]) cohortByDay[firstDay] = [];
+            cohortByDay[firstDay].push(userId);
+        });
+
+        const cohortRetention = Object.entries(cohortByDay)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, users]) => {
+                const cohortSize = users.length;
+                const retention = {};
+                retentionDays.forEach(retDay => {
+                    const daysSinceCohort = Math.floor((now - new Date(date)) / (1000 * 60 * 60 * 24));
+                    if (daysSinceCohort < retDay) {
+                        retention[`day${retDay}`] = null;
+                        return;
+                    }
+                    const targetDate = new Date(date);
+                    targetDate.setDate(targetDate.getDate() + retDay);
+                    const targetDay = targetDate.toISOString().split('T')[0];
+                    const retained = users.filter(uid => userLessonDays[uid]?.has(targetDay)).length;
+                    retention[`day${retDay}`] = Math.round((retained / cohortSize) * 100);
+                });
+                return { date, cohortSize, ...retention };
+            });
+
+        // Average retention across cohorts
+        const avgRetention = {};
+        retentionDays.forEach(retDay => {
+            const key = `day${retDay}`;
+            const valid = cohortRetention.filter(c => c[key] !== null);
+            avgRetention[key] = valid.length > 0
+                ? Math.round(valid.reduce((s, c) => s + c[key], 0) / valid.length)
+                : null;
+        });
+
+        // --- Top lessons by unique users ---
+        const lessonMap = {};
+        lessonEvents.forEach(e => {
+            if (!e.targetId) return;
+            if (!lessonMap[e.targetId]) lessonMap[e.targetId] = { title: e.targetTitle || e.targetId, views: new Set(), completions: new Set() };
+            lessonMap[e.targetId].views.add(e.userId);
+            if (e.eventType === 'lesson_complete') lessonMap[e.targetId].completions.add(e.userId);
+        });
+        const topLessons = Object.entries(lessonMap)
+            .map(([id, d]) => ({
+                lessonId: id,
+                title: d.title,
+                uniqueViewers: d.views.size,
+                uniqueCompleters: d.completions.size,
+                completionRate: d.views.size > 0 ? Math.round((d.completions.size / d.views.size) * 100) : 0,
+            }))
+            .sort((a, b) => b.uniqueViewers - a.uniqueViewers)
+            .slice(0, 15);
+
+        // --- Summary ---
+        const totalUniqueUsers = new Set(lessonEvents.map(e => e.userId)).size;
+        const totalCompletions = lessonEvents.filter(e => e.eventType === 'lesson_complete').length;
+        const uniqueCompleters = new Set(lessonEvents.filter(e => e.eventType === 'lesson_complete').map(e => e.userId)).size;
+        const multiDayUsers = Object.values(userLessonDays).filter(days => days.size > 1).length;
+        const avgDaysPerUser = totalUniqueUsers > 0
+            ? +(Object.values(userLessonDays).reduce((s, d) => s + d.size, 0) / totalUniqueUsers).toFixed(1)
+            : 0;
+
+        // Weekly active lesson users (WAU)
+        const weeklyMap = {};
+        lessonEvents.forEach(e => {
+            const d = new Date(e.createdAt);
+            const weekStart = new Date(d);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+            const weekKey = weekStart.toISOString().split('T')[0];
+            if (!weeklyMap[weekKey]) weeklyMap[weekKey] = new Set();
+            weeklyMap[weekKey].add(e.userId);
+        });
+        const weeklyTrends = Object.entries(weeklyMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([weekStart, users]) => ({ weekStart, activeUsers: users.size }));
+
+        res.json({
+            success: true,
+            period: { days, startDate: startDate.toISOString() },
+            summary: {
+                totalUniqueUsers,
+                totalCompletions,
+                uniqueCompleters,
+                completionRate: totalUniqueUsers > 0 ? Math.round((uniqueCompleters / totalUniqueUsers) * 100) : 0,
+                multiDayUsers,
+                multiDayPct: totalUniqueUsers > 0 ? Math.round((multiDayUsers / totalUniqueUsers) * 100) : 0,
+                avgDaysPerUser,
+                avgRetention,
+            },
+            dailyTrends,
+            weeklyTrends,
+            cohortRetention: cohortRetention.slice(-14),
+            topLessons,
+            retentionDays,
+        });
+    } catch (error) {
+        console.error('Lesson retention analytics error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch lesson retention analytics', error: error.message });
     }
 });
 

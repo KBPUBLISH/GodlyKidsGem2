@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn } from 'lucide-react';
+import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush, Music } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
@@ -13,12 +13,15 @@ import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
 import WebViewModal from '../components/features/WebViewModal';
 import ParentGateModal from '../components/features/ParentGateModal';
+import DespiaService from '../services/despiaService';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isSubscribed, isVoiceUnlocked, setIsSubscribed, resetUser } = useUser();
-  const { sfxEnabled, toggleSfx, playBack } = useAudio();
+  const { sfxEnabled, toggleSfx, musicEnabled, toggleMusic, musicVolume, setMusicVolume, playBack } = useAudio();
   const { currentLanguage, setLanguage, supportedLanguages, isTranslating, t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
@@ -43,6 +46,8 @@ const SettingsPage: React.FC = () => {
   
   // Parent gate for Help Center
   const [showHelpCenterGate, setShowHelpCenterGate] = useState(false);
+  const [showDeleteAccountGate, setShowDeleteAccountGate] = useState(false);
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   
   // Load cloned voices
   useEffect(() => {
@@ -73,6 +78,46 @@ const SettingsPage: React.FC = () => {
   const handleBack = () => {
       playBack();
       navigate('/profile');
+  };
+
+  const runDeleteAccountAfterParentGate = async () => {
+    const token = authService.getToken();
+    if (!token) {
+      alert('Please sign in again, then try deleting your account.');
+      return;
+    }
+    setDeleteAccountBusy(true);
+    try {
+      const base = getApiBaseUrl();
+      const res = await fetch(`${base}auth/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        alert(json.message || 'Failed to delete account');
+        return;
+      }
+      authService.signOut();
+      try {
+        localStorage.clear();
+      } catch {
+        Object.keys(localStorage).forEach((k) => localStorage.removeItem(k));
+      }
+      try {
+        sessionStorage.clear();
+      } catch {
+        /* ignore */
+      }
+      window.location.replace(
+        `${window.location.origin}${window.location.pathname}?account-deleted=${Date.now()}`
+      );
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete account');
+    } finally {
+      setDeleteAccountBusy(false);
+    }
   };
 
   const handleDeleteVoice = async (voiceId: string) => {
@@ -251,6 +296,50 @@ const SettingsPage: React.FC = () => {
                         </button>
                     </div>
 
+                    {/* App background music (API: Music target app-background) */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
+                                <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#7b1fa2] shrink-0">
+                                    <Music size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                    <span className="font-bold block">{t('backgroundMusic')}</span>
+                                    <span className="text-xs text-[#8B4513]/75 leading-tight block">
+                                        Soft loop while you browse. Off during books, playlists, and lessons.
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    playBack();
+                                    toggleMusic();
+                                }}
+                                className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                                aria-pressed={musicEnabled}
+                            >
+                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                            </button>
+                        </div>
+                        <div className={`flex items-center gap-3 pl-11 pr-2 ${musicEnabled ? '' : 'opacity-50'}`}>
+                            <span className="text-xs font-bold text-[#8B4513]/80 w-14 shrink-0">Volume</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={Math.round(musicVolume * 100)}
+                                disabled={!musicEnabled}
+                                onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                                className="flex-1 h-2 bg-[#d7ccc8] rounded-lg appearance-none cursor-pointer accent-[#7b1fa2] disabled:cursor-not-allowed"
+                                aria-label="Background music volume"
+                            />
+                            <span className="text-xs font-bold text-[#8B4513]/70 w-10 text-right tabular-nums">
+                                {Math.round(musicVolume * 100)}%
+                            </span>
+                        </div>
+                    </div>
+
                     {/* Notifications Toggle */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 text-[#5c2e0b]">
@@ -288,6 +377,41 @@ const SettingsPage: React.FC = () => {
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${notificationsEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
                     </div>
+                </div>
+            </section>
+
+            {/* Appearance / Theme Toggle */}
+            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Appearance</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { id: 'panorama' as AppTheme, label: 'Panorama', desc: 'Classic feed layout', emoji: '🌅' },
+                      { id: 'island' as AppTheme, label: 'Island', desc: 'Interactive world', emoji: '🏝️' },
+                    ]).map((option) => {
+                      const isActive = theme === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => setTheme(option.id)}
+                          className={`relative rounded-xl p-4 border-2 transition-all duration-200 text-left ${
+                            isActive
+                              ? 'border-[#f57c00] bg-[#fff3e0] shadow-md scale-[1.02]'
+                              : 'border-[#eecaa0] bg-white/60 hover:bg-white/80'
+                          }`}
+                        >
+                          <div className="text-2xl mb-2">{option.emoji}</div>
+                          <div className={`font-bold text-sm ${isActive ? 'text-[#e65100]' : 'text-[#5c2e0b]'}`}>
+                            {option.label}
+                          </div>
+                          <div className="text-[10px] text-[#8B6914] mt-0.5">{option.desc}</div>
+                          {isActive && (
+                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#f57c00] flex items-center justify-center">
+                              <Check size={12} className="text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                 </div>
             </section>
 
@@ -471,6 +595,23 @@ const SettingsPage: React.FC = () => {
                             <p className="text-[#5c2e0b] text-sm font-semibold">Signed in as:</p>
                             <p className="text-[#8B4513] text-base font-bold truncate">{userEmail}</p>
                         </div>
+                        <button
+                            type="button"
+                            disabled={deleteAccountBusy}
+                            onClick={() => {
+                                if (
+                                    !window.confirm(
+                                        'Permanently delete your Godly Kids account and server-side profile data? This cannot be undone. If you have a subscription, cancel it in the App Store or Play Store — we do not manage billing here.'
+                                    )
+                                ) {
+                                    return;
+                                }
+                                setShowDeleteAccountGate(true);
+                            }}
+                            className="mt-4 w-full text-center text-sm font-semibold text-red-800/90 underline underline-offset-2 disabled:opacity-50"
+                        >
+                            {deleteAccountBusy ? 'Deleting…' : 'Delete my account'}
+                        </button>
                     </section>
                 ) : (
                     /* Sign In / Sign Up Section - Show when NOT signed in */
@@ -511,7 +652,7 @@ const SettingsPage: React.FC = () => {
                             </div>
                             <div>
                                 <div className="font-extrabold text-[#856404] text-sm font-display">Premium Active</div>
-                                <div className="text-xs text-[#856404]/70 font-bold">Manage in App Store</div>
+                                <div className="text-xs text-[#856404]/70 font-bold">Manage in {navigator.userAgent.toLowerCase().includes('android') ? 'Play Store' : 'App Store'}</div>
                             </div>
                         </div>
                         <button 
@@ -519,15 +660,17 @@ const SettingsPage: React.FC = () => {
                                 // Open subscription management
                                 // iOS: Opens App Store subscriptions page
                                 // Android: Opens Play Store subscriptions
-                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const isAndroid = /Android/.test(navigator.userAgent);
+                                // Prefer DespiaService for native app (handles WebView UA correctly)
+                                const ua = navigator.userAgent.toLowerCase();
+                                const isIOS = DespiaService.isIOS || /ipad|iphone|ipod/.test(ua);
+                                const isAndroid = DespiaService.isAndroid || ua.includes('android');
                                 
-                                if (isIOS) {
-                                    // iOS App Store subscription management
-                                    window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
-                                } else if (isAndroid) {
-                                    // Google Play subscription management
-                                    window.location.href = 'https://play.google.com/store/account/subscriptions';
+                                if (isAndroid) {
+                                    // Android: Open native Play Store subscription management
+                                    window.open('https://play.google.com/store/account/subscriptions', '_blank');
+                                } else if (isIOS) {
+                                    // iOS: Open native App Store subscription management (window.open hands off to system)
+                                    window.open('itms-apps://apps.apple.com/account/subscriptions', '_blank');
                                 } else {
                                     // Web fallback - open Apple subscriptions page
                                     window.open('https://apps.apple.com/account/subscriptions', '_blank');
@@ -696,6 +839,14 @@ const SettingsPage: React.FC = () => {
         onSuccess={() => {
           // Open godlykids.com in a new tab
           window.open('https://www.godlykids.com', '_blank');
+        }}
+      />
+
+      <ParentGateModal
+        isOpen={showDeleteAccountGate}
+        onClose={() => !deleteAccountBusy && setShowDeleteAccountGate(false)}
+        onSuccess={() => {
+          void runDeleteAccountAfterParentGate();
         }}
       />
     </div>

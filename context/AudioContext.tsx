@@ -5,16 +5,7 @@ import { playHistoryService } from '../services/playHistoryService';
 import { analyticsService } from '../services/analyticsService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
-import {
-    despiaAudioPlayer,
-    isNativeAudioAvailable,
-    isUnknownNativeAudioCommand,
-    subscribeNativeAudio,
-    toNativeTracks,
-    type NativeAudioEvent,
-} from '../services/despiaAudioPlayer';
-
-const NATIVE_PLAYLIST_SNAPSHOT_KEY = 'gk_native_audio_snapshot';
+import { attachReliableLoop } from '../utils/audioLoop';
 
 // --- Interfaces ---
 export interface AudioItem {
@@ -23,6 +14,8 @@ export interface AudioItem {
     author?: string;
     coverImage?: string;
     audioUrl: string;
+    /** Optional music video (members-only playback in the app) */
+    videoUrl?: string;
     duration?: number;
     order: number;
 }
@@ -42,6 +35,15 @@ export interface Playlist {
 
 // Premium preview constants
 const AUDIO_PREVIEW_SECONDS = 120; // 2 minute preview for premium audio
+const STORAGE_BG_MUSIC_ENABLED = 'godlykids_bg_music_enabled';
+const STORAGE_BG_MUSIC_VOLUME = 'godlykids_bg_music_volume';
+
+interface AppBackgroundTrack {
+    audioUrl: string;
+    defaultVolume: number;
+    loop: boolean;
+    name: string;
+}
 
 interface AudioContextType {
     // Background Music & SFX (simplified - disabled by default)
@@ -116,9 +118,31 @@ export const useAudio = () => useContext(AudioContext);
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // --- State ---
-    const [musicVolume, setMusicVolumeState] = useState(0.5);
-    const [musicEnabled, setMusicEnabled] = useState(false); // Background music disabled by default
+    const [musicVolume, setMusicVolumeState] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_BG_MUSIC_VOLUME);
+            if (saved != null) {
+                const n = parseFloat(saved);
+                if (Number.isFinite(n)) return Math.min(1, Math.max(0, n));
+            }
+        } catch {
+            /* ignore */
+        }
+        return 0.5;
+    });
+    const [musicEnabled, setMusicEnabled] = useState(() => {
+        try {
+            return localStorage.getItem(STORAGE_BG_MUSIC_ENABLED) === 'true';
+        } catch {
+            return false;
+        }
+    });
     const [sfxEnabled, setSfxEnabled] = useState(true);
+    const [appBackgroundTrack, setAppBackgroundTrack] = useState<AppBackgroundTrack | null>(null);
+    /** When true, book reader / lessons / modals asked to duck or stop app-loop music */
+    const [contentMusicPaused, setContentMusicPaused] = useState(false);
+    /** Reserved for mini-games that need to own the mix (strength, etc.) */
+    const [gameModeActive, setGameModeActive] = useState(false);
 
     // --- Playlist Player State ---
     const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
@@ -137,16 +161,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // --- Refs ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    /** Separate from playlist `audioRef` so book/playlist never clobber the ambience loop */
+    const appBgAudioRef = useRef<HTMLAudioElement | null>(null);
+    const appBgLoopEnabledRef = useRef(true);
     const sfxContextRef = useRef<AudioContext | null>(null);
-    const [nativeAudioEnabled, setNativeAudioEnabled] = useState(() => isNativeAudioAvailable());
-    const nativeAudioEnabledRef = useRef(nativeAudioEnabled);
-    const nativeOwnsPlaybackRef = useRef(false);
-    const nativeConfirmedRef = useRef(false);
-    const nativeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const nativePositionRef = useRef(0);
-    const currentPlaylistRef = useRef<Playlist | null>(null);
-    const currentTrackIndexRef = useRef(0);
-    const isPlayingRef = useRef(false);
 
     // Get or create SFX AudioContext (reuse for all sound effects)
     // Protected against errors during Despia WebView transitions
@@ -206,66 +224,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         isPreviewModeRef.current = isPreviewMode;
     }, [isPreviewMode]);
-    useEffect(() => {
-        nativeAudioEnabledRef.current = nativeAudioEnabled;
-    }, [nativeAudioEnabled]);
-    useEffect(() => {
-        currentPlaylistRef.current = currentPlaylist;
-    }, [currentPlaylist]);
-    useEffect(() => {
-        currentTrackIndexRef.current = currentTrackIndex;
-    }, [currentTrackIndex]);
-    useEffect(() => {
-        isPlayingRef.current = isPlaying;
-    }, [isPlaying]);
-
-    const nativeControlsFor = (playlist: Playlist) =>
-        playlist.type === 'Audiobook'
-            ? { controls: 'skipforward,skipback,seek', skipInterval: 15 }
-            : { controls: 'next,prev,skipforward,skipback,seek', skipInterval: 10 };
-
-    const startNativeQueue = useCallback((playlist: Playlist, startIndex: number) => {
-        const tracks = toNativeTracks(playlist);
-        if (tracks.length === 0) {
-            console.warn('🎵 Native audio: no HTTPS tracks, using HTML audio for this playlist');
-            nativeOwnsPlaybackRef.current = false;
-            return false;
-        }
-
-        nativeOwnsPlaybackRef.current = true;
-        nativeConfirmedRef.current = false;
-
-        try {
-            localStorage.setItem(NATIVE_PLAYLIST_SNAPSHOT_KEY, JSON.stringify({ playlist }));
-        } catch {
-            /* ignore quota */
-        }
-
-        const html = audioRef.current;
-        if (html) {
-            html.pause();
-            html.removeAttribute('src');
-            try { html.load(); } catch { /* ignore */ }
-        }
-
-        despiaAudioPlayer.setQueue(tracks, {
-            startIndex: Math.max(0, startIndex),
-            ...nativeControlsFor(playlist),
-        });
-        despiaAudioPlayer.play();
-
-        if (nativeFallbackTimerRef.current) clearTimeout(nativeFallbackTimerRef.current);
-        nativeFallbackTimerRef.current = setTimeout(() => {
-            if (nativeOwnsPlaybackRef.current && !nativeConfirmedRef.current) {
-                console.warn('🎵 Native audio did not start (enable Native Audio in Despia and rebuild Android). Falling back to HTML audio.');
-                nativeOwnsPlaybackRef.current = false;
-                try { despiaAudioPlayer.terminate(); } catch { /* ignore */ }
-                setNativeAudioEnabled(false);
-            }
-        }, 4000);
-
-        return true;
-    }, []);
 
     // Create audio element once on mount
     useEffect(() => {
@@ -413,10 +371,105 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
     }, []);
 
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_BG_MUSIC_ENABLED, musicEnabled ? 'true' : 'false');
+        } catch {
+            /* ignore quota / privacy mode */
+        }
+    }, [musicEnabled]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_BG_MUSIC_VOLUME, String(musicVolume));
+        } catch {
+            /* ignore quota / privacy mode */
+        }
+    }, [musicVolume]);
+
+    // App-wide background loop — dedicated element so playlists never overwrite it
+    useEffect(() => {
+        const el = document.createElement('audio');
+        el.setAttribute('data-gk-role', 'app-background');
+        el.preload = 'auto';
+        appBgAudioRef.current = el;
+        const detachReliableLoop = attachReliableLoop(el, () => appBgLoopEnabledRef.current);
+
+        let cancelled = false;
+        (async () => {
+            const map = await ApiService.getActiveMusic();
+            if (cancelled || !map) return;
+            const raw = map['app-background'];
+            if (raw?.audioUrl) {
+                setAppBackgroundTrack({
+                    audioUrl: raw.audioUrl,
+                    defaultVolume: typeof raw.defaultVolume === 'number' ? raw.defaultVolume : 0.35,
+                    loop: raw.loop !== false,
+                    name: raw.name || 'Background',
+                });
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            detachReliableLoop();
+            el.pause();
+            el.removeAttribute('src');
+            appBgAudioRef.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
+        appBgLoopEnabledRef.current = appBackgroundTrack?.loop !== false;
+    }, [appBackgroundTrack?.loop]);
+
+    useEffect(() => {
+        const el = appBgAudioRef.current;
+        if (!el || !appBackgroundTrack?.audioUrl) {
+            return;
+        }
+
+        const desired = appBackgroundTrack.audioUrl;
+        const baseVol = typeof appBackgroundTrack.defaultVolume === 'number' ? appBackgroundTrack.defaultVolume : 0.35;
+        el.loop = appBackgroundTrack.loop !== false;
+        el.volume = Math.min(1, Math.max(0, baseVol * musicVolume));
+
+        const stripQuery = (u: string) => u.split('?')[0];
+        const cur = el.currentSrc || el.src || '';
+        if (!cur || stripQuery(cur) !== stripQuery(desired)) {
+            el.src = desired;
+            try {
+                el.load();
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const shouldPlay =
+            musicEnabled &&
+            !contentMusicPaused &&
+            !gameModeActive &&
+            currentPlaylist == null;
+
+        if (!shouldPlay) {
+            el.pause();
+            return;
+        }
+
+        el.play().catch(() => {
+            /* Autoplay may be blocked until the user turns this on in Settings (gesture) */
+        });
+    }, [
+        musicEnabled,
+        musicVolume,
+        contentMusicPaused,
+        gameModeActive,
+        currentPlaylist,
+        appBackgroundTrack,
+    ]);
+
     // Load track when playlist or index changes
     useEffect(() => {
-        if (nativeAudioEnabled && nativeOwnsPlaybackRef.current) return;
-
         const audio = audioRef.current;
         if (!audio || !currentPlaylist) return;
 
@@ -434,30 +487,60 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Update media session
         updateMediaSession();
-    }, [currentPlaylist, currentTrackIndex, nativeAudioEnabled]);
+    }, [currentPlaylist, currentTrackIndex]);
 
-    // Simple play/pause sync
+    // Play/pause sync - with recovery for frozen audio (Android WebView kills the element in background)
     useEffect(() => {
-        if (nativeAudioEnabled && nativeOwnsPlaybackRef.current) return;
-
         const audio = audioRef.current;
         if (!audio || !audio.src) return;
 
         if (isPlaying) {
-            audio.play().catch(e => console.log('Play failed:', e.name));
+            const playPromise = audio.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    // Verify audio is actually progressing after 1.5s
+                    const checkTime = audio.currentTime;
+                    setTimeout(() => {
+                        if (isPlaying && audioRef.current === audio && !audio.paused && audio.currentTime === checkTime && checkTime > 0) {
+                            // Audio element is frozen - reload the track
+                            console.log('🎵 Audio frozen, reloading track at', checkTime);
+                            const src = audio.src;
+                            audio.src = src;
+                            audio.load();
+                            audio.addEventListener('canplay', function resume() {
+                                audio.currentTime = checkTime;
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', resume);
+                            });
+                        }
+                    }, 1500);
+                }).catch(e => {
+                    console.log('Play failed:', e.name);
+                    // If play fails entirely, try reloading
+                    if (currentPlaylist) {
+                        const track = currentPlaylist.items[currentTrackIndex];
+                        if (track?.audioUrl) {
+                            audio.src = track.audioUrl;
+                            audio.load();
+                            audio.addEventListener('canplay', function retry() {
+                                audio.play().catch(() => {});
+                                audio.removeEventListener('canplay', retry);
+                            });
+                        }
+                    }
+                });
+            }
         } else {
             audio.pause();
         }
         
-        // Update media session playback state
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
-    }, [isPlaying, nativeAudioEnabled]);
+    }, [isPlaying]);
 
     // Media Session setup with cover image
     const updateMediaSession = useCallback(() => {
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) return;
         if (!('mediaSession' in navigator) || !currentPlaylist) return;
 
         const track = currentPlaylist.items[currentTrackIndex];
@@ -514,7 +597,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     // Set up Media Session action handlers once
     useEffect(() => {
-        if (nativeAudioEnabled) return;
         if (!('mediaSession' in navigator)) return;
 
         // In Despia, delay media session setup slightly to avoid race conditions during WebView creation
@@ -575,198 +657,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             safeMediaSessionAction('seekbackward', null);
             safeMediaSessionAction('seekforward', null);
         };
-    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction, nativeAudioEnabled]);
-
-    // Despia native player events (Android lock screen / background audio)
-    useEffect(() => {
-        if (!isNativeAudioAvailable()) return;
-
-        const applyNativeIndex = (evt: NativeAudioEvent) => {
-            const nativeIndex = evt.state?.current_index;
-            if (typeof nativeIndex !== 'number' || nativeIndex < 0) return;
-
-            const queued = evt.state?.queue?.[nativeIndex];
-            const originalFromMeta = queued?.metadata?.originalIndex;
-            const originalIndex = typeof originalFromMeta === 'number' ? originalFromMeta : nativeIndex;
-
-            if (originalIndex !== currentTrackIndexRef.current) {
-                currentTrackIndexRef.current = originalIndex;
-                setCurrentTrackIndex(originalIndex);
-            }
-            return originalIndex;
-        };
-
-        const recordNativeTrackPlay = (originalIndex: number) => {
-            const playlist = currentPlaylistRef.current;
-            if (!playlist) return;
-            const track = playlist.items[originalIndex];
-            const trackId = (track as { _id?: string })?._id;
-            const trackDuration = track?.duration || 0;
-            import('../services/playEventService').then(({ playEventService }) => {
-                playEventService.recordEpisodePlay(playlist._id, originalIndex, trackId, undefined, trackDuration);
-            }).catch(() => {});
-        };
-
-        const onNativeEvent = (evt: NativeAudioEvent) => {
-            if (isUnknownNativeAudioCommand(evt.error)) {
-                console.warn('🎵 Native audio unavailable in this build, falling back to HTML audio');
-                nativeOwnsPlaybackRef.current = false;
-                nativeConfirmedRef.current = false;
-                if (nativeFallbackTimerRef.current) clearTimeout(nativeFallbackTimerRef.current);
-                setNativeAudioEnabled(false);
-                return;
-            }
-
-            if (evt.type === 'play' || evt.type === 'playing' || evt.type === 'feed_updated' || evt.type === 'state' || evt.type === 'position') {
-                nativeConfirmedRef.current = true;
-                if (nativeFallbackTimerRef.current) {
-                    clearTimeout(nativeFallbackTimerRef.current);
-                    nativeFallbackTimerRef.current = null;
-                }
-            }
-
-            if (evt.type === 'position') {
-                const pos = evt.positionSeconds ?? 0;
-                const dur = evt.durationSeconds ?? 0;
-                nativePositionRef.current = pos;
-                setCurrentTime(pos);
-                if (typeof dur === 'number' && dur > 0) {
-                    setDuration(dur);
-                    setProgress((pos / dur) * 100);
-                }
-
-                const now = Date.now();
-                if (lastListeningTimeRef.current > 0 && evt.status === 'playing') {
-                    const deltaSeconds = (now - lastListeningTimeRef.current) / 1000;
-                    if (deltaSeconds > 0 && deltaSeconds < 5) {
-                        listeningTimeAccumulatorRef.current += deltaSeconds;
-                        if (listeningTimeAccumulatorRef.current >= 10) {
-                            activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
-                            listeningTimeAccumulatorRef.current = 0;
-                        }
-                        if (isPreviewModeRef.current) {
-                            previewTimeAccumulator.current += deltaSeconds;
-                            const remaining = Math.max(0, AUDIO_PREVIEW_SECONDS - previewTimeAccumulator.current);
-                            setPreviewTimeRemaining(Math.floor(remaining));
-                            if (previewTimeAccumulator.current >= AUDIO_PREVIEW_SECONDS) {
-                                console.log('🎵 Preview limit reached - pausing native playback');
-                                despiaAudioPlayer.pause();
-                                setIsPlaying(false);
-                                setPreviewLimitReached(true);
-                            }
-                        }
-                    }
-                }
-                lastListeningTimeRef.current = now;
-
-                if (typeof dur === 'number' && dur > 0 && pos - lastEngagementUpdateRef.current >= ENGAGEMENT_UPDATE_INTERVAL) {
-                    lastEngagementUpdateRef.current = pos;
-                    const playlist = currentPlaylistRef.current;
-                    const idx = currentTrackIndexRef.current;
-                    if (playlist) {
-                        import('../services/playEventService').then(({ playEventService }) => {
-                            playEventService.updateEpisodeEngagement(playlist._id, idx, pos, dur);
-                        }).catch(() => {});
-                    }
-                }
-                return;
-            }
-
-            const status = evt.state?.status;
-            if (nativeOwnsPlaybackRef.current) {
-                if (status === 'playing' || status === 'buffering') {
-                    setIsPlaying(true);
-                } else if (status === 'paused' || evt.type === 'pause') {
-                    setIsPlaying(false);
-                }
-            }
-
-            if (typeof evt.state?.position_seconds === 'number') {
-                nativePositionRef.current = evt.state.position_seconds;
-                setCurrentTime(evt.state.position_seconds);
-            }
-            if (typeof evt.state?.duration_seconds === 'number' && evt.state.duration_seconds > 0) {
-                setDuration(evt.state.duration_seconds);
-            }
-
-            switch (evt.type) {
-                case 'play':
-                case 'playing':
-                    applyNativeIndex(evt);
-                    break;
-                case 'pause':
-                    if (listeningTimeAccumulatorRef.current > 0) {
-                        activityTrackingService.trackAudioListeningTime(Math.floor(listeningTimeAccumulatorRef.current));
-                        listeningTimeAccumulatorRef.current = 0;
-                    }
-                    lastListeningTimeRef.current = 0;
-                    break;
-                case 'next':
-                case 'prev': {
-                    const prevIdx = currentTrackIndexRef.current;
-                    const nextIdx = applyNativeIndex(evt);
-                    lastEngagementUpdateRef.current = 0;
-                    if (typeof nextIdx === 'number' && nextIdx !== prevIdx) {
-                        recordNativeTrackPlay(nextIdx);
-                    }
-                    break;
-                }
-                case 'ended':
-                    setIsPlaying(false);
-                    break;
-                case 'terminated': {
-                    const owned = nativeOwnsPlaybackRef.current;
-                    nativeOwnsPlaybackRef.current = false;
-                    try { localStorage.removeItem(NATIVE_PLAYLIST_SNAPSHOT_KEY); } catch { /* ignore */ }
-                    if (!owned || !currentPlaylistRef.current) break;
-                    currentPlaylistRef.current = null;
-                    setCurrentPlaylist(null);
-                    setCurrentTrackIndex(0);
-                    setIsPlaying(false);
-                    setProgress(0);
-                    setCurrentTime(0);
-                    setDuration(0);
-                    break;
-                }
-                case 'state': {
-                    if (currentPlaylistRef.current) {
-                        applyNativeIndex(evt);
-                        break;
-                    }
-                    const queue = evt.state?.queue;
-                    if (!queue?.length || (status !== 'playing' && status !== 'paused' && status !== 'buffering')) {
-                        break;
-                    }
-                    try {
-                        const raw = localStorage.getItem(NATIVE_PLAYLIST_SNAPSHOT_KEY);
-                        if (!raw) break;
-                        const snap = JSON.parse(raw) as { playlist: Playlist };
-                        if (!snap?.playlist?._id) break;
-                        nativeOwnsPlaybackRef.current = true;
-                        setNativeAudioEnabled(true);
-                        setCurrentPlaylist(snap.playlist);
-                        currentPlaylistRef.current = snap.playlist;
-                        applyNativeIndex(evt);
-                        setIsPlaying(status === 'playing' || status === 'buffering');
-                        console.log('🎵 Restored native audio session after reload:', snap.playlist.title);
-                    } catch {
-                        /* ignore corrupt snapshot */
-                    }
-                    break;
-                }
-                case 'track_error':
-                    console.warn('🎵 Native track error:', evt.error);
-                    despiaAudioPlayer.next();
-                    break;
-                default:
-                    break;
-            }
-        };
-
-        const unsubscribe = subscribeNativeAudio(onNativeEvent);
-        despiaAudioPlayer.sync();
-        return unsubscribe;
-    }, []);
+    }, [currentPlaylist, currentTrackIndex, safeMediaSessionAction]);
 
     // --- Simple SFX using Web Audio API ---
     const playTone = useCallback((freq: number, dur: number, vol: number = 0.15) => {
@@ -820,7 +711,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setPreviewLimitReached(false);
             console.log('🎵 Starting playlist in preview mode (2 min limit) - user not subscribed');
         } else {
-            console.log('🎵 Full playback mode - user is subscribed');
+            // Subscribed: reset preview state to prevent stale limits from a previous preview session
+            previewTimeAccumulator.current = 0;
+            setPreviewTimeRemaining(AUDIO_PREVIEW_SECONDS);
             setPreviewLimitReached(false);
         }
         
@@ -851,33 +744,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 playEventService.recordEpisodePlay(playlistId, startIndex, trackId, undefined, trackDuration);
             }).catch(() => {});
         }
-
-        currentPlaylistRef.current = playlist;
-        currentTrackIndexRef.current = startIndex;
-        isPlayingRef.current = true;
-        isPreviewModeRef.current = isPremiumPreview;
-
-        if (nativeAudioEnabledRef.current) {
-            startNativeQueue(playlist, startIndex);
-        }
-    }, [startNativeQueue]);
+    }, []);
 
     const togglePlayPause = useCallback(() => {
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            if (isPlayingRef.current) {
-                despiaAudioPlayer.pause();
-            } else {
-                despiaAudioPlayer.play();
-            }
-        }
         setIsPlaying(prev => !prev);
     }, []);
 
     const nextTrack = useCallback(() => {
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            despiaAudioPlayer.next();
-            return;
-        }
         if (currentPlaylist && currentTrackIndex < currentPlaylist.items.length - 1) {
             setCurrentTrackIndex(prev => prev + 1);
             setIsPlaying(true);
@@ -885,10 +758,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [currentPlaylist, currentTrackIndex]);
 
     const prevTrack = useCallback(() => {
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            despiaAudioPlayer.prev();
-            return;
-        }
         if (currentTrackIndex > 0) {
             setCurrentTrackIndex(prev => prev - 1);
             setIsPlaying(true);
@@ -896,12 +765,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [currentTrackIndex]);
 
     const seek = useCallback((time: number) => {
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            nativePositionRef.current = time;
-            despiaAudioPlayer.seek(time);
-            setCurrentTime(time);
-            return;
-        }
         if (audioRef.current) {
             audioRef.current.currentTime = time;
             setCurrentTime(time);
@@ -911,22 +774,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const closePlayer = useCallback(() => {
         setIsPlaying(false);
         setCurrentPlaylist(null);
-        currentPlaylistRef.current = null;
-        isPlayingRef.current = false;
         setCurrentTrackIndex(0);
         setProgress(0);
         setCurrentTime(0);
         setDuration(0);
-
-        if (nativeAudioEnabledRef.current && nativeOwnsPlaybackRef.current) {
-            nativeOwnsPlaybackRef.current = false;
-            if (nativeFallbackTimerRef.current) {
-                clearTimeout(nativeFallbackTimerRef.current);
-                nativeFallbackTimerRef.current = null;
-            }
-            try { localStorage.removeItem(NATIVE_PLAYLIST_SNAPSHOT_KEY); } catch { /* ignore */ }
-            despiaAudioPlayer.terminate();
-        }
 
         if (audioRef.current) {
             audioRef.current.pause();
@@ -951,12 +802,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPreviewLimitReached(false);
     }, []);
 
-    // Stub methods for background music (disabled)
-    const toggleMusic = useCallback(() => setMusicEnabled(prev => !prev), []);
-    const toggleSfx = useCallback(() => setSfxEnabled(prev => !prev), []);
-    const setMusicVolume = useCallback((v: number) => setMusicVolumeState(v), []);
-    const setGameMode = useCallback(() => { }, []);
-    const setMusicPaused = useCallback(() => { }, []);
+    const toggleMusic = useCallback(() => {
+        setMusicEnabled((prev) => !prev);
+    }, []);
+    const toggleSfx = useCallback(() => setSfxEnabled((prev) => !prev), []);
+    const setMusicVolume = useCallback((v: number) => {
+        const clamped = Math.min(1, Math.max(0, v));
+        setMusicVolumeState(clamped);
+    }, []);
+    const setMusicPaused = useCallback((paused: boolean) => {
+        setContentMusicPaused(paused);
+    }, []);
+    const setGameMode = useCallback((active: boolean, _type?: 'default' | 'workout') => {
+        setGameModeActive(active);
+    }, []);
 
     return (
         <AudioContext.Provider value={{

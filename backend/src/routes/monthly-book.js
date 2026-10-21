@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const MonthlyBookTemplate = require('../models/MonthlyBookTemplate');
 const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const Book = require('../models/Book');
+const Page = require('../models/Page');
 const SavedCharacter = require('../models/SavedCharacter');
 const AppUser = require('../models/AppUser');
+const { bucket } = require('../config/storage');
 
 /**
  * Normalize userId to a MongoDB ObjectId for CustomMonthlyBook (required by schema).
@@ -23,6 +26,27 @@ async function resolveUserId(userId) {
         ],
     }).select('_id').lean();
     return user ? user._id : null;
+}
+
+/** Upload selfie base64 to GCS; returns public URL or null on failure. */
+async function uploadSelfieToGCS(selfieBase64, customBookId) {
+    if (!bucket || !selfieBase64) return null;
+    try {
+        const base64Data = selfieBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `monthly-book/selfies/${customBookId}_selfie.jpg`;
+        const file = bucket.file(filename);
+        await file.save(buffer, {
+            metadata: {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000',
+            },
+        });
+        return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    } catch (err) {
+        console.warn('Failed to upload selfie to GCS:', err.message);
+        return null;
+    }
 }
 
 /**
@@ -81,6 +105,26 @@ router.post('/create', async (req, res) => {
             });
         }
 
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const hasTrialOrPaidBool = isSubscribedForCredits(appUser, hasTrialOrPaid);
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        if (usedThisMonth >= limit) {
+            return res.status(400).json({
+                success: false,
+                error: limit === 0
+                    ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
+                    : "You've used your monthly story credit. Come back next month for another!",
+            });
+        }
+
         const template = await MonthlyBookTemplate.findById(templateId).populate('bibleCharacterId');
         if (!template || template.status !== 'published') {
             return res.status(400).json({ success: false, error: 'Invalid or unpublished template' });
@@ -88,6 +132,7 @@ router.post('/create', async (req, res) => {
 
         const customBook = await CustomMonthlyBook.create({
             userId,
+            rawUserId: rawUserId ? String(rawUserId).trim() : undefined,
             kidId,
             templateId,
             childName: String(childName).trim(),
@@ -116,16 +161,46 @@ router.post('/create', async (req, res) => {
 /**
  * POST /api/monthly-book/create-from-book
  * Create a custom monthly book from a Book Builder book (bookType kids_monthly).
- * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, hasTrialOrPaid?, narratorVoiceId?
+ * Body: userId, kidId, bookId, childName, childCharacterImageUrl?, characterStyleId?, bookStyleId?, hasTrialOrPaid?, narratorVoiceId?
+ * Or: characters (array of 1–3 { name, characterImageUrl? }) instead of childName/childCharacterImageUrl; legacy fields set from first.
  */
 router.post('/create-from-book', async (req, res) => {
     try {
-        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, hasTrialOrPaid, narratorVoiceId } = req.body;
+        const { userId: rawUserId, kidId, bookId: sourceBookId, childName, childCharacterImageUrl, characterStyleId, bookStyleId, hasTrialOrPaid, narratorVoiceId, backgroundMusicIndex, characters: charactersBody, childSelfieBase64 } = req.body;
 
-        if (!rawUserId || !kidId || !sourceBookId || !childName) {
+        const useCharacters = Array.isArray(charactersBody) && charactersBody.length >= 1 && charactersBody.length <= 3;
+        let primaryName, primaryImageUrl, charactersToStore;
+
+        if (useCharacters) {
+            const names = charactersBody.map(c => (c && c.name && String(c.name).trim()) || '').filter(Boolean);
+            if (names.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'characters must have at least one entry with a name',
+                });
+            }
+            primaryName = names[0];
+            primaryImageUrl = (charactersBody[0] && charactersBody[0].characterImageUrl) ? String(charactersBody[0].characterImageUrl).trim() : null;
+            charactersToStore = charactersBody.slice(0, 3).map(c => ({
+                name: String((c && c.name) || '').trim(),
+                characterImageUrl: (c && c.characterImageUrl) ? String(c.characterImageUrl).trim() : undefined,
+            }));
+        } else {
+            if (!rawUserId || !kidId || !sourceBookId || !childName) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing required fields: userId, kidId, bookId, childName',
+                });
+            }
+            primaryName = String(childName).trim();
+            primaryImageUrl = childCharacterImageUrl || null;
+            charactersToStore = undefined;
+        }
+
+        if (!rawUserId || !kidId || !sourceBookId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: userId, kidId, bookId, childName',
+                error: 'Missing required fields: userId, kidId, bookId',
             });
         }
 
@@ -134,6 +209,27 @@ router.post('/create-from-book', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error: 'User not found. Sign in or create an account, then try again.',
+            });
+        }
+
+        // Monthly credits: special email = 100, subscribed = 1, else 0. Backend verifies subscription from AppUser.
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const hasTrialOrPaidBool = isSubscribedForCredits(appUser, hasTrialOrPaid);
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (hasTrialOrPaidBool ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        if (usedThisMonth >= limit) {
+            return res.status(400).json({
+                success: false,
+                error: limit === 0
+                    ? 'Create Your Story is for subscribers. Subscribe to get one monthly credit.'
+                    : "You've used your monthly story credit. Come back next month for another!",
             });
         }
 
@@ -146,16 +242,42 @@ router.post('/create-from-book', async (req, res) => {
             });
         }
 
-        const customBook = await CustomMonthlyBook.create({
+        const charStyle = (characterStyleId && String(characterStyleId).trim()) || 'illustrated';
+        const bookStyle = (bookStyleId && String(bookStyleId).trim()) || charStyle;
+        const sourcePageCount = await Page.countDocuments({ bookId: sourceBook._id });
+        const progressTotalPages = hasTrialOrPaidBool
+            ? sourcePageCount
+            : Math.min(4, sourcePageCount);
+        const musicIdx = backgroundMusicIndex != null
+            ? Math.max(0, Math.min(2, parseInt(backgroundMusicIndex, 10) || 0))
+            : 0;
+        const createPayload = {
             userId,
+            rawUserId: rawUserId ? String(rawUserId).trim() : undefined,
             kidId,
             sourceBookId: new mongoose.Types.ObjectId(sourceBookId),
-            childName: String(childName).trim(),
-            childCharacterImageUrl: childCharacterImageUrl || null,
-            hasTrialOrPaid: Boolean(hasTrialOrPaid),
+            childName: primaryName,
+            childCharacterImageUrl: primaryImageUrl || null,
+            characterStyleId: charStyle,
+            bookStyleId: bookStyle,
+            hasTrialOrPaid: hasTrialOrPaidBool,
             narratorVoiceId: narratorVoiceId || null,
+            backgroundMusicIndex: musicIdx,
             status: 'pending',
-        });
+            progressPage: 0,
+            progressTotalPages: progressTotalPages || 1,
+        };
+        if (charactersToStore && charactersToStore.length > 0) {
+            createPayload.characters = charactersToStore;
+        }
+        const customBook = await CustomMonthlyBook.create(createPayload);
+
+        if (childSelfieBase64 && typeof childSelfieBase64 === 'string') {
+            const selfieUrl = await uploadSelfieToGCS(childSelfieBase64, customBook._id.toString());
+            if (selfieUrl) {
+                await CustomMonthlyBook.findByIdAndUpdate(customBook._id, { childSelfieUrl: selfieUrl });
+            }
+        }
 
         const { runMonthlyBookGeneration } = require('../jobs/monthlyBookGenerator');
         runMonthlyBookGeneration(customBook._id).catch((err) => {
@@ -235,31 +357,109 @@ router.get('/status/:customMonthlyBookId', async (req, res) => {
 });
 
 /**
+ * Monthly credits: special-email gets 100, subscribed gets 1, else 0.
+ */
+const MONTHLY_CREDITS_SPECIAL_EMAIL = 'michealbouchard7@gmail.com';
+const MONTHLY_CREDITS_SUBSCRIBED = 1;
+const MONTHLY_CREDITS_DEFAULT = 0;
+const MONTHLY_CREDITS_SPECIAL_LIMIT = 100;
+
+/** True if user gets monthly credits (subscribed). Uses AppUser.subscriptionStatus as source of truth; falls back to request for webhook delay. */
+function isSubscribedForCredits(appUser, hasTrialOrPaidFromRequest) {
+    if (!appUser) return Boolean(hasTrialOrPaidFromRequest);
+    const status = String(appUser.subscriptionStatus || '').toLowerCase();
+    const fromDb = status === 'active' || status === 'trial' || status === 'reverse_trial';
+    return fromDb || Boolean(hasTrialOrPaidFromRequest);
+}
+
+function startOfCurrentMonth() {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+}
+
+/**
+ * GET /api/monthly-book/credits
+ * Returns how many monthly book creations the user has used this calendar month and the limit.
+ * Query: userId (required). Optional fallbacks: email, deviceId.
+ * Response: { usedThisMonth, limit }. Backend verifies subscription from AppUser; limit = 1 for subscribed, 0 for free, 100 for special email.
+ */
+router.get('/credits', async (req, res) => {
+    try {
+        const { userId: rawUserId, email: rawEmail, deviceId: rawDeviceId } = req.query;
+        const candidates = [rawUserId, rawEmail, rawDeviceId].filter(Boolean);
+        if (candidates.length === 0) {
+            return res.status(400).json({ success: false, error: 'userId, email, or deviceId required' });
+        }
+        let userId = null;
+        for (const raw of candidates) {
+            userId = await resolveUserId(raw);
+            if (userId) break;
+        }
+        if (!userId) {
+            return res.json({ success: true, usedThisMonth: 0, limit: 0 });
+        }
+        const appUser = await AppUser.findById(userId).select('email subscriptionStatus').lean();
+        const userEmail = (appUser && appUser.email) ? String(appUser.email).trim().toLowerCase() : '';
+        const isSubscribed = isSubscribedForCredits(appUser, false);
+        const limit = userEmail === MONTHLY_CREDITS_SPECIAL_EMAIL
+            ? MONTHLY_CREDITS_SPECIAL_LIMIT
+            : (isSubscribed ? MONTHLY_CREDITS_SUBSCRIBED : MONTHLY_CREDITS_DEFAULT);
+        const startMonth = startOfCurrentMonth();
+        const usedThisMonth = await CustomMonthlyBook.countDocuments({
+            userId,
+            createdAt: { $gte: startMonth },
+        });
+        res.json({ success: true, usedThisMonth, limit });
+    } catch (err) {
+        console.error('Monthly book credits error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/monthly-book/my-books
  * List custom books for a user (for My Library). Optionally include in-progress.
- * Query: userId (required), includeInProgress (optional, 1/true to include pending/generating)
+ * Query: userId (required), includeInProgress (optional). Optional fallbacks: email, deviceId.
+ * Tries userId first, then email, then deviceId so books show even if app sends a different identifier than at create time.
  */
 router.get('/my-books', async (req, res) => {
     try {
-        const { userId: rawUserId, includeInProgress } = req.query;
-        if (!rawUserId) {
-            return res.status(400).json({ success: false, error: 'userId required' });
+        const { userId: rawUserId, email: rawEmail, deviceId: rawDeviceId, includeInProgress } = req.query;
+        if (!rawUserId && !rawEmail && !rawDeviceId) {
+            return res.status(400).json({ success: false, error: 'userId, email, or deviceId required' });
         }
-        const userId = await resolveUserId(rawUserId);
+        const candidates = [rawUserId, rawEmail, rawDeviceId].filter(Boolean);
+        let userId = null;
+        for (const raw of candidates) {
+            userId = await resolveUserId(raw);
+            if (userId) break;
+        }
         if (!userId) {
             return res.json({ success: true, books: [] });
         }
         const includeAll = includeInProgress === '1' || includeInProgress === 'true';
         const statusFilter = includeAll ? {} : { status: 'completed' };
         const list = await CustomMonthlyBook.find({ userId, ...statusFilter })
-            .populate('bookId', 'title files')
+            .populate('bookId', 'title files status')
             .populate('templateId', 'title')
             .populate('sourceBookId', 'title files')
             .sort({ createdAt: -1 })
             .limit(50)
             .lean();
 
-        const completedBookIds = list.filter((b) => b.status === 'completed' && b.bookId?._id).map((b) => b.bookId._id);
+        // Exclude in-progress entries older than 24h so archived/deleted jobs don't show "Creating..." forever
+        const staleCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const listFiltered = list.filter((b) => {
+            if (b.status === 'pending' || b.status === 'generating') {
+                const created = b.createdAt ? new Date(b.createdAt) : null;
+                if (created && created < staleCutoff) return false;
+            }
+            return true;
+        });
+
+        const completedBookIds = listFiltered.filter((b) => b.status === 'completed' && b.bookId?._id && b.bookId?.status !== 'archived').map((b) => b.bookId._id);
         let pageCountByBookId = {};
         if (completedBookIds.length > 0) {
             const counts = await Book.aggregate([
@@ -269,8 +469,9 @@ router.get('/my-books', async (req, res) => {
             counts.forEach((c) => { pageCountByBookId[String(c._id)] = c.pageCount; });
         }
 
-        const books = list.map((b) => {
-            if (b.status === 'completed' && b.bookId) {
+        const books = listFiltered.map((b) => {
+            // Completed with a valid (non-archived, existing) book
+            if (b.status === 'completed' && b.bookId && b.bookId.status !== 'archived') {
                 const bookIdStr = String(b.bookId._id);
                 return {
                     customMonthlyBookId: b._id,
@@ -283,12 +484,25 @@ router.get('/my-books', async (req, res) => {
                     pageCount: pageCountByBookId[bookIdStr],
                 };
             }
+            // Completed but book missing or archived → show as archived so frontend can hide or label
+            if (b.status === 'completed') {
+                const source = b.sourceBookId || b.templateId;
+                return {
+                    customMonthlyBookId: b._id,
+                    bookId: null,
+                    title: source?.title || 'Your story',
+                    coverImageUrl: source?.files?.coverImage || source?.coverImage || null,
+                    childName: b.childName,
+                    createdAt: b.createdAt,
+                    status: 'archived',
+                };
+            }
             const source = b.sourceBookId || b.templateId;
-            const sourceTitle = source?.title || 'Your story';
-            const sourceCover = source?.files?.coverImage || source?.coverImage || null;
+            const sourceTitle = b.bookId?.title || source?.title || 'Your story';
+            const sourceCover = b.bookId?.files?.coverImage || b.bookId?.files?.cover?.url || source?.files?.coverImage || source?.coverImage || null;
             return {
                 customMonthlyBookId: b._id,
-                bookId: null,
+                bookId: b.bookId?._id || null,
                 title: sourceTitle,
                 coverImageUrl: sourceCover,
                 childName: b.childName,
@@ -300,6 +514,86 @@ router.get('/my-books', async (req, res) => {
         res.json({ success: true, books });
     } catch (err) {
         console.error('My monthly books error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/monthly-book/share
+ * Create or return a share link for a kid-created book. Only the owner (userId) can get the link.
+ * Body: { bookId, userId } (userId can be ObjectId, email, or deviceId)
+ * Returns: { shareUrl, shareToken } — client can build shareUrl as appBase/book/:bookId?share=:shareToken
+ */
+router.post('/share', async (req, res) => {
+    try {
+        const { bookId, userId: rawUserId } = req.body;
+        if (!bookId) {
+            return res.status(400).json({ success: false, error: 'bookId is required' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(bookId)) {
+            return res.status(400).json({ success: false, error: 'Invalid bookId' });
+        }
+        const userId = await resolveUserId(rawUserId);
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'User not found. Sign in or provide userId.' });
+        }
+        const custom = await CustomMonthlyBook.findOne({
+            bookId: new mongoose.Types.ObjectId(bookId),
+            userId,
+            status: 'completed',
+        }).select('shareToken').lean();
+        if (!custom) {
+            return res.status(404).json({ success: false, error: 'Book not found or you do not own this Create Your Story book.' });
+        }
+        let shareToken = custom.shareToken;
+        if (!shareToken) {
+            shareToken = crypto.randomBytes(12).toString('hex');
+            await CustomMonthlyBook.updateOne(
+                { bookId: new mongoose.Types.ObjectId(bookId), userId },
+                { $set: { shareToken } }
+            );
+        }
+        res.json({
+            success: true,
+            shareToken,
+            shareUrl: null, // Client builds URL: `${appBase}/book/${bookId}?share=${shareToken}`
+        });
+    } catch (err) {
+        console.error('Monthly book share error:', err);
+        res.status(500).json({ success: false, error: err.message || 'Failed to create share link' });
+    }
+});
+
+/**
+ * GET /api/monthly-book/by-book/:bookId
+ * Check if this bookId is linked to an in-progress CustomMonthlyBook (generating).
+ * Used by BookDetailPage to show loading overlay and retry when user lands on /book/:id for a book still generating.
+ */
+router.get('/by-book/:bookId', async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        if (!bookId || !mongoose.Types.ObjectId.isValid(bookId)) {
+            return res.status(400).json({ success: false, error: 'Valid bookId required' });
+        }
+        const custom = await CustomMonthlyBook.findOne({
+            bookId: new mongoose.Types.ObjectId(bookId),
+            status: { $in: ['pending', 'generating'] },
+        })
+            .select('_id status progressPage progressTotalPages')
+            .lean();
+        if (!custom) {
+            return res.json({ success: true, inProgress: false });
+        }
+        res.json({
+            success: true,
+            inProgress: true,
+            customMonthlyBookId: custom._id,
+            status: custom.status,
+            progressPage: custom.progressPage ?? 0,
+            progressTotalPages: custom.progressTotalPages ?? 0,
+        });
+    } catch (err) {
+        console.error('Monthly book by-book error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

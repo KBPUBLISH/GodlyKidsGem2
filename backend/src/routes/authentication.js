@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
+const { checkPremiumAccess, linkDeviceToEmail, syncUserPremiumFromAppUser } = require('../utils/premiumAccess');
 
 // Old backend configuration
 const OLD_BACKEND_URL = process.env.OLD_BACKEND_URL || 'https://api.godlykids.kbpublish.org';
@@ -147,6 +148,21 @@ router.post('/sign-in', async (req, res) => {
         
         console.log(`✅ Sign-in successful: ${normalizedEmail}`);
 
+        // Link mobile device to email so web Stripe purchases on device id sync to this account
+        const deviceId = deviceInfo?.deviceId;
+        if (deviceId) {
+            try {
+                await linkDeviceToEmail(deviceId, normalizedEmail);
+            } catch (linkErr) {
+                console.warn('⚠️ linkDeviceToEmail on sign-in:', linkErr.message);
+            }
+        }
+
+        await syncUserPremiumFromAppUser(normalizedEmail);
+
+        const premiumCheck = await checkPremiumAccess([normalizedEmail, deviceId].filter(Boolean));
+        const isPremium = premiumCheck.isPremium || user.isPremium;
+
         // Generate tokens
         const payload = {
             user: {
@@ -169,10 +185,13 @@ router.post('/sign-in', async (req, res) => {
         res.json({
             accessToken,
             refreshToken,
+            isPremium,
+            subscriptionRestored: isPremium,
             user: {
                 id: user.id,
                 username: user.username,
                 email: user.email,
+                isPremium,
             },
         });
     } catch (err) {

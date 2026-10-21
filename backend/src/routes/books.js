@@ -1,9 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/Book');
+const CustomMonthlyBook = require('../models/CustomMonthlyBook');
 const SavedCharacter = require('../models/SavedCharacter');
+const AppUser = require('../models/AppUser');
 const mongoose = require('mongoose');
 const { notifyNewBook } = require('../services/notificationService');
+
+/** Resolve userId query (ObjectId, email, or deviceId) to ObjectId for CustomMonthlyBook lookup. */
+async function resolveUserIdForBooks(userId) {
+    if (!userId) return null;
+    if (mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24) {
+        return new mongoose.Types.ObjectId(userId);
+    }
+    const user = await AppUser.findOne({
+        $or: [{ email: userId }, { deviceId: userId }],
+    }).select('_id').lean();
+    return user ? user._id : null;
+}
+
+/** Kid-created (Create Your Story) book IDs — excluded from main catalog, featured, trending, top-rated. */
+async function getGeneratedMonthlyBookIds() {
+    const ids = await CustomMonthlyBook.find({ bookId: { $exists: true, $ne: null } })
+        .distinct('bookId')
+        .lean();
+    return ids;
+}
 
 // GET all books (with pagination support)
 router.get('/', async (req, res) => {
@@ -58,7 +80,26 @@ router.get('/', async (req, res) => {
             // App list (published): exclude kids_monthly so they only appear as Create Your Story templates
             filter.bookType = { $ne: 'kids_monthly' };
         }
-        
+
+        // Kid-created monthly books (CustomMonthlyBook.bookId) are per-user and must NEVER appear in the
+        // main catalog for all users. They only appear in that user's "My Books" via /api/monthly-book/my-books.
+        const generatedBookIds = await getGeneratedMonthlyBookIds();
+        const onlyGeneratedMonthly = req.query.onlyGeneratedMonthly === '1' || req.query.onlyGeneratedMonthly === 'true';
+        if (onlyGeneratedMonthly) {
+            // Portal "Kids Monthly Books" tab only: list books that are kid-created (for admin view).
+            if (generatedBookIds.length > 0) {
+                filter._id = { $in: generatedBookIds };
+            } else {
+                filter._id = { $in: [] };
+            }
+        } else {
+            // Always exclude kid-created books from the main list (app catalog, portal List tab).
+            if (generatedBookIds.length > 0) {
+                filter._id = filter._id || {};
+                filter._id.$nin = (filter._id.$nin || []).concat(generatedBookIds);
+            }
+        }
+
         // Get total count for pagination metadata
         const total = await Book.countDocuments(filter);
         
@@ -70,7 +111,7 @@ router.get('/', async (req, res) => {
         const books = await query.lean();
         
         // Map books to include coverImage for backward compatibility
-        const booksWithCoverImage = books.map(book => {
+        let booksWithCoverImage = books.map(book => {
             // Add coverImage at root level from files.coverImage for backward compatibility
             if (book.files && book.files.coverImage) {
                 book.coverImage = book.files.coverImage;
@@ -80,6 +121,32 @@ router.get('/', async (req, res) => {
             }
             return book;
         });
+
+        // Portal "Kids Monthly Books" tab: attach creator (app user) email and name for tracking
+        if (onlyGeneratedMonthly && booksWithCoverImage.length > 0) {
+            const bookIds = booksWithCoverImage.map(b => b._id);
+            const customBooks = await CustomMonthlyBook.find({ bookId: { $in: bookIds }, status: 'completed' })
+                .select('bookId userId')
+                .lean();
+            const userIds = [...new Set(customBooks.map(c => c.userId && c.userId.toString()).filter(Boolean))];
+            const users = await AppUser.find({ _id: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } })
+                .select('email parentName')
+                .lean();
+            const userMap = Object.fromEntries(users.map(u => [u._id.toString(), { email: u.email || null, parentName: u.parentName || null }]));
+            const bookToUser = Object.fromEntries(
+                customBooks
+                    .filter(c => c.bookId && c.userId)
+                    .map(c => [c.bookId.toString(), userMap[c.userId.toString()] || {}])
+            );
+            booksWithCoverImage = booksWithCoverImage.map(book => {
+                const creator = bookToUser[book._id.toString()];
+                return {
+                    ...book,
+                    createdByEmail: creator?.email || null,
+                    createdByParentName: creator?.parentName || null,
+                };
+            });
+        }
         
         // Return with pagination metadata
         res.json({
@@ -97,12 +164,15 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET featured books for carousel
+// GET featured books for carousel (exclude kid-created books)
 router.get('/featured', async (req, res) => {
     try {
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             isFeatured: true, 
-            status: 'published' 
+            status: 'published',
+            ...excludeIds
         }).sort({ featuredOrder: 1, createdAt: -1 });
         
         // Map books to include coverImage for backward compatibility
@@ -122,15 +192,17 @@ router.get('/featured', async (req, res) => {
     }
 });
 
-// GET top-rated books (15% or more likes/favorites to reads ratio)
+// GET top-rated books (15% or more likes/favorites to reads ratio); exclude kid-created books
 router.get('/top-rated', async (req, res) => {
     try {
         const minRatio = parseFloat(req.query.minRatio) || 0.15; // Default 15%
         const minReads = parseInt(req.query.minReads) || 5; // Minimum reads to qualify
-        
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             status: 'published',
-            readCount: { $gte: minReads } // At least minReads to be considered
+            readCount: { $gte: minReads },
+            ...excludeIds
         });
         
         // Calculate rating ratio and filter
@@ -207,9 +279,14 @@ router.get('/trending', async (req, res) => {
             { $limit: limit }
         ]);
         
-        // If we have trending data, fetch the book details
+        // If we have trending data, fetch the book details (exclude kid-created books)
         if (trendingData.length > 0) {
-            const bookIds = trendingData.map(t => t._id);
+            const generatedIds = await getGeneratedMonthlyBookIds();
+            const generatedSet = new Set(generatedIds.map(id => id.toString()));
+            const bookIds = trendingData.map(t => t._id).filter(id => !generatedSet.has(id.toString()));
+            if (bookIds.length === 0) {
+                return res.json([]);
+            }
             const books = await Book.find({ 
                 _id: { $in: bookIds },
                 status: 'published'
@@ -246,10 +323,13 @@ router.get('/trending', async (req, res) => {
             return res.json(formattedBooks);
         }
         
-        // Fallback: If no recent play events, use readCount
+        // Fallback: If no recent play events, use readCount (exclude kid-created books)
+        const generatedIds = await getGeneratedMonthlyBookIds();
+        const excludeIds = generatedIds.length > 0 ? { _id: { $nin: generatedIds } } : {};
         const books = await Book.find({ 
             status: 'published',
-            readCount: { $gt: 0 }
+            readCount: { $gt: 0 },
+            ...excludeIds
         })
         .sort({ readCount: -1 })
         .limit(limit)
@@ -288,20 +368,92 @@ function parseTimeWindow(window) {
 }
 
 // GET single book
+// Optional query: userId — if provided and this book is a Create Your Story book for that user, response includes isUserCreated: true
+// Optional query: share — if valid share token for this kid-created book, response includes allowSharedRead: true (recipient can read without subscription)
+// If id is not a Book id, tries CustomMonthlyBook id (same user) and returns the generated Book when completed.
 router.get('/:id', async (req, res) => {
     try {
-        const book = await Book.findById(req.params.id);
+        let book = await Book.findById(req.params.id);
+        const rawUserId = req.query.userId || req.query.email || req.query.deviceId;
+        const resolvedUserId = rawUserId ? await resolveUserIdForBooks(rawUserId) : null;
+        const shareToken = (req.query.share && String(req.query.share).trim()) || null;
+
+        // Shared link: validate token and return book with allowSharedRead (no userId required)
+        if (shareToken && book) {
+            const customByShare = await CustomMonthlyBook.findOne({
+                bookId: book._id,
+                shareToken,
+                status: 'completed',
+            }).select('_id childName childCharacterImageUrl childSelfieUrl bookStyleId characters').lean();
+            if (customByShare) {
+                const bookObj = book.toObject();
+                if (bookObj.files && bookObj.files.coverImage) {
+                    bookObj.coverImage = bookObj.files.coverImage;
+                } else if (!bookObj.files) {
+                    bookObj.files = { coverImage: bookObj.coverImage || null, images: [], videos: [], audio: [] };
+                }
+                bookObj.allowSharedRead = true;
+                bookObj.isUserCreated = true;
+                bookObj.createdForChildName = customByShare.childName || null;
+                bookObj.createdForAvatarUrl = customByShare.childCharacterImageUrl || null;
+                bookObj.createdForSelfieUrl = customByShare.childSelfieUrl || null;
+                bookObj.createdWithStyleId = (customByShare.bookStyleId && String(customByShare.bookStyleId).trim()) || null;
+                if (customByShare.characters && customByShare.characters.length > 0) {
+                    bookObj.createdForCharacters = customByShare.characters.map(c => ({
+                        name: c.name,
+                        characterImageUrl: c.characterImageUrl || null,
+                    }));
+                }
+                return res.json(bookObj);
+            }
+        }
+
+        // Fallback: id might be a CustomMonthlyBook id (e.g. link before redirect to bookId)
+        if (!book && resolvedUserId) {
+            const custom = await CustomMonthlyBook.findOne({
+                _id: req.params.id,
+                userId: resolvedUserId,
+                status: 'completed',
+                bookId: { $exists: true, $ne: null },
+            })
+                .select('bookId')
+                .lean();
+            if (custom && custom.bookId) {
+                book = await Book.findById(custom.bookId);
+            }
+        }
+
         if (!book) return res.status(404).json({ message: 'Book not found' });
-        
+
         const bookObj = book.toObject();
         // Add coverImage at root level from files.coverImage for backward compatibility
         if (bookObj.files && bookObj.files.coverImage) {
             bookObj.coverImage = bookObj.files.coverImage;
         } else if (!bookObj.files) {
-            // If files doesn't exist (old data), keep coverImage as is
             bookObj.files = { coverImage: bookObj.coverImage || null, images: [], videos: [], audio: [] };
         }
-        
+
+        if (resolvedUserId) {
+            const custom = await CustomMonthlyBook.findOne({
+                bookId: book._id,
+                userId: resolvedUserId,
+                status: 'completed',
+            }).select('_id childName childCharacterImageUrl childSelfieUrl bookStyleId characters').lean();
+            if (custom) {
+                bookObj.isUserCreated = true;
+                bookObj.createdForChildName = custom.childName || null;
+                bookObj.createdForAvatarUrl = custom.childCharacterImageUrl || null;
+                bookObj.createdForSelfieUrl = custom.childSelfieUrl || null;
+                bookObj.createdWithStyleId = (custom.bookStyleId && String(custom.bookStyleId).trim()) || null;
+                if (custom.characters && custom.characters.length > 0) {
+                    bookObj.createdForCharacters = custom.characters.map(c => ({
+                        name: c.name,
+                        characterImageUrl: c.characterImageUrl || null,
+                    }));
+                }
+            }
+        }
+
         res.json(bookObj);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -329,6 +481,8 @@ router.post('/', async (req, res) => {
             category: req.body.category || 'Other',
             status: req.body.status || 'draft',
             bookType: req.body.bookType || 'standard',
+            readerLayout: req.body.readerLayout === 'swipe_up' ? 'swipe_up' : 'side_swipe',
+            orientation: req.body.orientation === 'landscape' ? 'landscape' : 'portrait',
             text: req.body.text || '',
             games: req.body.games || [],
             bookGames: req.body.bookGames || [],
@@ -367,7 +521,13 @@ router.post('/', async (req, res) => {
                 bookData.files.videos = req.body.files.videos;
             }
             if (req.body.files.audio) {
-                bookData.files.audio = req.body.files.audio;
+                bookData.files.audio = Array.isArray(req.body.files.audio)
+                    ? req.body.files.audio.slice(0, 3)
+                    : [];
+            }
+            if (req.body.files.defaultAudioIndex !== undefined) {
+                const idx = Math.max(0, Math.min(2, parseInt(req.body.files.defaultAudioIndex, 10) || 0));
+                bookData.files.defaultAudioIndex = idx;
             }
         }
 
@@ -376,7 +536,7 @@ router.post('/', async (req, res) => {
         const newBook = await book.save();
         console.log('Book created successfully:', newBook._id);
         
-        // Send notification if book is published
+        // Send notification if book is published (Kids Monthly books are excluded — Create Your Story only)
         if (newBook.status === 'published') {
             notifyNewBook(newBook).catch(err => console.error('Notification error:', err));
         }
@@ -436,7 +596,13 @@ router.put('/:id', async (req, res) => {
                 book.files.videos = req.body.files.videos;
             }
             if (req.body.files.audio !== undefined) {
-                book.files.audio = req.body.files.audio;
+                book.files.audio = Array.isArray(req.body.files.audio)
+                    ? req.body.files.audio.slice(0, 3)
+                    : [];
+            }
+            if (req.body.files.defaultAudioIndex !== undefined) {
+                const idx = Math.max(0, Math.min(2, parseInt(req.body.files.defaultAudioIndex, 10) || 0));
+                book.files.defaultAudioIndex = idx;
             }
             delete req.body.files; // Remove from body to avoid duplicate assignment
         }
@@ -500,7 +666,7 @@ router.put('/:id', async (req, res) => {
         const updatedBook = await book.save();
         console.log('Book after save - files.coverImage:', updatedBook.files?.coverImage);
         
-        // Send notification if book was just published (status changed to published)
+        // Send notification if book was just published (Kids Monthly excluded — Create Your Story only)
         if (!wasPublished && updatedBook.status === 'published') {
             notifyNewBook(updatedBook).catch(err => console.error('Notification error:', err));
         }

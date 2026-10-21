@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, Music, SkipBack, SkipForward, Crown, Lock } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useUser } from '../../context/UserContext';
+import { getCoverThumb } from '../../utils/coverImage';
 
 const MiniPlayer: React.FC = () => {
     const {
@@ -37,6 +38,11 @@ const MiniPlayer: React.FC = () => {
         location.pathname.includes('/play/') ||
         location.pathname.includes('/read/') ||
         location.pathname.includes('/book-reader')) {
+        return null;
+    }
+
+    // Hide when on Listen page with Music Island playlist active (widget shown on island instead)
+    if (location.pathname === '/listen' && currentPlaylist.title?.toLowerCase().includes('bible bit')) {
         return null;
     }
 
@@ -147,7 +153,7 @@ const MiniPlayer: React.FC = () => {
                     >
                         {currentTrack.coverImage || currentPlaylist.coverImage ? (
                             <img
-                                src={currentTrack.coverImage || currentPlaylist.coverImage}
+                                src={getCoverThumb(currentTrack.coverImage || currentPlaylist.coverImage)}
                                 alt={currentTrack.title}
                                 className="w-full h-full object-cover"
                             />

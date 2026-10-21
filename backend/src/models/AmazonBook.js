@@ -14,10 +14,10 @@ const amazonBookSchema = new mongoose.Schema({
         type: String,
     },
     
-    // Amazon product details
+    // Amazon product details (optional if the book is sold via Stripe instead)
     amazonUrl: {
         type: String,
-        required: true,
+        default: '',
     },
     asin: {
         type: String, // Amazon Standard Identification Number (optional)
@@ -25,13 +25,56 @@ const amazonBookSchema = new mongoose.Schema({
     price: {
         type: String, // Display price (e.g., "$12.99")
     },
+
+    // Stripe checkout (optional) - supports two modes:
+    //   1. stripePaymentLinkUrl: a pre-built Payment Link (https://buy.stripe.com/...)
+    //      -> clicking the button just opens that URL directly.
+    //   2. stripePriceId: a Stripe Price id (e.g. price_1Abc...) -> the backend
+    //      creates a Checkout Session on demand and redirects the buyer.
+    // If both are set, the Payment Link takes precedence (simpler path).
+    stripePaymentLinkUrl: {
+        type: String,
+        default: '',
+    },
+    stripePriceId: {
+        type: String,
+        default: '',
+    },
     
-    // Cover image
+    // Cover image (main)
     coverImage: {
         type: String,
         required: true,
     },
-    
+
+    // Additional gallery images shown on the book detail page
+    images: {
+        type: [String],
+        default: [],
+    },
+
+    // Optional promo video (YouTube / Vimeo / direct mp4 URL)
+    promoVideoUrl: {
+        type: String,
+        default: '',
+    },
+
+    // Parent / reader reviews shown on the bookstore detail page
+    reviews: {
+        type: [
+            new mongoose.Schema(
+                {
+                    author: { type: String, required: true },
+                    rating: { type: Number, min: 1, max: 5, default: 5 },
+                    text: { type: String, default: '' },
+                    date: { type: Date, default: Date.now },
+                },
+                { _id: true }
+            ),
+        ],
+        default: [],
+    },
+
     // Categorization
     category: {
         type: String,
@@ -84,6 +127,10 @@ const amazonBookSchema = new mongoose.Schema({
     
     // Analytics
     clickCount: {
+        type: Number,
+        default: 0,
+    },
+    stripeClickCount: {
         type: Number,
         default: 0,
     },

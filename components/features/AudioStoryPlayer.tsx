@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Play, Pause, RotateCcw, SkipForward, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
+import { attachReliableLoop } from '../../utils/audioLoop';
 
 // Word alignment from TTS API
 interface WordAlignment {
@@ -46,6 +47,7 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
     // Refs
     const narrationRef = useRef<HTMLAudioElement>(null);
     const musicRef = useRef<HTMLAudioElement>(null);
+    const musicLoopDetachRef = useRef<(() => void) | null>(null);
     const textContainerRef = useRef<HTMLDivElement>(null);
     const highlightedWordRef = useRef<HTMLSpanElement>(null);
 
@@ -76,10 +78,12 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
             
             // Set up background music
             if (musicRef.current && story.backgroundMusicUrl) {
+                musicLoopDetachRef.current?.();
                 musicRef.current.src = story.backgroundMusicUrl;
                 musicRef.current.volume = 0.15;
                 musicRef.current.loop = true;
                 musicRef.current.load();
+                musicLoopDetachRef.current = attachReliableLoop(musicRef.current, true);
             }
             
             // Set up word alignment
@@ -104,6 +108,8 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
             if (narrationRef.current) {
                 narrationRef.current.pause();
             }
+            musicLoopDetachRef.current?.();
+            musicLoopDetachRef.current = null;
             if (musicRef.current) {
                 musicRef.current.pause();
             }
@@ -330,12 +336,12 @@ const AudioStoryPlayer: React.FC<AudioStoryPlayerProps> = ({
                                         <span
                                             key={idx}
                                             ref={isHighlighted ? highlightedWordRef : null}
-                                            className={`inline transition-all duration-150 ${
+                                            className={`gk-readalong-word transition-opacity duration-200 ${
                                                 isHighlighted
-                                                    ? 'text-[#FFD700] font-semibold scale-105 bg-[#FFD700]/20 rounded px-1 -mx-1'
+                                                    ? 'gk-readalong-word--current text-[#FFD700] font-semibold bg-[#FFD700]/25 rounded px-1 -mx-1 shadow-[0_0_18px_rgba(255,215,0,0.45)] ring-1 ring-amber-400/60 opacity-100'
                                                     : isPast
-                                                        ? 'text-white/70'
-                                                        : 'text-white/90'
+                                                        ? 'text-white/75'
+                                                        : 'text-white/42'
                                             }`}
                                         >
                                             {word}{' '}

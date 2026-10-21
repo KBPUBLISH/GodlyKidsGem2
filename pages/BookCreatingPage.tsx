@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getApiBaseUrl } from '../services/apiService';
+import { getMonthlyBookBaseUrl } from '../services/apiService';
 import Header from '../components/layout/Header';
 import { BookOpen, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 
@@ -18,11 +18,7 @@ interface StatusResponse {
   errorMessage?: string | null;
 }
 
-function getApiRoot(): string {
-  const raw = (getApiBaseUrl() || '').replace(/\/$/, '');
-  const withoutApi = raw.replace(/\/api\/?$/, '');
-  return withoutApi || raw;
-}
+const GEN_RETRY_COOLDOWN_MS = 120000; // 2 minutes between retry clicks
 
 const BookCreatingPage: React.FC = () => {
   const { customMonthlyBookId } = useParams<{ customMonthlyBookId: string }>();
@@ -31,12 +27,16 @@ const BookCreatingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [retryCooldownTick, setRetryCooldownTick] = useState(0);
+
+  const retryCooldownKey = customMonthlyBookId ? `godlykids_gen_retry_${customMonthlyBookId}` : '';
+  const lastRetryAt = retryCooldownKey ? parseInt(localStorage.getItem(retryCooldownKey) || '0', 10) : 0;
+  const retryCooldownRemaining = lastRetryAt ? Math.max(0, GEN_RETRY_COOLDOWN_MS - (Date.now() - lastRetryAt)) : 0;
 
   const fetchStatus = useCallback(async () => {
     if (!customMonthlyBookId) return;
-    const base = getApiRoot();
     try {
-      const res = await fetch(`${base}/api/monthly-book/status/${customMonthlyBookId}`);
+      const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/status/${customMonthlyBookId}`);
       const data = await res.json().catch(() => ({}));
       if (data.success) {
         setStatus(data);
@@ -56,9 +56,20 @@ const BookCreatingPage: React.FC = () => {
   }, [fetchStatus]);
 
   useEffect(() => {
+    if (retryCooldownRemaining <= 0) return;
+    const t = setInterval(() => setRetryCooldownTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [retryCooldownRemaining, retryCooldownTick]);
+
+  useEffect(() => {
     if (!customMonthlyBookId || !status) return;
     if (status.status === 'completed' && status.bookId) {
       navigate(`/book/${status.bookId}`, { replace: true });
+      return;
+    }
+    // Once we have a bookId, redirect to book detail page (shows same overlay there)
+    if (status.bookId && (status.status === 'pending' || status.status === 'generating')) {
+      navigate(`/book/${status.bookId}`, { replace: true, state: { customMonthlyBookId, isGenerating: true } });
       return;
     }
     if (status.status === 'failed' || status.status === 'completed') return;
@@ -74,8 +85,9 @@ const BookCreatingPage: React.FC = () => {
   if (loading && !status) {
     return (
       <>
+        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }} aria-hidden />
         <Header isVisible={true} title="MY LIBRARY" />
-        <div className="flex flex-col min-h-full items-center justify-center px-4 pt-24">
+        <div className="relative z-10 flex flex-col min-h-full items-center justify-center px-4 pt-24">
           <Loader2 className="w-12 h-12 text-amber-400 animate-spin mb-4" />
           <p className="text-white/80">Loading...</p>
         </div>
@@ -86,8 +98,9 @@ const BookCreatingPage: React.FC = () => {
   if (error && !status) {
     return (
       <>
+        <div className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }} aria-hidden />
         <Header isVisible={true} title="MY LIBRARY" />
-        <div className="flex flex-col min-h-full items-center justify-center px-4 pt-24">
+        <div className="relative z-10 flex flex-col min-h-full items-center justify-center px-4 pt-24">
           <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
           <p className="text-white/80 text-center mb-4">{error}</p>
           <button
@@ -110,8 +123,14 @@ const BookCreatingPage: React.FC = () => {
 
   return (
     <>
+      {/* Theatrical curtain background (same as Create Your Story creating view) */}
+      <div
+        className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none"
+        style={{ backgroundImage: 'url(/assets/images/create-story-curtain.webp)' }}
+        aria-hidden
+      />
       <Header isVisible={true} title="MY LIBRARY" />
-      <div className="flex flex-col min-h-full px-4 pt-24 pb-12" style={{ paddingTop: 'max(6rem, calc(var(--safe-area-top, 0px) + 4rem))' }}>
+      <div className="relative z-10 flex flex-col min-h-full px-4 pt-24 pb-12" style={{ paddingTop: 'max(6rem, calc(var(--safe-area-top, 0px) + 4rem))' }}>
         <button
           onClick={() => navigate('/library', { state: { fromCreating: true } })}
           className="self-start flex items-center gap-2 text-amber-200 hover:text-amber-100 mb-6"
@@ -174,23 +193,32 @@ const BookCreatingPage: React.FC = () => {
               </div>
               <div className="p-4">
                 <h2 className="text-white font-bold text-lg truncate">{status.title || 'Your story'}</h2>
+                <p className="text-amber-200 font-medium text-sm mt-2">
+                  {current} of {total} pages done
+                </p>
                 <div className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden">
                   <div
                     className="h-full bg-amber-500 rounded-full transition-all duration-500"
                     style={{ width: total ? `${(current / total) * 100}%` : '0%' }}
                   />
                 </div>
-                <p className="text-amber-200/80 text-xs mt-2">
-                  {current} of {total} pages complete
-                </p>
-                {status.bookId && current > 0 && (
+                {status.status === 'completed' && status.bookId ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/book/${status.bookId}`)}
-                    className="mt-4 w-full py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2"
+                    className="mt-4 w-full py-3 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2 hover:bg-amber-600 active:scale-[0.98]"
                   >
                     <BookOpen className="w-5 h-5" />
-                    Preview book ({current} page{current === 1 ? '' : 's'})
+                    Also read
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-4 w-full py-3 rounded-xl bg-white/10 text-white/50 font-bold flex items-center justify-center gap-2 cursor-not-allowed border border-white/20"
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    Also read — available when ready
                   </button>
                 )}
               </div>
@@ -203,13 +231,14 @@ const BookCreatingPage: React.FC = () => {
               <div className="text-center mt-4">
                 <button
                   type="button"
-                  disabled={retrying}
+                  disabled={retrying || retryCooldownRemaining > 0}
                   onClick={async () => {
-                    if (!customMonthlyBookId) return;
+                    if (!customMonthlyBookId || retryCooldownRemaining > 0) return;
+                    localStorage.setItem(retryCooldownKey, String(Date.now()));
+                    setRetryCooldownTick((n) => n + 1);
                     setRetrying(true);
                     try {
-                      const base = getApiRoot();
-                      const res = await fetch(`${base}/api/monthly-book/retry/${customMonthlyBookId}`, { method: 'POST' });
+                      const res = await fetch(`${getMonthlyBookBaseUrl()}/monthly-book/retry/${customMonthlyBookId}`, { method: 'POST' });
                       const data = await res.json().catch(() => ({}));
                       if (data.success) {
                         await fetchStatus();
@@ -220,7 +249,11 @@ const BookCreatingPage: React.FC = () => {
                   }}
                   className="text-amber-300 hover:text-amber-200 text-sm underline disabled:opacity-50"
                 >
-                  {retrying ? 'Retrying…' : 'Generation stuck? Tap to resume from next page'}
+                  {retrying
+                    ? 'Retrying…'
+                    : retryCooldownRemaining > 0
+                      ? `Try again in ${Math.ceil(retryCooldownRemaining / 1000)}s`
+                      : 'Generation stuck? Tap to resume from next page'}
                 </button>
               </div>
             )}

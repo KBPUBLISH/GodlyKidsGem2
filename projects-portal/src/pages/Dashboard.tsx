@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
     Users, UserPlus, Coins, Baby, Calendar, TrendingUp, 
     Activity, Smartphone, Globe, Monitor, RefreshCw,
     ChevronDown, ChevronUp, Search, ArrowUpRight, ArrowDownRight,
-    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail
+    BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, BookMarked,
+    Download, Trash2
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UserData {
     id: string;
@@ -50,6 +53,10 @@ interface UserData {
     // Onboarding fields
     onboardingStatus?: string;
     onboardingCompletedAt?: string;
+    /** Row origin: login table vs app-only profile */
+    source?: 'auth' | 'app';
+    /** Email/password login (User) and still on free tier — never started 14-day trial (server-computed). */
+    loginNoTrialYet?: boolean;
 }
 
 interface GameStats {
@@ -100,6 +107,17 @@ interface AnalyticsData {
     summary: {
         totalUsers: number;
         totalUsersAllTime: number;
+        /** Login accounts (User collection), may be filtered by time range */
+        authUsers?: number;
+        anonymousUsers?: number;
+        /** All-time count of users with an email+password login (User collection) */
+        loginAccountsAllTime?: number;
+        /** All-time app-only profiles (no User login row) */
+        appOnlyAccountsAllTime?: number;
+        /** Login accounts in selected time range still on `free` (never started trial/subscription). */
+        loginAccountsNeverStartedTrial?: number;
+        /** Same cohort, all-time user list size. */
+        loginAccountsNeverStartedTrialAllTime?: number;
         totalCoins: number;
         totalKids: number;
         totalSessions: number;
@@ -158,6 +176,12 @@ const getApiBase = () => {
 };
 const API_BASE = getApiBase();
 
+type UserCohortFilter = 'all' | 'login_no_trial';
+
+const isLoginAccountNoTrial = (u: UserData): boolean =>
+    u.loginNoTrialYet === true ||
+    (u.source === 'auth' && (u.subscriptionStatus || 'free') === 'free');
+
 const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
     { value: '1d', label: '1 Day' },
     { value: '1w', label: '1 Week' },
@@ -167,6 +191,7 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
 ];
 
 const Dashboard: React.FC = () => {
+    const { getToken } = useAuth();
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [gameAnalytics, setGameAnalytics] = useState<GameAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
@@ -178,6 +203,8 @@ const Dashboard: React.FC = () => {
     const [timeView, setTimeView] = useState<'daily' | 'weekly'>('daily');
     const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('all');
     const [showGameSection, setShowGameSection] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [cohortFilter, setCohortFilter] = useState<UserCohortFilter>('all');
 
     const fetchData = async (timeRange: TimeRange = selectedTimeRange) => {
         setLoading(true);
@@ -210,6 +237,102 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         fetchData(selectedTimeRange);
     }, [selectedTimeRange]);
+
+    const buildUserCsvRows = (users: UserData[], onlyLoginNoTrial: boolean) => {
+        const csvEscape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
+        const lines: string[] = [];
+        for (const u of users) {
+            if (onlyLoginNoTrial && !isLoginAccountNoTrial(u)) continue;
+            let email = u.email && u.email !== 'Anonymous' ? u.email.trim() : '';
+            if (!email && u.subscriberEmail) email = u.subscriberEmail.trim();
+            if (!email || !email.includes('@')) continue;
+            const loginNoTrial = isLoginAccountNoTrial(u) ? 'yes' : 'no';
+            lines.push(
+                [
+                    csvEscape(email),
+                    u.source || '',
+                    u.accountType,
+                    u.subscriptionStatus || 'free',
+                    loginNoTrial,
+                    csvEscape(u.createdAt || ''),
+                    u.id,
+                ].join(',')
+            );
+        }
+        return lines;
+    };
+
+    const downloadEmailCsv = () => {
+        if (!data?.users?.length) return;
+        const header =
+            'email,source,account_type,subscription_status,login_never_started_trial,created_at,user_id\n';
+        const lines = buildUserCsvRows(data.users, false);
+        const blob = new Blob([header + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `godlykids-users-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const downloadLoginNoTrialCsv = () => {
+        if (!data?.users?.length) return;
+        const header =
+            'email,source,account_type,subscription_status,login_never_started_trial,created_at,user_id\n';
+        const lines = buildUserCsvRows(data.users, true);
+        if (!lines.length) {
+            window.alert('No users match: login account and never started trial (still on free).');
+            return;
+        }
+        const blob = new Blob([header + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `godlykids-login-no-trial-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDeleteUser = async (user: UserData, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const src = user.source;
+        if (!src) {
+            window.alert('Cannot delete: missing account type. Refresh the dashboard and try again.');
+            return;
+        }
+        const token = getToken();
+        if (!token) {
+            window.alert('You must be logged in to delete users.');
+            return;
+        }
+        const ok = window.confirm(
+            `Permanently delete this user from the database?\n\n${user.email}\n(${src === 'auth' ? 'login account (+ linked app profile if any)' : 'app profile only'})\n\nThis cannot be undone.`
+        );
+        if (!ok) return;
+        setDeletingId(user.id);
+        try {
+            const res = await fetch(
+                `${API_BASE}/analytics/admin/users/${encodeURIComponent(user.id)}?source=${encodeURIComponent(src)}`,
+                { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+            );
+            const json = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+            if (!res.ok) {
+                window.alert(
+                    json.message ||
+                        json.error ||
+                        `Delete failed (${res.status})`
+                );
+                return;
+            }
+            await fetchData(selectedTimeRange);
+        } catch (err) {
+            console.error(err);
+            window.alert('Failed to delete user');
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-US', {
@@ -251,6 +374,9 @@ const Dashboard: React.FC = () => {
     // Filter and sort users
     const filteredUsers = data?.users
         .filter(user => {
+            if (cohortFilter === 'login_no_trial' && !isLoginAccountNoTrial(user)) {
+                return false;
+            }
             const search = searchTerm.toLowerCase();
             return (
                 user.email.toLowerCase().includes(search) ||
@@ -334,6 +460,25 @@ const Dashboard: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                    <button
+                        type="button"
+                        onClick={downloadEmailCsv}
+                        disabled={!data?.users?.length}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <Download className="w-4 h-4" />
+                        Download users (CSV)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={downloadLoginNoTrialCsv}
+                        disabled={!data?.users?.length}
+                        title="Export only email/password logins still on free (never started 14-day trial)"
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg hover:bg-amber-100 disabled:opacity-50 text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        CSV: login, no trial
+                    </button>
                     <button 
                         onClick={() => fetchData(selectedTimeRange)}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
@@ -359,8 +504,35 @@ const Dashboard: React.FC = () => {
                 </div>
             )}
 
+            {/* Kids Monthly quick access - Create Your Story templates & character design */}
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                <h3 className="text-sm font-semibold text-indigo-800 mb-2 flex items-center gap-2">
+                    <BookMarked className="w-4 h-4" />
+                    Kids Monthly (Create Your Story)
+                </h3>
+                <div className="flex flex-wrap gap-3">
+                    <Link
+                        to="/monthly-books"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+                    >
+                        <BookOpen className="w-4 h-4" />
+                        Kids Monthly Book Character Design
+                    </Link>
+                    <Link
+                        to="/books"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-50"
+                    >
+                        <BookOpen className="w-4 h-4" />
+                        Books → set type &quot;Kids Monthly Book&quot; for templates
+                    </Link>
+                </div>
+                <p className="text-xs text-indigo-600/80 mt-2">
+                    Character Design = Noah, David, etc. Books = create a book, set Book type to &quot;Kids Monthly Book&quot;, publish → it appears in the app&apos;s Create Your Story.
+                </p>
+            </div>
+
             {/* Summary Cards - Row 1: Users & Engagement */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                         <Users className="w-4 h-4" />
@@ -369,6 +541,36 @@ const Dashboard: React.FC = () => {
                     <p className="text-2xl font-bold text-gray-900">{data.summary.totalUsers.toLocaleString()}</p>
                     {selectedTimeRange !== 'all' && data.summary.totalUsersAllTime && (
                         <p className="text-xs text-gray-400">of {data.summary.totalUsersAllTime.toLocaleString()} total</p>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm ring-1 ring-indigo-50">
+                    <div className="flex items-center gap-2 text-indigo-700 text-sm mb-1 font-medium">
+                        <Mail className="w-4 h-4" />
+                        Login accounts (all time)
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-800">
+                        {(data.summary.loginAccountsAllTime ?? data.summary.authUsers ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        Email + password users (User collection)
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-sm ring-1 ring-amber-50">
+                    <div className="flex items-center gap-2 text-amber-800 text-sm mb-1 font-medium">
+                        <Mail className="w-4 h-4" />
+                        Login, never started trial
+                    </div>
+                    <p className="text-2xl font-bold text-amber-900">
+                        {(data.summary.loginAccountsNeverStartedTrial ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-amber-700/80 mt-1">
+                        In period · free tier only
+                    </p>
+                    {selectedTimeRange !== 'all' &&
+                        data.summary.loginAccountsNeverStartedTrialAllTime != null && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                            {data.summary.loginAccountsNeverStartedTrialAllTime.toLocaleString()} all-time
+                        </p>
                     )}
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
@@ -820,9 +1022,18 @@ const Dashboard: React.FC = () => {
                 <div className="p-4 border-b border-gray-100">
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-800">All Users</h3>
-                        <div className="flex gap-3 w-full md:w-auto">
+                        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                            <select
+                                value={cohortFilter}
+                                onChange={(e) => setCohortFilter(e.target.value as UserCohortFilter)}
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[200px]"
+                                title="Filter the table (and search within the filter)"
+                            >
+                                <option value="all">Show: all users</option>
+                                <option value="login_no_trial">Show: login, never started trial</option>
+                            </select>
                             {/* Search */}
-                            <div className="relative flex-1 md:w-64">
+                            <div className="relative flex-1 md:w-64 min-w-[180px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -867,6 +1078,7 @@ const Dashboard: React.FC = () => {
                                 <th className="px-4 py-3 text-center font-medium">Platform</th>
                                 <th className="px-4 py-3 text-left font-medium">Created</th>
                                 <th className="px-4 py-3 text-left font-medium">Last Active</th>
+                                <th className="px-4 py-3 text-right font-medium w-28">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -886,6 +1098,14 @@ const Dashboard: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <p className="font-medium text-gray-800">{user.email}</p>
                                                         {/* Account type badge */}
+                                                        {isLoginAccountNoTrial(user) && (
+                                                            <span
+                                                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-900 border border-amber-200"
+                                                                title="Email/password login, still on free — did not start 14-day trial"
+                                                            >
+                                                                No trial
+                                                            </span>
+                                                        )}
                                                         {user.accountType === 'email' ? (
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
                                                                 <Mail className="w-2.5 h-2.5 mr-0.5" />
@@ -959,10 +1179,22 @@ const Dashboard: React.FC = () => {
                                         <td className="px-4 py-3 text-gray-500 text-xs">
                                             {user.lastActiveAt ? formatDate(user.lastActiveAt) : '-'}
                                         </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <button
+                                                type="button"
+                                                title="Remove this user from the database"
+                                                disabled={deletingId === user.id || !user.source}
+                                                onClick={(e) => handleDeleteUser(user, e)}
+                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Delete
+                                            </button>
+                                        </td>
                                     </tr>
                                     {expandedUserId === user.id && (
                                         <tr className="bg-indigo-50">
-                                            <td colSpan={9} className="px-6 py-4">
+                                            <td colSpan={10} className="px-6 py-4">
                                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                                     <div>
                                                         <p className="text-xs text-gray-500 mb-1">Kid Profiles</p>

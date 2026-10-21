@@ -142,11 +142,17 @@ app.use('/api/character', require('./routes/character'));
 // Devotional Stories (Personalized Stories)
 app.use('/api/devotional-stories', require('./routes/devotional-stories'));
 
+// Episode Scripts & Character Voices (Audio Production)
+app.use('/api/episode-scripts', require('./routes/episodeScriptsRoutes'));
+app.use('/api/character-voices', require('./routes/characterVoicesRoutes'));
+
 // Background Music Library (for Devotional Stories)
 app.use('/api/background-music', require('./routes/background-music'));
 
 // Character Poses (for Illustrated Stories)
 app.use('/api/character-poses', require('./routes/character-poses'));
+app.use('/api/karaoke', require('./routes/karaoke'));
+app.use('/api/music-videos', require('./routes/musicVideos'));
 
 // AI Character Placement (analyzes backgrounds for optimal character positioning)
 app.use('/api/character-placement', require('./routes/character-placement'));

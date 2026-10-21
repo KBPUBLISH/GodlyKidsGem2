@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BookCard from '../components/ui/BookCard';
 import Header from '../components/layout/Header';
-import { getApiBaseUrl } from '../services/apiService';
+import { getMonthlyBookBaseUrl } from '../services/apiService';
 import { authService } from '../services/authService';
 import { BookOpen, Loader2, ChevronRight } from 'lucide-react';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
 
 /** From GET /api/monthly-book/my-books — only kid-created books (not templates). */
 interface MyMonthlyBook {
@@ -16,12 +17,6 @@ interface MyMonthlyBook {
   createdAt: string;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   pageCount?: number;
-}
-
-function getApiRoot(): string {
-  const raw = (getApiBaseUrl() || '').replace(/\/$/, '');
-  const withoutApi = raw.replace(/\/api\/?$/, '');
-  return withoutApi || raw;
 }
 
 /**
@@ -37,14 +32,12 @@ const KidsMonthlyPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
 
-  const user = authService.getUser();
-  const userId = (user as any)?._id || (user as any)?.id || user?.email || localStorage.getItem('godlykids_user_email') || localStorage.getItem('device_id');
+  const userId = authService.getUserIdForBackend();
 
   const fetchBooks = React.useCallback(() => {
     if (!userId) return;
     setLoading(true);
-    const base = getApiRoot();
-    fetch(`${base}/api/monthly-book/my-books?userId=${encodeURIComponent(userId)}&includeInProgress=1`)
+    fetch(`${getMonthlyBookBaseUrl()}/monthly-book/my-books?userId=${encodeURIComponent(userId)}&includeInProgress=1`)
       .then((res) => res.json().catch(() => ({})))
       .then((data) => {
         if (data.success && Array.isArray(data.books)) {
@@ -99,23 +92,24 @@ const KidsMonthlyPage: React.FC = () => {
           Stories you created with &quot;Create your story&quot; — just for you, not in the main library.
         </p>
 
-        {/* CTA to create a new one */}
-        <button
-          type="button"
-          onClick={() => navigate('/create-your-story')}
-          className="w-full mb-8 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
-        >
-          <div className="p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
-              <BookOpen className="w-8 h-8 text-amber-200" />
+        {FEATURE_CREATE_YOUR_STORY && (
+          <button
+            type="button"
+            onClick={() => navigate('/create-your-story')}
+            className="w-full mb-8 rounded-2xl overflow-hidden border-2 border-amber-400/60 bg-gradient-to-br from-amber-600/40 to-amber-800/50 shadow-xl active:scale-[0.98] transition-transform"
+          >
+            <div className="p-4 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+                <BookOpen className="w-8 h-8 text-amber-200" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h2 className="text-white font-bold text-lg">Create your story</h2>
+                <p className="text-amber-100/90 text-sm mt-0.5">A new adventure with you in it.</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-amber-200 shrink-0" />
             </div>
-            <div className="flex-1 min-w-0 text-left">
-              <h2 className="text-white font-bold text-lg">Create your story</h2>
-              <p className="text-amber-100/90 text-sm mt-0.5">A new adventure with you in it.</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-amber-200 shrink-0" />
-          </div>
-        </button>
+          </button>
+        )}
 
         {loading ? (
           <div className="py-12 flex flex-col items-center gap-3">
@@ -145,11 +139,6 @@ const KidsMonthlyPage: React.FC = () => {
                       } as any}
                       onClick={(id) => navigate(`/book/${id}`, { state: { from: '/kids-monthly' } })}
                     />
-                    {item.pageCount != null && item.pageCount > 0 && (
-                      <p className="text-amber-200/90 text-xs text-center mt-1">
-                        {item.pageCount} {item.pageCount === 1 ? 'page' : 'pages'}
-                      </p>
-                    )}
                   </>
                 ) : item.status === 'failed' ? (
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-red-400/40">
@@ -166,7 +155,13 @@ const KidsMonthlyPage: React.FC = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => navigate(`/library/creating/${item.customMonthlyBookId}`)}
+                    onClick={() => {
+                      if (item.bookId) {
+                        navigate(`/book/${item.bookId}`, { state: { customMonthlyBookId: item.customMonthlyBookId, isGenerating: true } });
+                      } else {
+                        navigate(`/library/creating/${item.customMonthlyBookId}`);
+                      }
+                    }}
                     className="w-full text-left bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border-2 border-amber-400/30 hover:border-amber-400/50 active:scale-[0.98] transition-all"
                   >
                     <div className="aspect-square relative bg-gradient-to-br from-amber-900/40 to-amber-800/30">

@@ -11,6 +11,11 @@ const customMonthlyBookSchema = new mongoose.Schema({
         required: true,
         index: true,
     },
+    // Raw identifier from client (email or deviceId) — used for push so OneSignal external_user_id matches
+    rawUserId: {
+        type: String,
+        required: false,
+    },
     kidId: {
         type: String,
         required: true,
@@ -38,8 +43,22 @@ const customMonthlyBookSchema = new mongoose.Schema({
     childCharacterImageUrl: {
         type: String,
     },
-    // MVP: one style; store style id or label if we need it for generation
+    // Original selfie image URL (uploaded when creating book; for before/after display)
+    childSelfieUrl: {
+        type: String,
+    },
+    // Multi-character (1–3): when set, generator uses these; childName/childCharacterImageUrl = first for legacy
+    characters: [{
+        name: { type: String, required: true },
+        characterImageUrl: { type: String },
+    }],
+    // How the main character (kid) is drawn — from character creation or chosen here
     characterStyleId: {
+        type: String,
+        default: 'illustrated',
+    },
+    // How the whole book is drawn (all characters + environment); can differ from character (e.g. Lego you in a Pixar book)
+    bookStyleId: {
         type: String,
         default: 'illustrated',
     },
@@ -48,10 +67,12 @@ const customMonthlyBookSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
-    // User-selected narrator voice (ElevenLabs voice ID) for TTS when reading the book
-    narratorVoiceId: {
-        type: String,
-        default: null,
+    // User-selected background music track (0, 1, or 2) from source book's up-to-3 tracks
+    backgroundMusicIndex: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 2,
     },
     status: {
         type: String,
@@ -65,18 +86,25 @@ const customMonthlyBookSchema = new mongoose.Schema({
         ref: 'Book',
         index: true,
     },
+    progressPage: { type: Number, default: 0 },
+    progressTotalPages: { type: Number, default: 0 },
+    generationNonce: { type: String, default: '' },
     errorMessage: {
         type: String,
     },
-    // Progress for loading UI (page index 1-based; 0 = not started)
-    progressPage: { type: Number, default: 0 },
-    progressTotalPages: { type: Number, default: 0 },
     // Notifications sent
     notificationSentAt: { type: Date },
     notification24hSentAt: { type: Date },
+    // Share link: secret token for read-only access without subscription (e.g. share with grandma)
+    shareToken: {
+        type: String,
+        sparse: true,
+        unique: true,
+    },
 }, { timestamps: true });
 
 customMonthlyBookSchema.index({ userId: 1, createdAt: -1 });
 customMonthlyBookSchema.index({ status: 1 });
+customMonthlyBookSchema.index({ bookId: 1, shareToken: 1 });
 
 module.exports = mongoose.model('CustomMonthlyBook', customMonthlyBookSchema);

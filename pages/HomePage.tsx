@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SectionTitle from '../components/ui/SectionTitle';
 import BookCard from '../components/ui/BookCard';
@@ -11,14 +11,13 @@ import StormySeaError from '../components/ui/StormySeaError';
 import DailyRewardModal from '../components/features/DailyRewardModal';
 import ChallengeGameModal from '../components/features/ChallengeGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
-import ReviewPromptModal, { shouldShowReviewPrompt } from '../components/features/ReviewPromptModal';
+import { shouldShowReviewPrompt, requestNativeReview } from '../components/features/ReviewPromptModal';
 import EmailSignupModal from '../components/features/EmailSignupModal';
 import SurveyPopup, { shouldShowSurvey } from '../components/features/SurveyPopup';
 import TutorialPromptModal, { shouldShowTutorialPrompt, markTutorialPromptShown } from '../components/modals/TutorialPromptModal';
 import { useTutorial } from '../context/TutorialContext';
 import { Key, Brain, Heart, Video, Lock, Check, Play, CheckCircle, Clock, Coins, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import { ApiService } from '../services/apiService';
-import { preloadFeaturedContent, preloadBookGrid } from '../utils/imagePreloading';
 import { DespiaService } from '../services/despiaService';
 import { authService } from '../services/authService';
 import { 
@@ -41,6 +40,26 @@ import { getPreferenceTags, getSavedPreferences } from './InterestSelectionPage'
 import { isSessionCompletedToday, getSessionStreak, hasSessionToday } from '../services/dailySessionService';
 import DailyLessonWidget from '../components/features/DailyLessonWidget';
 import PremiumBadge from '../components/ui/PremiumBadge';
+import { FEATURE_CREATE_YOUR_STORY } from '../constants';
+import { placeholderImage } from '../utils/placeholderImage';
+
+// Local SVG data-URI fallbacks for cover thumbnails. These replace the old
+// `via.placeholder.com` URLs which now return ERR_CONNECTION_CLOSED and
+// caused the <img onError> handler to loop indefinitely.
+const FALLBACK_LESSON_COVER = placeholderImage(150, 200, '9C27B0', '\u{1F4FA}'); // 📺
+const FALLBACK_RECOMMENDED_COVER = placeholderImage(150, 200, 'E91E63', '\u{1F49D}'); // 💝
+const FALLBACK_EPISODE_COVER = placeholderImage(150, 200, 'FF6B35', '\u{1F3B5}'); // 🎵
+const FALLBACK_BOOK_COVER = placeholderImage(150, 200, '4CAF50', '\u{1F4DA}'); // 📚
+
+// Swaps the <img> src to a guaranteed-load data URI on error, then disables
+// further onerror handling so the React re-render cycle can't restart the
+// fetch loop.
+const swapToFallback = (e: React.SyntheticEvent<HTMLImageElement>, fallback: string) => {
+  const img = e.currentTarget;
+  if (img.src === fallback) return; // already swapped — nothing to do
+  img.onerror = null;
+  img.src = fallback;
+};
 
 // Helper to format date as YYYY-MM-DD in local time
 const formatLocalDateKey = (d: Date): string => {
@@ -100,7 +119,6 @@ const HomePage: React.FC = () => {
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [showChallengeGame, setShowChallengeGame] = useState(false);
   const [showPrayerGame, setShowPrayerGame] = useState(false);
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
   const [showEmailSignup, setShowEmailSignup] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
@@ -112,7 +130,11 @@ const HomePage: React.FC = () => {
   const [showCoinReward, setShowCoinReward] = useState(false);
   const [coinRewardAmount, setCoinRewardAmount] = useState(0);
   const [coinRewardSource, setCoinRewardSource] = useState('');
-  
+
+  // Monthly Create Your Story credits (used this month; limit 1 or 100 for special email). Limit from backend when available.
+  const [monthlyCreditsUsed, setMonthlyCreditsUsed] = useState<number | null>(null);
+  const [monthlyCreditsLimit, setMonthlyCreditsLimit] = useState<number | null>(null);
+
   // Clear any old game engagement localStorage on mount (legacy cleanup)
   useEffect(() => {
     localStorage.removeItem('memory_game_engaged');
@@ -131,6 +153,29 @@ const HomePage: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [isTutorialActive, currentStep, onReturnToExplore]);
+
+  // Load monthly Create Your Story credits when feature is on (and refetch when returning to page)
+  const refreshMonthlyCredits = useCallback(async () => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const data = await ApiService.getMonthlyBookCredits();
+    if (data) {
+      setMonthlyCreditsUsed(data.usedThisMonth);
+      if (typeof data.limit === 'number') setMonthlyCreditsLimit(data.limit);
+    }
+  }, []);
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    let cancelled = false;
+    refreshMonthlyCredits().then(() => {});
+    return () => { cancelled = true; };
+  }, [FEATURE_CREATE_YOUR_STORY, refreshMonthlyCredits]);
+  // Refetch credits when user returns to this page (e.g. after creating a story)
+  useEffect(() => {
+    if (!FEATURE_CREATE_YOUR_STORY) return;
+    const handleVisibility = () => { if (document.visibilityState === 'visible') refreshMonthlyCredits(); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [FEATURE_CREATE_YOUR_STORY, refreshMonthlyCredits]);
 
   // Fix scroll lock: Reset body overflow when page mounts (in case modal left it stuck)
   useEffect(() => {
@@ -227,22 +272,7 @@ const HomePage: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(getSelectedDay());
   const todayIndex = getTodayIndex();
   
-  // Welcome video state - plays once per app session when returning to home
-  // Disabled on Android due to video playback issues
-  const [showWelcomeVideo, setShowWelcomeVideo] = useState(() => {
-    // Check if running on Android
-    const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = ua.includes('android');
-    
-    // Disable welcome video on Android
-    if (isAndroid) {
-      return false;
-    }
-    
-    const hasShownThisSession = sessionStorage.getItem('godlykids_welcome_shown');
-    return !hasShownThisSession;
-  });
-  const welcomeVideoRef = useRef<HTMLVideoElement>(null);
+  // Welcome video moved to Explore page (WorldPage) - plays once per session, header hidden until done
   
   // Explore categories state - initialize from cache if available
   const [exploreCategories, setExploreCategories] = useState<any[]>(() => getCached('categories'));
@@ -305,14 +335,13 @@ const HomePage: React.FC = () => {
   // Use sessionStorage so it persists across component remounts
   const FETCH_DEBOUNCE_MS = 120000; // Don't refetch within 2 minutes
 
-  // Check if we should show the review prompt (after user has been in app for a while)
+  // Trigger native iOS/Android review prompt directly (no custom modal) after ~1 min
   useEffect(() => {
-    // Wait about a minute before showing review prompt - let user explore first
     const timer = setTimeout(() => {
       try {
         if (shouldShowReviewPrompt()) {
-          console.log('🌟 Showing review prompt on home page!');
-          setShowReviewPrompt(true);
+          console.log('🌟 Triggering native review prompt');
+          requestNativeReview();
         }
       } catch (e) {
         console.error('Review prompt error:', e);
@@ -324,11 +353,9 @@ const HomePage: React.FC = () => {
 
   // Check if we should show the survey popup (after 7 days of use)
   useEffect(() => {
-    // Longer delay - show survey after user has been on page a bit
     const timer = setTimeout(() => {
       try {
-        // Don't show if review prompt is showing
-        if (!showReviewPrompt && shouldShowSurvey()) {
+        if (shouldShowSurvey()) {
           console.log('📊 Showing survey popup!');
           setShowSurvey(true);
         }
@@ -338,7 +365,7 @@ const HomePage: React.FC = () => {
     }, 5000); // 5 second delay after page load
     
     return () => clearTimeout(timer);
-  }, [showReviewPrompt]);
+  }, []);
 
   // Show tutorial prompt for new users after a brief moment
   useEffect(() => {
@@ -363,8 +390,7 @@ const HomePage: React.FC = () => {
     
     const timer = setTimeout(() => {
       try {
-        // Don't show if other modals are showing
-        if (!showReviewPrompt && !showSurvey && shouldShowTutorialPrompt()) {
+        if (!showSurvey && shouldShowTutorialPrompt()) {
           console.log('🎓 Showing tutorial prompt!');
           // Track that we showed the prompt
           activityTrackingService.trackTutorialStep('tutorial_prompt_shown', {});
@@ -376,7 +402,7 @@ const HomePage: React.FC = () => {
     }, delay);
     
     return () => clearTimeout(timer);
-  }, [isTutorialActive, showReviewPrompt, showSurvey]);
+  }, [isTutorialActive, showSurvey]);
 
   // Show email signup popup for web users after 30 seconds
   // DISABLED: Pausing email popup during tutorial development
@@ -500,9 +526,10 @@ const HomePage: React.FC = () => {
       setFeaturedLoading(false);
       setGamesLoading(false);
       
-      // Always fetch trending data since it's not cached (real-time updates)
+      // Always fetch trending + games (portal may update game URLs; don't use stale session cache)
       fetchTrendingEpisodes();
       fetchTrendingBooks();
+      fetchDynamicGames();
       return;
     }
     
@@ -533,7 +560,7 @@ const HomePage: React.FC = () => {
   const fetchDynamicGames = async () => {
     try {
       console.log('🎮 Fetching dynamic games...');
-      const games = await ApiService.getDailyTaskGames();
+      const games = await ApiService.getDailyTaskGames({ forceRefresh: true });
       console.log('🎮 Dynamic games received:', games.length, games);
       setDynamicGames(games);
       cacheData('games', games);
@@ -664,22 +691,6 @@ const HomePage: React.FC = () => {
     navigate(`/lesson/${lesson._id}`);
   };
 
-  // Handle welcome video end - mark as shown and hide video
-  const handleWelcomeVideoEnd = () => {
-    sessionStorage.setItem('godlykids_welcome_shown', 'true');
-    setShowWelcomeVideo(false);
-  };
-
-  // Auto-play welcome video when component mounts
-  useEffect(() => {
-    if (showWelcomeVideo && welcomeVideoRef.current) {
-      welcomeVideoRef.current.play().catch(() => {
-        // If autoplay fails (browser policy), skip the video
-        handleWelcomeVideoEnd();
-      });
-    }
-  }, [showWelcomeVideo]);
-
   // Fetch explore categories
   const fetchExploreCategories = async () => {
     try {
@@ -746,9 +757,6 @@ const HomePage: React.FC = () => {
       console.log('⭐ Featured content loaded:', data.length, 'items');
       setFeaturedContent(data);
       cacheData('featured', data);
-      
-      // Preload featured images for faster display
-      preloadFeaturedContent(data);
     } catch (error) {
       console.error('❌ Error fetching featured content:', error);
     } finally {
@@ -1049,11 +1057,6 @@ const HomePage: React.FC = () => {
         onClose={() => setShowPrayerGame(false)}
       />
 
-      <ReviewPromptModal
-        isOpen={showReviewPrompt}
-        onReviewSubmitted={() => setShowReviewPrompt(false)}
-      />
-
       <EmailSignupModal
         isOpen={showEmailSignup}
         onClose={() => setShowEmailSignup(false)}
@@ -1082,30 +1085,39 @@ const HomePage: React.FC = () => {
 
       <div className="px-4 pt-28 space-y-2 pb-52">
 
-        {/* Welcome Video - Plays once per session above Week's Progress */}
-        {showWelcomeVideo && (
-          <div className="flex flex-col items-center mb-4">
-            <div className="relative aspect-[9/16] w-32 sm:w-40 md:w-48 max-w-[200px] rounded-lg overflow-hidden bg-transparent">
-              <video
-                ref={welcomeVideoRef}
-                src="/assets/videos/welcome.mp4"
-                className="w-full h-full object-contain bg-transparent"
-                autoPlay
-                muted
-                playsInline
-                onEnded={handleWelcomeVideoEnd}
-                onError={handleWelcomeVideoEnd}
-                style={{ backgroundColor: 'transparent' }}
-              />
-            </div>
-            <p className="mt-3 text-white font-display font-bold text-lg text-center">
-              Hi Explorer! Let's Dive in. 🌊
-            </p>
-          </div>
-        )}
-
         {/* 📚 Daily Lessons Widget */}
         <DailyLessonWidget />
+
+        {/* Dive into The Bible - Create Your Story: caption, credits, then Start Story Adventure button */}
+        {FEATURE_CREATE_YOUR_STORY && (() => {
+          const userEmail = (authService.getUser()?.email || (typeof localStorage !== 'undefined' ? localStorage.getItem('godlykids_user_email') : null) || '').trim().toLowerCase();
+          const limit = monthlyCreditsLimit ?? (userEmail === 'michealbouchard7@gmail.com' ? 100 : (isSubscribed ? 1 : 0));
+          const used = monthlyCreditsUsed ?? 0;
+          const remaining = Math.max(0, limit - used);
+          const creditsLabel = limit === 0 ? '0 of 1 monthly credits available' : `${remaining} of ${limit} monthly credit${limit === 1 ? '' : 's'} available`;
+          return (
+            <div className="w-full max-w-md mx-auto mt-6">
+              <p className="text-center text-white/95 font-display font-bold text-base mb-1 px-2">
+                Once a month, create your own story
+              </p>
+              <p className="text-center text-white/80 text-sm mb-3 px-2">
+                {creditsLabel}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/create-your-story')}
+                className="block w-full p-0 border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-2xl transition-transform active:scale-[0.98]"
+                aria-label="Start Story Adventure - Create your story"
+              >
+                <img
+                  src="/assets/images/dive-into-bible-button.webp"
+                  alt="Dive into The Bible - Start Story Adventure"
+                  className="w-full h-auto block rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]"
+                />
+              </button>
+            </div>
+          );
+        })()}
 
         {/* 🎬 Video Devotional Activities */}
         {(() => {
@@ -1162,9 +1174,7 @@ const HomePage: React.FC = () => {
                               src={thumbnailUrl}
                               alt={lesson.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/9C27B0/FFFFFF?text=📺';
-                              }}
+                              onError={(e) => swapToFallback(e, FALLBACK_LESSON_COVER)}
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center">
@@ -1615,8 +1625,10 @@ const HomePage: React.FC = () => {
                 if (isAmazonBook && amazonUrl) {
                   // Track the click for analytics
                   ApiService.trackAmazonBookClick(id);
-                  // Navigate to webview with Amazon URL
-                  navigate(`/game?url=${encodeURIComponent(amazonUrl)}&name=${encodeURIComponent('Shop on Amazon')}`);
+                  // Opens in the Despia native in-app browser so the user stays in
+                  // the app. This is a native browser overlay (not an iframe), so
+                  // Amazon's X-Frame-Options does not block it. On web it opens a tab.
+                  DespiaService.openExternalUrl(amazonUrl);
                 } else if (isPlaylist) {
                   navigate(`/audio/playlist/${id}`);
                 } else {
@@ -1652,12 +1664,10 @@ const HomePage: React.FC = () => {
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-pink-400/50 transition-all">
                       <img
-                        src={item.coverUrl || item.coverImage || item.files?.coverImage}
+                        src={item.coverUrl || item.coverImage || item.files?.coverImage || FALLBACK_RECOMMENDED_COVER}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/E91E63/FFFFFF?text=💝';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_RECOMMENDED_COVER)}
                       />
                       {/* Play overlay for audio */}
                       {item.isAudio && (
@@ -1709,12 +1719,10 @@ const HomePage: React.FC = () => {
                     {/* Cover Image - Same 3:4 aspect ratio as books */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-orange-400/50 transition-all">
                       <img
-                        src={episode.coverImage || episode.playlist.coverImage}
+                        src={episode.coverImage || episode.playlist.coverImage || FALLBACK_EPISODE_COVER}
                         alt={episode.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/FF6B35/FFFFFF?text=🎵';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_EPISODE_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1757,19 +1765,17 @@ const HomePage: React.FC = () => {
               <div className="flex space-x-4 px-4">
                 {trendingBooks.map((book: any, index: number) => (
                   <div
-                    key={book._id}
-                    onClick={() => navigate(`/book/${book._id}`)}
+                    key={book.id || book._id || index}
+                    onClick={() => handleBookClick(book.id || book._id)}
                     className="relative flex-shrink-0 w-44 snap-center cursor-pointer group"
                   >
                     {/* Cover Image */}
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 group-hover:border-green-400/50 transition-all">
                       <img
-                        src={book.coverUrl || book.coverImage || book.files?.coverImage}
+                        src={book.coverUrl || book.coverImage || book.files?.coverImage || FALLBACK_BOOK_COVER}
                         alt={book.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x200/4CAF50/FFFFFF?text=📚';
-                        }}
+                        onError={(e) => swapToFallback(e, FALLBACK_BOOK_COVER)}
                       />
                       {/* Play overlay */}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1953,6 +1959,17 @@ const HomePage: React.FC = () => {
                         <div className={`absolute inset-0 bg-gradient-to-br ${isLocked ? 'from-[#8B4513] to-[#5c2e0b]' : 'from-[#4CAF50] to-[#2E7D32]'}`} />
                       )}
                       
+                      {/* Game Logo */}
+                      {game.logo && !isLocked && (
+                        <div className="absolute inset-0 flex items-center justify-center z-[5] pointer-events-none">
+                          <img
+                            src={game.logo}
+                            alt={`${game.name} logo`}
+                            className="w-[60%] h-auto max-h-[40%] object-contain rounded-2xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+                          />
+                        </div>
+                      )}
+
                       {/* Age Rating Badge - Always show */}
                       {game.ageRating && (
                         <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full z-20 shadow-lg">

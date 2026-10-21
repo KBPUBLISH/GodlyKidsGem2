@@ -52,6 +52,15 @@ const bookSchema = new mongoose.Schema({
         enum: ['portrait', 'landscape'],
         default: 'portrait',
     },
+
+    // Reader layout style
+    // - side_swipe: classic horizontal page-turn book (default; existing behavior)
+    // - swipe_up:  TikTok/Reels-style vertical snap-scroll story feed
+    readerLayout: {
+        type: String,
+        enum: ['side_swipe', 'swipe_up'],
+        default: 'side_swipe',
+    },
     
     // Access control - whether content requires membership
     isMembersOnly: {
@@ -92,6 +101,16 @@ const bookSchema = new mongoose.Schema({
         default: [],
     },
     
+    // Global view count (incremented when a user opens the book)
+    viewCount: {
+        type: Number,
+        default: 0,
+    },
+    // Total read sessions (opens); used for analytics
+    totalReadSessions: {
+        type: Number,
+        default: 0,
+    },
     // Global read count (incremented when any user completes the book)
     readCount: {
         type: Number,
@@ -139,7 +158,7 @@ const bookSchema = new mongoose.Schema({
                 default: [],
             },
             
-            // Audio files collection (for book-level audio)
+            // Audio files collection (for book-level background music, max 3 tracks)
             audio: {
                 type: [{
                     url: { type: String }, // URL to GCS: books/{bookId}/audio/filename
@@ -148,12 +167,20 @@ const bookSchema = new mongoose.Schema({
                 }],
                 default: [],
             },
+            // Index of which audio track is the main/default (0, 1, or 2). Used when reading; Create Your Story users can override.
+            defaultAudioIndex: {
+                type: Number,
+                default: 0,
+                min: 0,
+                max: 2,
+            },
         },
         default: () => ({
             coverImage: null,
             images: [],
             videos: [],
             audio: [],
+            defaultAudioIndex: 0,
         }),
     },
     

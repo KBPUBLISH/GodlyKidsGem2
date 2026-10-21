@@ -610,6 +610,7 @@ import KaraokeSharePage from './pages/KaraokeSharePage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
 import MusicVideosPage from './pages/MusicVideosPage';
+import FreeBookClaimPage from './pages/FreeBookClaimPage';
 
 // Check if user has an account (auth token or email stored)
 const hasUserAccount = (): boolean => {
@@ -1556,6 +1557,7 @@ const App: React.FC = () => {
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
+                  <Route path="/free-book-claim" element={<FreeBookClaimPage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
                   <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
                   {/* /home redirects to /world so island buttons are the main explore view */}

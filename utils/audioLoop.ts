@@ -11,6 +11,10 @@ export function attachReliableLoop(
 
     const restart = (): void => {
         if (!loopEnabled()) return;
+        // Don't restart if already playing - prevents multiple simultaneous playbacks
+        if (!media.paused && media.currentTime > 0 && media.currentTime < media.duration - 0.1) {
+            return;
+        }
         try {
             media.currentTime = 0;
             const playPromise = media.play();

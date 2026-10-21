@@ -48,3 +48,4 @@ npm start
 - Backend: Render (`backend/render.yaml`).
 - Admin portal: Netlify subdomain.
 - Bookstore: Netlify (`bookstore.godlykids.com`).
+# Deployment timestamp: Wed Oct 21 04:14:02 AM UTC 2026

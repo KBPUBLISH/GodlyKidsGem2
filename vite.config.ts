@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
           interval: 100,
         },
       },
+      preview: {
+        port: 4173,
+        host: '127.0.0.1',
+        strictPort: true,
+      },
       plugins: [react()],
       // SECURITY: Never inject GEMINI_API_KEY (or any other server-side secret) into the
       // client bundle via Vite's `define`. Vite's `define` performs a raw text replacement

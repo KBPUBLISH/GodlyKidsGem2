@@ -649,7 +649,7 @@ const WorldPage: React.FC = () => {
                     src={MAP_ISLAND}
                     alt=""
                     className="absolute left-1/2 -translate-x-1/2 w-[78%] max-w-[200px] drop-shadow-lg pointer-events-none select-none"
-                    style={{ top: '18%' }}
+                    style={{ top: '18%', filter: 'saturate(1.4) brightness(1.05)' }}
                     draggable={false}
                   />
                   <span className="absolute explore-map-ship" style={{ right: '14%', bottom: '28%' }}>

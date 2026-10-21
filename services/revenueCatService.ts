@@ -13,7 +13,7 @@
 // RevenueCat Web Billing configuration
 // Sandbox key for testing: rcb_sb_AGCrvdIvLfIRIFAzVNnddnjQT
 // Production key: rcb_mGsKFPuvjpOGRhvyyfnyTGypoHNF
-const REVENUECAT_WEB_API_KEY = 'rcb_sb_AGCrvdIvLfIRIFAzVNnddnjQT'; // Using sandbox for testing
+const REVENUECAT_WEB_API_KEY = 'rcb_mGsKFPuvjpOGRhvyyfnyTGypoHNF'; // Production key
 const WEB_BILLING_ENABLED = true;
 
 // Entitlement identifier for premium access

@@ -117,8 +117,8 @@ function resolveScrollHeights(
     page: PageData,
     opts?: { ensureVisibleResize?: boolean },
 ): { max: number; mid: number } {
-    let max = page.scrollMaxHeight ?? page.scrollHeight ?? 60;
-    let mid = page.scrollMidHeight ?? Math.max(30, max - 30);
+    let max = page.scrollMaxHeight ?? page.scrollHeight ?? 85;
+    let mid = page.scrollMidHeight ?? Math.max(50, max - 25);
     // Story books often save mid≈max, so raising the tab would not move the art.
     if (opts?.ensureVisibleResize && max - mid < 18) {
         max = Math.min(72, mid + 22);
@@ -142,6 +142,8 @@ interface BookPageRendererProps {
     ambientVideoSoundEnabled?: boolean;
     /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
     sequentialMultiBoxTts?: boolean;
+    /** When true, skip interactive puzzles and show the page text immediately. */
+    skipPuzzles?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
@@ -187,6 +189,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
     sequentialMultiBoxTts = false,
+    skipPuzzles = false,
     characterPoses,
     showCharacterOverlay = false,
     tappedInteractiveKeys,
@@ -246,6 +249,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     );
 
     const showWordHunt =
+        !skipPuzzles &&
         bibleMapLayout &&
         pageInteractiveTargets.length > 0 &&
         !!onInteractiveWordTap &&
@@ -1494,7 +1498,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                 box.interactiveWordIndices,
                                             ),
                                         );
-                                        const hasTapWords = tapIndices.size > 0 && !!onInteractiveWordTap;
+                                        const hasTapWords =
+                                            !skipPuzzles && tapIndices.size > 0 && !!onInteractiveWordTap;
                                         const renderWords = hasTapWords && tapWords.length > 0 ? tapWords : words;
                                         const canSpeakWords = !!onSpeakWord;
 

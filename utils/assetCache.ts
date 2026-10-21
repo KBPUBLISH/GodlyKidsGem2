@@ -112,7 +112,7 @@ export function registerAssetCacheWorker(): void {
   if (!import.meta.env.PROD) return;
   if (!('serviceWorker' in navigator)) return;
   const register = () => {
-    navigator.serviceWorker.register('/asset-cache-sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
   };
   if (document.readyState === 'complete') register();
   else window.addEventListener('load', register, { once: true });

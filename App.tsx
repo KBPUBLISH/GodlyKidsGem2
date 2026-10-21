@@ -629,6 +629,7 @@ import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import KaraokeSharePage from './pages/KaraokeSharePage';
 import InterestSelectionPage from './pages/InterestSelectionPage';
 import DailySessionPage from './pages/DailySessionPage';
+import FreeBookClaimPage from './pages/FreeBookClaimPage';
 import MusicVideosPage from './pages/MusicVideosPage';
 
 // Check if user has an account (auth token or email stored)
@@ -1487,6 +1488,12 @@ const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
   const isDespia = DespiaService.isNative();
 
+  // Image cache worker from main. Native Despia keeps its own file cache.
+  useEffect(() => {
+    if (isDespia || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
+  }, [isDespia]);
+
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
   // When the app regains focus after being in background, we need to ensure React
   // state is properly reconstructed before any routing or state updates happen
@@ -1669,6 +1676,7 @@ const App: React.FC = () => {
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/interests" element={<InterestSelectionPage />} />
                   <Route path="/daily-session" element={<DailySessionPage />} />
+                  <Route path="/free-book-claim" element={<FreeBookClaimPage />} />
                   <Route path="/sail" element={<SailScenePage />} />
                   {/* Before /sail/:islandId so "basement" is not treated as an island slug. */}
                   <Route path="/sail/basement/game" element={<SailBoatBasementGamePage />} />

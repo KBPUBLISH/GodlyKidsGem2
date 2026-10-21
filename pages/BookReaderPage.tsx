@@ -382,7 +382,7 @@ const BookReaderPage: React.FC = () => {
         }
     }, [islandSceneReturn, fromDailySession, bookDetailUrl, bookId, navigate]);
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId } = useUser();
+    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId, skipPuzzles } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
@@ -5720,6 +5720,7 @@ const BookReaderPage: React.FC = () => {
                                 isTTSPlaying={playing}
                                 ambientVideoSoundEnabled={pageVideoSoundEnabled}
                                 sequentialMultiBoxTts={sequentialMultiBoxTts}
+                                skipPuzzles={skipPuzzles}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}

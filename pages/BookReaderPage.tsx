@@ -185,7 +185,7 @@ const BookReaderPage: React.FC = () => {
     const readerShareToken = searchParams.get('share') || undefined;
     const bookDetailUrl = bookId ? `/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}` : '';
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, isSubscribed, kids, currentProfileId } = useUser();
+    const { isVoiceUnlocked, isSubscribed, kids, currentProfileId, skipPuzzles } = useUser();
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
@@ -5083,6 +5083,7 @@ const BookReaderPage: React.FC = () => {
                                 isTTSPlaying={playing}
                                 ambientVideoSoundEnabled={pageVideoSoundEnabled}
                                 sequentialMultiBoxTts={sequentialMultiBoxTts}
+                                skipPuzzles={skipPuzzles}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}

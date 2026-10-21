@@ -121,6 +121,8 @@ interface BookPageRendererProps {
     ambientVideoSoundEnabled?: boolean;
     /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
     sequentialMultiBoxTts?: boolean;
+    /** When true, skip interactive puzzles and show all text immediately */
+    skipPuzzles?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
@@ -139,6 +141,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
     sequentialMultiBoxTts = false,
+    skipPuzzles = false,
     characterPoses,
     showCharacterOverlay = false
 }) => {

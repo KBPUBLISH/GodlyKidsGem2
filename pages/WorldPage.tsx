@@ -359,6 +359,7 @@ export const PersistentWorldIsland: React.FC = () => {
               src={DAILY_ADVENTURE_ISLAND}
               alt="Daily Adventure"
               className="w-full h-auto object-contain"
+              style={{ filter: 'saturate(1.4) brightness(1.05)' }}
             />
           </button>
 

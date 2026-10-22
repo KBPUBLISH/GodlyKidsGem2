@@ -153,3 +153,97 @@ export function noteJourneyStep(step: JourneyStep, metadata?: { source?: string 
   if (Date.now() - session.startedAt >= STUDY_WINDOW_MS) return;
   send(session, step, metadata?.source);
 }
+
+export type JourneyActivity = 'boat_session' | 'character_talk' | 'story_pack_done';
+
+const ACTIVITY_KEY = 'gk_journey_activity_v1';
+const BOAT_GAP_MS = 30 * 60 * 1000;
+const BOAT_STAMP_KEY = 'gk_boat_session_at';
+
+function readActivityIds(): string[] {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeActivityIds(ids: string[]): void {
+  try {
+    localStorage.setItem(ACTIVITY_KEY, JSON.stringify(ids.slice(-200)));
+  } catch {
+    /* private mode */
+  }
+}
+
+/**
+ * A repeatable beat: another boat visit, a talk with a character, or a
+ * finished story pack. Kept apart from the once-per-voyage funnel.
+ */
+export function noteJourneyActivity(
+  step: JourneyActivity,
+  metadata?: { source?: string; label?: string; eventId?: string },
+  onFail?: () => void,
+): void {
+  const eventId = (metadata?.eventId || `${step}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`).slice(0, 120);
+  const fired = readActivityIds();
+  if (fired.includes(eventId)) return;
+  fired.push(eventId);
+  writeActivityIds(fired);
+  void postActivity(step, eventId, metadata).catch(() => {
+    const current = readActivityIds().filter((item) => item !== eventId);
+    writeActivityIds(current);
+    onFail?.();
+  });
+}
+
+async function postActivity(
+  step: JourneyActivity,
+  eventId: string,
+  metadata?: { source?: string; label?: string },
+): Promise<void> {
+  const response = await fetch(apiUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: currentUserId(),
+      sessionId: eventId,
+      step,
+      elapsedMs: 0,
+      metadata: {
+        platform: platform(),
+        ...(metadata?.source ? { source: metadata.source } : {}),
+        ...(metadata?.label ? { label: metadata.label } : {}),
+      },
+    }),
+  });
+  if (!response.ok) throw new Error(`journey activity ${response.status}`);
+}
+
+/** One boat session per half hour, whether they land on the deck or the crew. */
+export function noteBoatSession(): void {
+  let last = 0;
+  try {
+    last = Number(localStorage.getItem(BOAT_STAMP_KEY) || 0);
+  } catch {
+    last = 0;
+  }
+  const now = Date.now();
+  if (now - last < BOAT_GAP_MS) return;
+  try {
+    localStorage.setItem(BOAT_STAMP_KEY, String(now));
+  } catch {
+    /* private mode */
+  }
+  noteJourneyActivity('boat_session', { eventId: `boat_${now}` }, () => {
+    try {
+      if (localStorage.getItem(BOAT_STAMP_KEY) === String(now)) {
+        localStorage.removeItem(BOAT_STAMP_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+}

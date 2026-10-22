@@ -17,6 +17,7 @@ import {
   seedAskedFromHistory,
   selectSuggestions,
 } from './crewChatMemory';
+import { noteJourneyActivity } from '../../utils/journeyStudy';
 
 /** Shared wood texture — matches the deck plaques. */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
@@ -282,6 +283,11 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
   // history, send it along — the backend then welcomes the kid back and picks
   // up where they left off instead of re-introducing itself.
   useEffect(() => {
+    noteJourneyActivity('character_talk', {
+      source: 'opened',
+      label: character.name,
+      eventId: `char_${character.id}_${Date.now()}`,
+    });
     const saved = loadChatHistory(character.id);
     // Ensure past user turns count as "already asked" for suggestion picking
     // (covers histories saved before asked-question tracking existed).
@@ -308,6 +314,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
 
   const sendQuestion = (question: string) => {
     if (thinking) return;
+    noteJourneyActivity('character_talk', { source: 'message', label: character.name });
     recordAskedQuestion(character.id, question);
     setLastQuestion(question);
     setComposing(false);

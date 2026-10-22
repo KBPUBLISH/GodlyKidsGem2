@@ -13,7 +13,7 @@ import {
 } from '../utils/islandSceneReturn';
 import { bookCompletionService } from '../services/bookCompletionService';
 import { isOnboardingJourneyActive, markStoryPackRundownSeen } from '../utils/onboardingJourney';
-import { noteJourneyStep } from '../utils/journeyStudy';
+import { noteJourneyActivity, noteJourneyStep } from '../utils/journeyStudy';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
 import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
@@ -659,6 +659,16 @@ const IslandLessonPage: React.FC = () => {
   const completedCount = steps.filter((s) => s.status === 'done').length;
   const progressPct = (completedCount / steps.length) * 100;
   const packComplete = packBeatsDone;
+
+  useEffect(() => {
+    const sid = storyIdParam || cmsStoryId;
+    if (!packBeatsDone || !sid) return;
+    noteJourneyActivity('story_pack_done', {
+      label: lesson.title,
+      source: islandId,
+      eventId: `pack_${islandId}_${sid}`,
+    });
+  }, [packBeatsDone, storyIdParam, cmsStoryId, islandId, lesson.title]);
   const primaryLabel = hasStartedReading ? 'Continue' : 'Start';
   const pulseCta =
     !packComplete &&

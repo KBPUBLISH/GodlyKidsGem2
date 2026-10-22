@@ -28,7 +28,6 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
 export const PRODUCT_IDS = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
-  LIFETIME: 'lifetime',
 };
 
 /**
@@ -38,7 +37,6 @@ export const PRODUCT_IDS = {
 export const PRODUCT_IDS_IOS: Record<string, string> = {
   MONTHLY: 'kbpublish.godlykids.monthly',
   ANNUAL: 'kbpublish.godlykids.yearly',
-  LIFETIME: 'Lifetimepurchase', // Matches App Store Connect product identifier
 };
 
 /**
@@ -48,7 +46,6 @@ export const PRODUCT_IDS_IOS: Record<string, string> = {
 export const PRODUCT_IDS_ANDROID = {
   ANNUAL: 'yearlymember:yearly',
   MONTHLY: 'godlykidsmonthly:monthly',
-  LIFETIME: 'lifetime', // Matches Google Play product identifier
 };
 
 // Web Billing product IDs (Stripe products linked in RevenueCat Web Billing)
@@ -311,6 +308,14 @@ export const RevenueCatService = {
   getUserId,
 
   /**
+   * True while a native purchase is awaiting store/webhook confirmation.
+   * Background subscription re-checks (focus/visibility/auth) must not run
+   * during this window — on Android the Play sheet hides the webview, and a
+   * stale backend record would otherwise be read as "purchase succeeded".
+   */
+  isPurchaseInProgress: (): boolean => purchaseResolve !== null,
+
+  /**
    * Initialize - nothing needed for DeSpia URL scheme approach
    */
   init: async (): Promise<boolean> => {
@@ -334,19 +339,15 @@ export const RevenueCatService = {
 
   /**
    * Purchase a subscription using DeSpia URL scheme
-   * @param productId - 'annual', 'monthly', or 'lifetime'
+   * @param productId - 'annual' or 'monthly' (lifetime is no longer sold)
    * @param quickMode - if true, returns success quickly after triggering Apple sheet (optimistic)
    */
-  purchase: async (productId: 'annual' | 'monthly' | 'lifetime', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
+  purchase: async (productId: 'annual' | 'monthly', quickMode: boolean = true): Promise<{ success: boolean; error?: string }> => {
     const ua = navigator.userAgent.toLowerCase();
     const isAndroid = ua.includes('android');
     const isIOS = (ua.includes('iphone') || ua.includes('ipad')) && (ua.includes('despia') || ua.includes('wkwebview'));
     const ids = isAndroid ? PRODUCT_IDS_ANDROID : isIOS ? PRODUCT_IDS_IOS : PRODUCT_IDS;
-    const rcProductId = productId === 'lifetime'
-      ? ids.LIFETIME
-      : productId === 'annual'
-        ? ids.ANNUAL
-        : ids.MONTHLY;
+    const rcProductId = productId === 'annual' ? ids.ANNUAL : ids.MONTHLY;
     const userId = getUserId();
     
     console.log('🛒 Initiating purchase via DeSpia URL scheme');
@@ -373,6 +374,10 @@ export const RevenueCatService = {
     const purchaseUrl = `revenuecat://purchase?external_id=${encodeURIComponent(userId)}&product=${encodeURIComponent(rcProductId)}`;
     console.log(isAndroid ? '🔗 [Android] Sending product to RevenueCat → Google Play:' : '🔗 Sending product to RevenueCat:', rcProductId, purchaseUrl);
     
+    // Only confirmations the webhook received AFTER this moment count. Otherwise a
+    // user whose backend record is already premium (old sandbox purchase, stale
+    // flag) is told "success" while the store payment sheet is still open.
+    const purchaseStartedAt = Date.now();
     window.despia = purchaseUrl;
     
     // Poll backend for purchase confirmation (via RevenueCat webhook)
@@ -439,7 +444,7 @@ export const RevenueCatService = {
             if (deviceId && !idsToCheck.includes(deviceId)) idsToCheck.push(deviceId);
 
             for (const id of idsToCheck) {
-              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}`);
+              const response = await fetch(`${apiBaseUrl}/api/webhooks/purchase-status/${encodeURIComponent(id)}?since=${purchaseStartedAt}`);
               const data = await response.json();
               if (data.isPremium && !resolved) {
                 resolved = true;
@@ -677,7 +682,7 @@ export const RevenueCatService = {
    * Web-based purchase via Stripe Checkout
    * Redirects directly to Stripe's hosted checkout page
    */
-  purchaseWeb: async (productId: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
+  purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
     const userId = getUserId();
     const userEmail = localStorage.getItem('godlykids_user_email') || '';
     

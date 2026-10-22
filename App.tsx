@@ -8,10 +8,8 @@ import PerryMeetPage from './pages/PerryMeetPage';
 import ChallengeIntroPage from './pages/ChallengeIntroPage';
 import WorldPage from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
-import LifetimeOfferModal from './components/features/LifetimeOfferModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
-import SaveProgressModal from './components/modals/SaveProgressModal';
 import { useUser } from './context/UserContext';
 
 // Guest content tracking - tracks what content guests have consumed
@@ -783,16 +781,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   );
 };
 
-// Explore page wrapper - shows welcome screen for new users, save progress prompt for guests
+// Explore page wrapper - shows welcome screen for new users, paywall for guests
 // Renders WorldPage (Map-centered wood Explore layout)
 const WorldPageWithWelcomeCheck: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
-  const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
-  const [guestStats, setGuestStats] = useState(() => getGuestContentStats());
-  const [checkTrigger, setCheckTrigger] = useState(0); // Used to re-trigger checks
   
   // Check if user completed onboarding
   const savedData = localStorage.getItem('godly_kids_data_v7') || localStorage.getItem('godly_kids_data_v6');
@@ -807,22 +800,6 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
   
   // Check if tutorial is still in progress
   const tutorialActive = isTutorialInProgress();
-  
-  // Listen for guest content consumption events to re-check when user returns
-  useEffect(() => {
-    const handleContentConsumed = () => {
-      console.log('📚 Guest consumed content, will check for prompt on next visit');
-    };
-    
-    window.addEventListener('guestContentConsumed', handleContentConsumed);
-    return () => window.removeEventListener('guestContentConsumed', handleContentConsumed);
-  }, []);
-  
-  // Re-check for save progress modal whenever user navigates to this page
-  useEffect(() => {
-    // Trigger a check when location changes (user navigates here)
-    setCheckTrigger(prev => prev + 1);
-  }, [location.key]);
   
   // Check for expired reverse trial on mount
   useEffect(() => {
@@ -865,41 +842,26 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
     checkReverseTrial();
   }, []);
   
-  // Show save progress modal for guests who have consumed content
-  // This triggers on mount AND whenever user navigates back to explore page
-  useEffect(() => {
-    // Re-read hasAccount in case it changed
-    const currentHasAccount = hasUserAccount();
-    const currentTutorialActive = isTutorialInProgress();
-    
-    // Only show if: no account, not in tutorial, has consumed content, hasn't been shown this session
-    if (!currentHasAccount && !currentTutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown()) {
-      console.log('📚 Guest has consumed content, showing save progress modal');
-      // Small delay to let page render first
-      const timer = setTimeout(() => {
-        setGuestStats(getGuestContentStats());
-        setShowSaveProgressModal(true);
-        markGuestPromptShown();
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [checkTrigger]); // Re-run when checkTrigger changes (on navigation)
-  
-  // NOTE: We intentionally do NOT show CreateAccountModal immediately for new users!
-  // The flow is: explore → try content → SaveProgressModal prompts to create account
-  // This gives users a chance to experience the app before asking them to sign up
-  
+  // Guests who have tried content used to get a "Save your progress" (create
+  // account) modal here. That is replaced by the paywall: the paywall itself
+  // asks the user to sign in before any purchase, so the account prompt still
+  // happens — just after they have seen the offer, not instead of it.
+  const guestNeedsPaywallPrompt =
+    !hasUserAccount() && !tutorialActive && hasGuestConsumedContent() && !hasGuestPromptBeenShown();
+
   // Only show welcome screen if user completed onboarding AND hasn't seen welcome yet
   if (userCompletedOnboarding && shouldShowWelcome()) {
     return <NewUserWelcomePage />;
   }
 
-  // Show paywall once per day for non-subscribed users
+  // Show paywall once per day for non-subscribed users, and for guests who have
+  // consumed content but have not yet been prompted (replaces SaveProgressModal).
   const today = new Date().toISOString().split('T')[0];
   const paywallLastShown = localStorage.getItem('godlykids_paywall_shown_date');
   const isPremiumUser = localStorage.getItem('godlykids_premium') === 'true';
-  if (!isPremiumUser && paywallLastShown !== today && !tutorialActive) {
+  if (!isPremiumUser && !tutorialActive && (paywallLastShown !== today || guestNeedsPaywallPrompt)) {
     localStorage.setItem('godlykids_paywall_shown_date', today);
+    if (guestNeedsPaywallPrompt) markGuestPromptShown();
     navigate('/paywall', { replace: true });
     return null;
   }
@@ -907,23 +869,6 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
   return (
     <>
       <WorldPage />
-      {showSaveProgressModal && (
-        <SaveProgressModal
-          isOpen={true}
-          consumedContent={guestStats}
-          onClose={() => {
-            setShowSaveProgressModal(false);
-          }}
-          onCreateAccount={() => {
-            setShowSaveProgressModal(false);
-            navigate('/onboarding');
-          }}
-          onSignIn={() => {
-            setShowSaveProgressModal(false);
-            navigate('/signin', { state: { returnTo: '/world' } });
-          }}
-        />
-      )}
       {showTrialExpiredModal && (
         <ReverseTrialExpiredModal
           isOpen={true}
@@ -1218,19 +1163,11 @@ const ThemedListenPage: React.FC = () => {
   );
 };
 
-const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
-const LIFETIME_OFFER_SESSION_KEY = 'godlykids_lifetime_offer_session_checked';
-/** Paused — do not auto-show the lifetime deal during first-run / home. */
-const SHOW_LIFETIME_OFFER = false;
-
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [lifetimeOfferVariant, setLifetimeOfferVariant] = useState<'first' | 'final' | 'expired' | null>(null);
-  const lifetimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevPathForOfferRef = useRef(location.pathname);
   const [journeyGuide, setJourneyGuide] = useState(() => isOnboardingJourneyActive());
 
   useEffect(() => subscribeOnboardingJourney(() => setJourneyGuide(isOnboardingJourneyActive())), []);
@@ -1250,81 +1187,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       p === '/paywall';
     if (!stayInLibraryTrip) clearLibraryFromBasement();
   }, [location.pathname]);
-
-  // --- Lifetime offer popup: first offer (1 minute after user spends time on app) ---
-  const LIFETIME_FIRST_MAIN_PAGE_KEY = 'godlykids_lifetime_first_main_page_at';
-  useEffect(() => {
-    if (!SHOW_LIFETIME_OFFER) return;
-    prevPathForOfferRef.current = location.pathname;
-
-    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
-    if (isPremium) return;
-
-    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    if (stage === 'shown_first' || stage === 'done' || stage === 'offer_expired') return;
-
-    const isMainPage = MAIN_NAV_PAGES.includes(location.pathname);
-    if (!isMainPage) return;
-
-    let firstAt = parseInt(sessionStorage.getItem(LIFETIME_FIRST_MAIN_PAGE_KEY) || '0', 10);
-    if (!firstAt) {
-      firstAt = Date.now();
-      sessionStorage.setItem(LIFETIME_FIRST_MAIN_PAGE_KEY, firstAt.toString());
-    }
-    const elapsed = Date.now() - firstAt;
-    const remaining = Math.max(0, 60000 - elapsed);
-
-    if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
-    lifetimeTimerRef.current = setTimeout(() => {
-      if (localStorage.getItem('godlykids_premium') === 'true') return;
-      const currentStage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-      if (currentStage === 'shown_first' || currentStage === 'done') return;
-      if (!localStorage.getItem('godlykids_lifetime_deal_start')) {
-        localStorage.setItem('godlykids_lifetime_deal_start', Date.now().toString());
-      }
-      if (!currentStage || currentStage === 'none') {
-        localStorage.setItem(LIFETIME_OFFER_STAGE_KEY, 'ready');
-      }
-      setLifetimeOfferVariant('first');
-    }, remaining);
-
-    return () => {
-      if (lifetimeTimerRef.current) clearTimeout(lifetimeTimerRef.current);
-    };
-  }, [location.pathname]);
-
-  // --- Lifetime offer popup: final offer or expired offer (on fresh app open) ---
-  useEffect(() => {
-    if (!SHOW_LIFETIME_OFFER) return;
-    const isPremium = localStorage.getItem('godlykids_premium') === 'true';
-    if (isPremium) return;
-    if (sessionStorage.getItem(LIFETIME_OFFER_SESSION_KEY)) return;
-    sessionStorage.setItem(LIFETIME_OFFER_SESSION_KEY, 'true');
-
-    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    if (stage === 'offer_expired') {
-      const timer = setTimeout(() => {
-        if (localStorage.getItem('godlykids_premium') === 'true') return;
-        setLifetimeOfferVariant('expired');
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-    if (stage === 'shown_first') {
-      const timer = setTimeout(() => {
-        if (localStorage.getItem('godlykids_premium') === 'true') return;
-        setLifetimeOfferVariant('final');
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  // Listen for Header timer tap to show the lifetime offer modal at root level
-  useEffect(() => {
-    if (!SHOW_LIFETIME_OFFER) return;
-    const handler = () => setLifetimeOfferVariant('first');
-    window.addEventListener('show_lifetime_offer', handler);
-    return () => window.removeEventListener('show_lifetime_offer', handler);
-  }, []);
 
   // Transition detection runs in useLayoutEffect so the new page starts hidden
   // before the browser paints — prevents the one-frame flash of incoming content.
@@ -1448,14 +1310,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
 
-      {/* Lifetime offer popup — disabled for now */}
-      {SHOW_LIFETIME_OFFER && lifetimeOfferVariant && (
-        <LifetimeOfferModal
-          variant={lifetimeOfferVariant}
-          onClose={() => setLifetimeOfferVariant(null)}
-        />
-      )}
-      
       {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
       {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating || isKaraokePage) && (
         <div 

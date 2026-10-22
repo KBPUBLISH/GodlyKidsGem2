@@ -26,7 +26,7 @@ interface SubscriptionContextType {
   getPremiumStatus: () => Promise<boolean>;
   /** Check premium via backend only (no localStorage). Use for Create Your Story gate so stale cache cannot bypass paywall. */
   getPremiumStatusStrict: () => Promise<boolean>;
-  purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
+  purchase: (plan: 'annual' | 'monthly') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
   startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
@@ -204,6 +204,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
     // When auth token changes (login/logout), re-check subscription automatically.
     const handleAuthChange = async () => {
+      if (RevenueCatService.isPurchaseInProgress()) return; // purchase() owns confirmation
       try {
         const hasPremium = await checkSubscriptionFromAllSources({ skipLocalCache: true });
         setIsPremium(hasPremium);
@@ -320,6 +321,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isInitialized) {
+        // The Play/App Store payment sheet hides the webview; when it comes back we
+        // must not read a stale "premium" record as a completed purchase. purchase()
+        // polls with ?since= and resolves on its own.
+        if (RevenueCatService.isPurchaseInProgress()) {
+          console.log('📱 App became visible during purchase - skipping subscription re-check');
+          return;
+        }
         console.log('📱 App became visible - checking subscription status...');
         const hasPremium = await checkSubscriptionFromAllSources();
         if (hasPremium !== isPremium) {
@@ -380,7 +388,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   // Purchase a subscription
-  const purchase = useCallback(async (plan: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
+  const purchase = useCallback(async (plan: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     
     try {

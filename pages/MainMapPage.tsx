@@ -187,6 +187,78 @@ function readViewportSize(): { w: number; h: number } {
   return { w, h };
 }
 
+type MediaBox = { w: number; h: number };
+type StageBox = { left: number; top: number; width: number; height: number };
+
+/** Full image, centered, sitting on the bottom of the phone. */
+function fitMediaStage(view: { w: number; h: number }, media: MediaBox): StageBox {
+  const s = Math.min(view.w / media.w, view.h / media.h);
+  const width = media.w * s;
+  const height = media.h * s;
+  return {
+    left: (view.w - width) / 2,
+    top: view.h - height,
+    width,
+    height,
+  };
+}
+
+/**
+ * CMS saves badge centers against an object-cover frame. Map that point onto
+ * the full image so it stays on the same landmark once the sides are visible.
+ */
+function coverPointToImagePercent(
+  point: MainMapPoint,
+  view: { w: number; h: number },
+  media: MediaBox,
+): MainMapPoint {
+  const s = Math.max(view.w / media.w, view.h / media.h);
+  const coverW = media.w * s;
+  const coverH = media.h * s;
+  const coverX = (view.w - coverW) / 2;
+  const coverY = view.h - coverH;
+  const imgX = ((point.x / 100) * view.w - coverX) / coverW;
+  const imgY = ((point.y / 100) * view.h - coverY) / coverH;
+  return {
+    x: clamp(imgX * 100, 0, 100),
+    y: clamp(imgY * 100, 0, 100),
+  };
+}
+
+function sampleSkyColor(el: HTMLImageElement | HTMLVideoElement): string | null {
+  const sw =
+    'videoWidth' in el && el.videoWidth > 0
+      ? el.videoWidth
+      : (el as HTMLImageElement).naturalWidth;
+  if (!sw) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(el, Math.floor(sw / 2), 2, 1, 1, 0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `rgb(${r}, ${g}, ${b})`;
+  } catch {
+    return null;
+  }
+}
+
+function coverSizeToImagePercent(
+  size: MainMapSize,
+  view: { w: number; h: number },
+  media: MediaBox,
+): MainMapSize {
+  const s = Math.max(view.w / media.w, view.h / media.h);
+  const coverW = media.w * s;
+  const coverH = media.h * s;
+  return {
+    w: Math.max(4, ((size.w / 100) * view.w) / coverW * 100),
+    h: Math.max(4, ((size.h / 100) * view.h) / coverH * 100),
+  };
+}
+
 /**
  * Detect main-map layout key from screen class (aspect + size buckets).
  * Despia UA is only a soft boost, not the sole signal.
@@ -292,7 +364,8 @@ function resolvePoint(
  * Map → MainMap → IslandScene (intro → Scene Studio).
  *
  * (x,y) = center of the circular badge (same as CMS layout editor).
- * Icons share the full-viewport box with the object-cover background.
+ * The map is shown in full (no side crop). Saved cover-frame points are
+ * mapped onto that full image so badges stay on their landmarks.
  */
 const MainMapPage: React.FC = () => {
   const { soundOn, toggleSound } = useSailMusic();
@@ -310,6 +383,10 @@ const MainMapPage: React.FC = () => {
   const [layoutKey, setLayoutKey] = useState<MainMapLayoutKey>(() =>
     detectMainMapLayoutKey(),
   );
+  const [viewSize, setViewSize] = useState(readViewportSize);
+  const [mediaSize, setMediaSize] = useState<MediaBox | null>(null);
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const [skyColor, setSkyColor] = useState('#5ca3c5');
   const [loading, setLoading] = useState(true);
   const [mainMapUrl, setMainMapUrl] = useState('');
   const [mainMapVideoUrl, setMainMapVideoUrl] = useState('');
@@ -321,7 +398,10 @@ const MainMapPage: React.FC = () => {
   const lockHintTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const onResize = () => setLayoutKey(detectMainMapLayoutKey());
+    const onResize = () => {
+      setLayoutKey(detectMainMapLayoutKey());
+      setViewSize(readViewportSize());
+    };
     window.addEventListener('resize', onResize);
     const vv = window.visualViewport;
     vv?.addEventListener('resize', onResize);
@@ -413,6 +493,8 @@ const MainMapPage: React.FC = () => {
         const island = data.island;
         if (!island) throw new Error('No island');
 
+        setMediaSize(null);
+        setMediaFailed(false);
         setMainMapUrl(resolveBibleMapMediaUrl(island.mainMapUrl));
         setMainMapVideoUrl(resolveBibleMapMediaUrl(island.mainMapVideoUrl));
         const list = Array.isArray(data.stories) ? data.stories : [];
@@ -462,10 +544,69 @@ const MainMapPage: React.FC = () => {
     !loading && stories.length > 0,
   );
 
+  const stage = useMemo(() => {
+    if (!mediaSize || viewSize.w < 1 || viewSize.h < 1) return null;
+    return fitMediaStage(viewSize, mediaSize);
+  }, [mediaSize, viewSize]);
+
+  const placedMarkers = useMemo(() => {
+    if (!stage || !mediaSize) {
+      return markers.map((marker) => ({
+        ...marker,
+        place: marker.position,
+        box: marker.size,
+      }));
+    }
+    return markers.map((marker) => ({
+      ...marker,
+      place: coverPointToImagePercent(marker.position, viewSize, mediaSize),
+      box: coverSizeToImagePercent(marker.size, viewSize, mediaSize),
+    }));
+  }, [markers, stage, mediaSize, viewSize]);
+
   const firstPack = useMemo(
-    () => markers.find((m) => !m.locked) || markers[0] || null,
-    [markers],
+    () => placedMarkers.find((m) => !m.locked) || placedMarkers[0] || null,
+    [placedMarkers],
   );
+
+  const hintRef = useRef<HTMLSpanElement>(null);
+  const hintNudgeRef = useRef(0);
+  const [hintNudge, setHintNudge] = useState(0);
+
+  useEffect(() => {
+    const el = hintRef.current;
+    if (!el || !firstPack) {
+      hintNudgeRef.current = 0;
+      setHintNudge(0);
+      return;
+    }
+    const fit = () => {
+      const rect = el.getBoundingClientRect();
+      const applied = hintNudgeRef.current;
+      const naturalLeft = rect.left - applied;
+      const naturalRight = rect.right - applied;
+      const pad = 12;
+      let nudge = 0;
+      if (naturalLeft < pad) nudge = pad - naturalLeft;
+      else if (naturalRight > window.innerWidth - pad) {
+        nudge = window.innerWidth - pad - naturalRight;
+      }
+      if (Math.abs(nudge - applied) < 0.5) return;
+      hintNudgeRef.current = nudge;
+      setHintNudge(nudge);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [firstPack, stage, viewSize]);
+
+  const noteMediaSize = (el: HTMLImageElement | HTMLVideoElement, w: number, h: number) => {
+    if (w > 0 && h > 0) {
+      setMediaSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+    }
+    const sky = sampleSkyColor(el);
+    if (sky) setSkyColor(sky);
+  };
 
   const showLockHint = useCallback(() => {
     setLockHint('Finish the story before this one!');
@@ -543,26 +684,44 @@ const MainMapPage: React.FC = () => {
   const hasBg = hasVideo || hasImage;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#0b1e33] text-white overflow-hidden">
-      {/* Background — full viewport (same coordinate space as CMS DevicePreview) */}
+    <div className="fixed inset-0 z-[70] text-white overflow-hidden" style={{ background: skyColor }}>
+      {/* Full island. Until its size is known, contain keeps the edges on screen. */}
       {hasVideo ? (
         <video
           key={mainMapVideoUrl}
           src={mainMapVideoUrl}
-          className="absolute inset-0 w-full h-full object-cover object-bottom"
+          className="absolute select-none"
+          style={
+            stage
+              ? { left: stage.left, top: stage.top, width: stage.width, height: stage.height }
+              : { inset: 0, width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }
+          }
           muted
           loop
           playsInline
           autoPlay
           preload="auto"
           poster={mainMapUrl || undefined}
+          onLoadedMetadata={(e) =>
+            noteMediaSize(e.currentTarget, e.currentTarget.videoWidth, e.currentTarget.videoHeight)
+          }
+          onError={() => setMediaFailed(true)}
         />
       ) : hasImage ? (
         <img
           src={mainMapUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover object-bottom select-none"
+          className="absolute select-none"
+          style={
+            stage
+              ? { left: stage.left, top: stage.top, width: stage.width, height: stage.height }
+              : { inset: 0, width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }
+          }
           draggable={false}
+          onLoad={(e) =>
+            noteMediaSize(e.currentTarget, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
+          }
+          onError={() => setMediaFailed(true)}
         />
       ) : (
         <div
@@ -628,13 +787,19 @@ const MainMapPage: React.FC = () => {
       />
 
       {/*
-        Story icons — MUST share the full-viewport box with the BG (CMS does the same).
-        (x,y) = center of the circular badge; label hangs below and does not shift center.
+        Story icons sit on the fitted map. (x,y) is the badge center.
       */}
-      {!loading && hasBg && markers.length > 0 && (
-        <div className="absolute inset-0 z-10">
-          {markers.map((marker, index) => {
-            const { story, position, size, iconUrl, label, locked, isNew } = marker;
+      {!loading && hasBg && placedMarkers.length > 0 && (stage || mediaFailed) && (
+        <div
+          className="absolute z-10"
+          style={
+            stage
+              ? { left: stage.left, top: stage.top, width: stage.width, height: stage.height }
+              : { inset: 0 }
+          }
+        >
+          {placedMarkers.map((marker, index) => {
+            const { story, place, box, iconUrl, label, locked, isNew } = marker;
             return (
               <button
                 key={story._id}
@@ -646,10 +811,10 @@ const MainMapPage: React.FC = () => {
                     : ''
                 }`}
                 style={{
-                  left: `${position.x}%`,
-                  top: `${position.y}%`,
-                  width: `${size.w}%`,
-                  height: `${size.h}%`,
+                  left: `${place.x}%`,
+                  top: `${place.y}%`,
+                  width: `${box.w}%`,
+                  height: `${box.h}%`,
                   transform: 'translate(-50%, -50%)',
                   pointerEvents:
                     onboardingJourney && firstPack && story._id !== firstPack.story._id
@@ -694,7 +859,7 @@ const MainMapPage: React.FC = () => {
                       <MapPin className="w-[42%] h-[42%]" strokeWidth={2.2} />
                     </span>
                   )}
-                  {locked && <StoryLockBadge size={Math.min(40, 28 + Math.round(size.w))} />}
+                  {locked && <StoryLockBadge size={Math.min(40, 28 + Math.round(box.w))} />}
                   {!locked && isNew && <StoryPackNewBadge />}
                 </span>
                 <span
@@ -709,16 +874,22 @@ const MainMapPage: React.FC = () => {
         </div>
       )}
 
-      {onboardingJourney && firstPack && (
+      {onboardingJourney && firstPack && (stage || mediaFailed) && (
         <div
           className="absolute z-30 pointer-events-none flex flex-col items-center"
           style={{
-            left: `${firstPack.position.x}%`,
-            top: `${firstPack.position.y}%`,
-            transform: 'translate(-50%, calc(-100% - 18px))',
+            left: stage
+              ? stage.left + (firstPack.place.x / 100) * stage.width
+              : `${firstPack.place.x}%`,
+            top: stage
+              ? stage.top + (firstPack.place.y / 100) * stage.height
+              : `${firstPack.place.y}%`,
+            transform: `translate(calc(-50% + ${hintNudge}px), calc(-100% - 18px))`,
           }}
         >
-          <span className="ob-tap-story-pack">Tap the first story pack</span>
+          <span ref={hintRef} className="ob-tap-story-pack">
+            Tap the first story pack
+          </span>
         </div>
       )}
 

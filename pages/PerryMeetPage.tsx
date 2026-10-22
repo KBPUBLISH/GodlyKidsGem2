@@ -11,6 +11,8 @@ import {
   startOnboardingJourney,
 } from '../utils/onboardingJourney';
 import {
+  PERRY_ASK_KID_LINE,
+  PERRY_ASK_KID_TTS,
   PERRY_ASK_LINE,
   PERRY_ASK_TTS,
   PERRY_HELLO_LINE,
@@ -28,6 +30,7 @@ const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 const DEFAULT_HEAD = '/avatars/heads/head-1.png';
 
 type Phase = 'handoff' | 'ask' | 'ready' | 'depart';
+type Holder = 'parent' | 'kid';
 
 const FIELD =
   'w-full bg-[#FFF8E7] border-2 border-[#8B5A24] rounded-2xl px-4 py-3 text-[#3E1F07] font-extrabold text-[1.15rem] placeholder:text-[#8B4513]/35 placeholder:font-semibold focus:outline-none focus:border-[#E8C43D] focus:ring-2 focus:ring-[#E8C43D]/35';
@@ -61,6 +64,7 @@ const PerryMeetPage: React.FC = () => {
   const navigate = useNavigate();
   const { addKid, kids, switchProfile, updateKid, setEquippedAvatar } = useUser();
   const [phase, setPhase] = useState<Phase>('handoff');
+  const [holder, setHolder] = useState<Holder | null>(null);
   const [ready, setReady] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
@@ -73,6 +77,7 @@ const PerryMeetPage: React.FC = () => {
   useEffect(() => {
     preloadPerrySpeech(PERRY_HELLO_TTS);
     preloadPerrySpeech(PERRY_ASK_TTS);
+    preloadPerrySpeech(PERRY_ASK_KID_TTS);
     preloadPerrySpeech(PERRY_WOOHOO_TTS);
   }, []);
 
@@ -89,7 +94,9 @@ const PerryMeetPage: React.FC = () => {
     phase === 'handoff'
       ? PERRY_HELLO_LINE
       : phase === 'ask'
-        ? PERRY_ASK_LINE
+        ? holder === 'kid'
+          ? PERRY_ASK_KID_LINE
+          : PERRY_ASK_LINE
         : phase === 'ready'
             ? readyCopy.line
             : phase === 'depart'
@@ -100,7 +107,9 @@ const PerryMeetPage: React.FC = () => {
     phase === 'handoff'
       ? PERRY_HELLO_TTS
       : phase === 'ask'
-        ? PERRY_ASK_TTS
+        ? holder === 'kid'
+          ? PERRY_ASK_KID_TTS
+          : PERRY_ASK_TTS
         : phase === 'ready'
             ? readyCopy.tts
             : phase === 'depart'
@@ -213,8 +222,17 @@ const PerryMeetPage: React.FC = () => {
         onDeparted={goToMap}
         underlay={
           phase === 'handoff' ? (
-            <div className="flex flex-col items-center justify-end h-full pb-[11rem]">
-              <PassPhoneHandoff variant="underlay" direction="to-parent" />
+            <div className="flex flex-col items-center justify-end h-full pb-[max(1.5rem,var(--safe-area-bottom,0px))]">
+              <PassPhoneHandoff
+                variant="underlay"
+                onSelect={(who) => {
+                  setHolder(who);
+                  activityTrackingService.trackOnboardingEvent(
+                    who === 'parent' ? 'perry_holder_parent' : 'perry_holder_kid',
+                  );
+                  setPhase('ask');
+                }}
+              />
             </div>
           ) : undefined
         }
@@ -239,8 +257,8 @@ const PerryMeetPage: React.FC = () => {
                   value={name}
                   maxLength={18}
                   autoComplete="given-name"
-                  placeholder="Child's name"
-                  aria-label="Child's name"
+                  placeholder={holder === 'kid' ? 'Your name' : "Child's name"}
+                  aria-label={holder === 'kid' ? 'Your name' : "Child's name"}
                   className={FIELD}
                   style={{ fontFamily: BUBBLE }}
                   onChange={(e) => setName(e.target.value)}
@@ -251,26 +269,16 @@ const PerryMeetPage: React.FC = () => {
                   value={age}
                   min={1}
                   max={17}
-                  placeholder="Your age"
-                  aria-label="Your age"
+                  placeholder={holder === 'kid' ? 'Your age' : "Child's age"}
+                  aria-label={holder === 'kid' ? 'Your age' : "Child's age"}
                   className={FIELD}
                   style={{ fontFamily: BUBBLE }}
                   onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, '').slice(0, 2))}
                 />
                 <GoldButton onClick={saveKid} disabled={!canSubmit}>
-                  That&apos;s me!
+                  {holder === 'kid' ? "That's me!" : 'Continue →'}
                 </GoldButton>
               </form>
-            )}
-            {phase === 'handoff' && (
-              <GoldButton
-                onClick={() => {
-                  activityTrackingService.trackOnboardingEvent('pass_phone_continue');
-                  setPhase('ask');
-                }}
-              >
-                Continue →
-              </GoldButton>
             )}
             {phase === 'ready' && <GoldButton onClick={flyToMap}>Continue →</GoldButton>}
           </div>

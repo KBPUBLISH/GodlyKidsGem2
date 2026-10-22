@@ -5,11 +5,14 @@ const cache = new Map<string, string>();
 
 export const PERRY_VOICE_ID = ONBOARDING_GUIDE_VOICE_ID;
 
-export const PERRY_HELLO_LINE = 'Woah... hello! (squawk)';
-export const PERRY_HELLO_TTS = '[startled] Woah! [happily] Hello! [pause] Squawk!';
-export const PERRY_ASK_LINE = "My name is Perry, what is your Child's name?";
+export const PERRY_HELLO_LINE = 'Woah... hello! Who are you?';
+export const PERRY_HELLO_TTS = '[startled] Woah... [happily] Hello! [curiously] Who are you?';
+export const PERRY_ASK_LINE = "Hello! My name is Perry. What is your child's name?";
 export const PERRY_ASK_TTS =
-  "[happily] My name is Perry, [warmly] what is your child's name?";
+  "[happily] Hello! [warmly] My name is Perry. [gently] What is your child's name?";
+export const PERRY_ASK_KID_LINE = "Hi! My name is Perry. What's your name?";
+export const PERRY_ASK_KID_TTS =
+  "[happily] Hi! [warmly] My name is Perry. [excitedly] What's your name?";
 export const PERRY_WOOHOO_LINE = 'Woohoo!';
 export const PERRY_WOOHOO_TTS = '[excitedly] Woohoo!';
 

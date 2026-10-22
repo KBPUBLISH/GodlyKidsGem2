@@ -11,21 +11,25 @@ type PassPhoneHandoffProps = {
   variant?: 'full' | 'underlay';
   /** to-child: parent hands the phone over. to-parent: the kid hands it back. */
   direction?: 'to-child' | 'to-parent';
+  /** Tap a hand to choose who is holding the phone. Hides the pass animation. */
+  onSelect?: (who: 'parent' | 'kid') => void;
 };
 
 const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
   onContinue,
   variant = 'full',
   direction = 'to-child',
+  onSelect,
 }) => {
   const uid = useId().replace(/:/g, '');
   const underlay = variant === 'underlay';
+  const selectable = Boolean(onSelect);
 
   return (
     <div
       className={`w-full max-w-md px-6 flex flex-col items-center ${
-        underlay ? 'pb-2 pointer-events-none' : 'flex-1'
-      }`}
+        underlay ? 'pb-2' : 'flex-1'
+      } ${selectable ? '' : underlay ? 'pointer-events-none' : ''}`}
     >
       {variant === 'full' && (
         <>
@@ -44,6 +48,15 @@ const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
         </>
       )}
 
+      {selectable && (
+        <p
+          className="mb-1 text-center font-extrabold text-[1.65rem] leading-none"
+          style={{ fontFamily: BUBBLE, color: NAVY, textShadow: '0 2px 0 #fff' }}
+        >
+          Select
+        </p>
+      )}
+
       <div
         className={`relative w-full flex items-end justify-center ${
           underlay ? 'min-h-0 max-w-[19rem]' : 'flex-1 min-h-[300px] max-w-[22rem]'
@@ -51,10 +64,18 @@ const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
       >
         <div
           className={`relative w-full flex items-end justify-between gap-1 ${
-            direction === 'to-parent' ? 'gk-pass-to-parent' : ''
+            selectable ? '' : direction === 'to-parent' ? 'gk-pass-to-parent' : ''
           }`}
         >
-          <div className="gk-pass-adult flex flex-col items-center w-[46%]">
+          <button
+            type="button"
+            disabled={!selectable}
+            onClick={() => onSelect?.('parent')}
+            className={`gk-pass-adult flex flex-col items-center w-[46%] bg-transparent border-0 p-0 ${
+              selectable ? 'pointer-events-auto active:scale-95 transition-transform' : 'pointer-events-none'
+            }`}
+            aria-label="Parent"
+          >
             <img
               src={PARENT_HAND}
               alt=""
@@ -68,8 +89,9 @@ const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
             >
               Parent
             </span>
-          </div>
+          </button>
 
+          {!selectable && (
           <div className="absolute inset-0 pointer-events-none" aria-hidden>
             <svg viewBox="0 0 360 220" className="w-full h-full overflow-visible">
               <defs>
@@ -91,8 +113,17 @@ const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
               </g>
             </svg>
           </div>
+          )}
 
-          <div className="gk-pass-child flex flex-col items-center w-[36%] mb-[2%]">
+          <button
+            type="button"
+            disabled={!selectable}
+            onClick={() => onSelect?.('kid')}
+            className={`gk-pass-child flex flex-col items-center w-[36%] mb-[2%] bg-transparent border-0 p-0 ${
+              selectable ? 'pointer-events-auto active:scale-95 transition-transform' : 'pointer-events-none'
+            }`}
+            aria-label="Kid"
+          >
             <img
               src={KID_HAND}
               alt=""
@@ -106,7 +137,7 @@ const PassPhoneHandoff: React.FC<PassPhoneHandoffProps> = ({
             >
               Kid
             </span>
-          </div>
+          </button>
         </div>
       </div>
 

@@ -2,6 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
 import {
+  startAdventurePreload,
+  subscribeAdventurePreload,
+  type AdventurePreloadProgress,
+} from '../utils/assetCache';
+import {
   ONBOARDING_FAMILY_BG_VIDEO,
   SPLASH_BOAT_POSTER,
   SPLASH_BOAT_VIDEO,
@@ -39,6 +44,20 @@ const SPARKLES: Array<{
   { top: '76%', right: '-1.25rem', rotate: '-42deg', h: 10 },
 ];
 
+const formatDownloadSize = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 10) return `${Math.round(mb)} MB`;
+  if (mb >= 0.1) return `${mb.toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
+
+const preloadPercent = (progress: AdventurePreloadProgress): number => {
+  if (progress.finished) return 100;
+  if (progress.totalBytes <= 0) return 8;
+  return Math.max(8, Math.min(100, Math.round((progress.loadedBytes / progress.totalBytes) * 100)));
+};
+
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,6 +67,11 @@ const LandingPage: React.FC = () => {
   const [isChecking, setIsChecking] = useState(!replaySplash);
   const [mediaReady, setMediaReady] = useState(false);
   const [playingContinue, setPlayingContinue] = useState(false);
+  const [preload, setPreload] = useState<AdventurePreloadProgress>({
+    loadedBytes: 0,
+    totalBytes: 0,
+    finished: false,
+  });
   const startedRef = useRef(false);
   const splashRef = useRef<HTMLVideoElement>(null);
   const continueRef = useRef<HTMLVideoElement>(null);
@@ -77,6 +101,13 @@ const LandingPage: React.FC = () => {
     }
     setIsChecking(false);
   }, [navigate, replaySplash]);
+
+  useEffect(() => subscribeAdventurePreload(setPreload), []);
+
+  useEffect(() => {
+    if (isChecking) return;
+    void startAdventurePreload();
+  }, [isChecking]);
 
   useEffect(() => {
     const splashViewedKey = 'godlykids_splash_viewed_session';
@@ -237,37 +268,75 @@ const LandingPage: React.FC = () => {
           bottom: 'calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + max(0.85rem, 3.5vh))',
         }}
       >
-        <div className="relative">
-          {SPARKLES.map((s, i) => (
-            <span
-              key={i}
-              aria-hidden
-              className="absolute rounded-full pointer-events-none"
-              style={{
-                top: s.top,
-                left: s.left,
-                right: s.right,
-                width: 3,
-                height: s.h,
-                background: GOLD,
-                transform: `rotate(${s.rotate})`,
-              }}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={handleStartExplore}
-            disabled={playingContinue}
-            className="px-10 py-3.5 rounded-full font-extrabold text-[1.55rem] sm:text-[1.7rem] leading-none active:scale-[0.97] transition-transform disabled:opacity-70"
-            style={{
-              fontFamily: BUBBLE,
-              background: GOLD,
-              color: NAVY,
-              boxShadow: '0 6px 0 #E0A21A, 0 10px 18px rgba(18, 38, 74, 0.18)',
-            }}
-          >
-            Continue →
-          </button>
+        <div className="relative flex w-full justify-center">
+          {preload.finished ? (
+            <>
+              {SPARKLES.map((s, i) => (
+                <span
+                  key={i}
+                  aria-hidden
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    top: s.top,
+                    left: s.left,
+                    right: s.right,
+                    width: 3,
+                    height: s.h,
+                    background: GOLD,
+                    transform: `rotate(${s.rotate})`,
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={handleStartExplore}
+                disabled={playingContinue}
+                className="px-10 py-3.5 rounded-full font-extrabold text-[1.55rem] sm:text-[1.7rem] leading-none active:scale-[0.97] transition-transform disabled:opacity-70"
+                style={{
+                  fontFamily: BUBBLE,
+                  background: GOLD,
+                  color: NAVY,
+                  boxShadow: '0 6px 0 #E0A21A, 0 10px 18px rgba(18, 38, 74, 0.18)',
+                }}
+              >
+                Continue →
+              </button>
+            </>
+          ) : (
+            <div
+              className="w-full rounded-3xl px-4 py-3"
+              style={{ background: 'rgba(18, 38, 74, 0.82)' }}
+              role="status"
+              aria-live="polite"
+            >
+              <p
+                className="text-center text-white font-extrabold text-base leading-tight"
+                style={{ fontFamily: BUBBLE }}
+              >
+                Getting your adventure ready
+              </p>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/25">
+                <div
+                  className="h-full rounded-full transition-[width] duration-200"
+                  style={{
+                    width: `${preloadPercent(preload)}%`,
+                    background: GOLD,
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-center text-xs font-bold text-white/90">
+                {formatDownloadSize(preload.loadedBytes)}
+                {preload.totalBytes > 0 ? ` of ${formatDownloadSize(preload.totalBytes)}` : ''}
+              </p>
+              <button
+                type="button"
+                onClick={handleStartExplore}
+                className="mt-1 w-full text-center text-xs font-bold text-white/80 underline"
+              >
+                Continue anyway
+              </button>
+            </div>
+          )}
         </div>
         <button
           onClick={handleSignIn}

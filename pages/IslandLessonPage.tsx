@@ -12,6 +12,7 @@ import {
   type IslandSceneReturnContext,
 } from '../utils/islandSceneReturn';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
 import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
@@ -154,6 +155,10 @@ const IslandLessonPage: React.FC = () => {
 
   const onboardingJourney =
     Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
+
+  useEffect(() => {
+    if (onboardingJourney) noteJourneyStep('lesson_hub');
+  }, [onboardingJourney]);
 
   const returnStoryId = storyIdParam || cmsStoryId;
   const sceneReturnCtx = useMemo<IslandSceneReturnContext>(
@@ -382,6 +387,7 @@ const IslandLessonPage: React.FC = () => {
 
   const openRead = useCallback(
     (level: ReadingLevelKey) => {
+      if (onboardingJourney) noteJourneyStep('story_opened');
       setShowAgePicker(false);
       const returnCtx: IslandSceneReturnContext = {
         islandId,
@@ -427,6 +433,7 @@ const IslandLessonPage: React.FC = () => {
       navState?.fromSail,
       navState?.title,
       lesson.title,
+      onboardingJourney,
     ],
   );
 
@@ -520,6 +527,7 @@ const IslandLessonPage: React.FC = () => {
       setShowAgePicker(true);
       return;
     }
+    if (onboardingJourney) noteJourneyStep('story_opened');
     navigate('/read', {
       state: {
         fromIslandLesson: islandId,
@@ -539,6 +547,7 @@ const IslandLessonPage: React.FC = () => {
     islandId,
     navigate,
     sceneReturnCtx,
+    onboardingJourney,
   ]);
 
   const quizLocked = !readDone;
@@ -840,7 +849,7 @@ const IslandLessonPage: React.FC = () => {
               </button>
             )}
 
-            {/* Bible Map hunt stars (after story complete) */}
+            {/* Story stars (after story complete) */}
             {readDone && readStars > 0 && (
               <div
                 className={`flex flex-col items-center mb-3 ${

@@ -9,6 +9,7 @@ import {
   isOnboardingJourneyActive,
   subscribeOnboardingJourney,
 } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
   fetchOceanMapIslands,
@@ -343,6 +344,10 @@ const SailScenePage: React.FC = () => {
     sync();
     return subscribeOnboardingJourney(sync);
   }, []);
+
+  useEffect(() => {
+    if (fromOnboarding || journeyActive) noteJourneyStep('sail_deck');
+  }, [fromOnboarding, journeyActive]);
 
   // Onboarding: land under white (same overlay the intro video faded to) and reveal.
   useEffect(() => {

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, ChevronLeft, Compass, Gift, Heart, X } from 'lucide-react';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { isJourneyStudyOpen, noteJourneyStep } from '../utils/journeyStudy';
 import { startSevenDayChallenge } from '../utils/sevenDayChallenge';
 import { authService } from '../services/authService';
 import { getApiBaseUrl } from '../services/apiService';
@@ -178,6 +179,17 @@ const ChallengeIntroPage: React.FC = () => {
   const last = step === STEPS.length - 1;
 
   useEffect(() => {
+    if (!isJourneyStudyOpen()) return;
+    const source = reason || 'challenge';
+    if (reason === 'adam-offer' || reason === 'skip-tour') {
+      noteJourneyStep('offer_shown', { source: reason });
+    }
+    noteJourneyStep('paywall_shown', { source });
+    const screens = ['offer_challenge', 'offer_book', 'offer_trial'] as const;
+    if (step > 0 && screens[step - 1]) noteJourneyStep(screens[step - 1], { source });
+  }, [reason, step]);
+
+  useEffect(() => {
     if (!shipOpen) {
       setAddressHits([]);
       return;
@@ -271,6 +283,7 @@ const ChallengeIntroPage: React.FC = () => {
 
   const join = () => {
     track('challenge_intro_join');
+    noteJourneyStep('paywall_clicked', { source: reason || 'challenge' });
     setPayError('');
     setShowParentGate(true);
   };
@@ -368,6 +381,7 @@ const ChallengeIntroPage: React.FC = () => {
     try {
       const result = await purchase('annual');
       if (result.success) {
+        noteJourneyStep('trial_started', { source: reason || 'challenge' });
         startSevenDayChallenge();
         subscribe();
         navigate(returnTo, { replace: true });
@@ -384,6 +398,7 @@ const ChallengeIntroPage: React.FC = () => {
 
   const later = () => {
     track('challenge_intro_later');
+    noteJourneyStep('paywall_dismissed', { source: reason || 'challenge' });
     const fromAdam =
       reason === 'adam-offer' ||
       reason === 'skip-tour' ||

@@ -15,6 +15,7 @@ import {
   type RewardDefinition,
 } from '../services/rewardsService';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import { rememberLastStoryIsland } from '../utils/lastStoryIsland';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
@@ -503,6 +504,10 @@ const IslandScenePage: React.FC = () => {
   const storyIdParam = searchParams.get('storyId')?.trim() || '';
   const onboardingJourney =
     Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
+
+  useEffect(() => {
+    if (onboardingJourney) noteJourneyStep('story_pack');
+  }, [onboardingJourney]);
 
   const fallbackTitle =
     SCENE_TITLE_BY_ISLAND[islandId] ?? `1. ${titleCase(islandId).toUpperCase()}`;
@@ -1133,8 +1138,9 @@ const IslandScenePage: React.FC = () => {
 
   /** Board Read Story always opens the story. Quiz and Try It stay on the lesson hub. */
   const goReadStory = useCallback(() => {
+    if (onboardingJourney) noteJourneyStep('read_tapped');
     goHub();
-  }, [goHub]);
+  }, [goHub, onboardingJourney]);
 
   const goPuzzle = useCallback(() => {
     const qs = puzzleContent.storyId
@@ -1151,6 +1157,7 @@ const IslandScenePage: React.FC = () => {
   }, [navigate, coloringPath, coloringContent.storyId, activityReturnState]);
 
   const goRewards = useCallback(() => {
+    if (onboardingJourney) noteJourneyStep('reward_tapped');
     const sid =
       rewardsContent.storyId || storyIdParam || activeStoryId || '';
     if (sid) {

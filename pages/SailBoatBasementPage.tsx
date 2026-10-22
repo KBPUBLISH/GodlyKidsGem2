@@ -29,6 +29,7 @@ import {
   markAdamTourSeen,
   markTourWrapDone,
 } from '../utils/adamTour';
+import { noteJourneyStep } from '../utils/journeyStudy';
 
 // Lazy — the three.js chunk only loads when a crew character can walk (GLB or still).
 const CrewDeck3D = React.lazy(() => import('../components/crew/CrewDeck3D'));
@@ -206,6 +207,7 @@ const SailBoatBasementPage: React.FC = () => {
       resolveBasementCharacters().find(isAdamCharacter) ||
       getOnDeckCrew().find(isAdamCharacter);
     if (!adam) return;
+    noteJourneyStep('basement_tour');
     // Drop the flag from history so a later back-navigation can't replay it.
     navigate('/sail/basement', { replace: true, state: null });
     const id = window.setTimeout(
@@ -571,6 +573,7 @@ const SailBoatBasementPage: React.FC = () => {
   const openArcade = useCallback(() => openGame(ARCADE_PATH), [openGame]);
 
   const leaveToLibrary = useCallback(() => {
+    noteJourneyStep('library');
     armTourWrapFromLibrary();
     const t = tourRef.current;
     if (t) {

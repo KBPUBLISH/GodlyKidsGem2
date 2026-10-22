@@ -338,8 +338,8 @@ if (!(window as any).__GK_APP_BOOTED__) {
     );
   } catch {}
 
-  // On iOS standalone/custom app shells, proactively unregister ALL service workers 
-  // and clear caches to avoid stale-cache chunk failures and "Script error." crashes.
+  // Drop OneSignal workers on installed shells. The media worker stays so the
+  // splash download is still there when the phone is off Wi-Fi.
   try {
     const ua = navigator.userAgent || '';
     const isIOS =
@@ -350,25 +350,9 @@ if (!(window as any).__GK_APP_BOOTED__) {
       (navigator as any).standalone === true;
     const isCustomAppUA = /despia/i.test(ua);
 
-    // In DeSpia wrapper, be VERY aggressive about cleanup
-    if (isCustomAppUA && 'serviceWorker' in navigator) {
-      // Unregister ALL service workers (not just OneSignal)
-      navigator.serviceWorker.getRegistrations?.().then((regs) => {
-        regs?.forEach((reg) => {
-          console.log('🧹 Unregistering service worker:', reg.scope);
-          reg.unregister().catch(() => {});
-        });
-      });
-      
-      // Clear ALL caches
-      if ('caches' in window) {
-        caches.keys().then((names) => {
-          names.forEach((name) => {
-            console.log('🧹 Clearing cache:', name);
-            caches.delete(name).catch(() => {});
-          });
-        });
-      }
+    // OneSignal workers have shipped stale scripts. Keep the media cache worker
+    // and the adventure download — those are pictures, videos, and parrot models.
+    if ((isCustomAppUA || (isIOS && isStandalone)) && 'serviceWorker' in navigator) {
       
       // Clear OneSignal localStorage keys
       try {
@@ -380,12 +364,10 @@ if (!(window as any).__GK_APP_BOOTED__) {
           localStorage.removeItem(k);
         });
       } catch {}
-    } else if ((isIOS && isStandalone) && 'serviceWorker' in navigator) {
-      // For non-DeSpia iOS standalone, just unregister OneSignal SWs
       navigator.serviceWorker.getRegistrations?.().then((regs) => {
         regs?.forEach((reg) => {
-          const scriptURL = (reg as any)?.active?.scriptURL || '';
-          if (scriptURL.includes('OneSignal') || scriptURL.includes('onesignal')) {
+          const scriptURL = (reg as any)?.active?.scriptURL || (reg as any)?.installing?.scriptURL || '';
+          if (/onesignal/i.test(scriptURL)) {
             reg.unregister().catch(() => {});
           }
         });
@@ -1489,11 +1471,11 @@ const App: React.FC = () => {
   // Check if we're in DeSpia wrapper - if so, skip risky initializations
   const isDespia = DespiaService.isNative();
 
-  // Image cache worker from main. Native Despia keeps its own file cache.
+  // Serves the splash download (pictures, sail/island video, parrot models) on the next launch.
   useEffect(() => {
-    if (isDespia || !('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
-  }, [isDespia]);
+  }, []);
 
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
   // When the app regains focus after being in background, we need to ensure React

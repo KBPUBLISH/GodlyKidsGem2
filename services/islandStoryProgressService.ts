@@ -26,7 +26,7 @@ export type IslandStoryProgress = {
   game?: boolean;
   /** Alias for former game activity completion */
   rewards?: boolean;
-  /** Best Bible Map hunt star rating (1–3) for this island:story. */
+  /** Best story star rating (1–3) for this island:story. */
   readStars?: number;
   /** Wrong taps from the session that earned readStars (debug / display). */
   readWrongTaps?: number;
@@ -448,7 +448,7 @@ class IslandStoryProgressService {
   }
 
   /**
-   * Persist hunt stars for a story. Keeps the best (highest) rating.
+   * Persist story stars. Keeps the best (highest) rating.
    */
   setReadStars(
     islandId: string,

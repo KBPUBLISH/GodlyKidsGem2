@@ -15,6 +15,7 @@ import {
 } from '../utils/islandSceneReturn';
 import { useAudio } from '../context/AudioContext';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
 import { usePackUnlockCelebration } from '../hooks/usePackUnlockCelebration';
@@ -140,8 +141,11 @@ const shuffleQuestionOptions = (q: QuizQuestion): QuizQuestion => {
   };
 };
 
+/** Kids play this many questions, even when a story pack has more saved. */
+const QUIZ_LENGTH = 5;
+
 const preparePlayQuestions = (list: QuizQuestion[]): QuizQuestion[] =>
-  list.map(shuffleQuestionOptions);
+  list.slice(0, QUIZ_LENGTH).map(shuffleQuestionOptions);
 
 const levelsFromStory = (
   story: StoryCms | undefined,
@@ -192,6 +196,15 @@ const IslandQuizPage: React.FC = () => {
   const [tryItDone, setTryItDone] = useState(false);
   const [tryItVideoUrl, setTryItVideoUrl] = useState('');
   const [unlockStories, setUnlockStories] = useState<PackUnlockCoverStory[]>([]);
+
+  useEffect(() => {
+    if (onboardingJourney) noteJourneyStep('quiz_started');
+  }, [onboardingJourney]);
+
+  useEffect(() => {
+    if (onboardingJourney && phase === 'done') noteJourneyStep('quiz_done');
+  }, [onboardingJourney, phase]);
+
   const autoAdvanceRef = useRef<number | null>(null);
   /** Prevents double-advance if tap + Next + timeout fire in the same tick. */
   const advanceLockRef = useRef(false);

@@ -26,16 +26,7 @@ import { authService } from '../services/authService';
 import { useTutorial } from '../context/TutorialContext';
 import { isValidBookId } from '../utils/bookUtils';
 import { attachReliableLoop } from '../utils/audioLoop';
-import {
-    augmentInteractiveWordIndices,
-    bibleMapScrollBandPct,
-    collectPageInteractiveTargets,
-    pageInteractiveTapKey,
-    playInteractiveWordDing,
-    sanitizeInteractiveWordIndices,
-    splitInteractiveWords,
-    wordForSpeech,
-} from '../utils/interactiveWords';
+import { bibleMapScrollBandPct, splitStoryWords, wordForSpeech } from '../utils/bibleMapReader';
 import {
     buildIslandLessonHubPath,
     buildIslandSceneNavState,
@@ -43,7 +34,8 @@ import {
     resolveIslandSceneReturn,
     type IslandSceneReaderState,
 } from '../utils/islandSceneReturn';
-import { computeHuntStars } from '../utils/bibleMapHuntStars';
+import { shouldShowFullscreenHint, recordFullscreenHintUse } from '../utils/islandReaderPrefs';
+import TapToFullscreenHint from '../components/features/TapToFullscreenHint';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription } from '../utils/voiceUtils';
 
@@ -61,45 +53,6 @@ function readingLevelFontSize(level: ReadingLevelKey): number {
     if (level === 'ages_3_5') return 28;
     if (level === 'ages_6_7') return 24;
     return 22;
-}
-
-/** Session key for Bible Map word-hunt progress (survives refresh within the tab). */
-function huntProgressStorageKey(bookId: string): string {
-    return `bibleMapHunt:${bookId}`;
-}
-
-function loadHuntProgressByPage(bookId: string | undefined): Map<string, Set<string>> {
-    const map = new Map<string, Set<string>>();
-    if (!bookId) return map;
-    try {
-        const raw = sessionStorage.getItem(huntProgressStorageKey(bookId));
-        if (!raw) return map;
-        const parsed = JSON.parse(raw) as Record<string, string[]>;
-        for (const [pageKey, keys] of Object.entries(parsed)) {
-            if (Array.isArray(keys)) map.set(pageKey, new Set(keys.filter((k) => typeof k === 'string')));
-        }
-    } catch {
-        /* ignore corrupt session data */
-    }
-    return map;
-}
-
-function saveHuntProgressByPage(bookId: string | undefined, map: Map<string, Set<string>>): void {
-    if (!bookId) return;
-    try {
-        const obj: Record<string, string[]> = {};
-        map.forEach((keys, pageKey) => {
-            obj[pageKey] = Array.from(keys);
-        });
-        sessionStorage.setItem(huntProgressStorageKey(bookId), JSON.stringify(obj));
-    } catch {
-        /* quota / private mode */
-    }
-}
-
-/** Stable hunt progress key for a page (page id, else index). */
-function huntPageKey(page: { _id?: string } | undefined, pageIndex: number): string {
-    return page?._id || `idx:${pageIndex}`;
 }
 
 /** True while the kid is still on `/read/:bookId` (BrowserRouter pathname or HashRouter hash). */
@@ -122,7 +75,6 @@ interface TextBox {
     fontFamily?: string;
     fontSize?: number;
     color?: string;
-    interactiveWordIndices?: number[];
 }
 
 interface VideoSequenceItem {
@@ -199,9 +151,9 @@ interface Page {
     backgroundTrimStartSec?: number;
     backgroundTrimEndSec?: number;
     readingLevels?: {
-        ages_3_5?: { text?: string; interactiveWordIndices?: number[] };
-        ages_6_7?: { text?: string; interactiveWordIndices?: number[] };
-        ages_8_plus?: { text?: string; interactiveWordIndices?: number[] };
+        ages_3_5?: { text?: string };
+        ages_6_7?: { text?: string };
+        ages_8_plus?: { text?: string };
     };
 }
 
@@ -211,14 +163,6 @@ function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Pag
     const entry = page.readingLevels[level];
     const text = typeof entry?.text === 'string' ? entry.text.trim() : '';
     if (!text) return page;
-    let indices = sanitizeInteractiveWordIndices(text, entry?.interactiveWordIndices);
-    // Ages 6–7: CMS often marks only 1–2 hunt words even on long pages — densify
-    // deterministically (same text → same extra blanks) so full pages get a real
-    // hunt. Star totals / progress keys derive from these same indices, so the
-    // augmented set stays consistent across renders, navigation, and restores.
-    if (level === 'ages_6_7') {
-        indices = augmentInteractiveWordIndices(text, indices);
-    }
     const textBox: TextBox = {
         text,
         x: 10,
@@ -228,7 +172,6 @@ function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Pag
         fontFamily: 'Patrick Hand',
         color: '#4a3b2a',
         alignment: 'center',
-        interactiveWordIndices: indices,
     };
     return {
         ...page,
@@ -382,7 +325,22 @@ const BookReaderPage: React.FC = () => {
         }
     }, [islandSceneReturn, fromDailySession, bookDetailUrl, bookId, navigate]);
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId, skipPuzzles, setSkipPuzzles } = useUser();
+    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId } = useUser();
+
+    const isIslandRead = !!islandSceneReturn;
+    /**
+     * Island stories open full screen: art fills the phone and the page text
+     * rides over it as karaoke captions (ReaderCaptions) instead of the
+     * parchment. "↑ Show text" brings the parchment back at any time.
+     */
+    const ISLAND_OPENS_FULLSCREEN = true;
+    const startsFullscreen = isIslandRead && ISLAND_OPENS_FULLSCREEN;
+
+    // Finger cue: "tap the picture/video for full screen". Island reads that
+    // open with the parchment up only, until the kid has done it a few times.
+    const [fullscreenHintVisible, setFullscreenHintVisible] = useState<boolean>(
+        () => isIslandRead && !startsFullscreen && shouldShowFullscreenHint(),
+    );
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
@@ -393,66 +351,6 @@ const BookReaderPage: React.FC = () => {
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     /** Bible Map tap-words: keys `${boxIndex}:${wordIndex}` revealed on the *current* page */
-    const [tappedInteractiveKeys, setTappedInteractiveKeys] = useState<Set<string>>(() => new Set());
-    const tappedInteractiveKeysRef = useRef<Set<string>>(new Set());
-    /** Hunt completion persisted per page for the session (Back/Next must not reset). */
-    const tappedByPageRef = useRef<Map<string, Set<string>>>(new Map());
-    const huntProgressBookIdRef = useRef<string | undefined>(undefined);
-    useEffect(() => {
-        tappedInteractiveKeysRef.current = tappedInteractiveKeys;
-    }, [tappedInteractiveKeys]);
-
-    /** Session wrong taps for Bible Map star scoring (out-of-order / incorrect chips). */
-    const huntWrongTapsRef = useRef(0);
-    const bibleMapEndHandledRef = useRef(false);
-    /** When false, kill-interval / loop must not restart book BGM (prevents sticky music). */
-    const bookMusicAliveRef = useRef(true);
-    const stopBookAudioRef = useRef<() => void>(() => {});
-
-    // Load / switch per-book hunt progress (in-memory + sessionStorage)
-    useEffect(() => {
-        if (huntProgressBookIdRef.current === bookId) return;
-        huntProgressBookIdRef.current = bookId;
-        huntWrongTapsRef.current = 0;
-        bibleMapEndHandledRef.current = false;
-        tappedByPageRef.current = loadHuntProgressByPage(bookId);
-        const page = pagesRef.current[currentPageIndexRef.current];
-        const key = huntPageKey(page, currentPageIndexRef.current);
-        const restored = new Set(tappedByPageRef.current.get(key) || []);
-        setTappedInteractiveKeys(restored);
-        tappedInteractiveKeysRef.current = restored;
-    }, [bookId]);
-
-    const getTappedKeysForPage = useCallback((page: Page | undefined, pageIndex: number): Set<string> => {
-        const key = huntPageKey(page, pageIndex);
-        return tappedByPageRef.current.get(key) || new Set();
-    }, []);
-
-    const pageTapWordsComplete = useCallback(
-        (page: Page | undefined, tapped?: Set<string>, pageIndex?: number): boolean => {
-            if (skipPuzzles) return true;
-            if (!page || page._id === 'the-end-page') return true;
-            const contentBoxes = page.content?.textBoxes;
-            const boxes =
-                contentBoxes && contentBoxes.length > 0 ? contentBoxes : page.textBoxes || [];
-            const targets = collectPageInteractiveTargets(boxes);
-            if (targets.length === 0) return true;
-            const keys =
-                tapped ??
-                (pageIndex != null
-                    ? getTappedKeysForPage(page, pageIndex)
-                    : tappedInteractiveKeysRef.current);
-            return targets.every((t) => keys.has(pageInteractiveTapKey(t.boxIndex, t.wordIndex)));
-        },
-        [getTappedKeysForPage, skipPuzzles],
-    );
-
-    /** Used by TTS auto-advance (async) — must not skip tap-word gating. */
-    const canAutoAdvanceFromCurrentPage = useCallback((): boolean => {
-        const idx = currentPageIndexRef.current;
-        const page = pagesRef.current[idx];
-        return pageTapWordsComplete(page, tappedInteractiveKeysRef.current);
-    }, [pageTapWordsComplete]);
 
     const getPageTextBoxes = useCallback((page: Page | undefined) => {
         if (!page) return [] as TextBox[];
@@ -462,29 +360,33 @@ const BookReaderPage: React.FC = () => {
             : page.textBoxes || [];
     }, []);
 
-    const nextInteractiveKey = (() => {
-        if (skipPuzzles) return null;
-        const targets = collectPageInteractiveTargets(
-            getPageTextBoxes(pages[currentPageIndex]),
-        );
-        for (const t of targets) {
-            const key = pageInteractiveTapKey(t.boxIndex, t.wordIndex);
-            if (!tappedInteractiveKeys.has(key)) return key;
-        }
-        return null;
-    })();
+    const bibleMapEndHandledRef = useRef(false);
+    /** When false, kill-interval / loop must not restart book BGM (prevents sticky music). */
+    const bookMusicAliveRef = useRef(true);
+    const stopBookAudioRef = useRef<() => void>(() => {});
+    useEffect(() => {
+        bibleMapEndHandledRef.current = false;
+    }, [bookId]);
 
-    // Use state (not the ref) so Play / Next unlock on the same render as the last hunt tap.
-    // The ref is synced in useEffect and otherwise lags one frame behind setState.
-    const allInteractiveTappedOnCurrentPage = pageTapWordsComplete(
-        pages[currentPageIndex],
-        tappedInteractiveKeys,
-    );
-    
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
-    const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default mid (30%) — matches portal reader preview
+    const [scrollState, setScrollState] = useState<ScrollState>(
+        startsFullscreen ? 'hidden' : 'mid', // Default mid (30%) — matches portal reader preview
+    );
+
+    // Fullscreen finger cue: the kid followed it (art now fills the screen) →
+    // count it and hide. Otherwise it quietly times out so it never nags.
+    useEffect(() => {
+        if (!fullscreenHintVisible || loading) return;
+        if (scrollState === 'hidden') {
+            recordFullscreenHintUse();
+            setFullscreenHintVisible(false);
+            return;
+        }
+        const t = window.setTimeout(() => setFullscreenHintVisible(false), 20000);
+        return () => window.clearTimeout(t);
+    }, [fullscreenHintVisible, scrollState, loading]);
     const [readerNarrow, setReaderNarrow] = useState(
         () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
     );
@@ -503,7 +405,7 @@ const BookReaderPage: React.FC = () => {
             if (!page || !isBibleMapBook) return null;
             const boxes = getPageTextBoxes(page);
             const wordCount = boxes.reduce(
-                (sum, box) => sum + splitInteractiveWords(box?.text || '').length,
+                (sum, box) => sum + splitStoryWords(box?.text || '').length,
                 0,
             );
             return bibleMapScrollBandPct(wordCount, { mobile: readerNarrow });
@@ -521,7 +423,7 @@ const BookReaderPage: React.FC = () => {
 
     const bibleMapScrollBoot = React.useRef(false);
     useEffect(() => {
-        if (!isBibleMapBook || bibleMapScrollBoot.current) return;
+        if (!isBibleMapBook || bibleMapScrollBoot.current || startsFullscreen) return;
         bibleMapScrollBoot.current = true;
         if (window.matchMedia('(max-width: 639px)').matches) setScrollState('mid');
     }, [isBibleMapBook]);
@@ -554,7 +456,7 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('mid');
+    const scrollStateRef = useRef<ScrollState>(startsFullscreen ? 'hidden' : 'mid');
     const scrollBeforeHideRef = useRef<ScrollState>('mid');
     useEffect(() => {
         scrollStateRef.current = scrollState;
@@ -1144,8 +1046,8 @@ const BookReaderPage: React.FC = () => {
     const audioPreloadCacheRef = useRef<Map<string, { audioUrl: string; alignment: any }>>(new Map());
     const preloadingInProgressRef = useRef<Set<string>>(new Set());
     const desiredScrollStateRef = useRef<ScrollState | null>(null); // Track desired scroll state for next page turn
-    /** Short single-word TTS for hunt chips / tappable parchment words (separate from page narration). */
-    const huntWordAudioRef = useRef<HTMLAudioElement | null>(null);
+    /** Short single-word TTS for tappable parchment words (separate from page narration). */
+    const spokenWordAudioRef = useRef<HTMLAudioElement | null>(null);
     
     // Background preloading cache refs - prevents black flash between pages
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
@@ -1819,14 +1721,14 @@ const BookReaderPage: React.FC = () => {
                 console.warn('Error stopping multi-segment audio:', e);
             }
         }
-        // Hunt word TTS
-        if (huntWordAudioRef.current) {
+        // Tapped-word TTS
+        if (spokenWordAudioRef.current) {
             try {
-                huntWordAudioRef.current.pause();
-                huntWordAudioRef.current.src = '';
-                huntWordAudioRef.current.load?.();
+                spokenWordAudioRef.current.pause();
+                spokenWordAudioRef.current.src = '';
+                spokenWordAudioRef.current.load?.();
             } catch (e) { }
-            huntWordAudioRef.current = null;
+            spokenWordAudioRef.current = null;
         }
         // Cancel any in-progress multi-segment playback
         isPlayingMultiSegmentRef.current = false;
@@ -2258,13 +2160,6 @@ const BookReaderPage: React.FC = () => {
         loadClonedVoices();
     }, [bookId, readingLevel]);
 
-    const currentHuntPageKey = huntPageKey(pages[currentPageIndex], currentPageIndex);
-    // Restore this page's hunt progress when navigating (do not clear session progress)
-    useEffect(() => {
-        const restored = new Set(tappedByPageRef.current.get(currentHuntPageKey) || []);
-        setTappedInteractiveKeys(restored);
-        tappedInteractiveKeysRef.current = restored;
-    }, [currentHuntPageKey]);
 
     // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
     useEffect(() => {
@@ -2550,43 +2445,14 @@ const BookReaderPage: React.FC = () => {
         if (!bibleMapFlow || bibleMapEndHandledRef.current) return;
         bibleMapEndHandledRef.current = true;
 
-        // Score against the WHOLE story: every missing word on every page,
-        // counting only the ones the kid actually revealed (tappedByPageRef).
-        let huntPageCount = 0;
-        let totalHuntWords = 0;
-        let correctHuntWords = 0;
-        pages.forEach((page, pageIdx) => {
-            if (!page || page._id === 'the-end-page' || (page as any).id === 'the-end-page') {
-                return;
-            }
-            const contentBoxes = page.content?.textBoxes;
-            const boxes =
-                contentBoxes && contentBoxes.length > 0 ? contentBoxes : page.textBoxes || [];
-            const targets = collectPageInteractiveTargets(boxes);
-            if (targets.length === 0) return;
-            huntPageCount += 1;
-            totalHuntWords += targets.length;
-            const tapped =
-                tappedByPageRef.current.get(huntPageKey(page, pageIdx)) || new Set<string>();
-            correctHuntWords += targets.filter((t) =>
-                tapped.has(pageInteractiveTapKey(t.boxIndex, t.wordIndex)),
-            ).length;
-        });
-
-        const wrongTaps = huntWrongTapsRef.current;
-        const stars = computeHuntStars({
-            totalWords: totalHuntWords,
-            correctWords: correctHuntWords,
-            wrongTaps,
-            huntPageCount,
-        });
+        // Finishing the story earns the full three stars on the island hub.
+        const stars = 3;
 
         if (islandSceneReturn?.islandId && islandSceneReturn.storyId) {
             islandStoryProgressService.setReadStars(
                 islandSceneReturn.islandId,
                 islandSceneReturn.storyId,
                 stars,
-                wrongTaps,
             );
         }
 
@@ -2603,16 +2469,13 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        console.log(
-            `🏝️ Bible Map complete → hub (${stars}★, words=${correctHuntWords}/${totalHuntWords}, wrongs=${wrongTaps}, huntPages=${huntPageCount})`,
-        );
+        console.log(`🏝️ Bible Map complete → hub (${stars}★)`);
         navigate(hubPath, {
             replace: true,
             state: {
                 ...buildIslandSceneNavState(islandSceneReturn),
                 celebrateRead: true,
                 readStars: stars,
-                readWrongTaps: wrongTaps,
             },
         });
     }, [
@@ -2699,12 +2562,6 @@ const BookReaderPage: React.FC = () => {
         e.stopPropagation();
         if (isPageTurning) return;
 
-        // Bible Map: require tapping marked words before advancing
-        if (!pageTapWordsComplete(pages[currentPageIndex])) {
-            console.log('📖 Tap required words before advancing');
-            return;
-        }
-        
         // Auto-play if user had narration going and did not explicitly stop it
         const shouldAutoPlayOnSwipe =
             hasStartedTTSRef.current && !userStoppedPlaybackRef.current;
@@ -2776,15 +2633,9 @@ const BookReaderPage: React.FC = () => {
                 }
                 
                 // Auto-play narration after swipe (if user has used TTS this session)
-                // Skip when the new page has unfinished word-hunt targets
                 if (shouldAutoPlayOnSwipe) {
                     setTimeout(() => {
                         const newPage = pages[nextIndex];
-                        const newPageTapped = getTappedKeysForPage(newPage, nextIndex);
-                        if (!pageTapWordsComplete(newPage, newPageTapped)) {
-                            console.log('📖 Skipping auto-TTS after swipe — find missing words first');
-                            return;
-                        }
                         const contentTextBoxes = newPage?.content?.textBoxes;
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
@@ -2849,11 +2700,6 @@ const BookReaderPage: React.FC = () => {
                 if (shouldAutoPlayOnPrev) {
                     setTimeout(() => {
                         const newPage = pages[prevIndex];
-                        const prevPageTapped = getTappedKeysForPage(newPage, prevIndex);
-                        if (!pageTapWordsComplete(newPage, prevPageTapped)) {
-                            console.log('📖 Skipping auto-TTS after swipe back — find missing words first');
-                            return;
-                        }
                         const contentTextBoxes = newPage?.content?.textBoxes;
                         const pageTextBoxes = contentTextBoxes || newPage?.textBoxes || (newPage as any)?.content?.textBoxes || [];
                         
@@ -3193,8 +3039,8 @@ const BookReaderPage: React.FC = () => {
         isAutoPlayingRef.current = false; // Reset auto-play flag
     };
 
-    /** Speak a single word with the active narrator voice (hunt chips + parchment taps). */
-    const speakHuntWord = useCallback(
+    /** Speak a single word with the active narrator voice (parchment word taps). */
+    const speakWord = useCallback(
         async (rawWord: string) => {
             const spoken = wordForSpeech(rawWord);
             if (!spoken) return;
@@ -3209,15 +3055,15 @@ const BookReaderPage: React.FC = () => {
                     0,
                 );
                 if (!result?.audioUrl) return;
-                if (huntWordAudioRef.current) {
-                    huntWordAudioRef.current.pause();
-                    huntWordAudioRef.current = null;
+                if (spokenWordAudioRef.current) {
+                    spokenWordAudioRef.current.pause();
+                    spokenWordAudioRef.current = null;
                 }
                 const audio = new Audio(result.audioUrl);
-                huntWordAudioRef.current = audio;
+                spokenWordAudioRef.current = audio;
                 const finished = new Promise<void>((resolve) => {
                     const done = () => {
-                        if (huntWordAudioRef.current === audio) huntWordAudioRef.current = null;
+                        if (spokenWordAudioRef.current === audio) spokenWordAudioRef.current = null;
                         resolve();
                     };
                     audio.onended = done;
@@ -3226,7 +3072,7 @@ const BookReaderPage: React.FC = () => {
                 await audio.play();
                 await finished;
             } catch (err) {
-                console.warn('Hunt word TTS failed:', err);
+                console.warn('Word TTS failed:', err);
             }
         },
         [effectiveNarratorVoiceId, bookId],
@@ -3239,13 +3085,6 @@ const BookReaderPage: React.FC = () => {
         if (playing) {
             stopAudio();
             setAutoPlayMode(false);
-            return;
-        }
-
-        // Bible Map word-hunt: Play stays locked until all page targets are found
-        // Use state-synced ref (updated immediately on tap) + current page
-        if (!pageTapWordsComplete(pages[currentPageIndexRef.current] || currentPage, tappedInteractiveKeysRef.current)) {
-            console.log('📖 Find all missing words before Play');
             return;
         }
 
@@ -3276,17 +3115,6 @@ const BookReaderPage: React.FC = () => {
         }
     };
 
-    /** After the last hunt piece snaps in, start page TTS when Auto is on. */
-    const startPageTtsAfterHuntIfAuto = (pageIndex: number) => {
-        if (ttsModeRef.current !== 'auto') return;
-        if (playingRef.current || isPlayingMultiSegmentRef.current) return;
-        if (currentPageIndexRef.current !== pageIndex) return;
-        const page = pagesRef.current[pageIndex];
-        if (!pageTapWordsComplete(page, tappedInteractiveKeysRef.current)) return;
-        console.log('📖 Hunt complete — auto TTS');
-        void handlePlayPage({ stopPropagation: () => {} } as React.MouseEvent);
-    };
-    
     // Play the next pending text box in the sequential queue
     // Returns true if there was a next text box to play, false if queue is empty
     const playNextPendingTextBox = (): boolean => {
@@ -3511,13 +3339,6 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        // Bible Map / interactive: never auto-start TTS — kids find words first, then tap Play
-        if (!pageTapWordsComplete(currentPage, tappedInteractiveKeysRef.current)) {
-            hasAutoPlayedOnStartRef.current = true;
-            console.log('📖 Skipping auto-TTS on start — find missing words first');
-            return;
-        }
-
         // Mark as auto-played to prevent repeating
         hasAutoPlayedOnStartRef.current = true;
         
@@ -3532,10 +3353,6 @@ const BookReaderPage: React.FC = () => {
         // and the first page is fully rendered
         setTimeout(() => {
             void (async () => {
-                // Re-check hunt gate (page may still have unfinished taps)
-                if (!pageTapWordsComplete(pagesRef.current[0], tappedInteractiveKeysRef.current)) {
-                    return;
-                }
                 const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
                 setupSequentialTextBoxQueue(translatedTextBoxes);
                 if (translatedTextBoxes.length > 1) {
@@ -3767,7 +3584,7 @@ const BookReaderPage: React.FC = () => {
                         
                         // Auto-play to next page
                         const currentPageIdx = currentPageIndexRef.current;
-                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
+                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
                             isAutoPlayingRef.current = true;
                             const nextPageIndex = currentPageIdx + 1;
                             console.log('🔄 Auto-play after failed segment: Moving to page', nextPageIndex + 1);
@@ -3909,7 +3726,7 @@ const BookReaderPage: React.FC = () => {
                             canGoNext: currentPageIdx < pages.length - 1
                         });
                         
-                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
+                        if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
                             isAutoPlayingRef.current = true;
                             const nextPageIndex = currentPageIdx + 1;
                             console.log('🔄 Multi-segment auto-play: Moving to page', nextPageIndex + 1);
@@ -4094,13 +3911,6 @@ const BookReaderPage: React.FC = () => {
             clearSequentialTextBoxQueue();
             setActiveTextBoxIndex(null);
             setCurrentWordIndex(-1);
-            return;
-        }
-
-        // Word-hunt pages: block TTS until all interactive blanks on this page are found
-        const pageForGate = pagesRef.current[currentPageIndexRef.current];
-        if (!pageTapWordsComplete(pageForGate, tappedInteractiveKeysRef.current)) {
-            console.log('📖 TTS gated — finish finding missing words first');
             return;
         }
 
@@ -4572,7 +4382,7 @@ const BookReaderPage: React.FC = () => {
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
                             const currentPageIdx = currentPageIndexRef.current;
-                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
+                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
                                 isAutoPlayingRef.current = true; // Prevent multiple calls
                                 const nextPageIndex = currentPageIdx + 1;
                                 console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
@@ -4675,7 +4485,7 @@ const BookReaderPage: React.FC = () => {
                             // Auto-play: Move to next page if enabled
                             // Use refs to get latest values (closure-safe)
                             const currentPageIdx = currentPageIndexRef.current;
-                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1 && canAutoAdvanceFromCurrentPage()) {
+                            if (autoPlayModeRef.current && !isAutoPlayingRef.current && currentPageIdx < pages.length - 1) {
                                 isAutoPlayingRef.current = true; // Prevent multiple calls
                                 const nextPageIndex = currentPageIdx + 1;
                                 console.log('🔄 Auto-play: Moving to page', nextPageIndex + 1, `(from page ${currentPageIdx + 1})`);
@@ -5476,6 +5286,16 @@ const BookReaderPage: React.FC = () => {
                 onTouchEnd={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
                 onTouchCancel={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
             >
+                {/* Island reads: finger cue over the art — tap the picture/video for full screen */}
+                {fullscreenHintVisible &&
+                    !loading &&
+                    pages.length > 0 &&
+                    !showIntroVideo &&
+                    scrollState !== 'hidden' &&
+                    !currentPage?.isWebViewPage && (
+                        <TapToFullscreenHint top={scrollState === 'max' ? '18%' : '30%'} />
+                    )}
+
                 {/* Style for high-sheen 3D glossy white page curl animation */}
                 <style>{`
                     /* Enhanced 3D page curl with more dramatic rotation */
@@ -5722,74 +5542,21 @@ const BookReaderPage: React.FC = () => {
                                 isTTSPlaying={playing}
                                 ambientVideoSoundEnabled={pageVideoSoundEnabled}
                                 sequentialMultiBoxTts={sequentialMultiBoxTts}
-                                skipPuzzles={skipPuzzles}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}
-                                tappedInteractiveKeys={tappedInteractiveKeys}
-                                nextInteractiveKey={nextInteractiveKey}
-                                onSpeakWord={isBibleMapBook ? speakHuntWord : undefined}
+                                onSpeakWord={isBibleMapBook ? speakWord : undefined}
                                 pageNav={
                                     isBibleMapBook
                                         ? {
                                               onPrev: handlePrev,
-                                              onNext: (e) => {
-                                                  if (!allInteractiveTappedOnCurrentPage) return;
-                                                  handleNext(e);
-                                              },
+                                              onNext: handleNext,
                                               canGoPrev: currentPageIndex > 0,
                                               canGoNext: currentPageIndex < pages.length - 1,
-                                              nextLocked: !allInteractiveTappedOnCurrentPage,
                                               disabled: isPageTurning,
                                           }
                                         : undefined
                                 }
-                                onWrongHuntTap={() => {
-                                    huntWrongTapsRef.current += 1;
-                                }}
-                                onInteractiveWordTap={(boxIndex, wordIndex) => {
-                                    const key = pageInteractiveTapKey(boxIndex, wordIndex);
-                                    // Sequential hunt: only the next blank can be revealed
-                                    if (nextInteractiveKey && key !== nextInteractiveKey) {
-                                        huntWrongTapsRef.current += 1;
-                                        return;
-                                    }
-                                    const pageIdx = currentPageIndexRef.current;
-                                    const page = pages[pageIdx] || pages[currentPageIndex];
-                                    const boxes = getTranslatedTextBoxes(page);
-                                    const word =
-                                        splitInteractiveWords(boxes[boxIndex]?.text || '')[wordIndex] || '';
-                                    const nextKeys = new Set(tappedInteractiveKeysRef.current);
-                                    nextKeys.add(key);
-                                    const huntJustCompleted =
-                                        !pageTapWordsComplete(page, tappedInteractiveKeysRef.current) &&
-                                        pageTapWordsComplete(page, nextKeys);
-                                    setTappedInteractiveKeys((prev) => {
-                                        if (prev.has(key)) return prev;
-                                        const next = new Set(prev);
-                                        next.add(key);
-                                        // Sync ref immediately so Play / Next unlock without waiting for useEffect
-                                        tappedInteractiveKeysRef.current = next;
-                                        // Persist per-page for Back/Next (and sessionStorage for refresh)
-                                        const pageKey = huntPageKey(page, pageIdx);
-                                        tappedByPageRef.current.set(pageKey, new Set(next));
-                                        saveHuntProgressByPage(bookId, tappedByPageRef.current);
-                                        return next;
-                                    });
-                                    playInteractiveWordDing();
-                                    const afterChip = () => {
-                                        if (!huntJustCompleted) return;
-                                        window.setTimeout(
-                                            () => startPageTtsAfterHuntIfAuto(pageIdx),
-                                            280,
-                                        );
-                                    };
-                                    if (word) {
-                                        void speakHuntWord(word).then(afterChip);
-                                    } else {
-                                        afterChip();
-                                    }
-                                }}
                             />
                         )}
                     </div>
@@ -5814,32 +5581,15 @@ const BookReaderPage: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                onClick={(e) => {
-                                    if (!allInteractiveTappedOnCurrentPage) return;
-                                    handleNext(e);
-                                }}
-                                disabled={
-                                    isPageTurning ||
-                                    currentPageIndex >= pages.length - 1 ||
-                                    !allInteractiveTappedOnCurrentPage
-                                }
+                                onClick={(e) => handleNext(e)}
+                                disabled={isPageTurning || currentPageIndex >= pages.length - 1}
                                 className={`pointer-events-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
                                     isPageTurning || currentPageIndex >= pages.length - 1
                                         ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
-                                        : !allInteractiveTappedOnCurrentPage
-                                          ? 'opacity-45 cursor-not-allowed border-white/20 bg-black/30 text-white'
-                                          : 'opacity-100 border-emerald-300/50 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                                        : 'opacity-100 border-emerald-300/50 bg-emerald-600/90 text-white hover:bg-emerald-500'
                                 }`}
-                                aria-label={
-                                    allInteractiveTappedOnCurrentPage
-                                        ? 'Next page'
-                                        : 'Find all missing words to continue'
-                                }
-                                title={
-                                    allInteractiveTappedOnCurrentPage
-                                        ? 'Next page'
-                                        : 'Find all missing words to continue'
-                                }
+                                aria-label="Next page"
+                                title="Next page"
                             >
                                 <ChevronRight className="w-9 h-9 sm:w-10 sm:h-10" strokeWidth={2.5} />
                             </button>
@@ -6021,22 +5771,11 @@ const BookReaderPage: React.FC = () => {
                     bottom: 'max(calc(var(--safe-area-bottom, 0px) + 1rem), 1rem)',
                 }}
             >
-                {/* Main Play Button — gated until word-hunt complete on interactive pages */}
+                {/* Main Play Button */}
                 <WoodButton
                     onClick={handlePlayPage}
-                    disabled={!playing && !allInteractiveTappedOnCurrentPage}
-                    className={`p-3 ${
-                        !playing && !allInteractiveTappedOnCurrentPage
-                            ? 'opacity-45 cursor-not-allowed active:scale-100'
-                            : ''
-                    }`}
-                    title={
-                        !playing && !allInteractiveTappedOnCurrentPage
-                            ? 'Find all missing words on the picture first'
-                            : playing
-                              ? 'Pause'
-                              : 'Play narration'
-                    }
+                    className="p-3"
+                    title={playing ? 'Pause' : 'Play narration'}
                     icon={
                         loadingAudio ? (
                             <div className="w-6 h-6 border-4 border-[#3e2723] border-t-transparent rounded-full animate-spin" />
@@ -6085,42 +5824,6 @@ const BookReaderPage: React.FC = () => {
                     </span>
                 </button>
 
-                {isBibleMapBook && (
-                    <button
-                        type="button"
-                        onClick={() => setSkipPuzzles(!skipPuzzles)}
-                        className="flex flex-col items-center gap-1"
-                        aria-pressed={!skipPuzzles}
-                        title={skipPuzzles ? 'Puzzle game off — tap to turn it on' : 'Puzzle game on — tap to turn it off'}
-                    >
-                        <div className={`
-                            relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner
-                            ${skipPuzzles
-                                ? 'bg-gray-400'
-                                : 'bg-gradient-to-r from-amber-400 to-amber-500'
-                            }
-                        `}>
-                            <div className={`
-                                absolute top-0.5 w-5 h-5 rounded-full shadow-md
-                                transition-all duration-300 ease-in-out
-                                bg-white border-2
-                                ${skipPuzzles
-                                    ? 'left-0.5 border-gray-500'
-                                    : 'left-6 border-amber-600'
-                                }
-                            `} />
-                        </div>
-                        <span className={`
-                            text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm
-                            ${skipPuzzles
-                                ? 'bg-gray-500 text-white'
-                                : 'bg-amber-500 text-white'
-                            }
-                        `}>
-                            {skipPuzzles ? 'OFF' : 'PUZZLE'}
-                        </span>
-                    </button>
-                )}
             </div>
             )}
 

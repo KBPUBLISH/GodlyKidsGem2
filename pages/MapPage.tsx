@@ -10,6 +10,7 @@ import {
   ONBOARDING_GENESIS_VIDEO,
   isOnboardingJourneyActive,
 } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
 import { useUser } from '../context/UserContext';
 import { assertFreeTierIslandExists, hasPremiumAccess } from '../utils/freeTierAccess';
@@ -575,6 +576,10 @@ const MapPage: React.FC = () => {
   guidedRef.current = guided;
 
   useEffect(() => {
+    if (guided && showTapIsland) noteJourneyStep('map_guide');
+  }, [guided, showTapIsland]);
+
+  useEffect(() => {
     if (!guided) return;
     document.body.setAttribute('data-modal-open', 'true');
     return () => {
@@ -689,9 +694,11 @@ const MapPage: React.FC = () => {
       sailCinematicLockRef.current = true;
       pendingIslandRef.current = island;
       setShowTapIsland(false);
+      if (guidedRef.current) noteJourneyStep('island_tapped');
 
       const afterCinematic = () => {
         if (guidedRef.current) {
+          noteJourneyStep('genesis_video');
           setIntroVideo(true);
           return;
         }

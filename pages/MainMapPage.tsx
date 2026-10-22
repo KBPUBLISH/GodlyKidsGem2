@@ -20,6 +20,7 @@ import {
   storyPackUnlockUxService,
 } from '../services/storyPackUnlockUxService';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import { rememberLastStoryIsland } from '../utils/lastStoryIsland';
 import StoryPackNewBadge from '../components/world/StoryPackNewBadge';
 import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
@@ -301,6 +302,10 @@ const MainMapPage: React.FC = () => {
   const navState = location.state as NavState;
   const onboardingJourney =
     Boolean(navState?.onboardingJourney) || isOnboardingJourneyActive();
+
+  useEffect(() => {
+    if (onboardingJourney) noteJourneyStep('story_map');
+  }, [onboardingJourney]);
 
   const [layoutKey, setLayoutKey] = useState<MainMapLayoutKey>(() =>
     detectMainMapLayoutKey(),

@@ -4,6 +4,7 @@ import { islandStoryProgressService } from '../services/islandStoryProgressServi
 import { rewardsService } from '../services/rewardsService';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import { clearAdamTourSeen } from './adamTour';
+import { beginJourneyStudy } from './journeyStudy';
 
 const STORAGE_KEY = 'godlykids_onboarding_journey';
 export const ONBOARDING_JOURNEY_EVENT = 'gk-onboarding-journey';
@@ -204,6 +205,7 @@ function resetGuestPlayProgress(): void {
 }
 
 export function startOnboardingJourney(): void {
+  beginJourneyStudy();
   resetGuestPlayProgress();
   writeJourneyFlag(true);
   window.dispatchEvent(new Event(ONBOARDING_JOURNEY_EVENT));

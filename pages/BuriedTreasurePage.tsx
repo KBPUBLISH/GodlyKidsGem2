@@ -12,6 +12,7 @@ import { useUser } from '../context/UserContext';
 import WoodBackButton from '../components/WoodBackButton';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import {
   safeAppReturnPath,
   type GameShelfFromTreasureState,
@@ -60,6 +61,11 @@ const BuriedTreasurePage: React.FC = () => {
   const navState = (location.state || {}) as TreasureNavState;
   const onboardingJourney =
     Boolean(navState.onboardingJourney) || isOnboardingJourneyActive();
+
+  useEffect(() => {
+    if (onboardingJourney) noteJourneyStep('treasure');
+  }, [onboardingJourney]);
+
   // Snapshot on first mount only — collectCards() writes claimedKeys during
   // this visit, and that must not bounce the kid off the win screen.
   const [arrivedAlreadyClaimed] = useState(() => {

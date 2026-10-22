@@ -1,6 +1,37 @@
+import {
+  ONBOARDING_FAMILY_BG_POSTER,
+  ONBOARDING_FAMILY_BG_VIDEO,
+  ONBOARDING_GENESIS_VIDEO,
+} from './onboardingJourney';
 import { fetchOceanMapIslands, getOceanIslandArtSrc } from './oceanMapIslands';
 
-export const ASSET_CACHE_NAME = 'gk-asset-cache-v1';
+/** Same bucket the media service worker serves from. */
+export const ASSET_CACHE_NAME = 'godlykids-images-v1';
+
+/** Parrot flight clips used on the splash and crew deck. */
+const PARROT_MODEL_URLS = [
+  '/models/perry-flying-introduction.glb?v=tex-2',
+  '/models/perry-fly-dive-hover.glb?v=dh-1',
+];
+
+/** Sail deck background, boat, and clouds. */
+const SAIL_ASSET_URLS = [
+  '/assets/videos/sail-ocean-bg.mp4',
+  '/assets/images/sail-scene-bg.png',
+  '/assets/images/sail-ship-deck.png',
+  '/assets/images/sail-steering-wheel.png',
+  '/assets/images/sail-btn-crew.png',
+  '/assets/images/sail-btn-explore.png',
+  '/assets/images/wheel-background-wood.png',
+  '/assets/images/sail-bg-cloud-a.png',
+  '/assets/images/sail-bg-cloud-b.png',
+];
+
+const ONBOARDING_MEDIA_URLS = [
+  ONBOARDING_FAMILY_BG_VIDEO,
+  ONBOARDING_FAMILY_BG_POSTER,
+  ONBOARDING_GENESIS_VIDEO,
+];
 
 /** World background, journey-map ocean, and the wood tab bar art. */
 export const SHELL_ASSET_URLS = [
@@ -109,27 +140,187 @@ export async function cacheIslandBackgrounds(): Promise<void> {
 }
 
 export function registerAssetCacheWorker(): void {
-  if (!import.meta.env.PROD) return;
   if (!('serviceWorker' in navigator)) return;
-  const register = () => {
-    navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
-  };
-  if (document.readyState === 'complete') register();
-  else window.addEventListener('load', register, { once: true });
+  navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
 }
 
-/** Warm the shell art, then the island backgrounds, without blocking the first screen. */
-export function startAssetCache(): void {
-  registerAssetCacheWorker();
-  const run = () => {
-    void cacheAssetUrls(SHELL_ASSET_URLS);
-    void cacheIslandBackgrounds();
-  };
-  const idle = (
-    window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+export type AdventurePreloadProgress = {
+  loadedBytes: number;
+  totalBytes: number;
+  finished: boolean;
+};
+
+const listeners = new Set<(progress: AdventurePreloadProgress) => void>();
+let latestProgress: AdventurePreloadProgress = {
+  loadedBytes: 0,
+  totalBytes: 0,
+  finished: false,
+};
+let adventureRun: Promise<void> | null = null;
+
+const emitProgress = (progress: AdventurePreloadProgress) => {
+  latestProgress = progress;
+  listeners.forEach((listener) => listener(progress));
+};
+
+export function subscribeAdventurePreload(
+  listener: (progress: AdventurePreloadProgress) => void,
+): () => void {
+  listeners.add(listener);
+  listener(latestProgress);
+  return () => listeners.delete(listener);
+}
+
+const formatSafe = (value: number) => (Number.isFinite(value) && value > 0 ? value : 0);
+
+async function readCachedBytes(cache: Cache, url: string): Promise<number | null> {
+  const hit = await cache.match(url);
+  if (!hit) return null;
+  const header = Number(hit.headers.get('content-length'));
+  if (Number.isFinite(header) && header > 0) return header;
+  try {
+    const blob = await hit.clone().blob();
+    return blob.size;
+  } catch {
+    return 0;
+  }
+}
+
+async function storeResponse(cache: Cache, url: string, bytes: Uint8Array, contentType: string | null) {
+  const headers = new Headers();
+  if (contentType) headers.set('content-type', contentType);
+  headers.set('content-length', String(bytes.byteLength));
+  await cache.put(url, new Response(bytes, { status: 200, headers }));
+}
+
+async function downloadOne(
+  cache: Cache,
+  url: string,
+  onChunk: (received: number, expected: number) => void,
+): Promise<void> {
+  const existing = await readCachedBytes(cache, url);
+  if (existing != null) {
+    onChunk(existing, existing);
+    if (!isVideo(url) && !/\.glb(\?|#|$)/i.test(url)) warmImage(url);
+    return;
+  }
+  const response = await fetch(url, { credentials: 'omit' });
+  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+  const expected = formatSafe(Number(response.headers.get('content-length')));
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const step = await reader.read();
+    if (step.done) break;
+    if (step.value) {
+      chunks.push(step.value);
+      received += step.value.byteLength;
+      onChunk(received, expected || received);
     }
-  ).requestIdleCallback;
-  if (typeof idle === 'function') idle(() => run(), { timeout: 1800 });
-  else window.setTimeout(run, 500);
+  }
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  await storeResponse(cache, url, bytes, response.headers.get('content-type'));
+  if (!isVideo(url) && !/\.glb(\?|#|$)/i.test(url)) warmImage(url);
+}
+
+async function islandMediaUrls(): Promise<string[]> {
+  try {
+    const islands = await fetchOceanMapIslands();
+    if (!islands) return [];
+    const urls: string[] = [];
+    for (const island of islands) {
+      const art = getOceanIslandArtSrc(island);
+      if (art) urls.push(art);
+      if (island.sailArtUrl) urls.push(island.sailArtUrl);
+      if (island.mainMapUrl) urls.push(island.mainMapUrl);
+      if (island.mainMapVideoUrl) urls.push(island.mainMapVideoUrl);
+    }
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Download the parrot flights, sail background, journey art, and island
+ * backgrounds. Safe to call more than once — the second call joins the first.
+ */
+export function startAdventurePreload(): Promise<void> {
+  if (adventureRun) return adventureRun;
+  adventureRun = (async () => {
+    registerAssetCacheWorker();
+    const staticUrls = [
+      ...SHELL_ASSET_URLS,
+      ...SAIL_ASSET_URLS,
+      ...PARROT_MODEL_URLS,
+      ...ONBOARDING_MEDIA_URLS,
+    ];
+    const islandUrlsPromise = islandMediaUrls();
+    let cache: Cache | null = null;
+    try {
+      cache = await caches.open(ASSET_CACHE_NAME);
+    } catch {
+      cache = null;
+    }
+    const received = new Map<string, number>();
+    const expected = new Map<string, number>();
+    const publish = (finished: boolean) => {
+      let loadedBytes = 0;
+      let totalBytes = 0;
+      received.forEach((value) => {
+        loadedBytes += value;
+      });
+      expected.forEach((value) => {
+        totalBytes += value;
+      });
+      emitProgress({ loadedBytes, totalBytes: Math.max(totalBytes, loadedBytes), finished });
+    };
+    const queue = [...new Set(staticUrls)];
+    const queued = new Set(queue);
+    islandUrlsPromise.then((extra) => {
+      for (const url of extra) {
+        if (!url || queued.has(url)) continue;
+        queued.add(url);
+        queue.push(url);
+      }
+    });
+    const take = async () => {
+      while (queue.length) {
+        const url = queue.shift();
+        if (!url) continue;
+        try {
+          if (!cache) {
+            if (!isVideo(url)) warmImage(url);
+            continue;
+          }
+          await downloadOne(cache, url, (got, total) => {
+            received.set(url, got);
+            if (total > 0) expected.set(url, Math.max(expected.get(url) || 0, total));
+            publish(false);
+          });
+        } catch {
+          received.set(url, received.get(url) || 0);
+        }
+      }
+    };
+    await Promise.all([take(), take()]);
+    await islandUrlsPromise;
+    // Island art may have arrived after the workers drained the first list.
+    if (queue.length) await Promise.all([take(), take()]);
+    publish(true);
+  })().catch(() => {
+    emitProgress({ ...latestProgress, finished: true });
+  });
+  return adventureRun;
+}
+
+/** Warm the shell art, sail backgrounds, parrot models, and island art immediately. */
+export function startAssetCache(): void {
+  void startAdventurePreload();
 }

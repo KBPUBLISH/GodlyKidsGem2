@@ -23,6 +23,7 @@ import {
   completeOnboardingJourney,
   isOnboardingJourneyActive,
 } from '../utils/onboardingJourney';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import {
   ADAM_TOUR_FALLBACK_VOICE_ID,
   buildAdamDeckTour,
@@ -388,6 +389,11 @@ const CrewPage: React.FC = () => {
   const enteringRef = useRef(false);
   const reduceMotion = prefersReducedMotion();
   const arrivingOnboarding = isOnboardingJourneyActive();
+
+  useEffect(() => {
+    if (arrivingOnboarding) noteJourneyStep('crew');
+  }, [arrivingOnboarding]);
+
   const [crewGuide, setCrewGuide] = useState(arrivingOnboarding);
   const [tapAdam, setTapAdam] = useState(
     () => Boolean((location.state as { tapAdam?: boolean } | null)?.tapAdam),
@@ -633,18 +639,29 @@ const CrewPage: React.FC = () => {
     return () => window.clearInterval(id);
   }, [tapAdam, crew, crew3d.length]);
 
+  /**
+   * Go below deck. A plain hatch tap just opens the hatch and fades out —
+   * the crew stay where they are (the basement shows whoever is already down
+   * there via their persisted locations). Only when a `walkerId` is given
+   * (Adam leading the way at the end of his tour) does that character walk
+   * to the hatch and climb down first.
+   */
   const enterBasement = useCallback(
     (opts?: { walkerId?: string; navState?: Record<string, unknown> }) => {
       if (enteringRef.current || enteringGame) return;
       enteringRef.current = true;
       endParty(); // hatch descent cancels a running jukebox party
 
-      // With a 3D character on deck, he walks to the hatch and climbs down
-      // first; the white-fade transition fires once he's disappeared inside.
-      const walker =
-        (opts?.walkerId && crew3d.find((c) => c.id === opts.walkerId)) || crew3d[0];
       const onDown = () => beginHatchTransition(opts?.navState);
-      if (walker && !reduceMotion) {
+      const walker = opts?.walkerId ? crew3d.find((c) => c.id === opts.walkerId) : undefined;
+      if (!walker) {
+        onDown();
+        return;
+      }
+
+      // Escorted descent: he walks to the hatch and climbs down first; the
+      // white-fade transition fires once he's disappeared inside.
+      if (!reduceMotion) {
         const started = deckRef.current?.descendIntoHatch(walker.id, onDown);
         if (started) {
           try {
@@ -656,12 +673,12 @@ const CrewPage: React.FC = () => {
           return;
         }
       }
-      if (walker) {
-        try {
-          sessionStorage.setItem(BASEMENT_CHARACTER_KEY, walker.id);
-        } catch {
-          /* ignore */
-        }
+      // Reduced motion / no 3D walker yet: mark him as below deck without the
+      // animation so the basement still shows him.
+      try {
+        sessionStorage.setItem(BASEMENT_CHARACTER_KEY, walker.id);
+      } catch {
+        /* ignore */
       }
       onDown();
     },
@@ -690,6 +707,7 @@ const CrewPage: React.FC = () => {
   }, [navigate]);
 
   const startTour = useCallback((character: UnlockedCharacter) => {
+    if (!hasSeenAdamTour()) noteJourneyStep('adam_tour');
     endParty();
     danceMusic.stop();
     setTapAdam(false);

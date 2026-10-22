@@ -8,23 +8,30 @@
  */
 
 const CACHE_NAME = 'godlykids-images-v1';
-const IMAGE_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
-// URLs to cache (images from our CDN and storage)
-const IMAGE_URL_PATTERNS = [
-  /storage\.googleapis\.com/,
-  /cloudinary\.com/,
-  /\.webp(\?|$)/i,
-  /\.jpg(\?|$)/i,
-  /\.jpeg(\?|$)/i,
-  /\.png(\?|$)/i,
-  /\/uploads\//,
-  /\/avatars\//,
-];
+const MEDIA_EXT = /\.(png|jpe?g|webp|gif|avif|mp4|webm|glb)(\?|#|$)/i;
 
-// Check if URL should be cached
-const shouldCacheImage = (url) => {
-  return IMAGE_URL_PATTERNS.some(pattern => pattern.test(url));
+/** Pictures, sail/island videos, and parrot models. Never scripts or pages. */
+const shouldCacheMedia = (url) => {
+  const path = `${url.pathname}${url.search}`;
+  if (!MEDIA_EXT.test(path) && !/\/uploads\//.test(path) && !/\/avatars\//.test(path)) {
+    return false;
+  }
+  if (url.origin === self.location.origin) {
+    return (
+      url.pathname.startsWith('/assets/') ||
+      url.pathname.startsWith('/models/') ||
+      url.pathname === '/world-background.webp'
+    );
+  }
+  const host = url.hostname;
+  return (
+    host.endsWith('storage.googleapis.com') ||
+    host.endsWith('googleusercontent.com') ||
+    host.endsWith('cloudinary.com') ||
+    /\/uploads\//.test(path) ||
+    /\/avatars\//.test(path)
+  );
 };
 
 // Install event - cache core assets
@@ -50,38 +57,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - implement stale-while-revalidate for images
+// Cache-first for pictures, videos, and models so a later visit works off Wi-Fi.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  
-  // Only handle GET requests for images
-  if (request.method !== 'GET' || !shouldCacheImage(url.href)) {
-    return;
-  }
-  
+  if (!shouldCacheMedia(url)) return;
+
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(request).then((cachedResponse) => {
-        // Fetch from network in background to update cache
-        const fetchPromise = fetch(request)
-          .then((networkResponse) => {
-            // Only cache successful responses
-            if (networkResponse && networkResponse.status === 200) {
-              // Clone the response before caching
-              cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch((error) => {
-            console.warn('[SW] Fetch failed for:', url.href, error);
-            // Return cached response on network failure
-            return cachedResponse;
-          });
-        
-        // Return cached response immediately, or wait for network
-        return cachedResponse || fetchPromise;
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request) || await cache.match(url.href);
+      if (cached) return cached;
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (error) {
+        console.warn('[SW] Fetch failed for:', url.href, error);
+        return cached || new Response('', { status: 503, statusText: 'Offline' });
+      }
     })
   );
 });

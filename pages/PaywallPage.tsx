@@ -11,6 +11,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { isJourneyStudyOpen, noteJourneyStep } from '../utils/journeyStudy';
 import { markShipsLibraryPaywallSeen } from '../utils/shipsLibraryPaywall';
 
 // Check if user has a real account (not just device ID)
@@ -227,7 +228,10 @@ const PaywallPage: React.FC = () => {
       'paywall_shown',
       paywallAnalyticsSource ? { source: paywallAnalyticsSource } : undefined
     );
-  }, [paywallAnalyticsSource]);
+    if (isJourneyStudyOpen()) {
+      noteJourneyStep('paywall_shown', { source: paywallAnalyticsSource || fromState || 'paywall' });
+    }
+  }, [paywallAnalyticsSource, fromState]);
 
   // If user already has premium, redirect to home
   useEffect(() => {
@@ -335,6 +339,9 @@ const PaywallPage: React.FC = () => {
     // Track trial button clicked
     console.log('🔘 Start Trial button clicked, plan:', selectedPlan);
     activityTrackingService.trackOnboardingEvent('paywall_trial_clicked', { planType: selectedPlan, ...paywallSourceMeta });
+    if (isJourneyStudyOpen()) {
+      noteJourneyStep('paywall_clicked', { source: paywallAnalyticsSource || fromState || 'paywall' });
+    }
     
     // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
     // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
@@ -410,6 +417,7 @@ const PaywallPage: React.FC = () => {
         
         try {
           activityTrackingService.trackOnboardingEvent('subscribed', { planType: selectedPlan, ...paywallSourceMeta });
+          if (isJourneyStudyOpen()) noteJourneyStep('trial_started', { source: paywallAnalyticsSource || 'paywall' });
         } catch (trackError) {
           console.warn('⚠️ Activity tracking error:', trackError);
         }
@@ -703,6 +711,9 @@ const PaywallPage: React.FC = () => {
       'paywall_closed',
       paywallAnalyticsSource ? { source: paywallAnalyticsSource } : undefined
     ).catch(() => {});
+    if (isJourneyStudyOpen()) {
+      noteJourneyStep('paywall_dismissed', { source: paywallAnalyticsSource || 'paywall' });
+    }
 
     // Check if user is eligible for the 24h exit-intent trial
     const alreadyShown = sessionStorage.getItem(EXIT_TRIAL_SHOWN_KEY) === 'true';

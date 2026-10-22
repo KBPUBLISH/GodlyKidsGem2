@@ -2,15 +2,8 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { attachPlaybackTrim } from '../../utils/playbackTrim';
 import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
-import MissingWordHuntOverlay from '../bibleMapBook/MissingWordHuntOverlay';
-import {
-    blankSlotUnits,
-    collectPageInteractiveTargets,
-    pageInteractiveTapKey,
-    sanitizeInteractiveWordIndices,
-    splitInteractiveWords,
-    wordForSpeech,
-} from '../../utils/interactiveWords';
+import { wordForSpeech } from '../../utils/bibleMapReader';
+import ReaderCaptions from './ReaderCaptions';
 import { ChevronLeft, ChevronRight, Music } from 'lucide-react';
 
 interface TextBox {
@@ -26,8 +19,6 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     startTime?: number;
     endTime?: number;
-    /** Bible Map: word indices kids must tap before advancing */
-    interactiveWordIndices?: number[];
     showBackground?: boolean;
     backgroundColor?: string;
     shadowColor?: string;
@@ -142,35 +133,23 @@ interface BookPageRendererProps {
     ambientVideoSoundEnabled?: boolean;
     /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
     sequentialMultiBoxTts?: boolean;
-    /** When true, skip interactive puzzles and show the page text immediately. */
-    skipPuzzles?: boolean;
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
-    /** Bible Map tap-words: indices already tapped for the current page (boxIndex:wordIndex keys). */
-    tappedInteractiveKeys?: Set<string>;
-    /** Next blank that must be found (sequential hunt). */
-    nextInteractiveKey?: string | null;
-    onInteractiveWordTap?: (boxIndex: number, wordIndex: number) => void;
-    /** Wrong hunt chip (out of order) — for Bible Map star scoring. */
-    onWrongHuntTap?: () => void;
-    /** Speak a single visible word (hunt practice / parchment taps). */
+    /** Speak a single visible word (parchment word taps). */
     onSpeakWord?: (word: string) => void;
     /**
-     * Bible Map extras (word hunt, page-nav chrome, green art fallback).
+     * Bible Map extras (page-nav chrome, green art fallback).
      * Art still crops above the parchment for every book that has a scroll.
      */
     bibleMapLayout?: boolean;
-    /**
-     * Page Back/Next chrome — rendered above the parchment (same band as word-hunt progress).
-     * Parent owns gating (e.g. Next locked until hunt complete).
-     */
+    /** Page Back/Next chrome — rendered above the parchment. Parent owns gating. */
     pageNav?: {
         onPrev: (e: React.MouseEvent) => void;
         onNext: (e: React.MouseEvent) => void;
         canGoPrev: boolean;
         canGoNext: boolean;
-        /** When true, Next stays visible but disabled (hunt incomplete). */
+        /** When true, Next stays visible but disabled. */
         nextLocked?: boolean;
         disabled?: boolean;
     };
@@ -189,13 +168,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
     sequentialMultiBoxTts = false,
-    skipPuzzles = false,
     characterPoses,
     showCharacterOverlay = false,
-    tappedInteractiveKeys,
-    nextInteractiveKey = null,
-    onInteractiveWordTap,
-    onWrongHuntTap,
     onSpeakWord,
     bibleMapLayout = false,
     pageNav,
@@ -224,36 +198,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         if (scrollState === 'hidden') return 100;
         return Math.max(32, 100 - currentScrollHeightNum - scrollOffset);
     }, [cropArtToScroll, scrollState, currentScrollHeightNum, scrollOffset]);
-
-    const pageInteractiveTargets = useMemo(
-        () => collectPageInteractiveTargets(page.textBoxes),
-        [page.textBoxes],
-    );
-
-    const huntChips = useMemo(() => {
-        return pageInteractiveTargets.map((t) => {
-            const box = page.textBoxes?.[t.boxIndex];
-            const words = splitInteractiveWords(box?.text || '');
-            const word = words[t.wordIndex] || '';
-            return {
-                id: pageInteractiveTapKey(t.boxIndex, t.wordIndex),
-                label: wordForSpeech(word) || word || '?',
-            };
-        });
-    }, [pageInteractiveTargets, page.textBoxes]);
-
-    const pageHasBackgroundArt = Boolean(
-        page.backgroundUrl ||
-            (page.useImageSequence && (page.imageSequence?.length ?? 0) > 0) ||
-            (page.useVideoSequence && (page.videoSequence?.length ?? 0) > 0),
-    );
-
-    const showWordHunt =
-        !skipPuzzles &&
-        bibleMapLayout &&
-        pageInteractiveTargets.length > 0 &&
-        !!onInteractiveWordTap &&
-        nextInteractiveKey != null;
 
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
@@ -1078,62 +1022,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 ) : null}
             </div>
 
-            {/* Missing-word hunt — chips over art band (sibling so taps aren't blocked by art pointer-events) */}
-            {showWordHunt && pageHasBackgroundArt && (
-                <div
-                    className="absolute left-0 right-0 top-0 z-[25] pointer-events-none"
-                    style={{
-                        height: `${artHeightPct}%`,
-                        transition: layoutReady ? 'height 0.5s ease-in-out' : 'none',
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <MissingWordHuntOverlay
-                        pageSeed={page.id || page.pageNumber || 'page'}
-                        chips={huntChips}
-                        foundIds={tappedInteractiveKeys || new Set()}
-                        nextId={nextInteractiveKey}
-                        onCorrect={(id) => {
-                            const [boxStr, wordStr] = id.split(':');
-                            const boxIndex = Number(boxStr);
-                            const wordIndex = Number(wordStr);
-                            if (!Number.isInteger(boxIndex) || !Number.isInteger(wordIndex)) return;
-                            onInteractiveWordTap?.(boxIndex, wordIndex);
-                        }}
-                        onWrong={() => onWrongHuntTap?.()}
-                        placement="image"
-                    />
-                </div>
-            )}
-
-            {/* Hunt chips along scroll top when there is no page art */}
-            {showWordHunt && !pageHasBackgroundArt && scrollState !== 'hidden' && (
-                <div
-                    className="absolute left-0 right-0 z-[25] pointer-events-none"
-                    style={{
-                        top: `${Math.max(artHeightPct - 8, 50)}%`,
-                        height: '10%',
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <MissingWordHuntOverlay
-                        pageSeed={page.id || page.pageNumber || 'page'}
-                        chips={huntChips}
-                        foundIds={tappedInteractiveKeys || new Set()}
-                        nextId={nextInteractiveKey}
-                        onCorrect={(id) => {
-                            const [boxStr, wordStr] = id.split(':');
-                            const boxIndex = Number(boxStr);
-                            const wordIndex = Number(wordStr);
-                            if (!Number.isInteger(boxIndex) || !Number.isInteger(wordIndex)) return;
-                            onInteractiveWordTap?.(boxIndex, wordIndex);
-                        }}
-                        onWrong={() => onWrongHuntTap?.()}
-                        placement="scroll-top"
-                    />
-                </div>
-            )}
-
             {/* Gradient Overlay for depth (spine shadow) */}
             <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none z-10" />
 
@@ -1353,6 +1241,30 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
 
+            {/* Full-screen captions — Bible Map with the parchment hidden: the page
+                text rides over the art a phrase at a time, spoken word lit up. */}
+            {bibleMapLayout &&
+                page.scrollUrl &&
+                scrollState === 'hidden' &&
+                (() => {
+                    const boxIdx = activeTextBoxIndex ?? 0;
+                    const box = page.textBoxes?.[boxIdx];
+                    if (!box?.text) return null;
+                    return (
+                        <ReaderCaptions
+                            text={box.text}
+                            highlightedWordIndex={
+                                activeTextBoxIndex === boxIdx && wordAlignment
+                                    ? (highlightedWordIndex ?? -1)
+                                    : -1
+                            }
+                            fontSize={bibleMapMobile ? 30 : 38}
+                            fontFamily={box.fontFamily || 'Patrick Hand'}
+                            bottom={bibleMapMobile ? '21%' : '16%'}
+                        />
+                    );
+                })()}
+
             {/* Text Boxes Layer - Below swipe zone */}
             {/* Text boxes layer - z-50 to appear above play button (z-40) */}
             {/* When scroll exists, clip text to scroll bounds (top AND bottom) to prevent overflow */}
@@ -1466,12 +1378,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
-                                // Don't start page TTS when tapping a single speakable / hunt word
-                                if (
-                                    (e.target as HTMLElement)?.closest?.(
-                                        '[data-interactive-word], [data-speak-word]',
-                                    )
-                                ) {
+                                // Don't start page TTS when tapping a single speakable word
+                                if ((e.target as HTMLElement)?.closest?.('[data-speak-word]')) {
                                     return;
                                 }
                                 onPlayText && onPlayText(box.text, idx, e);
@@ -1491,16 +1399,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);
                                         const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
-                                        const tapWords = splitInteractiveWords(box.text || '');
-                                        const tapIndices = new Set(
-                                            sanitizeInteractiveWordIndices(
-                                                box.text || '',
-                                                box.interactiveWordIndices,
-                                            ),
-                                        );
-                                        const hasTapWords =
-                                            !skipPuzzles && tapIndices.size > 0 && !!onInteractiveWordTap;
-                                        const renderWords = hasTapWords && tapWords.length > 0 ? tapWords : words;
                                         const canSpeakWords = !!onSpeakWord;
 
                                         const speakWordClick = (
@@ -1540,117 +1438,6 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                 {word}{' '}
                                             </span>
                                         );
-
-                                        const renderBlankOrWord = (word: string, wIdx: number) => {
-                                            const isTapTarget = tapIndices.has(wIdx);
-                                            const key = pageInteractiveTapKey(idx, wIdx);
-                                            const tapped = tappedInteractiveKeys?.has(key);
-                                            if (!isTapTarget) {
-                                                return renderSpeakableWord(word, wIdx);
-                                            }
-                                            if (!tapped) {
-                                                const units = blankSlotUnits(word);
-                                                const isNext = key === nextInteractiveKey;
-                                                return (
-                                                    <span
-                                                        key={wIdx}
-                                                        data-interactive-word="1"
-                                                        data-hunt-blank={key}
-                                                        className={`inline-flex items-center justify-center mx-0.5 px-2 py-0.5 rounded-md border-2 border-dashed align-baseline transition ${
-                                                            isNext
-                                                                ? 'border-amber-500 bg-amber-50/95 ring-1 ring-amber-300/70'
-                                                                : 'border-emerald-600/80 bg-white/90'
-                                                        }`}
-                                                        style={{
-                                                            font: 'inherit',
-                                                            color: 'transparent',
-                                                            minWidth: `${Math.max(units * 0.55, 1.8)}em`,
-                                                        }}
-                                                        aria-label={
-                                                            isNext
-                                                                ? 'Find this word on the picture next'
-                                                                : 'Missing word blank'
-                                                        }
-                                                    >
-                                                        <span
-                                                            className={`block w-full border-b-2 leading-none ${
-                                                                isNext
-                                                                    ? 'border-amber-600'
-                                                                    : 'border-emerald-700/80'
-                                                            }`}
-                                                        >
-                                                            {'\u00A0'.repeat(units)}
-                                                        </span>
-                                                    </span>
-                                                );
-                                            }
-                                            // Revealed hunt word — speak anytime when voice path is wired
-                                            return (
-                                                <span
-                                                    key={wIdx}
-                                                    data-interactive-word="1"
-                                                    data-speak-word={canSpeakWords ? '1' : undefined}
-                                                    role={canSpeakWords ? 'button' : undefined}
-                                                    tabIndex={canSpeakWords ? 0 : undefined}
-                                                    className={`rounded px-0.5 bg-emerald-200/70 ${
-                                                        canSpeakWords
-                                                            ? 'cursor-pointer active:bg-emerald-300/80'
-                                                            : ''
-                                                    }`}
-                                                    onClick={
-                                                        canSpeakWords
-                                                            ? (e) => speakWordClick(e, word)
-                                                            : undefined
-                                                    }
-                                                    aria-label={
-                                                        canSpeakWords
-                                                            ? `Say ${wordForSpeech(word) || word}`
-                                                            : undefined
-                                                    }
-                                                >
-                                                    {word}{' '}
-                                                </span>
-                                            );
-                                        };
-
-                                        // Hunt mode: blanks in scroll until chips are found (skip read-along on blanks)
-                                        if (hasTapWords) {
-                                            // During TTS after hunt complete, allow read-along highlight
-                                            if (
-                                                isActive &&
-                                                wordAlignment &&
-                                                highlightedWordIndex >= 0 &&
-                                                pageInteractiveTargets.every((t) =>
-                                                    tappedInteractiveKeys?.has(
-                                                        pageInteractiveTapKey(t.boxIndex, t.wordIndex),
-                                                    ),
-                                                )
-                                            ) {
-                                                return renderWords.map((word, wIdx) => {
-                                                    const isHighlighted = wIdx === highlightedWordIndex;
-                                                    const isUpcoming =
-                                                        highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
-                                                    const isPast =
-                                                        highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
-                                                    return renderSpeakableWord(
-                                                        word,
-                                                        wIdx,
-                                                        `
-                                                                gk-readalong-word
-                                                                ${isHighlighted
-                                                                    ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
-                                                                    : isUpcoming
-                                                                        ? 'opacity-42'
-                                                                        : isPast
-                                                                            ? 'opacity-78'
-                                                                            : ''
-                                                                }
-                                                            `,
-                                                    );
-                                                });
-                                            }
-                                            return renderWords.map((word, wIdx) => renderBlankOrWord(word, wIdx));
-                                        }
 
                                         // If active with word alignment, show with highlighting
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {

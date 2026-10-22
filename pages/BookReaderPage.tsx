@@ -977,6 +977,10 @@ const BookReaderPage: React.FC = () => {
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
     /** First listen: pick a narrator before the story plays. No dismiss. */
     const [showNarratorPick, setShowNarratorPick] = useState(false);
+    /** True until a first-time listener confirms a voice. Blocks story autoplay. */
+    const [awaitingNarratorChoice, setAwaitingNarratorChoice] = useState(
+        () => !localStorage.getItem('godlykids_default_voice'),
+    );
     const [narratorPickId, setNarratorPickId] = useState<string | null>(null);
     const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
     const narratorPreviewRef = useRef<HTMLAudioElement | null>(null);
@@ -1005,6 +1009,17 @@ const BookReaderPage: React.FC = () => {
     const [autoPlayMode, setAutoPlayMode] = useState(false);
     const autoPlayModeRef = useRef(false);
     const currentPageIndexRef = useRef(0); // Track page index to avoid closure issues
+
+    // Leaving mid-story keeps this page so Continue can reopen it.
+    useEffect(() => {
+        return () => {
+            const id = bookId;
+            const page = currentPageIndexRef.current;
+            if (!id || page < 0) return;
+            if (bookCompletionService.isBookCompleted(id)) return;
+            readingProgressService.saveProgress(id, page);
+        };
+    }, [bookId]);
     const isAutoPlayingRef = useRef(false); // Prevent multiple simultaneous auto-play calls
     const userStoppedPlaybackRef = useRef(false); // Track when user explicitly stopped playback (prevents auto-resume)
     const alignmentWarningShownRef = useRef(false); // Prevent alignment warning spam
@@ -2143,6 +2158,9 @@ const BookReaderPage: React.FC = () => {
                 );
                 if (!alreadyChose && starters.length > 0) {
                     setShowNarratorPick(true);
+                    setAwaitingNarratorChoice(true);
+                } else {
+                    setAwaitingNarratorChoice(false);
                 }
             } else {
                 console.warn('⚠️ No voices enabled in portal. Please enable voices in the portal first.');
@@ -2254,6 +2272,7 @@ const BookReaderPage: React.FC = () => {
         setSelectedVoiceId(narratorPickId);
         setUseBookDefaultVoice(false);
         setShowNarratorPick(false);
+        setAwaitingNarratorChoice(false);
     };
 
     // Close language dropdown when clicking outside
@@ -3273,7 +3292,7 @@ const BookReaderPage: React.FC = () => {
         
         // IMPORTANT: Don't preload until voice settings are loaded
         // This prevents preloading with wrong voice before book's custom voice is applied
-        if (!voiceSettingsLoaded) {
+        if (!voiceSettingsLoaded || awaitingNarratorChoice) {
             console.log('⏳ Waiting for voice settings before preloading audio...');
             return;
         }
@@ -3288,7 +3307,7 @@ const BookReaderPage: React.FC = () => {
             console.log(`🎵 Starting audio preload for ${currentLang}, page ${currentPageIndex + 1}`);
             preloadUpcomingAudio(currentPageIndex);
         }
-    }, [currentPageIndex, effectiveVoiceId, pages.length, selectedLanguage, translatedContent.size, voiceSettingsLoaded]);
+    }, [currentPageIndex, effectiveVoiceId, pages.length, selectedLanguage, translatedContent.size, voiceSettingsLoaded, awaitingNarratorChoice]);
 
     useEffect(() => {
         multiBoxBatchDataRef.current = null;
@@ -3305,6 +3324,7 @@ const BookReaderPage: React.FC = () => {
         // - No voice selected
         // - No pages loaded
         // - Voice settings not loaded yet (prevents wrong voice on first play)
+        // - First-time listener still choosing a narrator
         if (
             hasAutoPlayedOnStartRef.current ||
             loading ||
@@ -3313,10 +3333,13 @@ const BookReaderPage: React.FC = () => {
             currentPageIndex !== 0 ||
             !effectiveVoiceId ||
             pages.length === 0 ||
-            !voiceSettingsLoaded
+            !voiceSettingsLoaded ||
+            awaitingNarratorChoice
         ) {
             // Log why we're waiting
-            if (!voiceSettingsLoaded && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
+            if (awaitingNarratorChoice && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
+                console.log('⏳ Auto-play: Waiting for the listener to choose a voice...');
+            } else if (!voiceSettingsLoaded && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
                 console.log('⏳ Auto-play: Waiting for book voice settings to load...');
             }
             return;
@@ -3339,9 +3362,6 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        // Mark as auto-played to prevent repeating
-        hasAutoPlayedOnStartRef.current = true;
-        
         console.log('▶️ Auto-playing TTS on book start (intro video finished)');
         
         // Enable auto-play mode based on ttsMode setting
@@ -3350,8 +3370,12 @@ const BookReaderPage: React.FC = () => {
         autoPlayModeRef.current = shouldAutoPlay;
         
         // Longer delay to ensure intro video transition is complete
-        // and the first page is fully rendered
-        setTimeout(() => {
+        // and the first page is fully rendered. Mark played only when this
+        // timer actually starts, so a voice change can cancel it first.
+        let cancelled = false;
+        const timer = window.setTimeout(() => {
+            if (cancelled) return;
+            hasAutoPlayedOnStartRef.current = true;
             void (async () => {
                 const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
                 setupSequentialTextBoxQueue(translatedTextBoxes);
@@ -3366,8 +3390,13 @@ const BookReaderPage: React.FC = () => {
                 handlePlayText(firstBoxText, 0, syntheticEvent, shouldAutoPlay);
             })();
         }, 1500); // 1.5s delay to let intro video fade out and page fully settle
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
         
-    }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded]);
+    }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded, awaitingNarratorChoice]);
 
     // Preload background images/videos for upcoming pages to prevent black flash
     const preloadBackgrounds = (startPageIndex: number) => {

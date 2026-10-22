@@ -11,7 +11,8 @@ import {
   buildIslandScenePath,
   type IslandSceneReturnContext,
 } from '../utils/islandSceneReturn';
-import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { bookCompletionService } from '../services/bookCompletionService';
+import { isOnboardingJourneyActive, markStoryPackRundownSeen } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import PackUnlockCelebration from '../components/world/PackUnlockCelebration';
@@ -398,10 +399,18 @@ const IslandLessonPage: React.FC = () => {
       };
       if (cmsBookId) {
         persistReadingLevel(cmsBookId, level);
+        markStoryPackRundownSeen();
         const params = new URLSearchParams();
         params.set('readingLevel', level);
         appendIslandSceneReturnParams(params, returnCtx);
-        // No `continue` / `page` — BookReader starts at page 1 (stars stay on the hub).
+        const saved = readingProgressService.getProgress(cmsBookId);
+        if (
+          saved &&
+          saved.currentPageIndex > 0 &&
+          !bookCompletionService.isBookCompleted(cmsBookId)
+        ) {
+          params.set('page', String(saved.currentPageIndex + 1));
+        }
         navigate(`/read/${cmsBookId}?${params.toString()}`, {
           state: {
             fromIslandLesson: islandId,

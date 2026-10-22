@@ -7,6 +7,8 @@ import {
   ONBOARDING_GUIDE_VOICE_ID,
   buildOnboardingGuideCopy,
   buildStoryPackGuideBeats,
+  buildStoryPackResumeBeats,
+  hasSeenStoryPackRundown,
   buildQuizCompleteGuideBeats,
   buildCrewShipGuideBeats,
   buildLibraryGuideBeats,
@@ -60,7 +62,11 @@ const OnboardingGuideCard: React.FC<Props> = ({
     return first || undefined;
   }, [kids, currentProfileId]);
   const beats = useMemo(() => {
-    if (variant === 'storyPack') return buildStoryPackGuideBeats(kidName);
+    if (variant === 'storyPack') {
+      return hasSeenStoryPackRundown()
+        ? buildStoryPackResumeBeats(kidName)
+        : buildStoryPackGuideBeats(kidName);
+    }
     if (variant === 'tapReward') return buildTapRewardGuideBeats(kidName);
     if (variant === 'quizComplete') return buildQuizCompleteGuideBeats(kidName);
     if (variant === 'crewShip') return buildCrewShipGuideBeats();

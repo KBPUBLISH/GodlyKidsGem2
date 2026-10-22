@@ -48,6 +48,47 @@ export function buildOnboardingGuideCopy(kidName?: string | null): GuideBeat {
   };
 }
 
+const STORY_PACK_RUNDOWN_KEY = 'godlykids_story_pack_rundown_seen';
+
+export function hasSeenStoryPackRundown(): boolean {
+  try {
+    return (
+      localStorage.getItem(STORY_PACK_RUNDOWN_KEY) === '1' ||
+      sessionStorage.getItem(STORY_PACK_RUNDOWN_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Set once they open the story, so a return visit does not replay the tour. */
+export function markStoryPackRundownSeen(): void {
+  try {
+    localStorage.setItem(STORY_PACK_RUNDOWN_KEY, '1');
+    sessionStorage.setItem(STORY_PACK_RUNDOWN_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Spoken when they come back to the pack before the story is finished. */
+export function buildStoryPackResumeBeats(kidName?: string | null): GuideBeat[] {
+  const first = String(kidName || '')
+    .trim()
+    .split(/\s+/)[0];
+  const named = first && first !== ONBOARDING_GUIDE_DEFAULT_NAME;
+  return [
+    {
+      line: named
+        ? `${first}, complete the story pack first before moving on.`
+        : 'Complete the story pack first before moving on.',
+      tts: named
+        ? `[warmly] ${first}, [gently] complete the story pack first before moving on.`
+        : '[warmly] Complete the story pack first before moving on.',
+    },
+  ];
+}
+
 /** Story-pack rundown — short beats so the bubble stays readable. */
 export function buildStoryPackGuideBeats(kidName?: string | null): GuideBeat[] {
   const name = guideFirstName(kidName);
@@ -193,6 +234,8 @@ function resetGuestPlayProgress(): void {
   try {
     localStorage.removeItem('godlykids_library_hs_guide');
     sessionStorage.removeItem('godlykids_library_hs_guide');
+    localStorage.removeItem(STORY_PACK_RUNDOWN_KEY);
+    sessionStorage.removeItem(STORY_PACK_RUNDOWN_KEY);
     localStorage.removeItem('godlykids_ships_library_paywall_seen');
     sessionStorage.removeItem('godlykids_ships_library_paywall_seen');
     localStorage.removeItem('godlykids_free_library_story_id');

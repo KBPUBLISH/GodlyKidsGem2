@@ -1,6 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
+import GameLockOverlay from '../components/crew/GameLockOverlay';
 import {
   CREW_WAVE_ANIMATION,
   getOnDeckCrew,
@@ -255,49 +256,6 @@ const PARTY_SPOTS = [
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-/**
- * Padlock + soft darkening + unlock hint over a locked deck hotspot.
- * Gold badge matches the basement / main-map story lock.
- */
-const GameLockOverlay: React.FC<{ islandLabel: string }> = ({ islandLabel }) => (
-  <span
-    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 pointer-events-none"
-    aria-hidden
-  >
-    <span
-      className="absolute inset-0"
-      style={{
-        background:
-          'radial-gradient(ellipse at center, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.24) 55%, rgba(0,0,0,0) 80%)',
-      }}
-    />
-    <span
-      className="relative flex items-center justify-center rounded-full"
-      style={{
-        width: 42,
-        height: 42,
-        background: 'linear-gradient(180deg, #F0D78C 0%, #D4A017 45%, #8B6914 100%)',
-        boxShadow:
-          '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,240,200,0.55)',
-        border: '1.5px solid #F5E6A3',
-      }}
-    >
-      <Lock
-        size={19}
-        className="text-[#5c3a1a]"
-        strokeWidth={2.8}
-        fill="rgba(92,58,26,0.2)"
-      />
-    </span>
-    <span
-      className="relative px-2 font-display font-bold text-[11px] leading-tight text-[#FFE9B0] text-center"
-      style={{ textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6)' }}
-    >
-      Complete {islandLabel}!
-    </span>
-  </span>
-);
 
 /** One ocean band: marching scallop crest strip + solid body to the bottom. */
 const SeaWaveBand: React.FC<{ w: (typeof CREW_SEA_WAVES)[number] }> = ({ w }) => (

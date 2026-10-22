@@ -36,6 +36,7 @@ import {
 } from '../utils/islandSceneReturn';
 import { shouldShowFullscreenHint, recordFullscreenHintUse } from '../utils/islandReaderPrefs';
 import TapToFullscreenHint from '../components/features/TapToFullscreenHint';
+import { cacheAssetUrls } from '../utils/assetCache';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription } from '../utils/voiceUtils';
 
@@ -3398,50 +3399,56 @@ const BookReaderPage: React.FC = () => {
         
     }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded, awaitingNarratorChoice]);
 
-    // Preload background images/videos for upcoming pages to prevent black flash
+    // Preload background images/videos for upcoming pages to prevent black flash.
+    // A story pack preloads every remaining page as soon as the book opens.
     const preloadBackgrounds = (startPageIndex: number) => {
-        const PAGES_TO_PRELOAD = 3;
+        const storyPack = Boolean(islandSceneReturn) || hasBibleMapReturnParams || isBibleMapBook;
+        const pagesAhead = storyPack ? pages.length : 3;
+        const cacheUrls: string[] = [];
+
+        const remember = (url: string | undefined, kind: 'image' | 'video') => {
+            const src = (url || '').trim();
+            if (!src || preloadedBackgroundsRef.current.has(src)) return;
+            preloadedBackgroundsRef.current.add(src);
+            cacheUrls.push(src);
+            if (kind === 'video') {
+                const video = document.createElement('video');
+                video.preload = 'auto';
+                video.muted = true;
+                video.src = src;
+                video.load();
+            } else {
+                const img = new Image();
+                img.src = src;
+            }
+        };
         
-        for (let i = 1; i <= PAGES_TO_PRELOAD; i++) {
+        for (let i = 1; i <= pagesAhead; i++) {
             const pageIndex = startPageIndex + i;
             if (pageIndex >= pages.length) break;
             
             const page = pages[pageIndex];
             if (!page) continue;
-            
+
             const backgroundUrl = page.backgroundUrl || page.files?.background?.url;
             const backgroundType = page.backgroundType || page.files?.background?.type || 'image';
-            
-            if (!backgroundUrl || preloadedBackgroundsRef.current.has(backgroundUrl)) {
-                continue; // Skip if no URL or already preloaded
+            const backgroundIsVideo =
+                backgroundType === 'video' ||
+                /\.(mp4|webm|mov|m4v)(\?|$)/i.test(backgroundUrl || '');
+            remember(backgroundUrl, backgroundIsVideo ? 'video' : 'image');
+            remember(page.scrollUrl || page.files?.scroll?.url, 'image');
+            remember(page.backgroundAudioUrl, 'video');
+            for (const clip of page.videoSequence || []) {
+                remember(clip.url, 'video');
+                remember(clip.audioUrl, 'video');
             }
-            
-            // Mark as preloaded
-            preloadedBackgroundsRef.current.add(backgroundUrl);
-            
-            if (backgroundType === 'video') {
-                // Preload video
-                const video = document.createElement('video');
-                video.preload = 'auto';
-                video.muted = true;
-                video.src = backgroundUrl;
-                video.load();
-                console.log(`🎬 Preloading video for page ${pageIndex + 1}`);
-            } else {
-                // Preload image
-                const img = new Image();
-                img.src = backgroundUrl;
-                console.log(`🖼️ Preloading image for page ${pageIndex + 1}`);
+            for (const frame of page.imageSequence || []) {
+                remember(frame.url, 'image');
             }
-            
-            // Also preload scroll image if exists
-            const scrollUrl = page.scrollUrl || page.files?.scroll?.url;
-            if (scrollUrl && !preloadedBackgroundsRef.current.has(scrollUrl)) {
-                preloadedBackgroundsRef.current.add(scrollUrl);
-                const scrollImg = new Image();
-                scrollImg.src = scrollUrl;
-                console.log(`📜 Preloading scroll for page ${pageIndex + 1}`);
-            }
+        }
+
+        if (storyPack && cacheUrls.length > 0) {
+            void cacheAssetUrls(cacheUrls);
         }
     };
 

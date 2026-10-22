@@ -44,14 +44,6 @@ const SPARKLES: Array<{
   { top: '76%', right: '-1.25rem', rotate: '-42deg', h: 10 },
 ];
 
-const formatDownloadSize = (bytes: number): string => {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 10) return `${Math.round(mb)} MB`;
-  if (mb >= 0.1) return `${mb.toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-};
-
 const preloadPercent = (progress: AdventurePreloadProgress): number => {
   if (progress.finished) return 100;
   if (progress.totalBytes <= 0) return 8;
@@ -324,10 +316,6 @@ const LandingPage: React.FC = () => {
                   }}
                 />
               </div>
-              <p className="mt-1.5 text-center text-xs font-bold text-white/90">
-                {formatDownloadSize(preload.loadedBytes)}
-                {preload.totalBytes > 0 ? ` of ${formatDownloadSize(preload.totalBytes)}` : ''}
-              </p>
               <button
                 type="button"
                 onClick={handleStartExplore}

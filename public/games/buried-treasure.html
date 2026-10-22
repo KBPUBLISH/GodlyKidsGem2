@@ -335,7 +335,7 @@ body{font-family:var(--display);color:var(--ink);touch-action:none;user-select:n
       <h1 id="wtitle">Treasure!</h1>
       <p id="wsub">You uncovered chest 1</p>
       <div id="rw"></div>
-      <button id="shelfBtn" type="button">Go to Arcade</button>
+      <button id="shelfBtn" type="button">Continue</button>
       <p class="cue">Tap anywhere to bury another</p>
     </div>
   </div>
@@ -373,11 +373,12 @@ body{font-family:var(--display);color:var(--ink);touch-action:none;user-select:n
   function tellChestOpened(){
     try{ if(parent&&parent!==window) parent.postMessage({type:'gk-chest-opened',chest:found},'*'); }catch(e){}
   }
+  /* "Continue" — the app takes the kid back to the story pack they came from. */
   const shelfBtn=document.getElementById('shelfBtn');
   shelfBtn.addEventListener('pointerdown',e=>e.stopPropagation()); // don't trigger "bury another"
   shelfBtn.addEventListener('click',e=>{
     e.stopPropagation();
-    try{ if(parent&&parent!==window) parent.postMessage({type:'gk-go-game-shelf'},'*'); }catch(err){}
+    try{ if(parent&&parent!==window) parent.postMessage({type:'gk-continue'},'*'); }catch(err){}
   });
   function showRewards(){
     const box=document.getElementById('rw');

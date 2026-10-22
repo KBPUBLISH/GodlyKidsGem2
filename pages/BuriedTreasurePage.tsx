@@ -13,12 +13,8 @@ import WoodBackButton from '../components/WoodBackButton';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
-import {
-  safeAppReturnPath,
-  type GameShelfFromTreasureState,
-} from '../utils/treasureNav';
+import { safeAppReturnPath } from '../utils/treasureNav';
 
-const ARCADE_PATH = '/sail/basement/arcade';
 const WHITE_FADE_MS = 480;
 // Local, ad-free digging game bundled with the app — no external site.
 const TREASURE_GAME_URL = '/games/buried-treasure.html';
@@ -50,9 +46,14 @@ type RewardCard = { name: string; imageUrl?: string };
  * cards back so the game can show them. Opened directly (no nav state), the
  * game plays standalone with its generic treasure card.
  *
- * After the chest is claimed, "Go to Arcade" *replaces* this route so Back
- * from the arcade cannot remount a fresh dig. If this page is reached again
- * for an already-claimed story, bounce to the story pack immediately.
+ * After the chest is claimed, the win card's "Continue" *replaces* this route
+ * with the story pack the kid came from, so Back cannot remount a fresh dig.
+ * If this page is reached again for an already-claimed story, bounce to the
+ * story pack immediately.
+ *
+ * The screen is locked against the browser / webview refresh gestures: every
+ * touch move on the shell is cancelled (the game does the same inside its
+ * iframe), so a pull-down while digging can't reload the page.
  */
 const BuriedTreasurePage: React.FC = () => {
   const navigate = useNavigate();
@@ -84,6 +85,18 @@ const BuriedTreasurePage: React.FC = () => {
   const reduceMotion = prefersReducedMotion();
 
   usePreventPullToRefresh(true);
+
+  // Hard lock: overscroll-behavior alone doesn't stop iOS WebKit's pull-down
+  // (Despia reload / rubber-band). Cancel every touch move that reaches the
+  // shell — the back button and overlays don't scroll, so nothing is lost.
+  // Touches inside the iframe are handled by the game's own touchmove guard.
+  useEffect(() => {
+    const cancel = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    document.addEventListener('touchmove', cancel, { passive: false });
+    return () => document.removeEventListener('touchmove', cancel);
+  }, []);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
@@ -166,22 +179,22 @@ const BuriedTreasurePage: React.FC = () => {
   }, [navigate]);
 
   // Reward bridge: game says the chest opened → send back what was inside.
-  // The win card's "Go to Arcade" button posts gk-go-game-shelf.
+  // The win card's "Continue" button posts gk-continue (older cached builds
+  // of the game still post gk-go-game-shelf — treat it the same).
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const frame = iframeRef.current;
       if (!frame || event.source !== frame.contentWindow) return;
-      if (event.data?.type === 'gk-go-game-shelf') {
+      const type = event.data?.type;
+      if (type === 'gk-continue' || type === 'gk-go-game-shelf') {
         if (onboardingJourney) {
           setMeetCrewGuide(true);
           return;
         }
-        // Replace so the completed dig is not sitting under the shelf.
-        const arcadeState: GameShelfFromTreasureState = {
-          fromCompletedTreasure: Boolean((navStateRef.current.storyId || '').trim()),
-          returnTo: safeAppReturnPath(navStateRef.current.returnTo),
-        };
-        leaveWithFade(() => navigate(ARCADE_PATH, { replace: true, state: arcadeState }));
+        // Back to the story pack. Replace so the completed dig is not left
+        // in history under it.
+        const returnTo = safeAppReturnPath(navStateRef.current.returnTo);
+        leaveWithFade(() => navigate(returnTo, { replace: true }));
         return;
       }
       if (event.data?.type !== 'gk-chest-opened') return;

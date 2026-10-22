@@ -33,12 +33,14 @@ type NavItem = {
 /**
  * Home (ship wheel) · Library (treasure map) · My Journey (anchor) ·
  * Favorites (gold star) · Crew (ship).
+ * My Journey opens the sail deck (/sail), where the kid steers the wheel
+ * between islands; the island map (/map) is reached from there.
  * The active tab sits in a cream door-shaped arch that rises above the plank.
  */
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home', path: '/world' },
   { id: 'library', label: 'Library', path: '/listen' },
-  { id: 'journey', label: 'My Journey', path: '/map' },
+  { id: 'journey', label: 'My Journey', path: '/sail' },
   { id: 'favorites', label: 'Favorites', path: '/library' },
   { id: 'crew', label: 'Crew', path: '/crew' },
 ];
@@ -56,7 +58,8 @@ const getActiveTab = (pathname: string): string | null => {
   if (pathname === '/world' || pathname === '/home' || pathname === '/') return 'home';
   // /read stays reachable via the Library page's Listen/Read toggle.
   if (pathname === '/listen' || pathname === '/read') return 'library';
-  if (pathname === '/map') return 'journey';
+  // /map (island map) still lights the Journey tab; tapping it goes to /sail.
+  if (pathname === '/sail' || pathname === '/map') return 'journey';
   if (pathname === '/library') return 'favorites';
   if (pathname === '/crew') return 'crew';
   // /games and other main pages: no matching tab highlight

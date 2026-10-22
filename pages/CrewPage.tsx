@@ -23,7 +23,7 @@ import {
   completeOnboardingJourney,
   isOnboardingJourneyActive,
 } from '../utils/onboardingJourney';
-import { noteJourneyStep } from '../utils/journeyStudy';
+import { noteBoatSession, noteJourneyStep } from '../utils/journeyStudy';
 import {
   ADAM_TOUR_FALLBACK_VOICE_ID,
   buildAdamDeckTour,
@@ -393,6 +393,10 @@ const CrewPage: React.FC = () => {
   useEffect(() => {
     if (arrivingOnboarding) noteJourneyStep('crew');
   }, [arrivingOnboarding]);
+
+  useEffect(() => {
+    noteBoatSession();
+  }, []);
 
   const [crewGuide, setCrewGuide] = useState(arrivingOnboarding);
   const [tapAdam, setTapAdam] = useState(

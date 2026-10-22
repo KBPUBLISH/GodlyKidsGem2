@@ -252,7 +252,7 @@ const PerryMeetPage: React.FC = () => {
                 }}
               >
                 <input
-                  autoFocus
+                  autoFocus={holder !== 'kid'}
                   type="text"
                   value={name}
                   maxLength={18}

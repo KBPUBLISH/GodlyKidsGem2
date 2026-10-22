@@ -355,7 +355,7 @@ const ReadPagePanorama: React.FC = () => {
       <Header isVisible={isHeaderVisible} title="READING" variant="plank" />
 
       {/* Plank header clearance — phone −1.5rem / tablet live edge at 6.25rem; keep in sync with Header.tsx */}
-      <div className="px-4 pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)] pb-52">
+      <div className="px-4 pt-[calc(var(--safe-area-top,0px)+100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(var(--safe-area-top,0px)+6.25rem+0.35rem)] pb-52">
         
         {/* Search Bar with Age Filter */}
         <div className="flex gap-2 mb-2">

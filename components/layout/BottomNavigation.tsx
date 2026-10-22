@@ -31,7 +31,7 @@ type NavItem = {
 };
 
 /**
- * Home (ship wheel) · Library (treasure map) · My Journey (anchor) ·
+ * Home (anchor) · Library (treasure map) · My Journey (ship wheel) ·
  * Favorites (gold star) · Crew (ship).
  * My Journey opens the sail deck (/sail), where the kid steers the wheel
  * between islands; the island map (/map) is reached from there.
@@ -69,11 +69,11 @@ const getActiveTab = (pathname: string): string | null => {
 const renderTabIcon = (id: string): React.ReactNode => {
   switch (id) {
     case 'home':
-      return <img src={SAIL_STEERING_WHEEL} alt="" draggable={false} className="gk-tab-img" />;
+      return <Anchor className="gk-tab-anchor" strokeWidth={2.75} aria-hidden />;
     case 'library':
       return <img src={TAB_MAP} alt="" draggable={false} className="gk-tab-img" />;
     case 'journey':
-      return <Anchor className="gk-tab-anchor" strokeWidth={2.75} aria-hidden />;
+      return <img src={SAIL_STEERING_WHEEL} alt="" draggable={false} className="gk-tab-img" />;
     case 'favorites':
       return <img src={GOLD_STAR} alt="" draggable={false} className="gk-tab-img" />;
     case 'crew':
@@ -163,13 +163,13 @@ const WoodTabBar: React.FC = () => {
               aria-current={isActive ? 'page' : undefined}
               className={`gk-tab pointer-events-auto touch-manipulation outline-none ${
                 isActive ? 'gk-tab--active' : ''
-              }`}
+              }${item.id === 'journey' ? ' gk-tab--journey' : ''}`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <span className="gk-tab-icon" aria-hidden>
                 {renderTabIcon(item.id)}
               </span>
-              <span className="gk-tab-label">{item.label}</span>
+              {item.id !== 'journey' && <span className="gk-tab-label">{item.label}</span>}
             </button>
           );
         })}
@@ -284,36 +284,62 @@ const WoodTabBar: React.FC = () => {
           text-overflow: ellipsis;
         }
         /*
-         * Active tab: cream door/arch — semicircular head, straight sides,
-         * flat base merging into the plank. Grows upward from the plank
-         * (align-items:end on the nav row) so its top rises above the rope.
-         * The rise (12px height bump + 6px nav bottom pad = ~18px) stays
-         * within the 24%-of-plank clearance budget pages already use
-         * (e.g. ListenPagePanorama pads by --map-footer-h * 1.24).
+         * Active tab: no container — the icon grows a step and the label turns
+         * gold, so the plank stays clean. (The old cream "door" arch is gone.)
          */
         .gk-tab--active {
-          --gk-icon: clamp(34px, 10.5vw, 41px);
-          min-height: calc(var(--app-footer-h) + 12px);
-          background: linear-gradient(180deg, #fffef8 0%, #f7f1e3 58%, #efe0c0 100%);
-          border-radius: 40px 40px 12px 12px;
-          box-shadow:
-            0 0 0 2px rgba(198, 152, 94, 0.5),
-            0 4px 10px rgba(0, 0, 0, 0.35),
-            inset 0 -3px 5px rgba(160, 118, 55, 0.25),
-            inset 0 2px 0 rgba(255, 255, 255, 0.9);
-          padding: 12px 6px 8px;
-          gap: 6px;
+          --gk-icon: clamp(30px, 9vw, 36px);
         }
         .gk-tab--active .gk-tab-label {
-          color: #4a2e12;
-          text-shadow: none;
+          color: #ffd95a;
+          text-shadow: 0 1px 2px rgba(40, 18, 4, 0.8), 0 0 8px rgba(255, 200, 60, 0.45);
         }
         .gk-tab--active .gk-tab-anchor,
         .gk-tab--active .gk-tab-ship {
-          color: #4a2e12;
+          color: #ffe08a;
         }
-        .gk-tab--active .gk-tab-icon {
-          filter: drop-shadow(0 1px 1px rgba(40, 18, 4, 0.25));
+        /*
+         * Centre tab (My Journey): the ship's wheel is the hero control — a
+         * big bare wheel (no medallion) that rises above the plank and rope
+         * (the button itself is taller, so the raised part is tappable) and
+         * rocks gently so it reads as "turn me".
+         */
+        .gk-tab--journey {
+          --gk-icon: clamp(92px, 27vw, 108px);
+          --gk-rise: 44px;
+          max-width: 132px;
+          min-height: calc(var(--app-footer-h) + var(--gk-rise));
+          justify-content: flex-start;
+          padding-top: 0;
+          gap: 0;
+          overflow: visible;
+        }
+        .gk-tab--journey .gk-tab-icon {
+          filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.5));
+        }
+        .gk-tab--journey .gk-tab-img {
+          animation: gk-wheel-rock 3.2s ease-in-out infinite;
+          transform-origin: 50% 50%;
+        }
+        .gk-tab--journey .gk-tab-label {
+          color: #ffe08a;
+          text-shadow: 0 1px 2px rgba(40, 18, 4, 0.8);
+          font-size: clamp(0.56rem, 2.6vw, 0.74rem);
+        }
+        .gk-tab--journey.gk-tab--active .gk-tab-icon {
+          filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 10px rgba(255, 215, 90, 0.7));
+        }
+        .gk-tab--journey:active {
+          transform: scale(0.96);
+        }
+        @keyframes gk-wheel-rock {
+          0%, 100% { transform: rotate(-10deg); }
+          50% { transform: rotate(10deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .gk-tab--journey .gk-tab-img {
+            animation: none;
+          }
         }
         @media (min-width: 768px) {
           .wood-tab-nav {
@@ -325,9 +351,12 @@ const WoodTabBar: React.FC = () => {
             gap: 3px;
           }
           .gk-tab--active {
-            --gk-icon: 46px;
-            /* Keep the arch head semicircular on the wider desktop tabs. */
-            border-radius: 56px 56px 12px 12px;
+            --gk-icon: 40px;
+          }
+          .gk-tab--journey {
+            --gk-icon: 116px;
+            --gk-rise: 48px;
+            max-width: 160px;
           }
           .gk-tab-label {
             font-size: 0.78rem;

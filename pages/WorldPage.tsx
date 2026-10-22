@@ -179,11 +179,13 @@ const FeaturedCabinCarousel: React.FC<{
   const multi = items.length > 1;
 
   return (
-    <div className="relative z-10 w-full py-3 min-h-[min(18dvh,160px)]">
+    <div className="relative z-10 w-full pt-1 pb-3 min-h-[min(18dvh,160px)]">
+      {/* pt-3 on the scroller: overflow-x:auto also clips vertically, which was
+          cutting off the "NEW RELEASE!" ribbon that pokes above each card. */}
       <div
         ref={trackRef}
         onScroll={multi ? handleTrackScroll : undefined}
-        className={`flex w-full ${
+        className={`flex w-full pt-3 ${
           multi
             ? 'overflow-x-auto snap-x snap-mandatory no-scrollbar'
             : 'justify-center'
@@ -546,7 +548,7 @@ const WorldPage: React.FC = () => {
               className={
                 // Match plank header: phone aspect − 1.5rem; tablet live edge at 6.25rem. Keep in sync with Header.tsx
                 'relative w-full explore-chrome pb-5 ' +
-                'pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)]'
+                'pt-[calc(var(--safe-area-top,0px)+100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(var(--safe-area-top,0px)+6.25rem+0.35rem)]'
               }
               aria-label="Featured new releases"
               style={{
@@ -573,7 +575,7 @@ const WorldPage: React.FC = () => {
           {/* Header clearance when featured cabin is absent — phone −1.5rem / tablet live edge at 6.25rem */}
           {featuredItems.length === 0 && (
             <div
-              className="pt-[calc(100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(6.25rem+0.35rem)]"
+              className="pt-[calc(var(--safe-area-top,0px)+100vw*284/1021+0.35rem-1.5rem)] min-[520px]:pt-[calc(var(--safe-area-top,0px)+6.25rem+0.35rem)]"
               aria-hidden
             />
           )}

@@ -234,7 +234,19 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
 
         {isPlank ? (
           /* Full plank PNG. Phone −1.5rem. Tablet slides the whole image up so the
-             live edge sits at 6.25rem — do not height-cap or object-cover it. */
+             live edge sits at 6.25rem — do not height-cap or object-cover it.
+             The status-bar inset is a wood strip ABOVE the plank (not padding
+             inside it): the plank is only ~76px tall on a phone, so padding the
+             controls by the inset pushed them off its bottom edge on Android /
+             notched phones. */
+          <>
+          <div
+            aria-hidden
+            style={{
+              height: 'var(--safe-area-top, 0px)',
+              background: 'linear-gradient(180deg, #D39A62 0%, #CB8C57 100%)',
+            }}
+          />
           <div className="relative w-full -mt-[1.5rem] min-[520px]:-mt-[calc(100vw*284/1021-6.25rem)] flex justify-center">
             <div className="relative w-full">
             <img
@@ -247,7 +259,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
             <div
               className={
                 'absolute inset-0 flex items-center min-[520px]:items-end justify-between gap-2 sm:gap-2.5 px-3 sm:px-4 ' +
-                'pt-[calc(var(--safe-area-top,0px)+1.75rem)] min-[520px]:pt-0 min-[520px]:pb-[1.75rem]'
+                'pt-[1.75rem] min-[520px]:pt-0 min-[520px]:pb-[1.75rem]'
               }
             >
                 <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
@@ -352,6 +364,7 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
             </div>
             </div>
           </div>
+          </>
         ) : (
           <>
             {/* Top Rough Edge SVG */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, ChevronRight, ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../utils/pricing';
 
 // Quiz screen types - 26 screens in 5 sections
 type Screen = 
@@ -842,12 +843,12 @@ const ParentQuizPage: React.FC = () => {
                   <p className="text-sm text-stone-500 mb-1">14-day free trial, then</p>
                   <div className="flex items-center justify-center gap-3">
                     <div>
-                      <p className="text-2xl font-bold text-amber-600">$39.99/yr</p>
-                      <p className="text-xs text-stone-400">~$3.33/month</p>
+                      <p className="text-2xl font-bold text-amber-600">${ANNUAL_PRICE_USD}/yr</p>
+                      <p className="text-xs text-stone-400">~${(ANNUAL_PRICE_USD / 12).toFixed(2)}/month</p>
                     </div>
                     <span className="text-stone-300">or</span>
                     <div>
-                      <p className="text-2xl font-bold text-stone-700">$5.99/mo</p>
+                      <p className="text-2xl font-bold text-stone-700">${MONTHLY_PRICE_USD}/mo</p>
                       <p className="text-xs text-stone-400">cancel anytime</p>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Crown, FileText, Clock, Settings } from 'lucide-react';
+import { Crown, FileText, Settings } from 'lucide-react';
 const ShopModal = lazy(() => import('../features/ShopModal'));
 import CoinHistoryModal from '../features/CoinHistoryModal';
 import ReportCardModal from '../features/ReportCardModal';
@@ -18,11 +18,6 @@ const PLANK_RECESS_CIRCLE =
 
 /** Embossed cream/brass icon tone on recessed controls */
 const PLANK_ICON = 'text-[#E8D5A8] drop-shadow-[0_1px_1px_rgba(60,30,10,0.55)]';
-
-// Lifetime deal timer constants - shared with PaywallPage
-const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
-const DEAL_DURATION_MS = 30 * 60 * 1000; // 30 minutes
-const LIFETIME_OFFER_STAGE_KEY = 'godlykids_lifetime_offer_stage';
 
 const EXPLORE_TOP_HEADER_WOOD = '/assets/images/explore-top-header-wood.png';
 /**
@@ -73,9 +68,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
   // Force repaint on Android after mount
   const [androidReady, setAndroidReady] = useState(!isAndroid);
   
-  // Lifetime deal countdown timer state
-  const [dealTimeRemaining, setDealTimeRemaining] = useState<{ minutes: number; seconds: number } | null>(null);
-  
   // Force a repaint on Android after mount by toggling a CSS transform
   useEffect(() => {
     if (!isAndroid) return;
@@ -85,41 +77,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
     return () => clearTimeout(timer);
   }, [isAndroid]);
   
-  // Track the 30-minute countdown for lifetime deal (only after paywall dismissed)
-  // Re-runs on route change so it picks up the localStorage values set by the paywall close handler
-  useEffect(() => {
-    if (isSubscribed) {
-      setDealTimeRemaining(null);
-      return;
-    }
-    
-    const stage = localStorage.getItem(LIFETIME_OFFER_STAGE_KEY);
-    const dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
-    if (!dealStartTime || !stage || stage === 'none' || stage === 'done') {
-      setDealTimeRemaining(null);
-      return;
-    }
-    
-    const startTime = parseInt(dealStartTime, 10);
-    const endTime = startTime + DEAL_DURATION_MS;
-    
-    const updateTimer = () => {
-      const remaining = endTime - Date.now();
-      if (remaining <= 0) {
-        setDealTimeRemaining(null);
-        return;
-      }
-      setDealTimeRemaining({
-        minutes: Math.floor(remaining / 60000),
-        seconds: Math.floor((remaining % 60000) / 1000),
-      });
-    };
-    
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [isSubscribed, location.pathname]);
-
   // Auto-close modals when tutorial step advances past the popup_open steps
   useEffect(() => {
     // When tutorial advances past coins_popup_open, close coins modal
@@ -290,20 +247,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                   </button>
 
                   <SevenDayChallengeBadge />
-
-                  {dealTimeRemaining && !isSubscribed && (
-                    <button
-                      type="button"
-                      onClick={() => window.dispatchEvent(new CustomEvent('show_lifetime_offer'))}
-                      className="flex-shrink-0 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-1.5 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1 animate-pulse hover:animate-none active:scale-95 transition-transform"
-                    >
-                      <Clock size={11} className="text-white" />
-                      <span className="text-white font-mono font-bold text-[10px]">
-                        {String(dealTimeRemaining.minutes).padStart(2, '0')}:
-                        {String(dealTimeRemaining.seconds).padStart(2, '0')}
-                      </span>
-                    </button>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
@@ -418,20 +361,6 @@ const Header: React.FC<HeaderProps> = ({ isVisible, title = "GODLY KIDS", varian
                 </div>
 
                 <SevenDayChallengeBadge />
-
-                {dealTimeRemaining && !isSubscribed && (
-                  <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('show_lifetime_offer'))}
-                    className="ml-2 bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-2 py-1 rounded-lg border border-[#b91c1c] shadow-md flex items-center gap-1.5 animate-pulse hover:animate-none active:scale-95 transition-transform"
-                  >
-                    <Clock size={12} className="text-white" />
-                    <span className="text-white font-mono font-bold text-xs">
-                      {String(dealTimeRemaining.minutes).padStart(2, '0')}:
-                      {String(dealTimeRemaining.seconds).padStart(2, '0')}
-                    </span>
-                    <span className="text-white/80 text-[10px] font-semibold">DEAL</span>
-                  </button>
-                )}
 
                 <div className="flex-1"></div>
 

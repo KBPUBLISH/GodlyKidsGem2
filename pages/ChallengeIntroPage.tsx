@@ -7,13 +7,14 @@ import { startSevenDayChallenge } from '../utils/sevenDayChallenge';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useUser } from '../context/UserContext';
 import ParentGateModal from '../components/features/ParentGateModal';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../utils/pricing';
 
 const NAVY = '#12264A';
 const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 
-const ANNUAL_PRICE = 39.99;
-const MONTHLY_PRICE = 5.99;
+const ANNUAL_PRICE = ANNUAL_PRICE_USD;
+const MONTHLY_PRICE = MONTHLY_PRICE_USD;
 
 const BENEFITS = [
   { Icon: BookOpen, title: 'Unlock all Story Packs', body: 'Every island, story, and activity.' },

@@ -14,6 +14,7 @@ import { ApiService } from '../services/apiService';
 import { API_BASE_URL } from '../constants';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { cleanVoiceDescription, cleanVoiceCategory } from '../utils/voiceUtils';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../utils/pricing';
 import { facebookPixelService } from '../services/facebookPixelService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { metaAttributionService } from '../services/metaAttributionService';
@@ -557,10 +558,10 @@ const PaywallStep: React.FC<{
                   </div>
                   <div className="text-left">
                     <span className="font-display font-bold text-sm text-[#3E1F07]">Annual</span>
-                    <span className="text-[10px] text-[#4CAF50] font-semibold block">Save 44% • $0.77/week</span>
+                    <span className="text-[10px] text-[#4CAF50] font-semibold block">Save {Math.round((1 - ANNUAL_PRICE_USD / (MONTHLY_PRICE_USD * 12)) * 100)}% • ${(ANNUAL_PRICE_USD / 52).toFixed(2)}/week</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$39.99<span className="text-xs font-normal"> USD/yr</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">${ANNUAL_PRICE_USD}<span className="text-xs font-normal"> USD/yr</span></span>
               </div>
             </div>
 
@@ -583,7 +584,7 @@ const PaywallStep: React.FC<{
                     <span className="text-[10px] text-[#8B4513] block">Flexible billing</span>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-xl text-[#3E1F07]">$5.99<span className="text-xs font-normal"> USD/mo</span></span>
+                <span className="font-display font-extrabold text-xl text-[#3E1F07]">${MONTHLY_PRICE_USD}<span className="text-xs font-normal"> USD/mo</span></span>
               </div>
             </div>
           </div>
@@ -1580,7 +1581,7 @@ const OnboardingPage: React.FC = () => {
       console.log('🛒 This will open the Apple subscription sheet...');
       
       // Facebook Pixel - Track checkout initiation (parent-gated)
-      const price = selectedPlan === 'annual' ? 39.99 : 5.99;
+      const price = selectedPlan === 'annual' ? ANNUAL_PRICE_USD : MONTHLY_PRICE_USD;
       facebookPixelService.trackInitiateCheckout(selectedPlan, price);
       
       // Use quick mode - this triggers the Apple sheet and returns quickly
@@ -1601,7 +1602,7 @@ const OnboardingPage: React.FC = () => {
         setIsPurchasing(false);
         
         // Facebook Pixel - Track successful purchase (parent-gated)
-        const purchasePrice = selectedPlan === 'annual' ? 39.99 : 5.99;
+        const purchasePrice = selectedPlan === 'annual' ? ANNUAL_PRICE_USD : MONTHLY_PRICE_USD;
         facebookPixelService.trackPurchase(selectedPlan, purchasePrice);
         facebookPixelService.trackSubscribe(selectedPlan, purchasePrice);
         

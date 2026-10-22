@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Loader2, RefreshCw, AlertCircle, CheckCircle, Mail, UserPlus, ChevronDown, ChevronUp, ChevronLeft, Gift, Clock, BookOpen, Gamepad2, Sparkles, Star, Shield, CalendarDays } from 'lucide-react';
 import { useUser } from '../context/UserContext';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../utils/pricing';
 import { useSubscription } from '../context/SubscriptionContext';
 import ParentGateModal from '../components/features/ParentGateModal';
 import { authService } from '../services/authService';
@@ -128,10 +129,10 @@ const PaywallPage: React.FC = () => {
   const showReverseTrialToast = (location.state as any)?.showReverseTrialToast === true
     || (reverseTrial?.isActive && fromState === 'create-your-story');
 
-  // Create Your Story paywall: hero image, 12 custom books for annual. Show lifetime option when from deal page.
+  // Create Your Story paywall: hero image, 12 custom books for annual.
+  // The lifetime offer has been removed — only annual and monthly are sold.
   const isCreateYourStoryPaywall = fromState === 'create-your-story';
-  const showLifetimeOption = fromState === 'lifetime-offer'; // Deal page sends users here; show $19.99 lifetime
-  const isThreeStepPaywall = !isCreateYourStoryPaywall && !showLifetimeOption;
+  const isThreeStepPaywall = !isCreateYourStoryPaywall;
 
   /** Funnel source for analytics (portal "Paywall sources"). Not every entry path sets this. */
   const paywallAnalyticsSource =
@@ -146,12 +147,12 @@ const PaywallPage: React.FC = () => {
             : undefined;
   const paywallSourceMeta = paywallAnalyticsSource ? { source: paywallAnalyticsSource } : {};
   
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'lifetime'>(() => {
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly'>(() => {
     const s = (location.state as any)?.selectedPlan;
-    if (s === 'annual' || s === 'monthly' || s === 'lifetime') return s;
-    return fromState === 'lifetime-offer' ? 'lifetime' : 'annual';
+    if (s === 'annual' || s === 'monthly') return s;
+    return 'annual';
   });
-  const [planSelectorExpanded, setPlanSelectorExpanded] = useState(fromState === 'lifetime-offer');
+  const [planSelectorExpanded, setPlanSelectorExpanded] = useState(false);
   // Monthly plan is hidden by default; revealed via the "monthly billing" dropdown toggle.
   const [showMonthlyOption, setShowMonthlyOption] = useState(false);
   /** 0 = value, 1 = trust, 2 = plans + checkout. Default Godly Kids Plus flow.
@@ -312,7 +313,7 @@ const PaywallPage: React.FC = () => {
     resumeSubscribeHandledKey.current = location.key;
 
     const plan =
-      st.selectedPlan === 'annual' || st.selectedPlan === 'monthly' || st.selectedPlan === 'lifetime'
+      st.selectedPlan === 'annual' || st.selectedPlan === 'monthly'
         ? st.selectedPlan
         : selectedPlan;
 
@@ -374,11 +375,10 @@ const PaywallPage: React.FC = () => {
     setIsPurchasing(true);
     setError(null);
 
-    // Create Your Story paywall has no lifetime unless from deal page; otherwise use annual
-    const effectivePlan = (isCreateYourStoryPaywall && !showLifetimeOption && selectedPlan === 'lifetime') ? 'annual' : selectedPlan;
+    const effectivePlan = selectedPlan;
     
     // Facebook Pixel - Track checkout initiation
-    const price = effectivePlan === 'lifetime' ? lifetimeSalePrice : effectivePlan === 'annual' ? annualPrice : 5.99;
+    const price = effectivePlan === 'annual' ? annualPrice : monthlyPrice;
     facebookPixelService.trackInitiateCheckout(effectivePlan, price);
     
     // Track purchase attempt
@@ -561,14 +561,11 @@ const PaywallPage: React.FC = () => {
     }
   };
 
-  // Calculate prices and savings
-  const monthlyPrice = 5.99;
-  // Settings / onboarding: $39.99/year. Library: $69.99/year shown as a weekly rate, billed yearly.
-  const annualPrice = isLibraryPaywall ? 69.99 : 39.99;
+  // Prices — must match the App Store / Google Play products exactly
+  // (godlykidsmonthly:monthly / kbpublish.godlykids.monthly and yearlymember:yearly / kbpublish.godlykids.yearly).
+  const monthlyPrice = MONTHLY_PRICE_USD;
+  const annualPrice = ANNUAL_PRICE_USD; // Library paywall shows it as a weekly rate, billed yearly.
   const annualWeeklyPrice = (annualPrice / 52).toFixed(2);
-  const lifetimeOriginalPrice = 69.99;  // Lifetime (exit deal only) - was $69.99, sale $19.99
-  const lifetimeSalePrice = 19.99;      // Only shown in LifetimeOfferModal (exit paywall deal)
-  const lifetimeDiscount = Math.round(((lifetimeOriginalPrice - lifetimeSalePrice) / lifetimeOriginalPrice) * 100);
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
   const annualTrialLine = isSevenDayOffer
@@ -577,43 +574,6 @@ const PaywallPage: React.FC = () => {
       ? `14-day free trial, then $${annualWeeklyPrice}/week ($${annualPrice} billed yearly). Cancel anytime.`
       : `14-day free trial, then $${annualPrice}/year. Cancel anytime.`;
   
-  // 30-minute countdown timer for lifetime deal
-  const LIFETIME_DEAL_KEY = 'godlykids_lifetime_deal_start';
-  const DEAL_DURATION_MS = 30 * 60 * 1000; // 30 minutes
-  
-  const [timeRemaining, setTimeRemaining] = useState<{ minutes: number; seconds: number } | null>(null);
-  const [dealExpired, setDealExpired] = useState(false);
-  
-  useEffect(() => {
-    let dealStartTime = localStorage.getItem(LIFETIME_DEAL_KEY);
-    if (!dealStartTime) {
-      dealStartTime = Date.now().toString();
-      localStorage.setItem(LIFETIME_DEAL_KEY, dealStartTime);
-    }
-    
-    const startTime = parseInt(dealStartTime, 10);
-    const endTime = startTime + DEAL_DURATION_MS;
-    
-    const updateTimer = () => {
-      const remaining = endTime - Date.now();
-      
-      if (remaining <= 0) {
-        setDealExpired(true);
-        setTimeRemaining(null);
-        return;
-      }
-      
-      setTimeRemaining({
-        minutes: Math.floor(remaining / 60000),
-        seconds: Math.floor((remaining % 60000) / 1000),
-      });
-    };
-    
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const [trialUrgency, setTrialUrgency] = useState(getTrialUrgencyRemaining);
   useEffect(() => {
     setTrialUrgency(getTrialUrgencyRemaining());
@@ -655,18 +615,9 @@ const PaywallPage: React.FC = () => {
   const EXIT_TRIAL_SHOWN_KEY = 'godlykids_exit_trial_shown';
 
   const proceedWithPaywallBack = () => {
-    const stage = localStorage.getItem('godlykids_lifetime_offer_stage');
-    if (!stage || stage === 'none') {
-      localStorage.setItem('godlykids_lifetime_offer_stage', 'ready');
-      localStorage.setItem('godlykids_lifetime_offer_ready_at', Date.now().toString());
-      if (!localStorage.getItem(LIFETIME_DEAL_KEY)) {
-        localStorage.setItem(LIFETIME_DEAL_KEY, Date.now().toString());
-      }
-    }
-
     const st = (location.state || {}) as {
       paywallFlowBackTarget?: 'intro' | 'reminder';
-      selectedPlan?: 'annual' | 'monthly' | 'lifetime';
+      selectedPlan?: 'annual' | 'monthly';
       from?: string;
       fromOnboarding?: boolean;
       hideCloseButton?: boolean;
@@ -1403,8 +1354,6 @@ const PaywallPage: React.FC = () => {
                   <p className="text-gray-500 text-xs text-center">
                     {selectedPlan === 'annual'
                       ? `14-day free trial, then $${annualPrice}/year. Cancel anytime.`
-                      : selectedPlan === 'lifetime'
-                      ? `$${lifetimeSalePrice} one-time • Lifetime access`
                       : `14-day free trial, then $${monthlyPrice}/month. Cancel anytime.`}
                   </p>
                 </div>
@@ -1425,13 +1374,11 @@ const PaywallPage: React.FC = () => {
                     </div>
                     <div className="text-left">
                       <p className="font-bold text-[#1e1b4b]">
-                        {selectedPlan === 'annual' ? 'Annual' : selectedPlan === 'lifetime' ? 'Lifetime' : 'Family Monthly Plan'}
+                        {selectedPlan === 'annual' ? 'Annual' : 'Family Monthly Plan'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {selectedPlan === 'annual'
                           ? `$${annualPrice}/year • 12 free custom books`
-                          : selectedPlan === 'lifetime'
-                          ? `$${lifetimeSalePrice} one-time • Forever`
                           : `$${monthlyPrice} USD/month • Over 1,000 members • Cancel anytime`}
                       </p>
                     </div>
@@ -1475,7 +1422,7 @@ const PaywallPage: React.FC = () => {
                   
                   <div className="flex-1">
                     <p className="font-bold text-[#1e1b4b]">Annual</p>
-                    <p className="text-xs text-gray-500">14-day free trial, then <span className="font-semibold text-green-600">$39.99/year</span></p>
+                    <p className="text-xs text-gray-500">14-day free trial, then <span className="font-semibold text-green-600">${annualPrice}/year</span></p>
                   </div>
                   
                   <div className="text-right">
@@ -1525,71 +1472,7 @@ const PaywallPage: React.FC = () => {
               )}
               </>
               )}
-
-              {/* Lifetime Option - TEMPORARILY HIDDEN on the standard paywall.
-                  Only shown when coming from the explicit lifetime deal/exit-intent page. */}
-              {showLifetimeOption && (
-              <div 
-                onClick={() => setSelectedPlan('lifetime')}
-                className={`relative w-full rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
-                  selectedPlan === 'lifetime' 
-                  ? 'bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border-[#f59e0b] shadow-lg' 
-                  : 'bg-gradient-to-r from-[#fffbeb] to-[#fef3c7] border-[#fbbf24]'
-                }`}
-              >
-                {/* Discount Badge */}
-                <div className="absolute -top-0 -right-0">
-                  <div className="bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl animate-pulse">
-                    {lifetimeDiscount}% OFF
-                  </div>
-                </div>
-                
-                {/* Countdown Timer Banner */}
-                {timeRemaining && !dealExpired && (
-                  <div className="bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] px-4 py-2 flex items-center justify-center gap-2">
-                    <span className="text-white text-xs font-semibold">⏰ Limited Time Offer:</span>
-                    <div className="flex gap-1">
-                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
-                        {String(timeRemaining.minutes).padStart(2, '0')}
-                      </span>
-                      <span className="text-white font-bold">:</span>
-                      <span className="bg-white/20 text-white font-mono font-bold text-sm px-2 py-0.5 rounded">
-                        {String(timeRemaining.seconds).padStart(2, '0')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="p-4 flex items-center gap-4">
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    selectedPlan === 'lifetime' ? 'bg-[#f59e0b] border-[#f59e0b]' : 'border-[#f59e0b]'
-                  }`}>
-                    {selectedPlan === 'lifetime' && <Check size={14} className="text-white" strokeWidth={3} />}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <p className="font-bold text-[#1e1b4b]">🔥 Lifetime Access</p>
-                    <p className="text-xs text-gray-600">One-time payment • Forever yours</p>
-                  </div>
-                  
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 line-through">${lifetimeOriginalPrice} USD</p>
-                    <p className="font-extrabold text-xl text-[#dc2626]">${lifetimeSalePrice} <span className="text-sm">USD</span></p>
-                    <p className="text-[10px] text-green-600 font-semibold">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD</p>
-                  </div>
-                </div>
-              </div>
-              )}
             </div>
-
-            {/* Pricing Summary - only for lifetime (subscription summary moved below CTA) */}
-            {selectedPlan === 'lifetime' && (
-              <p className="text-center text-[#6366f1] font-medium text-sm mb-4">
-                <span className="text-[#dc2626]">Special offer: ${lifetimeSalePrice} USD</span> <span className="text-gray-400 line-through text-xs">${lifetimeOriginalPrice} USD</span>
-                <br />
-                <span className="text-gray-500 font-normal">One-time payment. Yours forever!</span>
-              </p>
-            )}
 
             {/* Error Messages */}
             {error && (
@@ -1632,11 +1515,7 @@ const PaywallPage: React.FC = () => {
             <button 
               onClick={handleSubscribeClick}
               disabled={isPurchasing || isRestoring || isLoading}
-              className={`w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed ${
-                selectedPlan === 'lifetime'
-                  ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white shadow-red-200/50'
-                  : 'bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50'
-              }`}
+              className="w-full font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all mb-3 disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-[#6366f1] to-[#4f46e5] text-white shadow-indigo-200/50"
             >
               {isPurchasing ? (
                 <span className="flex items-center justify-center gap-2">
@@ -1645,21 +1524,14 @@ const PaywallPage: React.FC = () => {
                 </span>
               ) : (
                 <span className="flex flex-col items-center">
-                  {selectedPlan === 'lifetime' ? (
-                    <>
-                      <span>{firstName ? `${firstName}, ` : ''}Get Lifetime for ${lifetimeSalePrice} USD</span>
-                      <span className="text-xs font-normal opacity-90">Save ${(lifetimeOriginalPrice - lifetimeSalePrice).toFixed(2)} USD today!</span>
-                    </>
-                  ) : (
-                    <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
-                  )}
+                  <span>{firstName ? `${firstName}, ` : ''}Start your free trial</span>
                 </span>
               )}
             </button>
             )}
 
-            {/* No payment + trial summary - only for subscription plans, not on Create Your Story (moved above) */}
-            {!isCreateYourStoryPaywall && selectedPlan !== 'lifetime' && (
+            {/* No payment + trial summary - not on Create Your Story (moved above) */}
+            {!isCreateYourStoryPaywall && (
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-green-600 mb-1">
                   <Check size={18} strokeWidth={3} />
@@ -1673,14 +1545,6 @@ const PaywallPage: React.FC = () => {
               </div>
             )}
             
-            {/* Lifetime badge */}
-            {selectedPlan === 'lifetime' && !isCreateYourStoryPaywall && (
-              <div className="flex items-center gap-2 text-[#dc2626] mb-6">
-                <Check size={18} strokeWidth={3} />
-                <span className="font-semibold text-sm">🔥 {lifetimeDiscount}% off • Limited time only!</span>
-              </div>
-            )}
-
             {/* How to Cancel Section */}
             <div className="w-full bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
               <h3 className="font-bold text-[#1e1b4b] mb-2">How can I cancel?</h3>

@@ -5577,6 +5577,7 @@ const BookReaderPage: React.FC = () => {
                                 wordAlignment={wordAlignment}
                                 isTTSPlaying={playing}
                                 ambientVideoSoundEnabled={pageVideoSoundEnabled}
+                                ambientVolume={hideLanguageSelector ? 0.5 : 0.7}
                                 sequentialMultiBoxTts={sequentialMultiBoxTts}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}

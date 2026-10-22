@@ -131,6 +131,8 @@ interface BookPageRendererProps {
     isTTSPlaying?: boolean; // When true, duck layered page video / ambient audio for TTS
     /** Separate from TTS mute: layered background-video audio (extracted URL). Defaults on. */
     ambientVideoSoundEnabled?: boolean;
+    /** Loudness of that layered soundtrack. Story packs use half. */
+    ambientVolume?: number;
     /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
     sequentialMultiBoxTts?: boolean;
     // Character overlay props
@@ -167,6 +169,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onVideoTransition,
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
+    ambientVolume = 0.7,
     sequentialMultiBoxTts = false,
     characterPoses,
     showCharacterOverlay = false,
@@ -323,9 +326,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         if (audioUrl) {
             if (audio.src !== audioUrl) {
                 audio.src = audioUrl;
-                audio.volume = 0.7;
                 audio.load();
             }
+            audio.volume = ambientVolume;
 
             detachTrim?.();
             detachTrim = attachPlaybackTrim(audio, {
@@ -367,6 +370,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         page.useVideoSequence,
         sortedVideoSequence,
         currentVideoIndex,
+        ambientVolume,
     ]);
 
     // Duck or silence layered page video audio when narration plays or viewer turns it off.
@@ -376,8 +380,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const enabled = ambientVideoSoundEnabled !== false;
         const audible = enabled && !isTTSPlaying;
         audio.muted = !audible;
-        audio.volume = audible ? 0.7 : 0;
-    }, [ambientVideoSoundEnabled, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
+        audio.volume = audible ? ambientVolume : 0;
+    }, [ambientVideoSoundEnabled, ambientVolume, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
 
     // iOS/iPad: percentage clip-path and top can mis-measure until the container has a stable size.
     useLayoutEffect(() => {

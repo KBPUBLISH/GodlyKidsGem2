@@ -190,11 +190,19 @@ function readViewportSize(): { w: number; h: number } {
 type MediaBox = { w: number; h: number };
 type StageBox = { left: number; top: number; width: number; height: number };
 
-/** Full image, centered, sitting on the bottom of the phone. */
+/**
+ * Fit the island on a phone. A straight contain-fit leaves a tall empty sky,
+ * so on a narrow screen the map grows toward full-bleed and only a slim
+ * strip of the outer coast is cropped.
+ */
 function fitMediaStage(view: { w: number; h: number }, media: MediaBox): StageBox {
-  const s = Math.min(view.w / media.w, view.h / media.h);
-  const width = media.w * s;
-  const height = media.h * s;
+  const widthFit = view.w / media.w;
+  const heightFit = view.h / media.h;
+  const contain = Math.min(widthFit, heightFit);
+  const tallPhone = widthFit < heightFit;
+  const scale = tallPhone ? contain + (heightFit - contain) * 0.78 : contain;
+  const width = media.w * scale;
+  const height = media.h * scale;
   return {
     left: (view.w - width) / 2,
     top: view.h - height,
@@ -693,7 +701,14 @@ const MainMapPage: React.FC = () => {
           className="absolute select-none"
           style={
             stage
-              ? { left: stage.left, top: stage.top, width: stage.width, height: stage.height }
+              ? {
+                  left: stage.left,
+                  top: stage.top,
+                  width: stage.width,
+                  height: stage.height,
+                  maxWidth: 'none',
+                  maxHeight: 'none',
+                }
               : { inset: 0, width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }
           }
           muted
@@ -714,7 +729,14 @@ const MainMapPage: React.FC = () => {
           className="absolute select-none"
           style={
             stage
-              ? { left: stage.left, top: stage.top, width: stage.width, height: stage.height }
+              ? {
+                  left: stage.left,
+                  top: stage.top,
+                  width: stage.width,
+                  height: stage.height,
+                  maxWidth: 'none',
+                  maxHeight: 'none',
+                }
               : { inset: 0, width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }
           }
           draggable={false}

@@ -969,6 +969,7 @@ const IslandScenePage: React.FC = () => {
       const el = ref.current;
       if (!el) continue;
       el.muted = !sceneSoundOn;
+      if (ref === bgVideoRef) el.volume = 0.5;
       if (sceneSoundOn && el.paused) {
         void el.play().catch(() => {
           /* ignore */
@@ -1531,6 +1532,7 @@ const IslandScenePage: React.FC = () => {
               src={bgSrc}
               className="absolute inset-0 w-full h-full object-cover"
               muted={!sceneSoundOn}
+              volume={0.5}
               loop
               playsInline
               autoPlay

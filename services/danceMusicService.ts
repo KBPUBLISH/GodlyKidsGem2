@@ -1,9 +1,8 @@
 /**
  * Background music for the crew jukebox dance party (CrewDeck3D / CrewPage).
  *
- * Plays a small bundled chiptune loop (public/sounds/dance-loop.mp3, generated
- * by scripts/make-dance-loop.mjs) while a character's dance clip runs, looping
- * if the clip outlasts the 8s tune. `stop()` fades out over ~300ms.
+ * Plays the jukebox tune once (public/sounds/dance-loop.mp3). It does not
+ * restart when the clip ends. `stop()` fades out over ~300ms.
  *
  * While dancing, any OTHER audio already playing (playlist player / app
  * ambient loop from AudioContext) is ducked to 25% of its volume and restored
@@ -58,11 +57,17 @@ export const danceMusic = {
       clearFade();
       if (!el) {
         el = new Audio(SRC);
-        el.loop = true;
+        el.loop = false;
         el.setAttribute('data-gk-role', 'dance-music');
+        el.addEventListener('ended', () => {
+          if (!el) return;
+          el.loop = false;
+          el.pause();
+        });
         // In the DOM (invisible — no controls) so it's inspectable/duckable
         document.body.appendChild(el);
       }
+      el.loop = false;
       el.volume = VOLUME;
       el.currentTime = 0;
       duckOthers();
@@ -81,7 +86,9 @@ export const danceMusic = {
   stop(): void {
     const audio = el;
     restoreOthers();
-    if (!audio || audio.paused) return;
+    if (!audio) return;
+    audio.loop = false;
+    if (audio.paused) return;
     clearFade();
     const step = 30;
     const dropPerStep = (audio.volume * step) / FADE_MS;

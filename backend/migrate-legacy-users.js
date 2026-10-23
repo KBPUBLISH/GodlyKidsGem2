@@ -19,11 +19,11 @@ const mongoose = require('mongoose');
 // Configuration
 // Legacy DB (where Android users currently live)
 const LEGACY_MONGO_URI = process.env.LEGACY_MONGO_URI || 
-  'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+  'mongodb+srv://USER:PASSWORD@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
 
 // New DB (where new backend stores AppUsers)  
 const NEW_MONGO_URI = process.env.MONGO_URI ||
-  'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+  'mongodb+srv://USER:PASSWORD@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
 
 const isDryRun = process.argv.includes('--dry-run');
 

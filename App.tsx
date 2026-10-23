@@ -200,10 +200,10 @@ if (!(window as any).__GK_APP_BOOTED__) {
             lastFocusState = 'out';
             
             // Store the current route so we can restore it properly
-            // Skip game routes - they have query params that won't survive force quit
+            // Skip game routes and audio player routes - they have transient state that shouldn't be restored
             try {
               const currentHash = window.location.hash || '#/world';
-              if (!currentHash.includes('/game')) {
+              if (!currentHash.includes('/game') && !currentHash.includes('/player/')) {
                 localStorage.setItem('gk_last_route', currentHash);
               }
             } catch {}
@@ -1277,8 +1277,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       (window as any).__GK_TRACE__?.('route_change', { path: location.pathname, hash: location.hash, search: location.search });
       activityTrackingService.trackPageVisit(location.pathname);
       if ((window as any).__GK_IS_DESPIA__ && location.pathname && location.pathname !== '/') {
-        if (location.pathname.startsWith('/game')) {
-          console.log('📱 Despia: Skipping route save for game page');
+        // Skip saving transient routes (games, audio player)
+        if (location.pathname.startsWith('/game') || location.pathname.startsWith('/player/')) {
+          console.log('📱 Despia: Skipping route save for transient page:', location.pathname);
           localStorage.removeItem('gk_last_route');
         } else {
           const routeToSave = `#${location.pathname}${location.search || ''}`;

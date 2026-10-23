@@ -7,7 +7,7 @@
  * - Reduces load times and bandwidth usage
  */
 
-const CACHE_NAME = 'godlykids-images-v1';
+const CACHE_NAME = 'godlykids-images-v2';
 const IMAGE_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 // URLs to cache (images from our CDN and storage)
@@ -63,11 +63,21 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(request).then((cachedResponse) => {
+        // Create a CORS request for cross-origin images
+        // This ensures images can be used for pixel manipulation (canvas, etc.)
+        const corsRequest = new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+          mode: 'cors',
+          credentials: 'omit',
+          cache: 'default'
+        });
+        
         // Fetch from network in background to update cache
-        const fetchPromise = fetch(request)
+        const fetchPromise = fetch(corsRequest)
           .then((networkResponse) => {
-            // Only cache successful responses
-            if (networkResponse && networkResponse.status === 200) {
+            // Only cache successful, non-opaque responses
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
               // Clone the response before caching
               cache.put(request, networkResponse.clone());
             }
@@ -103,9 +113,10 @@ self.addEventListener('message', (event) => {
       caches.open(CACHE_NAME).then((cache) => {
         return Promise.all(
           urls.map((url) => {
-            return fetch(url)
+            // Use CORS mode for prefetch as well
+            return fetch(url, { mode: 'cors', credentials: 'omit' })
               .then((response) => {
-                if (response && response.status === 200) {
+                if (response && response.status === 200 && response.type !== 'opaque') {
                   return cache.put(url, response);
                 }
               })

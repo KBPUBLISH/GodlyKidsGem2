@@ -52,7 +52,14 @@ const AudioPlayerPage: React.FC = () => {
       <div className="absolute top-0 left-0 right-0 p-6 z-30 flex justify-between items-center pt-8">
         {/* Custom Back Button (Orange/Wood Box style) */}
         <button 
-          onClick={() => navigate(`/book/${bookId}`)}
+          onClick={() => {
+            // Try to go back in history first, if that doesn't work, go to book detail
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate(`/book/${bookId}`);
+            }
+          }}
           className="w-12 h-12 bg-[#e67e22] rounded-2xl border-b-4 border-[#d35400] shadow-lg flex items-center justify-center active:translate-y-1 active:border-b-0 active:shadow-none transition-all"
         >
           <ChevronLeft size={32} className="text-[#5c2e0b]" strokeWidth={3} />

@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {Icon,ItemIcon} from './ui.jsx';
 import {SEEDS,gameTime,growth} from './core.mjs';
 import {completedHomes} from './nutrition.mjs';
+import {ResidentLine} from './resident-line.jsx';
 
 /** Jobs a friend can be given from the Task button, beyond what the to-do list suggests right now. */
 function jobsFor(g,helper){
@@ -48,6 +49,7 @@ export function ResidentGreeting({engine,enabled}){
     {work&&<div className={`resident-work ${work.paused?'paused':''}`}><Icon type={work.type==='chop'?'axe':work.type==='fish'?'rawfish':work.type==='water'?'water':'rest'} size={15}/><span>{work.paused?'Paused · ':''}{work.label}{work.target!=null?` · ${work.done}/${work.target}`:work.done?` · ${work.progress}`:''}</span></div>}
    </div>
   </aside>
+  {!picking&&!jobs&&card.line&&<ResidentLine name={card.name} line={card.line} onDismiss={()=>engine.current?.residents?.dismissLine()}/>}
   {card.actions&&picking&&!work&&<div className="resident-food-picker" role="menu" aria-label={`Food for ${card.name}`} style={{left:card.actions.x,top:card.actions.y-78}} onPointerDown={e=>e.stopPropagation()}>
    <strong>What should {card.name} eat?</strong>
    <div className="resident-food-list">{foods.map(f=><button key={f.id} type="button" role="menuitem" disabled={f.gain<=0} aria-label={`${f.name}, ${f.count} in the bag${f.gain>0?`, plus ${f.gain}`:', full'}`} onClick={e=>{e.stopPropagation();eatItem(f.id);}}><ItemIcon id={f.id} size={30}/><span>{f.name}</span><small>{f.gain>0?`+${f.gain}`:'Full'} · ×{f.count}</small></button>)}</div>

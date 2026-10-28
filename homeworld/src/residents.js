@@ -4,7 +4,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { heightAt, dist, gameTime, growth, cellFromKey, activeTrees, activeRocks, pruneBuiltIns } from './core.mjs';
 import { woodRoom } from './wood-storage.mjs';
 import { toolTier, rockProfile } from './mining.mjs';
-import { woodTotal } from './building.mjs';
+import { woodTotal, buildingById } from './building.mjs';
 import { energyFor, FOODS, hungerFor, isStarving, mealGain, workRate } from './nutrition.mjs';
 import { workPoint, completedFires, firesNeedingLog, fireCanTakeLog, bedCount } from './building.mjs';
 import { communityClaim } from './community.mjs';
@@ -632,7 +632,31 @@ export class Residents {
   closeMenu() {
     if (!this.menuId) return;
     this.menuId = null;
+    this.line = null;
     this.game.notify?.();
+  }
+
+  dismissLine() {
+    this.line = null;
+    this.game.notify?.();
+  }
+
+  /** Read real island context once per tap; the animation loop only displays the selected line. */
+  sayHello(actor) {
+    this.line = null;
+    const game = this.game, home = actor?.userData, state = game.store?.state;
+    if (!home?.residentId || !state || !game.playersOnly) return;
+    const minutes = gameTime(state);
+    const context = {
+      residents:[...this.models.values()].map(a => ({id:a.userData.residentId,name:a.userData.name || 'Friend'})),
+      plants:Object.entries(state.cells || {}).filter(([,c]) => c.seed).map(([key,c]) => ({key,seed:c.seed,plantedAt:c.plantedAt,ready:growth(c,minutes)?.stage === 'ready'})),
+      buildings:(state.buildings || []).map(b => ({id:b.id,kind:b.kind,status:b.status,name:buildingById(b.kind)?.name || 'building'})),
+    };
+    try {
+      this.line = game.store.residentLine({id:home.residentId,name:home.name},context);
+    } catch (error) {
+      game.toast?.(error.message);
+    }
   }
 
   /** Tap: keep this friend selected, and play the wave once. */
@@ -641,6 +665,7 @@ export class Residents {
     const home = actor?.userData;
     if (!home?.residentId) return;
     this.menuId = home.residentId;
+    this.sayHello(actor);
     // Working or mid-action: open the menu without interrupting the job.
     if (game.action || game.autoWork?.active) {
       game.notify?.();

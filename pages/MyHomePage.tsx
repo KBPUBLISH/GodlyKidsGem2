@@ -8,7 +8,7 @@ import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/p
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players97&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players98&players=1';
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';

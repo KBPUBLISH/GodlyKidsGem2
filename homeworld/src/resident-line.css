@@ -1,0 +1,27 @@
+.resident-line {
+  position: absolute;
+  z-index: 14;
+  left: 50%;
+  bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 84px);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(360px, calc(100% - 28px));
+  padding: 13px 49px 15px 17px;
+  border: 2px solid #91ad70;
+  border-radius: 20px;
+  background: #fffbed;
+  box-shadow: 0 4px 0 #38533726, 0 8px 22px #183c3120;
+  color: #314b35;
+  pointer-events: auto;
+  text-align: left;
+}
+.resident-line > strong { display: block; margin: 0 0 5px; color: #57723d; font-size: 12px; font-weight: 900; }
+.resident-line > p { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.resident-line > button { position: absolute; top: 3px; right: 3px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: #57723d; font-size: 27px; }
+.resident-line > button:focus-visible { outline: 3px solid #527838; outline-offset: -4px; }
+/* Job/selection notifications must not cover the sentence a child is reading. */
+.game-shell:has(.resident-line) .toast { bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 220px); }
+@media (max-height: 600px) {
+  .resident-line { left: max(12px, env(safe-area-inset-left, 0px)); transform: none; width: min(360px, calc(100% - 116px)); }
+  .resident-line > p { font-size: 14px; }
+}

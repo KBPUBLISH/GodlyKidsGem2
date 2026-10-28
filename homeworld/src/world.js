@@ -568,6 +568,7 @@ export class HomeWorld {
     const inv=this.store.state.inventory||{},foodId=Object.keys(FOODS).filter(id=>inv[id]>0).sort((a,b)=>FOODS[b].energy-FOODS[a].energy)[0]||null;
     const helper=actor!==this.actor;const who=helper?home.residentId:undefined;const energyShown=helper?energyFor(this.store.state,home.residentId):energy;const hunger=Math.round(hungerFor(this.store.state,min,who));
     const card={name:home.name||'Friend',imageUrl:home.imageUrl||'',energy:energyShown,hunger,low:energyShown<=20||hunger<=25,canSleep:!helper&&completedHomes(this.store.state).length>0,canPray:!helper,actions:null,helper,work:helper?this.residents.jobSnapshot(home):(this.autoWork?.snapshot()||null),food:foodId?{id:foodId,name:FOODS[foodId].name,gain:mealGain(this.store.state,foodId,min,who).total}:null,foods:Object.keys(FOODS).filter(id=>inv[id]>0).sort((a,b)=>FOODS[b].energy-FOODS[a].energy).map(id=>{const m=mealGain(this.store.state,id,min,who);return {id,name:FOODS[id].name,count:inv[id],gain:m.total,energy:m.energy,hunger:m.hunger};}),hasRawFish:(inv.fish||0)>0};
+    card.line=this.residents?.line?.residentId===home.residentId?this.residents.line:null;
     const rect=this.renderer.domElement.getBoundingClientRect(),w=rect.width,h=rect.height;
     if(!w||!h)return card;
     this.camera.updateMatrixWorld(true);actor.updateWorldMatrix(true,false);

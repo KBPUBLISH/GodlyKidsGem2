@@ -13,6 +13,7 @@ import {BUILD_ENERGY,buildingById,activeBuildings,completedFires,litFires,fireCa
 import {advanceCommunity,configureCommunity,validCommunity,communityClaim,homeReserved,memberPosition} from './community.mjs';
 import {woodRoom,validWoodDrops} from './wood-storage.mjs';
 import {validAnimals,animalSiteStatus} from './animals.mjs';
+import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
 export const SAVE_KEY = 'godlykids_homeworld_playtest_v1';
 export const GAME_MINUTES_PER_MS = 1440 / 600000;
 export const SEEDS = [
@@ -177,6 +178,7 @@ export class GameStore {
   save(next,wall=Date.now()) {
     if(this.locked)throw Error(this.error);
     const latest=this.readLatest();if(latest&&latest.revision>this.state.revision){this.state=latest;throw Error('Progress changed in another HomeWorld window. Please try that action again.');}
+    if(this.playersOnly)next=rememberCompletedBuildings(this.state,next,wall);
     const minutes=gameTime(next,wall);
     const anchored={...next,clock:{...next.clock,minutes,wall},revision:Math.max(next.revision,this.state.revision)+1};
     // Only expose inventory/world changes once the whole save has succeeded.
@@ -185,7 +187,8 @@ export class GameStore {
   }
   commit(action,wall=Date.now()) {
     const latest=this.readLatest();if(latest&&latest.revision>this.state.revision)this.state=latest;
-    const next=applyAction(this.state,action,this.world,gameTime(this.state,wall),wall);
+    let next=applyAction(this.state,action,this.world,gameTime(this.state,wall),wall);
+    if(this.playersOnly)next=rememberResidentAction(this.state,next,action,{actorId:this.state.activeCharacter,wall});
     return next===this.state?this.state:this.save(next,wall);
   }
   communityStep(options={},wall=Date.now()) {
@@ -212,14 +215,23 @@ export class GameStore {
     return this.save(configureCommunity(this.state,gameTime(this.state,wall),changes),wall);
   }
   readLatest(){try{const raw=this.storage.getItem(SAVE_KEY);if(!raw)return null;const s=migrateGrid(JSON.parse(raw),this.world);return validState(s,this.world)?this.migrate(s):null;}catch{return null;}}
+  /** Conversation memory changes only when a resident is tapped, alongside normal island saves. */
+  residentLine(resident,context,wall=Date.now()) {
+    if(!this.playersOnly)return null;
+    const latest=this.readLatest();if(latest&&latest.revision>this.state.revision)this.state=latest;
+    const result=nextResidentLine(this.state,resident,context,wall);
+    if(result.state!==this.state)this.save(result.state,wall);
+    return result.line;
+  }
   persistPlayer(player,wall=Date.now()) {return this.save({...this.state,player:{x:player.x,y:player.y}},wall);}
   /** Apply an action as another character standing at `position` (island helpers doing chores). */
   commitAs(id,name,position,action,wall=Date.now()) {
     const latest=this.readLatest();if(latest&&latest.revision>this.state.revision)this.state=latest;
     const base=this.state,characters=base.characters?.[id]?base.characters:{...base.characters,[id]:{name:name||id,energy:100}};
     const scoped={...base,characters,activeCharacter:id,player:{x:position.x,y:position.y}};
-    const next=applyAction(scoped,action,this.world,gameTime(scoped,wall),wall);
+    let next=applyAction(scoped,action,this.world,gameTime(scoped,wall),wall);
     if(next===scoped)return base;
+    if(this.playersOnly)next=rememberResidentAction(scoped,next,action,{actorId:id,helper:true,wall});
     return this.save({...next,player:base.player,activeCharacter:base.activeCharacter},wall);
   }
   clockChange(delta=0,paused=this.state.clock.paused,wall=Date.now()) {

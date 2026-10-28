@@ -372,25 +372,22 @@ const LibraryBookIcon = () => (
 /** Wheel turns a quarter turn per island… */
 const ISLAND_STEP_DEG = 90;
 /** …and the hand has to drag this far before it clicks to the next one. */
-const ISLAND_DETENT = 62;
+const ISLAND_DETENT = 50;
 /** How closely the wheel follows the hand before the click (1 = exactly). */
-const WHEEL_FOLLOW = 0.85;
+const WHEEL_FOLLOW = 1;
 /** Rubber-band follow when there is no island further in that direction. */
 const WHEEL_END_FOLLOW = 0.15;
-/** Shortest gap between two clicks, so one hard flick is still one island. */
-const WHEEL_SETTLE_MS = 120;
 /**
  * Inside this fraction of the radius the hand is on the hub, where the
  * angle to the center is meaningless — a plain horizontal swipe turns the
  * wheel instead (kids swipe straight across it), scaled as if the finger
  * were on a rim this far out.
  */
-const WHEEL_HUB_FRAC = 0.45;
-const WHEEL_SWIPE_RIM_FRAC = 0.7;
+const WHEEL_HUB_FRAC = 0.3;
 /** Movement under this (deg) is finger jitter. */
 const WHEEL_DEAD_DEG = 0.1;
-// Touch is a short, consistent left/right swipe everywhere on the wheel.
-// Never switch to polar angles as the thumb crosses its center or rim.
+// The hub supports a short left/right swipe; the rim turns with the hand.
+// A short straight swipe can also select an island when no turn was committed.
 const WHEEL_SWIPE_MIN_PX = 24;
 const WHEEL_SWIPE_DEG_PER_PX = 1.5;
 const WHEEL_IDLE_TRANSITION = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
@@ -844,6 +841,7 @@ const CrewPage: React.FC = () => {
     active: false,
     pointerId: -1,
     swipe: false,
+    shifted: false,
     startX: 0,
     startY: 0,
     pickupOffset: 0,
@@ -853,15 +851,13 @@ const CrewPage: React.FC = () => {
     /** Last hand angle about the center (deg). */
     angle: 0,
     lastX: 0,
-    /** Hub swipe: which rim the hand is "on" (+1 top rim, -1 bottom rim). */
-    swipeSign: -1,
+    lastY: 0,
     /** Hand travel since the last click (deg, carried over past clicks). */
     accum: 0,
     /** Creep (deg) the wheel should draw on top of the notch. */
     creep: 0,
     /** Rotation currently drawn. */
     shown: 0,
-    settleUntil: 0,
     frame: 0,
   });
   const sailingRef = useRef(false);
@@ -942,28 +938,39 @@ const CrewPage: React.FC = () => {
       const dx = e.clientX - g.cx;
       const dy = e.clientY - g.cy;
       const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-      let delta: number;
-      if (Math.hypot(dx, dy) < g.radius * WHEEL_HUB_FRAC) {
-        // On the hub: sideways finger travel turns the wheel.
-        delta = ((e.clientX - g.lastX) / (g.radius * WHEEL_SWIPE_RIM_FRAC)) * (180 / Math.PI) * g.swipeSign;
-      } else {
-        delta = angle - g.angle;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-      }
+      // Ignore a chord through the hub: its polar angle jumps by 180 degrees.
+      // Keep the rim gesture locked instead of changing formulas mid-turn.
+      const prevX = g.lastX - g.cx;
+      const prevY = g.lastY - g.cy;
+      const stepX = dx - prevX;
+      const stepY = dy - prevY;
+      const lengthSq = stepX * stepX + stepY * stepY;
+      const t = lengthSq ? Math.max(0, Math.min(1, -(prevX * stepX + prevY * stepY) / lengthSq)) : 0;
+      const crossesHub = Math.hypot(prevX + t * stepX, prevY + t * stepY) < g.radius * WHEEL_HUB_FRAC;
+      let delta = angle - g.angle;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
       g.angle = angle;
       g.lastX = e.clientX;
-      if (Math.abs(delta) < WHEEL_DEAD_DEG) return;
+      g.lastY = e.clientY;
+      if (crossesHub || Math.abs(delta) < WHEEL_DEAD_DEG) return;
+      const pushingPastEnd = (delta > 0 && lookRef.current >= voyageRef.current.length - 1) ||
+        (delta < 0 && lookRef.current <= 0);
+      if (pushingPastEnd) {
+        // Do not bank blocked travel; reversing away from an end responds at once.
+        g.accum = 0;
+        g.creep = Math.max(-12, Math.min(12, g.creep + delta * WHEEL_END_FOLLOW));
+        return;
+      }
       let accum = g.accum + delta;
       if (Math.abs(accum) >= ISLAND_DETENT) {
         const dir: 1 | -1 = accum > 0 ? 1 : -1;
-        const now = performance.now();
-        if (now >= g.settleUntil && shiftIsland(dir)) {
+        if (shiftIsland(dir)) {
           // Carry the hand past the click so continuous turning keeps
           // clicking every quarter turn instead of restarting each notch.
           accum -= dir * ISLAND_STEP_DEG;
-          g.settleUntil = now + WHEEL_SETTLE_MS;
-          navigator.vibrate?.(6);
+          g.shifted = true;
+          try { navigator.vibrate?.(6); } catch { /* haptics are optional */ }
         } else {
           accum = dir * ISLAND_DETENT;
         }
@@ -971,7 +978,7 @@ const CrewPage: React.FC = () => {
       g.accum = accum;
       const count = voyageRef.current.length;
       const atEnd = (accum > 0 && lookRef.current >= count - 1) || (accum < 0 && lookRef.current <= 0);
-      g.creep = accum * (atEnd ? WHEEL_END_FOLLOW : WHEEL_FOLLOW);
+      g.creep = g.pickupOffset + accum * (atEnd ? WHEEL_END_FOLLOW : WHEEL_FOLLOW);
     },
     [shiftIsland],
   );
@@ -979,12 +986,14 @@ const CrewPage: React.FC = () => {
   const onWheelPointerUp = useCallback((e: PointerEvent) => {
     const g = wheelGestureRef.current;
     if (!g.active || e.pointerId !== g.pointerId) return;
-    if (g.swipe && e.type === 'pointerup' && !sailingRef.current) {
+    if (!g.shifted && e.type === 'pointerup' && !sailingRef.current) {
       // Include the final sample: a fast flick may end between pointermoves.
       const dx = e.clientX - g.startX;
       const dy = e.clientY - g.startY;
       if (Math.abs(dx) >= WHEEL_SWIPE_MIN_PX && Math.abs(dx) >= Math.abs(dy) * 0.75) {
-        if (shiftIsland(dx < 0 ? 1 : -1)) navigator.vibrate?.(6);
+        if (shiftIsland(dx < 0 ? 1 : -1)) {
+          try { navigator.vibrate?.(6); } catch { /* haptics are optional */ }
+        }
       }
     }
     g.active = false;
@@ -1024,19 +1033,19 @@ const CrewPage: React.FC = () => {
       g.cx = rect.left + rect.width / 2;
       g.cy = rect.top + rect.height / 2;
       g.radius = Math.max(1, rect.width / 2);
-      g.swipe = e.pointerType !== 'mouse';
       g.startX = e.clientX;
       g.startY = e.clientY;
       const dx = e.clientX - g.cx;
       const dy = e.clientY - g.cy;
+      // Touch, pen and mouse all retain real circular turning on the rim.
+      // Only a gesture starting inside the hub is treated as a straight swipe.
+      g.swipe = Math.hypot(dx, dy) < g.radius * WHEEL_HUB_FRAC;
+      g.shifted = false;
       g.angle = Math.atan2(dy, dx) * (180 / Math.PI);
       g.lastX = e.clientX;
-      // Start on the top rim: a sideways swipe drags that rim. Anywhere else
-      // (lower half, hub) the bottom rim follows the finger.
-      g.swipeSign = dy < -g.radius * WHEEL_HUB_FRAC ? 1 : -1;
+      g.lastY = e.clientY;
       g.accum = 0;
       g.creep = 0;
-      g.settleUntil = 0;
       g.pointerId = e.pointerId;
       g.active = true;
       // Pick up from the wheel's current drawn angle (it may be mid-ease).
@@ -1083,6 +1092,22 @@ const CrewPage: React.FC = () => {
     },
     [onWheelPointerMove, onWheelPointerUp],
   );
+
+  useEffect(() => {
+    const wheel = wheelRef.current;
+    if (!wheel) return;
+    const keepWheelTouch = (event: TouchEvent) => {
+      if (wheelGestureRef.current.active && event.cancelable) event.preventDefault();
+    };
+    wheel.addEventListener('touchmove', keepWheelTouch, { passive: false });
+    // A WebView may lose capture without delivering pointerup. Release the
+    // gesture so the next touch can start, without treating it as a swipe.
+    wheel.addEventListener('lostpointercapture', onWheelPointerUp);
+    return () => {
+      wheel.removeEventListener('touchmove', keepWheelTouch);
+      wheel.removeEventListener('lostpointercapture', onWheelPointerUp);
+    };
+  }, [showJourneyBtn, showCrewBtn, onWheelPointerUp]);
 
   const openVoyageIsland = useCallback((island: VoyageIsland) => {
     if (sailingRef.current) return;

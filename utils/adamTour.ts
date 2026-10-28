@@ -173,10 +173,7 @@ const unlockLine = (lock: TourLock, playLine: string): string =>
   lock.locked ? `It's locked for now — finish ${lock.islandLabel} and it's yours!` : playLine;
 
 /** Top deck: hello → cannon → jukebox → crew → journey → hatch. */
-export function buildAdamDeckTour(
-  kidName: string | null | undefined,
-  canon: TourLock,
-): TourBeat[] {
+export function buildAdamDeckTour(kidName: string | null | undefined): TourBeat[] {
   const name = firstName(kidName);
   const hello = name ? `Hi ${name}!` : 'Hi there!';
   return [
@@ -187,8 +184,8 @@ export function buildAdamDeckTour(
     },
     {
       id: 'cannon',
-      line: `See that cannon? ${unlockLine(canon, 'Tap it to play Canon Golf!')} Lots of things on this ship unlock as you finish story packs.`,
-      tts: `[curious] See that cannon? ${unlockLine(canon, '[excitedly] Tap it to play Canon Golf!')} [warmly] Lots of things on this ship unlock as you finish story packs.`,
+      line: `See that cannon? Tap it to play Canon Golf! Lots of things on this ship unlock as you finish story packs.`,
+      tts: `[curious] See that cannon? [excitedly] Tap it to play Canon Golf! [warmly] Lots of things on this ship unlock as you finish story packs.`,
     },
     {
       id: 'jukebox',

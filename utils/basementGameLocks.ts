@@ -7,7 +7,7 @@ import {
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 
 /**
- * Ship game locks (basement tables + deck cannon) — each game unlocks once a
+ * Ship game locks (basement tables) — each game unlocks once a
  * Bible Map island is complete (every story on the island has read + quiz
  * done; quiz is waived for stories without quiz content — same rule as
  * main-map sequential unlock).
@@ -16,7 +16,7 @@ import { islandStoryProgressService } from '../services/islandStoryProgressServi
  * lock state resolves instantly (and offline) after the first visit.
  */
 
-export type BasementGameId = 'pool' | 'darts' | 'canon';
+export type BasementGameId = 'pool' | 'darts';
 
 export type BasementIslandRequirement = {
   islandId: string;
@@ -36,13 +36,13 @@ export type BasementGameLockConfig = {
 };
 
 /**
- * All three games open on the same milestone: finishing `beginnings`, the
+ * Both games open on the same milestone: finishing `beginnings`, the
  * first island of the voyage and also the free-tier island. One completion
  * unlocks everything.
  *
  * These are hardcoded CMS slugs. The previous value was `genesis`, and when
  * that island was deleted from the CMS every requirement silently stopped
- * matching, leaving all three games permanently unreachable with no error
+ * matching, leaving both games permanently unreachable with no error
  * anywhere. `warnOnMissingRequiredIslands` below turns a repeat of that into
  * a console error at the moment the CMS answers.
  */
@@ -54,10 +54,6 @@ export const BASEMENT_GAME_LOCKS: Record<BasementGameId, BasementGameLockConfig>
   darts: {
     requirements: [{ islandId: 'beginnings', islandLabel: 'Beginnings Island' }],
     gameLabel: 'the dartboard',
-  },
-  canon: {
-    requirements: [{ islandId: 'beginnings', islandLabel: 'Beginnings Island' }],
-    gameLabel: 'the cannon',
   },
 };
 

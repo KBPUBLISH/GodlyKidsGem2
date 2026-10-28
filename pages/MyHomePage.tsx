@@ -7,12 +7,12 @@ import CrewChatPopup from '../components/crew/CrewChatPopup';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players92&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players94&players=1';
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
 const LOADING_WHEEL = '/assets/images/sail-voyage-wheel.png?v=2';
-const LOADING_HOME_ICON = '/assets/images/sail-voyage-btn-home.png?v=3';
+const LOADING_HOME_ICON = '/assets/images/sail-voyage-btn-home.png?v=5';
 const LOADING_WOOD = '/assets/images/wheel-background-wood.png';
 const LOADING_FADE_MS = 520;
 /** Give up waiting for the island's ready message this long after the frame loads. */
@@ -20,6 +20,27 @@ const LOADING_FALLBACK_MS = 12000;
 const LOADING_LINES = ['Setting sail…', 'Rowing ashore…', 'Waking up your island…', 'Almost home…'];
 
 const CARVED = '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)';
+
+/** Toggled on <html> and <body> while My Home is mounted (CSS lives in index.html). */
+const NO_PULL_REFRESH_CLASS = 'gk-no-pull-refresh';
+
+/**
+ * True when the touch landed inside an element that can scroll vertically on
+ * its own (the Friends sheet list, chat transcript, …), so a downward drag
+ * there must stay a normal scroll rather than being swallowed by the guard.
+ */
+function touchInsideScrollable(target: EventTarget | null, root: HTMLElement): boolean {
+  let el = target instanceof Element ? target : null;
+  while (el && el !== root) {
+    if (el.matches('[data-scrollable], .overflow-y-auto, .overflow-y-scroll, .overflow-auto')) return true;
+    if (el instanceof HTMLElement && el.scrollHeight > el.clientHeight) {
+      const overflowY = window.getComputedStyle(el).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll') return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
 
 /**
  * On-brand "sailing home" screen: the deck's sea panorama drifting by, the
@@ -167,6 +188,7 @@ type DropCharacter = {
  */
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   /** The prayer currently being spoken in the character's ElevenLabs voice (one at a time). */
   const prayerAudioRef = useRef<{ id: string; audio: HTMLAudioElement | null; url: string | null } | null>(null);
@@ -191,6 +213,54 @@ const MyHomePage: React.FC = () => {
   const [chatWorld, setChatWorld] = useState<WorldBrief | null>(null);
 
   usePreventPullToRefresh(true);
+
+  // Disable the browser's swipe-down refresh while on My Home: lock the top
+  // document (html/body overscroll none + overflow hidden via a scoped class)
+  // and, as a belt-and-braces guard for iOS/WKWebView, cancel downward
+  // touchmoves that start with the document at the top — except inside
+  // elements that scroll on their own (Friends list, chat transcript).
+  useEffect(() => {
+    const root = rootRef.current;
+    document.documentElement.classList.add(NO_PULL_REFRESH_CLASS);
+    document.body.classList.add(NO_PULL_REFRESH_CLASS);
+    if (!root) {
+      return () => {
+        document.documentElement.classList.remove(NO_PULL_REFRESH_CLASS);
+        document.body.classList.remove(NO_PULL_REFRESH_CLASS);
+      };
+    }
+    let startY: number | null = null;
+    let inScrollable = false;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        startY = null;
+        return;
+      }
+      startY = event.touches[0].clientY;
+      inScrollable = touchInsideScrollable(event.target, root);
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (startY === null || inScrollable || !event.cancelable) return;
+      const dy = event.touches[0].clientY - startY;
+      if (dy > 0 && window.scrollY <= 0) event.preventDefault();
+    };
+    const onTouchEnd = () => {
+      startY = null;
+      inScrollable = false;
+    };
+    root.addEventListener('touchstart', onTouchStart, { passive: true });
+    root.addEventListener('touchmove', onTouchMove, { passive: false });
+    root.addEventListener('touchend', onTouchEnd, { passive: true });
+    root.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    return () => {
+      document.documentElement.classList.remove(NO_PULL_REFRESH_CLASS);
+      document.body.classList.remove(NO_PULL_REFRESH_CLASS);
+      root.removeEventListener('touchstart', onTouchStart);
+      root.removeEventListener('touchmove', onTouchMove);
+      root.removeEventListener('touchend', onTouchEnd);
+      root.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
 
   const post = useCallback((message: Record<string, unknown>) => {
     frameRef.current?.contentWindow?.postMessage(message, window.location.origin);
@@ -388,7 +458,8 @@ const MyHomePage: React.FC = () => {
 
   return (
     <div
-      className="relative h-[100dvh] min-h-0 bg-[#315d41] flex flex-col overflow-hidden overscroll-none"
+      ref={rootRef}
+      className="fixed inset-0 h-[100dvh] min-h-0 bg-[#315d41] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
       {chatCharacter && (
@@ -524,7 +595,8 @@ const MyHomePage: React.FC = () => {
 
       {overlayMounted && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
-      <div className="flex-1 relative min-h-0 overscroll-none" style={{ overscrollBehavior: 'none' }}>
+      {/* touch-action none: a finger on the frame wrapper never starts a vertical document pan (pull-to-refresh). */}
+      <div className="flex-1 relative min-h-0 overscroll-none" style={{ overscrollBehavior: 'none', touchAction: 'none' }}>
         {modelsReady && (
         <iframe
           ref={frameRef}

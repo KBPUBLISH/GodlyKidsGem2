@@ -2,16 +2,54 @@ import React,{useEffect,useRef,useState} from 'react';
 import {Icon} from './ui.jsx';
 import {SWEET_SPOT} from './fishing.js';
 
-/** Round wooden reel: drag in circles to turn it. Clockwise turns reel the line in. */
+const TAU=Math.PI*2;
+const NOTCH=TAU/8;        // haptic tick every eighth of a turn
+const TAP_TURN=TAU/8;     // a quick tap on the reel cranks it this far (fallback for kids who tap instead of circling)
+const DEAD_ZONE=12;       // px around the hub where the angle is meaningless
+const TAP_MS=350,TAP_PX=10;
+const wrapAngle=d=>((d+Math.PI)%TAU+TAU)%TAU-Math.PI;
+
+/**
+ * Round wooden reel: drag in circles (either way) or tap it to crank. Built for thumbs — the pointer is
+ * captured on touch so the finger can wander off the disc, the angle is measured from the reel centre
+ * (re-read on every press so rotation/resize can't stale it), deltas wrap at ±π instead of being dropped,
+ * and the disc follows the finger without a React re-render per move.
+ */
 function Reel({engine,hot,disabled}){
-  const ref=useRef(null),last=useRef(null),[angle,setAngle]=useState(0);
-  const angleAt=e=>{const r=ref.current.getBoundingClientRect();return Math.atan2(e.clientY-(r.top+r.height/2),e.clientX-(r.left+r.width/2));};
-  const down=e=>{if(disabled)return;e.preventDefault();ref.current.setPointerCapture(e.pointerId);last.current=angleAt(e);};
-  const move=e=>{if(last.current==null||disabled)return;const a=angleAt(e);let d=a-last.current;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;last.current=a;if(Math.abs(d)>1.2)return;setAngle(v=>v+d);if(d>0)engine.current?.fishing?.reel(d);};
-  const up=()=>{last.current=null;};
-  return <div ref={ref} className={`fishing-reel ${hot?'hot':''} ${disabled?'off':''}`} role="slider" aria-label="Fishing reel. Drag in circles to reel in." aria-valuenow={Math.round(angle)} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+  const ref=useRef(null),disc=useRef(null),drag=useRef(null),spin=useRef({angle:0,notch:0});
+  const show=()=>{if(disc.current)disc.current.style.transform=`rotate(${spin.current.angle}rad)`;};
+  /** Signed radians from the finger: the disc always follows; the line only comes in while the reel is live. */
+  const turn=(d,live)=>{
+    const s=spin.current;s.angle+=d;show();if(!live)return;
+    const amount=Math.abs(d);if(!(amount>0))return;
+    engine.current?.fishing?.reel(amount);
+    s.notch+=amount;if(s.notch>=NOTCH){s.notch%=NOTCH;try{navigator.vibrate?.(8);}catch{/* no haptics here */}}
+  };
+  const centre=()=>{const r=ref.current.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};};
+  const angleAt=(e,c)=>{const dx=e.clientX-c.x,dy=e.clientY-c.y;return Math.hypot(dx,dy)<DEAD_ZONE?null:Math.atan2(dy,dx);};
+  const down=e=>{
+    if(drag.current||(e.pointerType==='mouse'&&e.button!==0))return;
+    e.stopPropagation();e.preventDefault();
+    const c=centre();drag.current={id:e.pointerId,c,last:angleAt(e,c),x:e.clientX,y:e.clientY,moved:0,t:performance.now()};
+    try{ref.current.setPointerCapture(e.pointerId);}catch{/* pointer already gone */}
+  };
+  const move=e=>{
+    const d=drag.current;if(!d||d.id!==e.pointerId)return;e.stopPropagation();
+    d.moved=Math.max(d.moved,Math.hypot(e.clientX-d.x,e.clientY-d.y));
+    const a=angleAt(e,d.c);if(a==null)return;
+    if(d.last==null){d.last=a;return;}
+    const delta=Math.max(-1.6,Math.min(1.6,wrapAngle(a-d.last)));d.last=a;
+    if(delta)turn(delta,!disabled);
+  };
+  const up=e=>{
+    const d=drag.current;if(!d||d.id!==e.pointerId)return;drag.current=null;e.stopPropagation();
+    try{if(ref.current?.hasPointerCapture(d.id))ref.current.releasePointerCapture(d.id);}catch{/* capture already released */}
+    if(e.type==='pointerup'&&d.moved<TAP_PX&&performance.now()-d.t<TAP_MS)turn(TAP_TURN,!disabled);
+  };
+  useEffect(()=>{const relayout=()=>{const d=drag.current;if(d&&ref.current){d.c=centre();d.last=null;}};window.addEventListener('resize',relayout);return ()=>window.removeEventListener('resize',relayout);},[]);
+  return <div ref={ref} className={`fishing-reel ${hot?'hot':''} ${disabled?'off':''}`} role="button" aria-label="Fishing reel. Drag in circles or tap to reel in." onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} onContextMenu={e=>e.preventDefault()}>
     <div className="fishing-reel-rim"/>
-    <div className="fishing-reel-disc" style={{transform:`rotate(${angle}rad)`}}><i/><i/><i/><i/><u/><b/></div>
+    <div ref={disc} className="fishing-reel-disc"><i/><i/><i/><i/><u/><b/></div>
     <span className="fishing-reel-hint">{hot?'Turn!':'Reel'}</span>
   </div>;
 }
@@ -62,8 +100,8 @@ export function FishingGame({engine,fishing}){
         <button type="button" className={`fishing-cast ${holding?'charging':''} ${inSweet&&holding?'sweet':''}`} disabled={!canCast} onPointerDown={start} onPointerUp={end} onPointerCancel={end} onPointerLeave={end} onContextMenu={e=>e.preventDefault()} aria-label={holding?'Let go to cast':'Hold to power up the cast'}>
           <RodIcon/><span>{castLabel}</span>
         </button>
-        <Reel engine={engine} hot={reelHot} disabled={!reelOn}/>
       </div>
+      <div className="fishing-reel-dock"><Reel engine={engine} hot={reelHot} disabled={!reelOn}/></div>
     </>}
   </div>;
 }

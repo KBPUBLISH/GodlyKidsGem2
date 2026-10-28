@@ -53,6 +53,19 @@
       h1, h2, h3, h4, h5, h6, button {
         font-family: 'Fredoka', sans-serif;
       }
+      /*
+       * My Home (Players World island): the page is a fixed full-screen iframe,
+       * so the top document must never scroll or rubber-band — otherwise a
+       * downward drag on a phone fires the browser's pull-to-refresh.
+       * MyHomePage toggles this class on <html> and <body> while mounted.
+       */
+      html.gk-no-pull-refresh,
+      body.gk-no-pull-refresh {
+        overscroll-behavior: none;
+        overscroll-behavior-y: none;
+        overflow: hidden;
+        height: 100%;
+      }
       /* Custom scrollbar hiding */
       .no-scrollbar::-webkit-scrollbar {
         display: none;

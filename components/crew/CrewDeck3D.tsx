@@ -432,7 +432,7 @@ const pickTalkClip = (clips: THREE.AnimationClip[]) =>
  * the port rail. `heading` is the sit pose (radians, 0 faces the camera).
  */
 const PARROT_PERCHES: { x: number; y: number; heading: number }[] = [
-  { x: 0.2, y: 0.5, heading: -0.2 }, // on the cannon, right of the lock
+  { x: 0.2, y: 0.5, heading: -0.2 }, // on the cannon barrel
   { x: 0.5, y: 0.33, heading: 0.05 }, // standing on top of the jukebox
   { x: 0.5, y: 0.152, heading: 0 }, // bow railing
   { x: 0.06, y: 0.57, heading: 0.9 }, // port rail, below the cannon

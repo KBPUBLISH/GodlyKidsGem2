@@ -7,11 +7,11 @@ const BLOCK_H = 96;
 const EDGE_MARGIN = 8;
 
 /**
- * Padlock + soft darkening + unlock hint over a locked deck / basement hotspot.
+ * Padlock + soft darkening + unlock hint over a locked basement hotspot.
  * Gold badge matches the main-map story lock.
  *
  * Hotspots are laid out in the painting's object-cover frame, so on a tall
- * phone the ones near the painting's edges (cannon, dartboard) are partly
+ * phone the ones near the painting's edges (e.g. the dartboard) are partly
  * cropped by the viewport. The badge therefore isn't simply centred in the
  * hotspot: it's centred in the *visible* part of it and nudged so the whole
  * badge + text block stays inside the screen.

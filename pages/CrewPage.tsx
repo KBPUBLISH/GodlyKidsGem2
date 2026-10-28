@@ -1,7 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
-import GameLockOverlay from '../components/crew/GameLockOverlay';
 import {
   CREW_WAVE_ANIMATION,
   getOnDeckCrew,
@@ -16,10 +15,6 @@ import type { CrewDeckHandle } from '../components/crew/CrewDeck3D';
 import { BASEMENT_CHARACTER_KEY, canWalkOnDeck } from '../components/crew/basementCharacter';
 import { danceMusic } from '../services/danceMusicService';
 import { useUser } from '../context/UserContext';
-import {
-  getBasementGameLockStates,
-  refreshBasementGameLockStates,
-} from '../utils/basementGameLocks';
 import {
   clearDiscoverShipPending,
   completeOnboardingJourney,
@@ -220,10 +215,10 @@ const BOW_BOTTOM_PAD = 0.093;
 const BOW_STRIP_TOP = 0.613;
 const BOW_STRIP_BOTTOM = 0.885;
 const CREW_TAB_ART: Record<string, string> = {
-  crew: '/assets/images/sail-voyage-btn-crew.png?v=3',
+  crew: '/assets/images/sail-voyage-btn-crew.png?v=4',
   profile: '/assets/images/sail-voyage-btn-profile.png?v=1',
-  home: '/assets/images/sail-voyage-btn-home.png?v=3',
-  library: '/assets/images/sail-voyage-btn-library.png?v=3',
+  home: '/assets/images/sail-voyage-btn-home.png?v=5',
+  library: '/assets/images/sail-voyage-btn-library.png?v=4',
 };
 const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.png';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
@@ -380,8 +375,23 @@ const ISLAND_STEP_DEG = 90;
 const ISLAND_DETENT = 62;
 /** How closely the wheel follows the hand before the click (1 = exactly). */
 const WHEEL_FOLLOW = 0.85;
-/** Pause after a click before the wheel accepts the next notch. */
-const WHEEL_SETTLE_MS = 360;
+/** Rubber-band follow when there is no island further in that direction. */
+const WHEEL_END_FOLLOW = 0.15;
+/** Shortest gap between two clicks, so one hard flick is still one island. */
+const WHEEL_SETTLE_MS = 120;
+/**
+ * Inside this fraction of the radius the hand is on the hub, where the
+ * angle to the center is meaningless — a plain horizontal swipe turns the
+ * wheel instead (kids swipe straight across it), scaled as if the finger
+ * were on a rim this far out.
+ */
+const WHEEL_HUB_FRAC = 0.45;
+const WHEEL_SWIPE_RIM_FRAC = 0.7;
+/** Movement under this (deg) is finger jitter. */
+const WHEEL_DEAD_DEG = 0.1;
+/** Per-frame catch-up of the drawn wheel toward the hand (1 = instant). */
+const WHEEL_LERP = 0.45;
+const WHEEL_IDLE_TRANSITION = 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
 
 type VoyageIsland = {
   id: string;
@@ -418,11 +428,10 @@ const ShipDeckTabBar: React.FC<{
   wheelRef: React.RefObject<HTMLButtonElement | null>;
   rotation: number;
   wheelTransition?: string;
-  onWheelDown: (x: number, y: number) => void;
-  onWheelMove: (x: number, y: number) => void;
-  onWheelUp: () => void;
+  /** Pointer down on the wheel; move/up are tracked on window with capture. */
+  onWheelDown: (e: React.PointerEvent<HTMLButtonElement>) => void;
   stage: StageRect;
-}> = ({ tabs, disabled, wheelRef, rotation, wheelTransition, onWheelDown, onWheelMove, onWheelUp, stage }) => {
+}> = ({ tabs, disabled, wheelRef, rotation, wheelTransition, onWheelDown, stage }) => {
   // Bow spans the screen width on phones. On tablets (the deck art is taller
   // than the screen, so the lower deck is already cropped) the bow is kept
   // smaller so the hatch and walkable planks stay in view. Wheel sits on the
@@ -472,34 +481,26 @@ const ShipDeckTabBar: React.FC<{
       type="button"
       disabled={disabled}
       aria-label="Turn the wheel to change island"
-      className="pointer-events-auto absolute left-1/2 z-[2] m-0 touch-none border-0 bg-transparent p-0 disabled:opacity-60"
+      className="pointer-events-auto absolute left-1/2 z-[2] m-0 touch-none select-none border-0 bg-transparent p-0 disabled:opacity-60"
       style={{
         bottom: barH * (1 - BOW_STRIP_TOP) - wheelD * 0.06,
         width: wheelD,
         transform: 'translateX(-50%)',
         filter: 'drop-shadow(0 8px 10px rgba(60, 24, 8, 0.45))',
-      }}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onWheelDown(e.clientX, e.clientY);
-      }}
-      onTouchStart={(e) => onWheelDown(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchMove={(e) => {
-        e.preventDefault();
-        onWheelMove(e.touches[0].clientX, e.touches[0].clientY);
-      }}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        onWheelUp();
-      }}
-      onTouchCancel={onWheelUp}
+        // iOS: no save-image callout / selection loupe on a long slow turn.
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        WebkitUserDrag: 'none',
+      } as React.CSSProperties}
+      onPointerDown={onWheelDown}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <img
         src={SAIL_STEERING_WHEEL}
         alt=""
         draggable={false}
         className="pointer-events-none block h-auto w-full select-none"
-        style={{ transform: `rotate(${rotation}deg)`, transition: wheelTransition }}
+        style={{ transform: `rotate(${rotation}deg)`, transition: wheelTransition, willChange: 'transform' }}
       />
     </button>
     <div
@@ -547,7 +548,6 @@ const WHEEL_SPIN_OUT_MS = 1100;
 /** White fade begins partway through the spin so they overlap. */
 const WHEEL_SPIN_FADE_DELAY_MS = 380;
 const CANON_GAME_PATH = '/crew/canon';
-const TOAST_MS = 2200;
 
 /** Jukebox party length — everyone dances, sky darkens, disco ball drops. */
 const PARTY_MS = 8000;
@@ -603,8 +603,8 @@ const SeaWaveBand: React.FC<{ w: (typeof CREW_SEA_WAVES)[number] }> = ({ w }) =>
  * walk frames); tapping one opens the AI chat popup directly. Nameless
  * leftovers (no model, no image) stand as 2D plaques. Dancing happens only
  * via the jukebox party (everyone dances for 8s).
- * Wheel (bottom-left) returns to sail; glowing cannon → Canon Golf (locked
- * until Genesis Island is complete); open hatch → white fade → basement.
+ * Wheel (bottom-left) returns to sail; glowing cannon → Canon Golf;
+ * open hatch → white fade → basement.
  * Crew button (bottom-right) opens the roster picker.
  * First tap on Adam runs his guided tour (utils/adamTour) instead of chat:
  * he walks feature to feature, then leads the kid down the hatch.
@@ -633,8 +633,6 @@ const CrewPage: React.FC = () => {
   const [hatchOpen, setHatchOpen] = useState(false);
   const [enteringGame, setEnteringGame] = useState(false);
   const [whiteFade, setWhiteFade] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const [gameLocks, setGameLocks] = useState(getBasementGameLockStates);
   const [crew, setCrew] = useState<UnlockedCharacter[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
@@ -651,7 +649,6 @@ const CrewPage: React.FC = () => {
   );
   const deckRef = useRef<CrewDeckHandle>(null);
   const timersRef = useRef<number[]>([]);
-  const toastTimerRef = useRef<number | null>(null);
   const enteringRef = useRef(false);
   const reduceMotion = prefersReducedMotion();
   const arrivingOnboarding = isOnboardingJourneyActive();
@@ -680,8 +677,8 @@ const CrewPage: React.FC = () => {
   const deckBusy = hatchOpen || enteringGame;
   const chromeLocked = deckBusy || crewGuide || !!tour;
   const tourBeats = useMemo(
-    () => buildAdamDeckTour(kidName, gameLocks.canon).filter((b) => JUKEBOX_ENABLED || b.id !== 'jukebox'),
-    [kidName, gameLocks.canon],
+    () => buildAdamDeckTour(kidName).filter((b) => JUKEBOX_ENABLED || b.id !== 'jukebox'),
+    [kidName],
   );
   const tourBeat =
     tour && !tour.leaving ? tourBeats[Math.min(tour.beatIndex, tourBeats.length - 1)] : null;
@@ -753,21 +750,6 @@ const CrewPage: React.FC = () => {
       return changed;
     })();
   }, [loadCrew]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    refreshBasementGameLockStates(controller.signal)
-      .then((states) => setGameLocks(states))
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
-    },
-    [],
-  );
 
   const closePicker = useCallback(() => {
     setPickerOpen(false);
@@ -841,8 +823,8 @@ const CrewPage: React.FC = () => {
   const [voyageIslands, setVoyageIslands] = useState<VoyageIsland[]>([]);
   const [lookIndex, setLookIndex] = useState(0);
   const [wheelDrag, setWheelDrag] = useState(false);
-  const [wheelCreep, setWheelCreep] = useState(0);
-  const [wheelShift, setWheelShift] = useState(false);
+  /** Rotation React keeps on the img while a drag owns the transform. */
+  const [wheelHold, setWheelHold] = useState(0);
   const [sailingIsland, setSailingIsland] = useState(false);
   const [wheelSpinOut, setWheelSpinOut] = useState(false);
   const voyageRef = useRef<VoyageIsland[]>([]);
@@ -850,10 +832,31 @@ const CrewPage: React.FC = () => {
   const wheelRef = useRef<HTMLButtonElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const stage = useStageRect(pageRef);
-  const wheelDragRef = useRef(false);
-  const wheelAngleRef = useRef(0);
-  const wheelAccumRef = useRef(0);
-  const wheelSettleRef = useRef(0);
+  /**
+   * Live wheel drag. Everything per-move lives here (no React state per
+   * pointermove — a CrewPage re-render per touch sample lagged the thumb on
+   * phones); the img transform is written straight from a rAF loop.
+   */
+  const wheelGestureRef = useRef({
+    active: false,
+    pointerId: -1,
+    cx: 0,
+    cy: 0,
+    radius: 1,
+    /** Last hand angle about the center (deg). */
+    angle: 0,
+    lastX: 0,
+    /** Hub swipe: which rim the hand is "on" (+1 top rim, -1 bottom rim). */
+    swipeSign: -1,
+    /** Hand travel since the last click (deg, carried over past clicks). */
+    accum: 0,
+    /** Creep (deg) the wheel should draw on top of the notch. */
+    creep: 0,
+    /** Rotation currently drawn. */
+    shown: 0,
+    settleUntil: 0,
+    frame: 0,
+  });
   const sailingRef = useRef(false);
   voyageRef.current = voyageIslands;
   lookRef.current = lookIndex;
@@ -879,24 +882,12 @@ const CrewPage: React.FC = () => {
     };
   }, []);
 
-  const wheelAngle = useCallback((x: number, y: number) => {
-    const el = wheelRef.current;
-    if (!el) return 0;
-    const rect = el.getBoundingClientRect();
-    return Math.atan2(y - (rect.top + rect.height / 2), x - (rect.left + rect.width / 2)) * (180 / Math.PI);
-  }, []);
-
   const shiftIsland = useCallback((direction: 1 | -1) => {
     const count = voyageRef.current.length;
     const next = Math.max(0, Math.min(count - 1, lookRef.current + direction));
     if (next === lookRef.current) return false;
     lookRef.current = next;
-    wheelAccumRef.current = 0;
-    wheelSettleRef.current = performance.now() + WHEEL_SETTLE_MS;
     setLookIndex(next);
-    setWheelCreep(0);
-    setWheelShift(true);
-    window.setTimeout(() => setWheelShift(false), WHEEL_SETTLE_MS);
     return true;
   }, []);
 
@@ -904,57 +895,164 @@ const CrewPage: React.FC = () => {
   const lookAtIsland = useCallback((index: number) => {
     if (sailingRef.current || index === lookRef.current) return;
     lookRef.current = index;
-    wheelAccumRef.current = 0;
     setLookIndex(index);
-    setWheelCreep(0);
   }, []);
 
-  const onWheelMove = useCallback((x: number, y: number) => {
-    if (!wheelDragRef.current || sailingRef.current) return;
-    const current = wheelAngle(x, y);
-    let delta = current - wheelAngleRef.current;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    wheelAngleRef.current = current;
-    // Right after a click the wheel settles — the hand keeps moving but the
-    // notch does not count, so one swipe is one island.
-    if (performance.now() < wheelSettleRef.current) return;
-    const accum = Math.max(-ISLAND_DETENT, Math.min(ISLAND_DETENT, wheelAccumRef.current + delta));
-    wheelAccumRef.current = accum;
-    if (accum >= ISLAND_DETENT && shiftIsland(1)) return;
-    if (accum <= -ISLAND_DETENT && shiftIsland(-1)) return;
-    const count = voyageRef.current.length;
-    const atEnd = (accum > 0 && lookRef.current >= count - 1) || (accum < 0 && lookRef.current <= 0);
-    setWheelCreep(accum * (atEnd ? 0.15 : WHEEL_FOLLOW));
-  }, [shiftIsland, wheelAngle]);
+  const wheelImg = () => wheelRef.current?.querySelector('img') ?? null;
 
-  const onWheelDown = useCallback((x: number, y: number) => {
-    if (sailingRef.current) return;
-    wheelDragRef.current = true;
-    wheelAngleRef.current = wheelAngle(x, y);
-    wheelAccumRef.current = 0;
-    setWheelCreep(0);
-    setWheelDrag(true);
-  }, [wheelAngle]);
-
-  const onWheelUp = useCallback(() => {
-    if (!wheelDragRef.current) return;
-    wheelDragRef.current = false;
-    wheelAccumRef.current = 0;
-    setWheelCreep(0);
-    setWheelDrag(false);
-  }, []);
-
-  useEffect(() => {
-    const move = (e: MouseEvent) => onWheelMove(e.clientX, e.clientY);
-    const up = () => onWheelUp();
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    return () => {
-      window.removeEventListener('mousemove', move);
-      window.removeEventListener('mouseup', up);
+  /** rAF loop: ease the drawn wheel toward notch + creep while a drag owns it. */
+  const startWheelLoop = useCallback(() => {
+    const g = wheelGestureRef.current;
+    if (g.frame) return;
+    const tick = () => {
+      const img = wheelImg();
+      if (!g.active || !img) {
+        g.frame = 0;
+        return;
+      }
+      const target = lookRef.current * ISLAND_STEP_DEG + g.creep;
+      g.shown += (target - g.shown) * WHEEL_LERP;
+      if (Math.abs(target - g.shown) < 0.05) g.shown = target;
+      img.style.transform = `rotate(${g.shown}deg)`;
+      g.frame = requestAnimationFrame(tick);
     };
-  }, [onWheelMove, onWheelUp]);
+    g.frame = requestAnimationFrame(tick);
+  }, []);
+
+  const onWheelPointerMove = useCallback(
+    (e: PointerEvent) => {
+      const g = wheelGestureRef.current;
+      if (!g.active || e.pointerId !== g.pointerId || sailingRef.current) return;
+      const dx = e.clientX - g.cx;
+      const dy = e.clientY - g.cy;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      let delta: number;
+      if (Math.hypot(dx, dy) < g.radius * WHEEL_HUB_FRAC) {
+        // On the hub: sideways finger travel turns the wheel.
+        delta = ((e.clientX - g.lastX) / (g.radius * WHEEL_SWIPE_RIM_FRAC)) * (180 / Math.PI) * g.swipeSign;
+      } else {
+        delta = angle - g.angle;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+      }
+      g.angle = angle;
+      g.lastX = e.clientX;
+      if (Math.abs(delta) < WHEEL_DEAD_DEG) return;
+      let accum = g.accum + delta;
+      if (Math.abs(accum) >= ISLAND_DETENT) {
+        const dir: 1 | -1 = accum > 0 ? 1 : -1;
+        const now = performance.now();
+        if (now >= g.settleUntil && shiftIsland(dir)) {
+          // Carry the hand past the click so continuous turning keeps
+          // clicking every quarter turn instead of restarting each notch.
+          accum -= dir * ISLAND_STEP_DEG;
+          g.settleUntil = now + WHEEL_SETTLE_MS;
+          navigator.vibrate?.(6);
+        } else {
+          accum = dir * ISLAND_DETENT;
+        }
+      }
+      g.accum = accum;
+      const count = voyageRef.current.length;
+      const atEnd = (accum > 0 && lookRef.current >= count - 1) || (accum < 0 && lookRef.current <= 0);
+      g.creep = accum * (atEnd ? WHEEL_END_FOLLOW : WHEEL_FOLLOW);
+    },
+    [shiftIsland],
+  );
+
+  const onWheelPointerUp = useCallback((e: PointerEvent) => {
+    const g = wheelGestureRef.current;
+    if (!g.active || e.pointerId !== g.pointerId) return;
+    g.active = false;
+    g.accum = 0;
+    g.creep = 0;
+    if (g.frame) cancelAnimationFrame(g.frame);
+    g.frame = 0;
+    window.removeEventListener('pointermove', onWheelPointerMove);
+    window.removeEventListener('pointerup', onWheelPointerUp);
+    window.removeEventListener('pointercancel', onWheelPointerUp);
+    const btn = wheelRef.current;
+    try {
+      if (btn?.hasPointerCapture(g.pointerId)) btn.releasePointerCapture(g.pointerId);
+    } catch {
+      /* capture already gone */
+    }
+    // Hand the transform back to React: ease onto the notch from wherever
+    // the drag left it (React only rewrites the style when its value changes).
+    const img = wheelImg();
+    if (img) {
+      img.style.transition = WHEEL_IDLE_TRANSITION;
+      img.style.transform = `rotate(${lookRef.current * ISLAND_STEP_DEG}deg)`;
+    }
+    setWheelDrag(false);
+  }, [onWheelPointerMove]);
+
+  const onWheelDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const g = wheelGestureRef.current;
+      if (sailingRef.current || g.active || e.currentTarget.disabled) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // Keep the touch: no compat mouse events, focus ring, or deck taps.
+      e.preventDefault();
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const rect = btn.getBoundingClientRect();
+      g.cx = rect.left + rect.width / 2;
+      g.cy = rect.top + rect.height / 2;
+      g.radius = Math.max(1, rect.width / 2);
+      const dx = e.clientX - g.cx;
+      const dy = e.clientY - g.cy;
+      g.angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      g.lastX = e.clientX;
+      // Start on the top rim: a sideways swipe drags that rim. Anywhere else
+      // (lower half, hub) the bottom rim follows the finger.
+      g.swipeSign = dy < -g.radius * WHEEL_HUB_FRAC ? 1 : -1;
+      g.accum = 0;
+      g.creep = 0;
+      g.settleUntil = 0;
+      g.pointerId = e.pointerId;
+      g.active = true;
+      // Pick up from the wheel's current drawn angle (it may be mid-ease).
+      const base = lookRef.current * ISLAND_STEP_DEG;
+      g.shown = base;
+      const img = wheelImg();
+      if (img) {
+        const m = getComputedStyle(img).transform.match(/matrix\(([^)]+)\)/);
+        if (m) {
+          const [a, b] = m[1].split(',').map(Number);
+          let off = Math.atan2(b, a) * (180 / Math.PI) - base;
+          off = ((((off + 180) % 360) + 360) % 360) - 180;
+          g.shown = base + off;
+        }
+        img.style.transition = 'none';
+      }
+      try {
+        btn.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic / already captured — window listeners still track it */
+      }
+      window.addEventListener('pointermove', onWheelPointerMove);
+      window.addEventListener('pointerup', onWheelPointerUp);
+      window.addEventListener('pointercancel', onWheelPointerUp);
+      setWheelHold(base);
+      setWheelDrag(true);
+      startWheelLoop();
+    },
+    [onWheelPointerMove, onWheelPointerUp, startWheelLoop],
+  );
+
+  useEffect(
+    () => () => {
+      const g = wheelGestureRef.current;
+      if (g.frame) cancelAnimationFrame(g.frame);
+      g.frame = 0;
+      g.active = false;
+      window.removeEventListener('pointermove', onWheelPointerMove);
+      window.removeEventListener('pointerup', onWheelPointerUp);
+      window.removeEventListener('pointercancel', onWheelPointerUp);
+    },
+    [onWheelPointerMove, onWheelPointerUp],
+  );
 
   const openVoyageIsland = useCallback((island: VoyageIsland) => {
     if (sailingRef.current) return;
@@ -984,15 +1082,16 @@ const CrewPage: React.FC = () => {
 
   const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
   const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
+  // While a drag owns the wheel the prop stays frozen at its start value so
+  // React never overwrites the per-frame transform; on release it eases to
+  // the notch (see onWheelPointerUp).
   const wheelRotation =
-    lookIndex * ISLAND_STEP_DEG + (wheelDrag && !wheelShift ? wheelCreep : 0) + (wheelSpinOut ? WHEEL_SPIN_OUT_DEG : 0);
+    (wheelDrag ? wheelHold : lookIndex * ISLAND_STEP_DEG) + (wheelSpinOut ? WHEEL_SPIN_OUT_DEG : 0);
   const wheelTransition = wheelSpinOut
     ? `transform ${WHEEL_SPIN_OUT_MS}ms cubic-bezier(0.3, 0.1, 0.35, 1)`
     : wheelDrag
-      ? wheelShift
-        ? 'transform 0.34s cubic-bezier(0.2, 1.35, 0.45, 1)'
-        : 'none'
-      : 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
+      ? 'none'
+      : WHEEL_IDLE_TRANSITION;
 
   const goLibrary = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
@@ -1008,7 +1107,6 @@ const CrewPage: React.FC = () => {
       return;
     }
     enteringRef.current = true;
-    setToast(null);
     clearTimers();
     setWheelSpinOut(true);
     const fadeId = window.setTimeout(() => setWhiteFade(true), WHEEL_SPIN_FADE_DELAY_MS);
@@ -1288,21 +1386,10 @@ const CrewPage: React.FC = () => {
     [deckBusy, endParty, openChat],
   );
 
-  const showPlaque = useCallback(
-    (message: string) => {
-      if (enteringRef.current || enteringGame) return;
-      setToast(message);
-      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = window.setTimeout(() => setToast(null), TOAST_MS);
-    },
-    [enteringGame],
-  );
-
   const openCanonGame = useCallback(() => {
     if (enteringRef.current || hatchOpen || enteringGame) return;
     enteringRef.current = true;
     setEnteringGame(true);
-    setToast(null);
     endParty();
     clearTimers();
 
@@ -1330,13 +1417,9 @@ const CrewPage: React.FC = () => {
         openChat(hit.character);
         return;
       }
-      if (gameLocks.canon.locked) {
-        showPlaque(gameLocks.canon.message);
-        return;
-      }
       openCanonGame();
     },
-    [enteringGame, gameLocks.canon, hatchOpen, openCanonGame, openChat, showPlaque],
+    [enteringGame, hatchOpen, openCanonGame, openChat],
   );
 
   return (
@@ -1854,25 +1937,16 @@ const CrewPage: React.FC = () => {
         </div>
       )}
 
-      {/* Painted cannon — left rail. Locked until the island is complete;
-          then Canon Golf. Taps first raycast for a character so a walker on
-          the rail still opens chat. */}
+      {/* Painted cannon — left rail. Tap opens Canon Golf. Taps first
+          raycast for a character so a walker on the rail still opens chat. */}
       <button
         type="button"
         onClick={onCannonTap}
         disabled={chromeLocked}
-        aria-label={
-          gameLocks.canon.locked
-            ? `Locked — ${gameLocks.canon.message}`
-            : 'Play Canon Golf'
-        }
+        aria-label="Play Canon Golf"
         className="absolute z-20 p-0 m-0 border-0 appearance-none bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         style={{ ...onStage(stage, CANNON_BOX), cursor: deckBusy ? 'default' : 'pointer' }}
-      >
-        {gameLocks.canon.locked && (
-          <GameLockOverlay islandLabel={gameLocks.canon.islandLabel} />
-        )}
-      </button>
+      />
 
       {/* Cabin door at the bow — painted in the deck art. Tap opens the
           Builder Shop. A walker standing on the landing still opens chat. */}
@@ -1936,8 +2010,6 @@ const CrewPage: React.FC = () => {
           rotation={wheelRotation}
           wheelTransition={wheelTransition}
           onWheelDown={onWheelDown}
-          onWheelMove={onWheelMove}
-          onWheelUp={onWheelUp}
           tabs={[
             {
               id: 'home',
@@ -2002,22 +2074,6 @@ const CrewPage: React.FC = () => {
           character={chatCharacter}
           onClose={() => setChatCharacter(null)}
         />
-      )}
-
-      {toast && (
-        <div
-          className="absolute left-1/2 z-40 -translate-x-1/2 px-4 py-2.5 rounded-2xl font-display font-bold text-sm text-[#3d2414] text-center max-w-[85vw]"
-          style={{
-            bottom: 'max(236px, calc(var(--safe-area-bottom, 0px) + 224px))',
-            background: 'linear-gradient(180deg, #F5E6C8 0%, #E8D4A8 100%)',
-            boxShadow:
-              '0 6px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5)',
-            border: '2px solid #8B6914',
-          }}
-          role="status"
-        >
-          {toast}
-        </div>
       )}
 
       {/* White fade → basement or Canon Golf */}

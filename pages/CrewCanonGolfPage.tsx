@@ -4,10 +4,6 @@ import { Loader2 } from 'lucide-react';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import WoodBackButton from '../components/WoodBackButton';
 import {
-  getBasementGameLockStates,
-  refreshBasementGameLockStates,
-} from '../utils/basementGameLocks';
-import {
   installParentWindowOpenGuard,
   kidSafeIframeProps,
 } from '../utils/kidSafeGameIframe';
@@ -21,15 +17,14 @@ const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Canon Golf — opened from the glowing cannon on the crew deck once Genesis
- * Island is complete. Route: /crew/canon
+ * Canon Golf — opened from the glowing cannon on the crew deck.
+ * Route: /crew/canon
  */
 const CrewCanonGolfPage: React.FC = () => {
   const navigate = useNavigate();
   const [whiteFade, setWhiteFade] = useState(true);
   const [loading, setLoading] = useState(true);
   const [leaving, setLeaving] = useState(false);
-  const [allowed, setAllowed] = useState(() => !getBasementGameLockStates().canon.locked);
   const timersRef = useRef<number[]>([]);
   const reduceMotion = prefersReducedMotion();
   const iframeProps = kidSafeIframeProps('Canon Golf');
@@ -41,26 +36,9 @@ const CrewCanonGolfPage: React.FC = () => {
     timersRef.current = [];
   }, []);
 
-  useEffect(() => {
-    if (!allowed) {
-      navigate(CREW_PATH, { replace: true });
-    }
-  }, [allowed, navigate]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    refreshBasementGameLockStates(controller.signal)
-      .then((states) => {
-        if (states.canon.locked) setAllowed(false);
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
-
   useEffect(() => installParentWindowOpenGuard(), []);
 
   useEffect(() => {
-    if (!allowed) return;
     if (reduceMotion) {
       setWhiteFade(false);
       return;
@@ -68,7 +46,7 @@ const CrewCanonGolfPage: React.FC = () => {
     const id = window.setTimeout(() => setWhiteFade(false), 40);
     timersRef.current.push(id);
     return () => clearTimers();
-  }, [allowed, clearTimers, reduceMotion]);
+  }, [clearTimers, reduceMotion]);
 
   const goBackToCrew = useCallback(() => {
     if (leaving) return;
@@ -94,8 +72,6 @@ const CrewCanonGolfPage: React.FC = () => {
     const navId = window.setTimeout(leave, WHITE_FADE_MS);
     timersRef.current = [navId];
   }, [clearTimers, leaving, navigate, reduceMotion]);
-
-  if (!allowed) return null;
 
   return (
     <div

@@ -7,5 +7,40 @@
   to = "/index.html"
   status = 200
 
+# Cache policy. index.html stays revalidated so a deploy is picked up at once;
+# everything it references is either content-hashed (Vite chunks) or versioned
+# by a `?v=` query / rarely changes (art, GLB models, Draco decoder, sounds),
+# so a day in the HTTP cache is safe and lets the first-launch background
+# prefetch (utils/assetPreloader.ts) actually pay off on the crew page.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/draco/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/sounds/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
 
 

@@ -1,0 +1,34 @@
+/* First-visit island tour: a spotlight on the thing to tap plus a storybook caption. The layer never eats taps. */
+.tour-layer{position:absolute;inset:0;z-index:45;pointer-events:none;font-family:inherit;color:#3d2414}
+.tour-shade{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.tour-ring{position:absolute;pointer-events:none;border:3px solid #ffd36a;border-radius:var(--r,18px);box-shadow:0 0 0 4px #ffd36a66,0 0 24px #ffb23dbb,inset 0 0 14px #ffe9a066;animation:tour-pulse 1.5s ease-in-out infinite}
+@keyframes tour-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.07);opacity:.72}}
+.tour-card{position:absolute;pointer-events:auto;width:min(330px,calc(100vw - 24px));padding:12px 14px 10px;border-radius:18px;background:#fffaee;border:3px solid #e8d7ae;box-shadow:0 5px 0 #8f9b7245,0 10px 26px #1b3e3033;display:grid;gap:6px;animation:tour-in .25s ease-out}
+@keyframes tour-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.tour-card::after{content:'';position:absolute;left:var(--ax,50%);width:18px;height:18px;background:#fffaee;transform:translateX(-50%) rotate(45deg)}
+.tour-card.below::after{top:-12px;border-left:3px solid #e8d7ae;border-top:3px solid #e8d7ae}
+.tour-card.above::after{bottom:-12px;border-right:3px solid #e8d7ae;border-bottom:3px solid #e8d7ae}
+.tour-card.center::after{display:none}
+.tour-head{display:flex;align-items:center;gap:9px}
+.tour-head .picture-icon{width:36px;height:36px;flex:none}
+.tour-head>div{min-width:0;flex:1}
+.tour-step{display:block;font-size:10.5px;font-weight:900;letter-spacing:.1em;color:#8a5a32;text-transform:uppercase}
+.tour-card strong{display:block;font-size:17px;line-height:1.15;font-weight:900}
+.tour-card p{margin:0;font-size:16px;line-height:1.3;font-weight:800}
+.tour-card small{font-size:12.5px;line-height:1.3;color:#6b4423;font-weight:600}
+.tour-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px}
+.tour-actions button{min-height:44px;padding:6px 14px;border-radius:14px;font-weight:900;font-size:14px}
+.tour-skip{background:transparent;border-color:transparent;color:#8a5a32;box-shadow:none;padding-left:6px}
+.tour-next{background:linear-gradient(180deg,#ffd36a 0%,#ffb23d 100%);border-color:#e09020;color:#7a3e12;box-shadow:0 3px 0 #e09020;min-width:104px}
+.tour-next:active:not(:disabled){transform:translateY(3px)}
+.tour-card.center{left:50%;transform:translateX(-50%);text-align:center;justify-items:center;gap:8px;padding:16px 16px 12px}
+.tour-card.center .tour-head{flex-direction:column;gap:4px}
+.tour-card.center .tour-head .picture-icon{width:48px;height:48px}
+.tour-card.center strong{font-size:20px}
+.tour-card.center .tour-actions{width:100%;justify-content:center}
+.tour-card.center .tour-next{min-width:150px;min-height:50px;font-size:16px}
+.tour-ok{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;background:#e7f1d9;border:3px solid #7ea75c;color:#2f5a32;font-size:18px;font-weight:900;box-shadow:0 4px 0 #4f7a3c,0 8px 20px #1b3e3033;animation:tour-ok .9s ease-out both}
+@keyframes tour-ok{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}25%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-60%) scale(1)}}
+.tour-edge{position:absolute;pointer-events:none;width:46px;height:46px;border-radius:50%;background:linear-gradient(180deg,#ffd36a,#ffb23d);border:3px solid #e09020;box-shadow:0 3px 0 #e09020,0 6px 14px #0005;display:grid;place-items:center;font-size:24px;font-weight:900;color:#7a3e12;animation:tour-pulse 1.2s ease-in-out infinite}
+.tour-busy{position:absolute;pointer-events:none;transform:translate(-50%,-100%);padding:6px 12px;border-radius:999px;background:#fffaeeee;border:2px solid #e8d7ae;font-size:13px;font-weight:900;color:#4b5a3a;white-space:nowrap}
+@media(prefers-reduced-motion:reduce){.tour-ring,.tour-edge,.tour-card,.tour-ok{animation:none}}

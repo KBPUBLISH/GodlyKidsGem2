@@ -1,4 +1,7 @@
 import { getBibleMapApiRoot, resolveBibleMapMediaUrl } from './bibleMapApi';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import { isPlayableMainMapStory, isStoryPackComplete } from './mainMapStoryUnlock';
+import type { TryItPayload } from './tryItContent';
 
 export type OceanMapIslandStatus = 'complete' | 'current' | 'locked';
 
@@ -34,6 +37,8 @@ export type OceanMapStoryRow = {
   quiz?: {
     levels?: Partial<Record<'easy' | 'medium' | 'hard', unknown[]>>;
   };
+  /** Try It beat — when present it is part of pack completion. */
+  tryIt?: TryItPayload;
 };
 
 /** Island keys a story can match (ObjectId and/or slug). */
@@ -158,3 +163,55 @@ export const fetchPublishedMapStories = async (
   if (!Array.isArray(data) || data.length === 0) return null;
   return data.filter((row) => row && row._id);
 };
+
+/** Island id aliases a story row may be filed under (slug + CMS ObjectId). */
+export const oceanIslandAliases = (
+  island: Pick<OceanMapIsland, 'id' | 'cmsId'>,
+): string[] =>
+  [island.id, island.cmsId]
+    .map((id) => (id == null ? '' : String(id).trim()))
+    .filter(Boolean);
+
+/**
+ * Stories-complete count for one island, from the same source the story
+ * flow writes to (`islandStoryProgressService`, stamped by the reader /
+ * quiz / Try It pages). A story is complete when its pack beats are done:
+ * Read + Quiz (when it has quiz content) + Try It (when it has Try It) —
+ * the rule the ocean map and sequential unlock already use.
+ *
+ * `mapStories` is the published story list from `fetchPublishedMapStories`.
+ * Story rows match the island by slug or CMS ObjectId, and progress lookup
+ * tolerates completions saved under either island alias (or `genesis`).
+ * Without a story list we fall back to counting locally read stories.
+ * The result is clamped so the pill never shows more than the total.
+ */
+export const countIslandStoriesComplete = (
+  island: Pick<OceanMapIsland, 'id' | 'cmsId' | 'storiesTotal'>,
+  mapStories: ReadonlyArray<OceanMapStoryRow> | null | undefined,
+): { complete: number; total: number } => {
+  const aliases = oceanIslandAliases(island);
+  const aliasSet = new Set(aliases);
+  const playable = (mapStories ?? []).filter((row) => {
+    if (!isPlayableMainMapStory(row)) return false;
+    return storyIslandKeys(row).some((key) => aliasSet.has(key));
+  });
+  const completeFromStories = playable.filter((row) =>
+    isStoryPackComplete(island.id, row),
+  ).length;
+  const rawComplete =
+    playable.length > 0
+      ? completeFromStories
+      : islandStoryProgressService.countReadCompleteStories(aliases);
+  const total = Math.max(island.storiesTotal, playable.length, 0);
+  return { complete: Math.min(rawComplete, total), total };
+};
+
+/** Islands with `storiesComplete` / `storiesTotal` filled from real progress. */
+export const withIslandStoryProgress = (
+  islands: ReadonlyArray<OceanMapIsland>,
+  mapStories: ReadonlyArray<OceanMapStoryRow> | null | undefined,
+): OceanMapIsland[] =>
+  islands.map((island) => {
+    const { complete, total } = countIslandStoriesComplete(island, mapStories);
+    return { ...island, storiesComplete: complete, storiesTotal: total };
+  });

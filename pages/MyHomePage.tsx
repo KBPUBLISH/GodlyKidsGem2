@@ -6,8 +6,9 @@ import { fetchTtsAudioUrl } from '../services/characterChatService';
 import CrewChatPopup from '../components/crew/CrewChatPopup';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
+import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players94&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players97&players=1';
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
@@ -580,6 +581,7 @@ const MyHomePage: React.FC = () => {
                           disabled={!!beds && !beds.canDrop}
                           title={beds && !beds.canDrop ? `Needs a bed · ${beds.beds} bed${beds.beds === 1 ? '' : 's'} for ${beds.residents} friend${beds.residents === 1 ? '' : 's'}` : undefined}
                           onClick={() => startDrop(character)}
+                          data-gk-dropoff={character.id}
                         >
                           {beds && !beds.canDrop ? 'Needs a bed' : 'Drop off'}
                         </button>
@@ -589,11 +591,40 @@ const MyHomePage: React.FC = () => {
                 })}
               </ul>
             )}
+            {residents.length > 0 && (
+              <button
+                type="button"
+                className="mt-3 min-h-[40px] w-full text-center text-xs font-bold text-[#8a5a32] underline underline-offset-4"
+                onClick={() => {
+                  writeHomeOnboarding({ step: 'tour', done: false, tourStep: 0 });
+                  setFriendsOpen(false);
+                  post({ type: 'gk-onboarding', phase: 'tour', replay: true });
+                }}
+              >
+                Replay the island tour
+              </button>
+            )}
           </section>
         </div>
       )}
 
       {overlayMounted && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
+
+      {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx). */}
+      {modelsReady && (
+        <HomeOnboarding
+          ready={ready}
+          collected={collected}
+          residents={residents}
+          placing={placing}
+          friendsOpen={friendsOpen}
+          onOpenFriends={() => {
+            setCollected(rewardsService.getUnlockedCharacters());
+            setFriendsOpen(true);
+          }}
+          post={post}
+        />
+      )}
 
       {/* touch-action none: a finger on the frame wrapper never starts a vertical document pan (pull-to-refresh). */}
       <div className="flex-1 relative min-h-0 overscroll-none" style={{ overscrollBehavior: 'none', touchAction: 'none' }}>

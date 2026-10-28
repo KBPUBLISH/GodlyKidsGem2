@@ -13,8 +13,11 @@ import { noteBoatSession, noteJourneyStep } from '../utils/journeyStudy';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
   fetchOceanMapIslands,
+  fetchPublishedMapStories,
   getSailIslandArtSrc,
+  withIslandStoryProgress,
   type OceanMapIsland,
+  type OceanMapStoryRow,
 } from '../utils/oceanMapIslands';
 import { useSailMusic } from '../hooks/useSailMusic';
 import { hasPremiumAccess } from '../utils/freeTierAccess';
@@ -448,7 +451,16 @@ const SailScenePage: React.FC = () => {
       try {
         const mapped = await fetchOceanMapIslands(controller.signal);
         if (cancelled || !mapped) return;
-        const next = mapped
+        // CMS rows carry `storiesComplete: 0`; count real completions from
+        // islandStoryProgressService (same rule as the ocean map).
+        let stories: OceanMapStoryRow[] | null = null;
+        try {
+          stories = await fetchPublishedMapStories(controller.signal);
+        } catch {
+          /* falls back to local read counts */
+        }
+        if (cancelled) return;
+        const next = withIslandStoryProgress(mapped, stories)
           .map(toCarouselIsland)
           .filter((row): row is SailCarouselIsland => row != null);
         if (!next.length) return;

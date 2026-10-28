@@ -589,6 +589,7 @@ import ParentQuizPage from './pages/ParentQuizPage';
 import GamesPage from './pages/GamesPage';
 import MapPage from './pages/MapPage';
 import { startAssetCache } from './utils/assetCache';
+import { preloadCrewPageAssets } from './utils/assetPreloader';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
 import IslandScenePage from './pages/IslandScenePage';
@@ -1332,6 +1333,12 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.register('/sw-image-cache.js').catch(() => {});
+  }, []);
+
+  // First launch: warm the crew ship deck's art + models in the background
+  // (once per install, after the first screen has painted; see utils/assetPreloader).
+  useEffect(() => {
+    void preloadCrewPageAssets();
   }, []);
 
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router

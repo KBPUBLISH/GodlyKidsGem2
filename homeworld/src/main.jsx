@@ -23,6 +23,7 @@ const FriendsIcon=()=><svg className="picture-icon" width="34" height="34" viewB
 const SHIP_ICON=['', 'assets', 'images', 'sail-tab-ship.png'].join('/');
 import {FishingGame} from './fishing-ui.jsx';
 import {IslandPlan} from './island-plan.jsx';
+import {IslandTour,onboardingPending} from './onboarding.jsx';
 import './style.css';
 
 function FoodPanel({view,onEat,onCook,onFish,onRest,onHarvest,onSleep}){
@@ -92,7 +93,9 @@ function App(){
   const [plan,setPlan]=useState(null),planShown=useRef(false);
   const openPlan=()=>{const g=engine.current;if(!g?.loaded)return;setActionsOpen(false);setPanel(null);const goal=g.goal;const def=goal&&buildingById(goal.kind);setPlan({items:g.plan(),crew:g.crew(),goal:def?{kind:goal.kind,name:def.name,need:{wood:def.wood,stone:def.stone},have:{wood:woodTotal(g.store.state),stone:g.store.state.inventory.stone||0}}:null});};
   useEffect(()=>{if(view.ui?.openPlan)openPlan();},[view.ui?.openPlan]);
-  useEffect(()=>{if(!view.loaded||!view.playersOnly||planShown.current)return;planShown.current=true;const t=setTimeout(openPlan,1400);return()=>clearTimeout(t);},[view.loaded,view.playersOnly]);
+  // First-visit tour (onboarding.jsx): while it is pending the to-do sheet waits; the tour's "Homes" step opens it by hand.
+  const [tourActive,setTourActive]=useState(false);
+  useEffect(()=>{if(!view.loaded||!view.playersOnly||view.ambient||planShown.current||onboardingPending())return;planShown.current=true;const t=setTimeout(openPlan,1400);return()=>clearTimeout(t);},[view.loaded,view.playersOnly,view.ambient]);
   useDialogFocus(panel,drawer,()=>close());
   useDialogFocus(showTime,timeDialog,()=>setShowTime(false));
   useEffect(()=>{if(panel&&drawer.current)drawer.current.scrollTop=0;},[panel]);
@@ -136,7 +139,7 @@ function App(){
     return()=>{window.removeEventListener('keydown',key);mapButton.current?.focus();};
   },[mapOnly]);
   const activeTool=TOOLS.find(t=>t.id===view.tool);
-  const showRecent=view.loaded&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
+  const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
   return <main className={`game-shell ${mapOnly?'map-only':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>engine.current?.community?.activity()} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
@@ -158,12 +161,12 @@ function App(){
 
     {view.playersOnly&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onClick={()=>window.parent?.postMessage({type:'gk-back-to-ship'},location.origin)}><img src={SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
-      {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}
+      {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded||view.ambient} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}
       <button aria-label="Open my bag" onClick={()=>openPanel('inventory')}><Icon type="bag"/><span>My bag</span></button>
       <button ref={mapButton} aria-label="Show full island map" onClick={showFullMap} disabled={!view.loaded||!!view.building?.preview}><Icon type="map"/><span>Map</span></button>
       <button aria-label="Zoom view" onClick={()=>invoke(g=>g.toggleClose())}><Icon type="zoom"/><span>Zoom</span></button>
-      <button ref={actionsButton} className={`actions-menu-button ${activeTool?'has-tool':''}`} aria-label="Open build" aria-expanded={actionsOpen} aria-controls="action-menu" disabled={!view.loaded} onClick={toggleActions}><Icon type="build"/><span>Build</span>{activeTool&&<i className="equipped-mark" aria-hidden="true">✓</i>}</button>
-      <button aria-label="Open tools and upgrades" disabled={!view.loaded} onClick={()=>openPanel('tools')}><Icon type="mine"/><span>Tools</span></button>
+      <button ref={actionsButton} className={`actions-menu-button ${activeTool?'has-tool':''}`} aria-label="Open build" aria-expanded={actionsOpen} aria-controls="action-menu" disabled={!view.loaded||view.ambient} onClick={toggleActions}><Icon type="build"/><span>Build</span>{activeTool&&<i className="equipped-mark" aria-hidden="true">✓</i>}</button>
+      <button aria-label="Open tools and upgrades" disabled={!view.loaded||view.ambient} onClick={()=>openPanel('tools')}><Icon type="mine"/><span>Tools</span></button>
     </nav>
     {view.playersOnly&&!view.fishing&&<button type="button" className={`friends-button ${friendsOpen?'open':''}`} aria-expanded={friendsOpen} aria-label={view.friendsWaiting?.count?`Friends. ${view.friendsWaiting.count} waiting to come ashore`:'Friends'} disabled={!view.loaded} onClick={()=>{setActionsOpen(false);if(!view.friends?.length){window.parent?.postMessage({type:'gk-open-friends'},location.origin);return;}setFriendsOpen(o=>!o);}}><FriendsIcon/><span>{view.friendsWaiting?.count>0&&view.friendsWaiting.name&&!friendsOpen?<>Drop off<br/>{view.friendsWaiting.name}</>:'Friends'}</span>{view.friendsWaiting?.count>0&&<b className="friends-badge">{view.friendsWaiting.count}</b>}</button>}
     {friendsOpen&&view.playersOnly&&!view.fishing&&<><div className="friends-shade" onClick={()=>setFriendsOpen(false)}/><div className="friends-menu" role="menu" aria-label="Friends on the island">
@@ -197,6 +200,7 @@ function App(){
     {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan plan={plan.items} crew={plan.crew} goal={plan.goal} working={view.work?.label||null} onClose={()=>setPlan(null)} onDropGoal={()=>{invoke(g=>g.clearGoal());setPlan(null);}} onGo={(task,who)=>{setPlan(null);invoke(g=>g.assign(task,who));}}/>}
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
     <EnergyFx engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!view.night?.sleeping}/>
+    {view.playersOnly&&<IslandTour engine={engine} view={view} ui={{panel,showTime,mapOnly,actionsOpen,actionsTab,friendsOpen,plan:!!plan}} onActive={setTourActive}/>}
     <NightRest night={view.night}/>
     {mapOnly&&!view.night?.sleeping&&<button ref={backToPlay} className="map-only-return" onClick={returnToPlay} aria-label="Back to play. Show game buttons"><span aria-hidden="true">←</span> Back to play</button>}
     {!view.loaded&&<div className="loading"><div className="loading-mark">✦</div><h1>{view.error?'The island needs another try':'A little world, ready to grow.'}</h1><p>{view.status}</p>{view.error?<><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<div className="loading-track"><i/></div>}</div>}

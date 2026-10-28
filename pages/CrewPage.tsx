@@ -27,9 +27,13 @@ import { hasPremiumAccess } from '../utils/freeTierAccess';
 import {
   CMS_ISLANDS_TIMEOUT_MS,
   fetchOceanMapIslands,
+  fetchPublishedMapStories,
   getSailIslandArtSrc,
+  withIslandStoryProgress,
   type OceanMapIsland,
+  type OceanMapStoryRow,
 } from '../utils/oceanMapIslands';
+import { profileService } from '../services/profileService';
 import {
   ADAM_TOUR_FALLBACK_VOICE_ID,
   buildAdamDeckTour,
@@ -864,6 +868,13 @@ const CrewPage: React.FC = () => {
   voyageRef.current = voyageIslands;
   lookRef.current = lookIndex;
 
+  // CMS islands arrive with `storiesComplete: 0`; the published story list
+  // plus islandStoryProgressService (what the reader / quiz pages write)
+  // give the real "N/M stories complete" count on the horizon pill.
+  const [oceanIslands, setOceanIslands] = useState<OceanMapIsland[]>([]);
+  const [mapStories, setMapStories] = useState<OceanMapStoryRow[] | null>(null);
+  const [progressTick, setProgressTick] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -871,19 +882,45 @@ const CrewPage: React.FC = () => {
     void fetchOceanMapIslands(controller.signal)
       .then((mapped) => {
         if (cancelled || !mapped) return;
-        const next = mapped.map(toVoyageIsland).filter((row): row is VoyageIsland => row != null);
-        if (next.length) setVoyageIslands(next);
+        if (mapped.length) setOceanIslands(mapped);
       })
       .catch(() => {
         /* horizon stays open water */
       })
       .finally(() => window.clearTimeout(failSafe));
+    void fetchPublishedMapStories()
+      .then((stories) => {
+        if (!cancelled && stories) setMapStories(stories);
+      })
+      .catch(() => {
+        /* pill falls back to local read counts */
+      });
     return () => {
       cancelled = true;
       controller.abort();
       window.clearTimeout(failSafe);
     };
   }, []);
+
+  // Re-count after a story completes in another tab / cloud hydrate / profile switch.
+  useEffect(() => {
+    const onProgress = () => setProgressTick((t) => t + 1);
+    window.addEventListener('islandStoryProgressUpdated', onProgress);
+    const unsub = profileService.onProfileChange(onProgress);
+    return () => {
+      window.removeEventListener('islandStoryProgressUpdated', onProgress);
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!oceanIslands.length) return;
+    const next = withIslandStoryProgress(oceanIslands, mapStories)
+      .map(toVoyageIsland)
+      .filter((row): row is VoyageIsland => row != null);
+    if (next.length) setVoyageIslands(next);
+    // progressTick re-reads islandStoryProgressService.
+  }, [oceanIslands, mapStories, progressTick]);
 
   const shiftIsland = useCallback((direction: 1 | -1) => {
     const count = voyageRef.current.length;

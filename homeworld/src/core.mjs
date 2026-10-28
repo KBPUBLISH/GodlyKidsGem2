@@ -154,13 +154,26 @@ export function seedStarterGarden(state,world){
   }
   return {...state,cells,starterGarden:1};
 }
+/** The standalone island's built-in villagers. Players World has none: story friends do everything. */
+export const BUILT_IN_IDS=['adam','eve','noah'];
+/** Drop the hidden built-in villagers from a Players World save (keeping whoever is still being played, or on a build crew). */
+export function pruneBuiltIns(state){
+ const characters=state.characters||{},crewed=new Set((state.buildings||[]).flatMap(b=>b.project?.crew||[]));
+ const drop=BUILT_IN_IDS.filter(id=>id in characters&&id!==state.activeCharacter&&!crewed.has(id));
+ if(!drop.length)return state;
+ const kept={...characters};for(const id of drop)delete kept[id];
+ const night=state.night?.homes?{...state.night,homes:Object.fromEntries(Object.entries(state.night.homes).filter(([id])=>!drop.includes(id)))}:state.night;
+ return {...state,characters:kept,night};
+}
 export class GameStore {
-  constructor(world,storage,wall=Date.now()) {
-    this.world=world;this.storage=storage;this.error='';this.savedAt=null;
+  constructor(world,storage,wall=Date.now(),{playersOnly=false}={}) {
+    this.world=world;this.storage=storage;this.error='';this.savedAt=null;this.playersOnly=playersOnly;
     const raw=storage.getItem(SAVE_KEY);
-    if(raw){try {let s=migrateGrid(JSON.parse(raw),world);if(!validState(s,world)){const repaired=repairState(s,world);if(!validState(repaired,world))throw Error('unrecognized save');s=repaired;}this.state=seedStarterGarden(migrateState(s),world);for(const [missing,suffix] of [[Object.values(s.characters||{}).some(c=>c.fatigue!==undefined||c.awakeSince!==undefined),'before_remove_sleep_meter'],[s.community&&!s.community.members.adam,'before_character_control'],[projectBuildings(s).some(b=>b.project.basis!==CONSTRUCTION_BASIS),'before_island_build_days'],[s.constructionVersion===undefined,'before_construction_crews'],[s.treeDamage===undefined,'before_resource_health'],[s.community===undefined,'before_community'],[s.woodDrops===undefined,'before_wood_storage'],[s.removedRocks===undefined,'before_mining'],[s.characters===undefined,'before_energy'],[s.buildings===undefined,'before_building']])if(missing&&!storage.getItem(`${SAVE_KEY}_${suffix}`)){try{storage.setItem(`${SAVE_KEY}_${suffix}`,raw);}catch{/* Main writes still report storage failures without discarding this state. */}}}catch{this.state=initialState(world,wall);this.error='The previous test save could not be read. It has been kept. Reset this test to start a new save.';this.locked=true;}}
+    if(raw){try {let s=migrateGrid(JSON.parse(raw),world);if(!validState(s,world)){const repaired=repairState(s,world);if(!validState(repaired,world))throw Error('unrecognized save');s=repaired;}this.state=seedStarterGarden(this.migrate(s),world);for(const [missing,suffix] of [[Object.values(s.characters||{}).some(c=>c.fatigue!==undefined||c.awakeSince!==undefined),'before_remove_sleep_meter'],[s.community&&!s.community.members.adam,'before_character_control'],[projectBuildings(s).some(b=>b.project.basis!==CONSTRUCTION_BASIS),'before_island_build_days'],[s.constructionVersion===undefined,'before_construction_crews'],[s.treeDamage===undefined,'before_resource_health'],[s.community===undefined,'before_community'],[s.woodDrops===undefined,'before_wood_storage'],[s.removedRocks===undefined,'before_mining'],[s.characters===undefined,'before_energy'],[s.buildings===undefined,'before_building']])if(missing&&!storage.getItem(`${SAVE_KEY}_${suffix}`)){try{storage.setItem(`${SAVE_KEY}_${suffix}`,raw);}catch{/* Main writes still report storage failures without discarding this state. */}}}catch{this.state=initialState(world,wall);this.error='The previous test save could not be read. It has been kept. Reset this test to start a new save.';this.locked=true;}}
     else this.state=seedStarterGarden(initialState(world,wall),world);
   }
+  /** migrateState restores the built-in villagers on every read; Players World drops them again right here, so they never live in its save. */
+  migrate(s){const next=migrateState(s);return this.playersOnly?pruneBuiltIns(next):next;}
   save(next,wall=Date.now()) {
     if(this.locked)throw Error(this.error);
     const latest=this.readLatest();if(latest&&latest.revision>this.state.revision){this.state=latest;throw Error('Progress changed in another HomeWorld window. Please try that action again.');}
@@ -198,7 +211,7 @@ export class GameStore {
     const latest=this.readLatest();if(latest&&latest.revision>this.state.revision)this.state=latest;
     return this.save(configureCommunity(this.state,gameTime(this.state,wall),changes),wall);
   }
-  readLatest(){try{const raw=this.storage.getItem(SAVE_KEY);if(!raw)return null;const s=migrateGrid(JSON.parse(raw),this.world);return validState(s,this.world)?migrateState(s):null;}catch{return null;}}
+  readLatest(){try{const raw=this.storage.getItem(SAVE_KEY);if(!raw)return null;const s=migrateGrid(JSON.parse(raw),this.world);return validState(s,this.world)?this.migrate(s):null;}catch{return null;}}
   persistPlayer(player,wall=Date.now()) {return this.save({...this.state,player:{x:player.x,y:player.y}},wall);}
   /** Apply an action as another character standing at `position` (island helpers doing chores). */
   commitAs(id,name,position,action,wall=Date.now()) {
@@ -219,7 +232,7 @@ export class GameStore {
   undoReset(wall=Date.now()) {
     const raw=this.storage.getItem(`${SAVE_KEY}_backup`);if(!raw)throw Error('There is no previous test to restore.');
     const s=JSON.parse(raw);if(!validState(s,this.world))throw Error('That previous save cannot be restored.');
-    this.locked=false;return this.save(migrateState(s),wall);
+    this.locked=false;return this.save(this.migrate(s),wall);
   }
 }
 export function plantedTrees(world,state,minutes) {

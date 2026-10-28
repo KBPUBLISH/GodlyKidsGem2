@@ -39,7 +39,7 @@ export class Nutrition {
     const cost=energyCost(s,action);
     this.g.status=`${name} needs ${cost} energy. Go home to sleep, eat some food, or take a breather.`;this.g.toast(this.g.status);return false;
   }
-  busy(){if(this.g.action||this.g.order||this.sleep){this.g.toast('Let your character finish this action first.');return true;}return false;}
+  busy(){if(this.g.ambientNudge?.())return true;if(this.g.action||this.g.order||this.sleep){this.g.toast('Let your character finish this action first.');return true;}return false;}
   eat(item){const g=this.g;if(this.busy())return;const food=FOODS[item];if(!food||!(g.store.state.inventory[item]>0)){g.toast('Gather or prepare that food first.');return;}if(mealGain(g.store.state,item,gameTime(g.store.state)).total<=0){g.toast(`${g.store.state.characters?.[activeCharacter(g.store.state)]?.name||'Adam'} is full. Save this food for later.`);return;}g.startAction({type:'eat',item,actionId:crypto.randomUUID(),target:{...g.player}});}
   /** Walk to a campfire and drop a log on it (one log = 2 island hours). */
   stokeFire(fireId){
@@ -297,6 +297,6 @@ export class Nutrition {
       if(p&&g.camera&&g.container){const point=V(p.center.x,(home.baseHeight||0)+(buildingById(home.kind).height+.6),-p.center.y).project(g.camera),w=g.container.clientWidth,h=g.container.clientHeight;screen={x:Math.max(95,Math.min(w-95,(point.x+1)/2*w)),y:Math.max(320,Math.min(h-80,(1-point.y)/2*h))};}
       sleeping={...sleep,...sleepProgress(sleep),homeName:homeName(home),screen,saveError:this.sleepSaveError===sleep.id};
     }
-    return {character:id,name:s.characters[id]?.name||'Adam',energy:energyFor(s),max:MAX_ENERGY,hunger:Math.round(hungerFor(s,minutes)),maxHunger:MAX_HUNGER,hungry:isHungry(s,minutes),starving:isStarving(s,minutes),restGain:restGain(s),fishCost:energyCost(s,'fish'),lowEnergy,canSleep:canSleep(s,minutes),sleep:sleeping,homes:homes.map(h=>({id:h.id,name:homeName(h),kind:h.kind})),stateLabel:sleep?'Resting':isStarving(s,minutes)?'Too hungry to work':lowEnergy?'Low energy':'Ready'};
+    return {character:id,name:g.ambient?'Your friend':s.characters[id]?.name||'Adam',energy:energyFor(s),max:MAX_ENERGY,hunger:Math.round(hungerFor(s,minutes)),maxHunger:MAX_HUNGER,hungry:isHungry(s,minutes),starving:isStarving(s,minutes),restGain:restGain(s),fishCost:energyCost(s,'fish'),lowEnergy,canSleep:canSleep(s,minutes),sleep:sleeping,homes:homes.map(h=>({id:h.id,name:homeName(h),kind:h.kind})),stateLabel:sleep?'Resting':isStarving(s,minutes)?'Too hungry to work':lowEnergy?'Low energy':'Ready'};
   }
 }

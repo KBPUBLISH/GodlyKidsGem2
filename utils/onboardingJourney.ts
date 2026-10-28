@@ -295,6 +295,9 @@ export function startOnboardingJourney(): void {
   resetGuestPlayProgress();
   writeJourneyFlag(true);
   window.dispatchEvent(new Event(ONBOARDING_JOURNEY_EVENT));
+  // The ship is the next stop — make sure its art is warming (dynamic import:
+  // assetPreloader → assetCache imports this module, so no static cycle).
+  void import('./assetPreloader').then((m) => m.preloadCrewPageAssets()).catch(() => {});
 }
 
 export function isOnboardingJourneyActive(): boolean {

@@ -29,6 +29,7 @@ export class AutoWork {
   start(spec){
     const g=this.g;if(!g.loaded||!spec?.type)return false;
     if(spec.type==='stop'){this.stop();return true;}
+    if(g.ambientNudge?.())return false; // nobody on the island to send yet
     if(spec.type==='pause'){this.pause();return true;}
     if(spec.type==='resume'){this.resume();return true;}
     if(!LABELS[spec.type])return false;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { heightAt, dist, gameTime, growth, cellFromKey, activeTrees, activeRocks } from './core.mjs';
+import { heightAt, dist, gameTime, growth, cellFromKey, activeTrees, activeRocks, pruneBuiltIns } from './core.mjs';
 import { woodRoom } from './wood-storage.mjs';
 import { toolTier, rockProfile } from './mining.mjs';
 import { woodTotal } from './building.mjs';
@@ -28,21 +28,6 @@ function readResidents() {
 
 function writeResidents(list) {
   localStorage.setItem(RESIDENTS_KEY, JSON.stringify(list));
-}
-
-/** The standalone island's built-in villagers. Players World has none: story friends do everything. */
-export const BUILT_IN_IDS = ['adam', 'eve', 'noah'];
-
-/** Drop the hidden built-in villagers from a Players World save (keeping whoever is still being played). */
-export function pruneBuiltIns(state) {
-  const characters = state.characters || {};
-  const crewed = new Set((state.buildings || []).flatMap((b) => b.project?.crew || []));
-  const drop = BUILT_IN_IDS.filter((id) => id in characters && id !== state.activeCharacter && !crewed.has(id));
-  if (!drop.length) return state;
-  const kept = { ...characters };
-  for (const id of drop) delete kept[id];
-  const night = state.night?.homes ? { ...state.night, homes: Object.fromEntries(Object.entries(state.night.homes).filter(([id]) => !drop.includes(id))) } : state.night;
-  return { ...state, characters: kept, night };
 }
 
 function tellParent(type, residents) {
@@ -287,7 +272,11 @@ export class Residents {
     actor.userData.idling = false;
     this.activeId = home.id;
     // The default Adam body (no story friend behind it) leaves the island for good.
-    if (!previous && game.playersOnly && this.builtInActor && this.builtInActor !== actor) { game.scene.remove(this.builtInActor); this.builtInActor = null; }
+    if (!previous && game.playersOnly && this.builtInActor && this.builtInActor !== actor) {
+      game.scene.remove(this.builtInActor); this.builtInActor = null;
+      // The island was look-only until now; the first friend opens it up.
+      game.status = 'Tap land to walk. Open Actions to choose a tool.';
+    }
     // Energy and sleep belong to the character, not the controller: the save follows whoever you play as.
     const s = game.store?.state;
     if (s && s.activeCharacter !== home.id && !s.characters?.[s.activeCharacter]?.sleep) {

@@ -8,10 +8,9 @@ import { fetchOceanMapIslands, getOceanIslandArtSrc } from './oceanMapIslands';
 /** Same bucket the media service worker serves from. */
 export const ASSET_CACHE_NAME = 'godlykids-images-v1';
 
-/** Parrot flight clips used on the splash and crew deck. */
+/** Perry's flight clips used on the splash and the first voyage. */
 const PARROT_MODEL_URLS = [
-  '/models/perry-flying-introduction.glb?v=tex-2',
-  '/models/perry-fly-dive-hover.glb?v=dh-1',
+  '/models/perry-flight-essentials.glb?v=flight-3',
 ];
 
 /** Sail deck background, boat, and clouds. */

@@ -47,7 +47,9 @@ const ICON_READ = `${publicAsset('assets/images/island-activity-read-story.png')
 const ICON_QUIZ = `${publicAsset('assets/images/island-activity-quiz.png')}?v=4`;
 const ICON_PUZZLE = `${publicAsset('assets/images/island-activity-puzzle.png')}?v=4`;
 const ICON_COLORING = `${publicAsset('assets/images/island-activity-coloring.png')}?v=4`;
-const ICON_REWARDS = `${publicAsset('assets/images/rewards-gamepad-icon.png')}?v=1`;
+const ICON_REWARDS = `${publicAsset('assets/images/rewards-treasure-chest-icon.png')}?v=1`;
+/** Activity post art is 463×512 (chest 642×710) — same ~0.9 aspect; badges anchor to this box, not the wide tablet cell. */
+const ACTIVITY_POST_ASPECT = '463 / 512';
 const ICON_GAME = `${publicAsset('assets/images/island-activity-game.png')}?v=4`;
 const ICON_MENU = `${publicAsset('assets/images/island-activity-menu.png')}?v=3`;
 const ICON_DIALOGUE = publicAsset('assets/images/dialogue-tap-to-talk.png');
@@ -322,25 +324,40 @@ const writeSeenActivity = (storyKey: string, activityId: ActivityId): void => {
 /** Bright "New" pill over unlocked-but-not-yet-opened activity buttons. */
 const ActivityNewBadge: React.FC = () => (
   <span
-    className="absolute z-[2] pointer-events-none select-none font-display font-black uppercase text-white"
+    className="absolute z-[2] pointer-events-none select-none"
     style={{
-      top: '3%',
-      right: '2%',
-      fontSize: '0.5rem',
-      lineHeight: 1,
-      letterSpacing: '0.06em',
-      padding: '3px 7px 2px',
-      borderRadius: 9999,
-      background: 'linear-gradient(180deg, #FFB03B 0%, #F4511E 100%)',
-      border: '1.5px solid rgba(255,255,255,0.9)',
-      boxShadow: '0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,235,200,0.6)',
-      textShadow: '0 1px 2px rgba(0,0,0,0.35)',
-      animation: 'gk-new-badge-wiggle 2.4s ease-in-out infinite',
+      // Pinned to the post's top-right corner, sized from the post height so
+      // it reads the same on a phone (~90px post) and an iPad (~160px post).
+      top: '-3%',
+      right: '-4%',
     }}
     aria-hidden
   >
-    New
-    <style>{`@keyframes gk-new-badge-wiggle{0%,20%,100%{transform:rotate(-4deg) scale(1)}6%{transform:rotate(5deg) scale(1.12)}12%{transform:rotate(-4deg) scale(1)}}`}</style>
+    <span
+      className="gk-new-badge block font-display font-black uppercase text-white"
+      style={{
+        fontSize: 'clamp(0.5rem, 7cqh, 0.8rem)',
+        lineHeight: 1,
+        letterSpacing: '0.06em',
+        padding: '0.45em 0.9em 0.35em',
+        borderRadius: 9999,
+        background: 'linear-gradient(180deg, #FFB03B 0%, #F4511E 100%)',
+        border: '1.5px solid rgba(255,255,255,0.9)',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,235,200,0.6)',
+        textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+        transform: 'rotate(-4deg) translateZ(0)',
+        transformOrigin: '50% 60%',
+        willChange: 'transform',
+        backfaceVisibility: 'hidden',
+        animation: 'gk-new-badge-wiggle 2.4s ease-in-out infinite',
+      }}
+    >
+      New
+    </span>
+    <style>{`
+      @keyframes gk-new-badge-wiggle{0%,20%,100%{transform:rotate(-4deg) scale(1) translateZ(0)}6%{transform:rotate(5deg) scale(1.1) translateZ(0)}12%{transform:rotate(-4deg) scale(1) translateZ(0)}}
+      @media (prefers-reduced-motion: reduce){.gk-new-badge{animation:none !important}}
+    `}</style>
   </span>
 );
 
@@ -1880,27 +1897,34 @@ const IslandScenePage: React.FC = () => {
                                 Tap
                               </span>
                             )}
-                            <ActivityIcon
-                              key={`${cmsIcon}|${activity.iconSrc}`}
-                              primarySrc={cmsIcon || undefined}
-                              localSrc={activity.iconSrc}
-                              locked={inert}
-                              imgClassName="w-full h-full object-contain drop-shadow-md"
-                            />
-                            {locked && <ActivityLockBadge size={34} />}
-                            {claimed &&
-                              !(awaitOnboardingReward && activity.id === 'rewards') && (
-                              <ActivityClaimedBadge size={34} />
-                            )}
-                            {isNewActivity(activity.id, inert) && <ActivityNewBadge />}
+                            {/* Post-sized box: on tablets the flex cell is much wider than
+                                the post art, so badges/labels anchor here, not to the cell. */}
                             <span
-                              className="absolute left-0 right-0 z-[1] font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 pointer-events-none"
-                              style={{
-                                bottom: '16%',
-                                textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-                              }}
+                              className="relative flex items-center justify-center h-full max-w-full"
+                              style={{ aspectRatio: ACTIVITY_POST_ASPECT, containerType: 'size' }}
                             >
-                              {label}
+                              <ActivityIcon
+                                key={`${cmsIcon}|${activity.iconSrc}`}
+                                primarySrc={cmsIcon || undefined}
+                                localSrc={activity.iconSrc}
+                                locked={inert}
+                                imgClassName="w-full h-full object-contain drop-shadow-md"
+                              />
+                              {locked && <ActivityLockBadge size={34} />}
+                              {claimed &&
+                                !(awaitOnboardingReward && activity.id === 'rewards') && (
+                                <ActivityClaimedBadge size={34} />
+                              )}
+                              {isNewActivity(activity.id, inert) && <ActivityNewBadge />}
+                              <span
+                                className="absolute left-0 right-0 z-[1] font-display font-black text-white text-[0.55rem] sm:text-[0.65rem] leading-tight tracking-wide text-center px-0.5 pointer-events-none"
+                                style={{
+                                  bottom: '16%',
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                                }}
+                              >
+                                {label}
+                              </span>
                             </span>
                           </span>
                         </button>

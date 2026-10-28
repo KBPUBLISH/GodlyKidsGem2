@@ -11,6 +11,7 @@ import {
   hasSeenStoryPackRundown,
   buildQuizCompleteGuideBeats,
   buildCrewShipGuideBeats,
+  buildDiscoverShipGuideBeats,
   buildLibraryGuideBeats,
   buildTapRewardGuideBeats,
 } from '../../utils/onboardingJourney';
@@ -25,7 +26,14 @@ const TYPE_MS_MAX = 80;
 const AUDIO_WAIT_MS = 3500;
 const SCENE_AUDIO_WAIT_MS = 900;
 
-export type GuideCardVariant = 'map' | 'storyPack' | 'tapReward' | 'quizComplete' | 'crewShip' | 'library';
+export type GuideCardVariant =
+  | 'map'
+  | 'storyPack'
+  | 'tapReward'
+  | 'quizComplete'
+  | 'discoverShip'
+  | 'crewShip'
+  | 'library';
 
 type Props = {
   active: boolean;
@@ -69,6 +77,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
     }
     if (variant === 'tapReward') return buildTapRewardGuideBeats(kidName);
     if (variant === 'quizComplete') return buildQuizCompleteGuideBeats(kidName);
+    if (variant === 'discoverShip') return buildDiscoverShipGuideBeats();
     if (variant === 'crewShip') return buildCrewShipGuideBeats();
     if (variant === 'library') return buildLibraryGuideBeats();
     return [buildOnboardingGuideCopy(kidName)];
@@ -247,7 +256,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
       }}
       role="dialog"
       aria-label={
-        variant === 'crewShip'
+        variant === 'discoverShip' || variant === 'crewShip'
           ? 'Crew ship guide'
           : variant === 'library'
             ? 'Library guide'

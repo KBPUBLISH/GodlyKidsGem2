@@ -22,13 +22,18 @@ const ProfileSelectionPage: React.FC = () => {
   
   const [isShopOpen, setIsShopOpen] = useState(false);
   const { t } = useLanguage();
+  /** In-app path to return to after picking a profile (e.g. '/crew'). */
+  const returnTo: string | undefined =
+    typeof location.state?.returnTo === 'string' && location.state.returnTo.startsWith('/') && !location.state.returnTo.startsWith('//')
+      ? location.state.returnTo
+      : undefined;
   
   // Open shop if requested via navigation state
   useEffect(() => {
     if (location.state?.openShop) {
       setIsShopOpen(true);
-      // Clear the state to prevent reopening on re-render
-      navigate(location.pathname, { replace: true, state: {} });
+      // Clear the state to prevent reopening on re-render (keep returnTo)
+      navigate(location.pathname, { replace: true, state: { returnTo: location.state?.returnTo } });
     }
   }, [location.state, navigate]);
 
@@ -97,7 +102,8 @@ const ProfileSelectionPage: React.FC = () => {
                   key={profile.id} 
                   onClick={() => {
                     switchProfile(profile.id); // Switch to this kid's profile
-                    navigate('/home');
+                    // Opened from the ship deck (Profile tab) → back to the ship.
+                    navigate(returnTo || '/home');
                   }}
                   className="flex flex-col items-center gap-3 cursor-pointer group"
                 >

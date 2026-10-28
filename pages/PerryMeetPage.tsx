@@ -1,13 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import NameTrialPaywall from '../components/onboarding/NameTrialPaywall';
 import PassPhoneHandoff from '../components/onboarding/PassPhoneHandoff';
 import PerryFlyIn from '../components/onboarding/PerryFlyIn';
 import WoodBackButton from '../components/WoodBackButton';
 import { useUser } from '../context/UserContext';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { noteJourneyStep } from '../utils/journeyStudy';
 import {
   ONBOARDING_FAMILY_BG_POSTER,
   ONBOARDING_FAMILY_BG_VIDEO,
+  markDiscoverShipPending,
   startOnboardingJourney,
 } from '../utils/onboardingJourney';
 import {
@@ -29,7 +32,7 @@ const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 const DEFAULT_HEAD = '/avatars/heads/head-1.png';
 
-type Phase = 'handoff' | 'ask' | 'ready' | 'depart';
+type Phase = 'handoff' | 'ask' | 'paywall' | 'ready' | 'depart';
 type Holder = 'parent' | 'kid';
 
 const FIELD =
@@ -70,6 +73,7 @@ const PerryMeetPage: React.FC = () => {
   const [age, setAge] = useState('');
   const [savedName, setSavedName] = useState('');
   const [departing, setDeparting] = useState(false);
+  const paywallChoice = useRef<'trial' | 'tour' | null>(null);
   const [formVisible, setFormVisible] = useState(false);
 
   const readyCopy = useMemo(() => buildPerryReadyCopy(savedName), [savedName]);
@@ -97,7 +101,7 @@ const PerryMeetPage: React.FC = () => {
         ? holder === 'kid'
           ? PERRY_ASK_KID_LINE
           : PERRY_ASK_LINE
-        : phase === 'ready'
+        : phase === 'ready' || phase === 'paywall'
             ? readyCopy.line
             : phase === 'depart'
               ? PERRY_WOOHOO_LINE
@@ -110,7 +114,7 @@ const PerryMeetPage: React.FC = () => {
         ? holder === 'kid'
           ? PERRY_ASK_KID_TTS
           : PERRY_ASK_TTS
-        : phase === 'ready'
+        : phase === 'ready' || phase === 'paywall'
             ? readyCopy.tts
             : phase === 'depart'
               ? PERRY_WOOHOO_TTS
@@ -157,7 +161,7 @@ const PerryMeetPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('perry_name_entered', {
       kidsCount: 1,
     });
-    setPhase('ready');
+    setPhase('paywall');
   };
 
   const flyToMap = () => {
@@ -169,11 +173,20 @@ const PerryMeetPage: React.FC = () => {
 
   const goToMap = () => {
     startOnboardingJourney();
-    navigate('/map', {
+    const choice = paywallChoice.current;
+    if (choice) {
+      noteJourneyStep('paywall_shown', { source: 'child-name' });
+      noteJourneyStep(choice === 'trial' ? 'paywall_clicked' : 'paywall_dismissed', {
+        source: 'child-name',
+      });
+      if (choice === 'trial') noteJourneyStep('trial_started', { source: 'child-name' });
+    }
+    markDiscoverShipPending();
+    navigate('/crew', {
       replace: true,
       state: {
         onboardingJourney: true,
-        perryArrive: true,
+        discoverShip: true,
         kidName: savedName || name.trim(),
       },
     });
@@ -215,7 +228,7 @@ const PerryMeetPage: React.FC = () => {
         bubble={bubble}
         tts={ready ? tts : null}
         departing={departing}
-        holdY={phase === 'handoff' ? 0.55 : phase === 'ready' ? 0.48 : 0.32}
+        holdY={phase === 'handoff' ? 0.55 : phase === 'ready' || phase === 'paywall' ? 0.48 : 0.32}
         bubbleNearBird={phase === 'handoff'}
         motion="meet"
         onReady={() => setReady(true)}
@@ -284,6 +297,21 @@ const PerryMeetPage: React.FC = () => {
           </div>
         }
       />
+      {phase === 'paywall' && (
+        <NameTrialPaywall
+          childName={savedName || name}
+          onTakeTour={() => {
+            paywallChoice.current = 'tour';
+            activityTrackingService.trackOnboardingEvent('perry_name_paywall_tour');
+            flyToMap();
+          }}
+          onTrialStarted={(plan) => {
+            paywallChoice.current = 'trial';
+            activityTrackingService.trackOnboardingEvent('perry_name_paywall_trial', { planType: plan });
+            flyToMap();
+          }}
+        />
+      )}
     </div>
   );
 };

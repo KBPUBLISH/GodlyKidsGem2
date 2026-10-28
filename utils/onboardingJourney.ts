@@ -1,17 +1,20 @@
-/** First-time guided sail: crew setup → journey map → first island → first story pack. */
+/** First-time voyage: crew ship → first story pack → treasure → meet Adam. */
 
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { rewardsService } from '../services/rewardsService';
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import { clearAdamTourSeen } from './adamTour';
+import { getBibleMapApiRoot, resolveBibleMapMediaUrl } from './bibleMapApi';
 import { beginJourneyStudy } from './journeyStudy';
+import { isPlayableMainMapStory } from './mainMapStoryUnlock';
+import { fetchOceanMapIslands } from './oceanMapIslands';
 
 const STORAGE_KEY = 'godlykids_onboarding_journey';
 export const ONBOARDING_JOURNEY_EVENT = 'gk-onboarding-journey';
 export const ONBOARDING_GENESIS_VIDEO = '/assets/videos/onboarding-genesis-arrival.mp4';
 export const SPLASH_BOAT_VIDEO = '/assets/videos/splash-set-sail.mp4?v=openart-1';
-export const SPLASH_BOAT_POSTER = '/assets/images/splash-set-sail.jpg?v=openart-1';
-export const SPLASH_CONTINUE_VIDEO = '/assets/videos/splash-continue.mp4?v=openart-1';
+export const SPLASH_BOAT_POSTER = '/assets/images/splash-adventure.jpg?v=adventure-1';
+export const SPLASH_CONTINUE_VIDEO = '/assets/videos/splash-adventure.mp4?v=adventure-1';
 export const SPLASH_TAGLINE = '/assets/images/splash-tagline.png?v=hand-1';
 export const ONBOARDING_FAMILY_BG_VIDEO = '/assets/videos/onboarding-family-bg.mp4?v=openart-3';
 export const ONBOARDING_FAMILY_BG_POSTER = '/assets/images/onboarding-family-bg.jpg?v=openart-3';
@@ -89,29 +92,17 @@ export function buildStoryPackResumeBeats(kidName?: string | null): GuideBeat[] 
   ];
 }
 
-/** Story-pack rundown — short beats so the bubble stays readable. */
+/** Story-pack rundown — finishing a Bible story is how the ship fills up. */
 export function buildStoryPackGuideBeats(kidName?: string | null): GuideBeat[] {
   const name = guideFirstName(kidName);
   return [
     {
-      line: `Ok ${name}, so here is the run down.`,
-      tts: `[happily] Ok ${name}, [excitedly] so here is the run down.`,
+      line: `${name}, this is a story pack.`,
+      tts: `[happily] ${name}, [warmly] this is a story pack.`,
     },
     {
-      line: `This is called a story pack.`,
-      tts: `This is called a story pack.`,
-    },
-    {
-      line: `You can interact and learn things by tapping on buttons on the background.`,
-      tts: `[warmly] You can interact and learn things by tapping on buttons on the background.`,
-    },
-    {
-      line: `Learn about true stories from the Bible personalized for you.`,
-      tts: `[happily] Learn about true stories from the Bible personalized for you.`,
-    },
-    {
-      line: `And even unlock fun games, and characters to add to your crew!`,
-      tts: `[excitedly] And even unlock fun games, and characters to add to your crew!`,
+      line: `Completing Bible stories unlocks characters and treasures.`,
+      tts: `[excitedly] Completing Bible stories unlocks characters and treasures.`,
     },
     {
       line: `Ready to get started? Tap Read Story`,
@@ -145,7 +136,57 @@ export function buildQuizCompleteGuideBeats(_kidName?: string | null): GuideBeat
   ];
 }
 
-/** First visit to the crew ship with Adam on deck. */
+const DISCOVER_SHIP_KEY = 'godlykids_discover_ship_pending';
+
+/** First stop of the voyage: Perry introduces the ship, then the story pack. */
+export function markDiscoverShipPending(): void {
+  try {
+    sessionStorage.setItem(DISCOVER_SHIP_KEY, '1');
+    localStorage.setItem(DISCOVER_SHIP_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+}
+
+export function isDiscoverShipPending(): boolean {
+  try {
+    return (
+      sessionStorage.getItem(DISCOVER_SHIP_KEY) === '1' ||
+      localStorage.getItem(DISCOVER_SHIP_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function clearDiscoverShipPending(): void {
+  try {
+    sessionStorage.removeItem(DISCOVER_SHIP_KEY);
+    localStorage.removeItem(DISCOVER_SHIP_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Opening lines on the crew ship, before the first story pack. */
+export function buildDiscoverShipGuideBeats(): GuideBeat[] {
+  return [
+    {
+      line: `This is your crew ship.`,
+      tts: `[excitedly] This is your crew ship.`,
+    },
+    {
+      line: `You unlock characters.`,
+      tts: `[happily] You unlock characters.`,
+    },
+    {
+      line: `Let me show you how.`,
+      tts: `[warmly] Let me show you how.`,
+    },
+  ];
+}
+
+/** Later visit, after the first treasure, with Adam on deck. */
 export function buildCrewShipGuideBeats(): GuideBeat[] {
   return [
     {
@@ -236,6 +277,8 @@ function resetGuestPlayProgress(): void {
     sessionStorage.removeItem('godlykids_library_hs_guide');
     localStorage.removeItem(STORY_PACK_RUNDOWN_KEY);
     sessionStorage.removeItem(STORY_PACK_RUNDOWN_KEY);
+    localStorage.removeItem(DISCOVER_SHIP_KEY);
+    sessionStorage.removeItem(DISCOVER_SHIP_KEY);
     localStorage.removeItem('godlykids_ships_library_paywall_seen');
     sessionStorage.removeItem('godlykids_ships_library_paywall_seen');
     localStorage.removeItem('godlykids_free_library_story_id');
@@ -270,4 +313,62 @@ export function completeOnboardingJourney(): void {
 export function subscribeOnboardingJourney(listener: () => void): () => void {
   window.addEventListener(ONBOARDING_JOURNEY_EVENT, listener);
   return () => window.removeEventListener(ONBOARDING_JOURNEY_EVENT, listener);
+}
+
+type PackStory = {
+  _id: string;
+  order?: number;
+  title?: string;
+  displayTitle?: string;
+  heroImageUrl?: string;
+  status?: string;
+};
+
+/** Where "let me show you how" lands: the first island's first story pack. */
+export async function resolveFirstStoryPackDestination(): Promise<{
+  path: string;
+  state: Record<string, unknown>;
+}> {
+  const islands = await fetchOceanMapIslands().catch(() => null);
+  const first = islands?.find((island) => island.status !== 'locked') || islands?.[0];
+  if (!first) {
+    return { path: '/map', state: { onboardingJourney: true } };
+  }
+
+  try {
+    const res = await fetch(
+      `${getBibleMapApiRoot()}/bible-map/islands/${encodeURIComponent(first.id)}`,
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { stories?: PackStory[] };
+      const pack = (Array.isArray(data.stories) ? data.stories : [])
+        .filter((story): story is PackStory => Boolean(story && story._id))
+        .filter((story) => isPlayableMainMapStory(story))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+      if (pack?._id) {
+        const title = pack.displayTitle || pack.title || first.title;
+        return {
+          path: `/sail/${encodeURIComponent(first.id)}/lesson?storyId=${encodeURIComponent(pack._id)}`,
+          state: {
+            onboardingJourney: true,
+            title,
+            heroImageUrl: resolveBibleMapMediaUrl(pack.heroImageUrl) || undefined,
+          },
+        };
+      }
+    }
+  } catch {
+    /* sail deck still gets them onto the island */
+  }
+
+  return {
+    path: `/sail/${encodeURIComponent(first.id)}`,
+    state: {
+      onboardingJourney: true,
+      title: `${first.book}: ${first.title}`,
+      hasMainMap: Boolean(first.mainMapUrl || first.mainMapVideoUrl),
+      mainMapUrl: first.mainMapUrl,
+      mainMapVideoUrl: first.mainMapVideoUrl,
+    },
+  };
 }

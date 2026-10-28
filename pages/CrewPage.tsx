@@ -21,10 +21,20 @@ import {
   refreshBasementGameLockStates,
 } from '../utils/basementGameLocks';
 import {
+  clearDiscoverShipPending,
   completeOnboardingJourney,
+  isDiscoverShipPending,
   isOnboardingJourneyActive,
+  resolveFirstStoryPackDestination,
 } from '../utils/onboardingJourney';
 import { noteBoatSession, noteJourneyStep } from '../utils/journeyStudy';
+import { hasPremiumAccess } from '../utils/freeTierAccess';
+import {
+  CMS_ISLANDS_TIMEOUT_MS,
+  fetchOceanMapIslands,
+  getSailIslandArtSrc,
+  type OceanMapIsland,
+} from '../utils/oceanMapIslands';
 import {
   ADAM_TOUR_FALLBACK_VOICE_ID,
   buildAdamDeckTour,
@@ -48,7 +58,84 @@ const ShopModal = React.lazy(() => import('../components/features/ShopModal'));
  * cannon, hatch, and cabin door, so the DOM only adds tap targets.
  * Hotspot percentages below assume a phone-portrait object-cover crop.
  */
-const CREW_SHIP_DECK_SHIP = '/assets/images/crew-ship-deck-v2.jpg';
+/**
+ * Wide sea panorama (repeat-x, mirror-tiled, horizon at HORIZON_PCT). It
+ * pans with the wheel so the islands feel like the ship is turning.
+ */
+const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
+const CREW_VOYAGE_HULL = '/assets/images/sail-voyage-hull.png?v=7';
+/**
+ * Scene stage: the hull art frame. It is fitted by HEIGHT and centered, so
+ * the same fractions hold on phones (edges crop a little) and tablets
+ * (water shows beside the ship). CrewDeck3D maps the walk zone the same way.
+ */
+const STAGE_ASPECT = 1520 / 2688;
+/**
+ * Stage = object-cover of the hull art. Phones (narrower than the art) crop
+ * the sides; tablets (wider) fill the width. On every layout the ship is
+ * pushed DOWN by a share of the screen height so more sky and island show
+ * above the cabin; the extra planks go under the bow bar. CrewDeck3D uses
+ * the same offsets (topPct / wideTopPct).
+ */
+const STAGE_TOP_PCT = 0.11;
+const STAGE_WIDE_TOP_PCT = 0.07;
+/** Island art width as a fraction of the stage width (active island). */
+const ISLAND_WIDTH_FRAC = 0.42;
+/** Plain sky color for the strip above the panorama on tablets. */
+const SKY_TOP_COLOR = '#91dff9';
+/** Water line, as a fraction of the stage height (islands sit on it). */
+const HORIZON_PCT = 16.5;
+/** Sea panorama tile (crew-voyage-sea-pano.jpg) width ÷ height. */
+const SEA_PANO_ASPECT = 3840 / 1229;
+/** How far the panorama pans per island notch, as a fraction of stage width. */
+const SEA_PAN_PER_NOTCH = 0.16;
+
+type StageRect = { left: number; top: number; width: number; height: number; pageW: number; pageH: number };
+
+const stageFor = (w: number, h: number): StageRect => {
+  const sw = Math.max(w, h * STAGE_ASPECT);
+  const sh = sw / STAGE_ASPECT;
+  const top = h * (sh > h + 1 ? STAGE_WIDE_TOP_PCT : STAGE_TOP_PCT);
+  return { left: (w - sw) / 2, top, width: sw, height: sh, pageW: w, pageH: h };
+};
+
+const useStageRect = (ref: React.RefObject<HTMLElement | null>): StageRect => {
+  const [rect, setRect] = useState<StageRect>(() =>
+    stageFor(
+      typeof window !== 'undefined' ? window.innerWidth : 390,
+      typeof window !== 'undefined' ? window.innerHeight : 844,
+    ),
+  );
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth || window.innerWidth;
+      const h = el.clientHeight || window.innerHeight;
+      setRect((prev) => (prev.pageW === w && prev.pageH === h ? prev : stageFor(w, h)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return rect;
+};
+
+/** Stage-fraction box (`left/top/width/height` in % of the stage) → viewport px. */
+const onStage = (stage: StageRect, box: React.CSSProperties): React.CSSProperties => {
+  const pct = (v: unknown) => (typeof v === 'string' && v.endsWith('%') ? parseFloat(v) / 100 : null);
+  const out: React.CSSProperties = { ...box };
+  const l = pct(box.left);
+  const w = pct(box.width);
+  const t = pct(box.top);
+  const h = pct(box.height);
+  if (l !== null) out.left = stage.left + l * stage.width;
+  if (w !== null) out.width = w * stage.width;
+  if (t !== null) out.top = stage.top + t * stage.height;
+  if (h !== null) out.height = h * stage.height;
+  return out;
+};
 /** The art is opaque — skip the animated CSS sky/ocean slot behind it. */
 const SHIP_ART_HAS_SKY = true;
 
@@ -122,49 +209,78 @@ const CREW_SEA_WAVES = [
   { id: 'wave-deep', fill: '#0A70AF', topPct: 46, tilePct: 10, driftSec: 19, bobSec: 10, reverse: true, opacity: 1 },
   { id: 'wave-hull', fill: '#0A5A96', topPct: 84, tilePct: 12.5, driftSec: 18, bobSec: 8, reverse: false, opacity: 1 },
 ] as const;
-const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
-const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
-const JOURNEY_MAP_ICON = '/assets/ui/tab-map.png';
+const SAIL_STEERING_WHEEL = '/assets/images/sail-voyage-wheel.png?v=2';
+const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.png?v=2';
+/**
+ * Bow art (2048×1360): arch peak at 30% of its height, lanterns at x 14% /
+ * 86%, plank strip from 61.3% to 88.5%, last opaque row at 90.7%.
+ */
+const BOW_ASPECT = 2048 / 1360;
+const BOW_BOTTOM_PAD = 0.093;
+const BOW_STRIP_TOP = 0.613;
+const BOW_STRIP_BOTTOM = 0.885;
+const CREW_TAB_ART: Record<string, string> = {
+  crew: '/assets/images/sail-voyage-btn-crew.png?v=3',
+  profile: '/assets/images/sail-voyage-btn-profile.png?v=1',
+  home: '/assets/images/sail-voyage-btn-home.png?v=3',
+  library: '/assets/images/sail-voyage-btn-library.png?v=3',
+};
+const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.png';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 
-const DECK_NAV_ICON_W = 'min(22vw, 88px)';
 const DECK_NAV_BOTTOM = 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))';
-/** Adam's tour card sits just above the Home / Journey / Crew row. */
-const TOUR_CARD_BOTTOM = 'max(124px, calc(var(--safe-area-bottom, 0px) + 118px))';
+/** Adam's tour card sits just above the wheel, clear of the button bow. */
+const TOUR_CARD_BOTTOM = 'max(300px, calc(var(--safe-area-bottom, 0px) + 280px))';
 
-/** Painted jukebox at the mast foot (image ~x 0.41–0.56, y 0.30–0.47). */
-const JUKEBOX_BOX: React.CSSProperties = {
-  left: '34%',
-  top: '29%',
-  width: '27%',
-  height: '19%',
-};
-/** Painted cannon on the left rail (image x 0–0.27, y 0.40–0.55; mostly cropped on phones). */
-const CANNON_BOX: React.CSSProperties = {
-  left: '0%',
-  top: '39%',
-  width: '22%',
-  height: '17%',
-};
-/** Glowing open hatch, right-mid (image x 0.63–0.91, y 0.57–0.72). */
-const HATCH_BOX: React.CSSProperties = {
-  left: '69%',
-  top: '55%',
-  width: '31%',
-  height: '19%',
-};
-
+/* Hotspots are fractions of the STAGE (hull art frame), see onStage(). */
 /**
- * Cabin door at the bow (painted in the deck art, between the stairs).
- * Image ~x 0.42–0.58, y 0.13–0.24, expanded for the phone object-cover crop
- * the other deck hotspots use.
+ * Jukebox is parked for now: the deck art no longer paints it (tablets crop
+ * the deck too short for both it and the hatch). Flip to bring the party
+ * hotspot and Adam's tour beat back.
  */
+const JUKEBOX_ENABLED = false;
+/** Where the jukebox stood, mid deck center (hotspot when enabled). */
+const JUKEBOX_BOX: React.CSSProperties = {
+  left: '35%',
+  top: '40%',
+  width: '22%',
+  height: '19%',
+};
+/** Hatch sprite (drawn by us, not the hull art) — just below the cabin stairs. */
+const CREW_HATCH_SPRITE = '/assets/images/crew-voyage-hatch.png?v=1';
+/** Left-rail barrels stand in for the cannon tap on this deck. */
+const CANNON_BOX: React.CSSProperties = {
+  left: '3%',
+  top: '37%',
+  width: '22%',
+  height: '14%',
+};
+/**
+ * Open hatch — mid deck center, right under the cabin stairs so it stays
+ * above the wheel on tablets (which crop the lower deck).
+ */
+const HATCH_BOX: React.CSSProperties = {
+  left: '38%',
+  top: '40.5%',
+  width: '24%',
+  height: '8.5%',
+};
+
+/** Band for 2D crew plaques — the open mid deck. */
+const PLAQUE_BAND_BOX: React.CSSProperties = {
+  left: '6%',
+  width: '88%',
+  top: '42%',
+  height: '20%',
+};
+
+/** Glowing dove door on the cabin. */
 const SHOP_DOOR_BOX: React.CSSProperties = {
   left: '37%',
-  top: '13%',
+  top: '28%',
   width: '26%',
-  height: '12%',
+  height: '10%',
 };
 
 /**
@@ -179,58 +295,239 @@ const DECK_TOUR_STAGING: Record<
   // Standing spots keep him beside the feature (not on top of it) and above
   // the tour card, which covers roughly the bottom 30% of the screen.
   cannon: {
-    walkTo: { x: 0.43, y: 0.52 },
+    walkTo: { x: 0.28, y: 0.53 },
     spot: CANNON_BOX,
   },
   jukebox: {
-    walkTo: { x: 0.63, y: 0.5 },
+    walkTo: { x: 0.64, y: 0.56 },
     spot: JUKEBOX_BOX,
   },
   door: {
-    walkTo: { x: 0.32, y: 0.18 },
+    walkTo: { x: 0.50, y: 0.42 },
     spot: SHOP_DOOR_BOX,
   },
   crew: {
-    walkTo: { x: 0.58, y: 0.7 },
+    walkTo: { x: 0.22, y: 0.64 },
     spot: {
-      right: 'max(6px, calc(env(safe-area-inset-right, 0px) - 4px))',
-      bottom: `calc(${DECK_NAV_BOTTOM} - 6px)`,
-      width: `calc(${DECK_NAV_ICON_W} + 8px)`,
-      height: `calc(${DECK_NAV_ICON_W} + 8px)`,
+      left: 'calc(50vw - 42vw)',
+      bottom: 'calc(var(--safe-area-bottom, 0px) + 3vh)',
+      width: '20vw',
+      height: '9vh',
     },
   },
   journey: {
-    walkTo: { x: 0.42, y: 0.7 },
+    walkTo: { x: 0.50, y: 0.62 },
     spot: {
-      left: '50%',
+      left: '50vw',
       transform: 'translateX(-50%)',
-      bottom: `calc(${DECK_NAV_BOTTOM} - 6px)`,
-      width: `calc(${DECK_NAV_ICON_W} + 8px)`,
-      height: `calc(${DECK_NAV_ICON_W} + 8px)`,
+      bottom: 'calc(var(--safe-area-bottom, 0px) + 11vh)',
+      width: 'min(50vw, 29vh)',
+      height: 'min(50vw, 29vh)',
     },
   },
   hatch: {
-    walkTo: { x: 0.58, y: 0.66 },
+    walkTo: { x: 0.34, y: 0.52 },
     spot: HATCH_BOX,
   },
 };
 
-const deckPlaqueClass =
-  'absolute left-1/2 flex items-center justify-center pointer-events-none select-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[#F5E6C8]';
-const deckPlaqueStyle: React.CSSProperties = {
-  bottom: '-0.35rem',
-  transform: 'translateX(-50%)',
-  padding: '0.32rem 0.55rem',
-  borderRadius: '0.55rem',
-  fontSize: 'clamp(0.58rem, 2.6vw, 0.78rem)',
-  lineHeight: 1,
-  backgroundImage: `url(${WOOD_TEX})`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  border: '2px solid #6B4423',
-  boxShadow:
-    '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.35)',
-  textShadow: '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+type ShipTab = {
+  id: string;
+  label: string;
+  aria: string;
+  active?: boolean;
+  icon: React.ReactNode;
+  onClick: () => void;
+};
+
+/** Little sailboat, cottage, and bible — painted to match the gable mock. */
+const CrewBoatIcon = () => (
+  <svg viewBox="0 0 64 64" aria-hidden>
+    <path d="M14 40 L32 16 L32 40 Z" fill="#F7F1E4" />
+    <path d="M34 24 L34 40 L50 40 Z" fill="#E4534A" />
+    <path d="M32 12 V40" stroke="#8A5A32" strokeWidth="2.4" strokeLinecap="round" />
+    <path d="M30 14 L36 14 L33 7 Z" fill="#3E8FD4" />
+    <path d="M8 42 H56 L50 50 Q32 56 14 50 Z" fill="#C4843C" />
+    <path d="M12 44 H52" stroke="#8A5424" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const MyHomeIcon = () => (
+  <svg viewBox="0 0 64 64" aria-hidden>
+    <path d="M10 30 L32 12 L54 30 V52 H10 Z" fill="#F4E2C4" />
+    <path d="M6 32 L32 8 L58 32 L52 32 L32 16 L12 32 Z" fill="#E4534A" />
+    <rect x="27" y="36" width="10" height="16" rx="1.5" fill="#8A5424" />
+    <rect x="16" y="34" width="8" height="8" rx="1.5" fill="#7EC8F0" />
+    <rect x="40" y="34" width="8" height="8" rx="1.5" fill="#7EC8F0" />
+    <rect x="42" y="16" width="6" height="10" fill="#C4843C" />
+  </svg>
+);
+
+const LibraryBookIcon = () => (
+  <svg viewBox="0 0 64 64" aria-hidden>
+    <path d="M14 12 H46 Q52 12 52 18 V52 H18 Q14 52 14 48 Z" fill="#8A5424" />
+    <path d="M18 12 H48 V48 H18 Q14 48 14 44 V16 Q14 12 18 12 Z" fill="#C4843C" />
+    <path d="M18 16 H44 V46 H18 Z" fill="#F7F1E4" />
+    <path d="M31 22 H33 V42 H31 Z" fill="#E0B33A" />
+    <path d="M24 31 H40 V33 H24 Z" fill="#E0B33A" />
+  </svg>
+);
+
+/** Peaked wood board: wheel on the crest, two tiles, a gap, two tiles. */
+/** Wheel turns a quarter turn per island… */
+const ISLAND_STEP_DEG = 90;
+/** …and the hand has to drag this far before it clicks to the next one. */
+const ISLAND_DETENT = 62;
+/** How closely the wheel follows the hand before the click (1 = exactly). */
+const WHEEL_FOLLOW = 0.85;
+/** Pause after a click before the wheel accepts the next notch. */
+const WHEEL_SETTLE_MS = 360;
+
+type VoyageIsland = {
+  id: string;
+  title: string;
+  src: string;
+  hasMainMap: boolean;
+  storiesComplete: number;
+  storiesTotal: number;
+};
+
+const toVoyageIsland = (island: OceanMapIsland): VoyageIsland | null => {
+  const src = getSailIslandArtSrc(island);
+  if (!src) return null;
+  const title = (island.book && island.book.trim()) || island.title;
+  return {
+    id: island.id,
+    title,
+    src,
+    hasMainMap: Boolean(island.mainMapUrl || island.mainMapVideoUrl),
+    storiesComplete: island.storiesComplete,
+    storiesTotal: island.storiesTotal || 5,
+  };
+};
+
+const firstIslandDone = (islands: VoyageIsland[]) => {
+  const first = islands[0];
+  if (!first) return false;
+  return first.storiesTotal > 0 && first.storiesComplete >= first.storiesTotal;
+};
+
+const ShipDeckTabBar: React.FC<{
+  tabs: ShipTab[];
+  disabled?: boolean;
+  wheelRef: React.RefObject<HTMLButtonElement | null>;
+  rotation: number;
+  wheelTransition?: string;
+  onWheelDown: (x: number, y: number) => void;
+  onWheelMove: (x: number, y: number) => void;
+  onWheelUp: () => void;
+  stage: StageRect;
+}> = ({ tabs, disabled, wheelRef, rotation, wheelTransition, onWheelDown, onWheelMove, onWheelUp, stage }) => {
+  // Bow spans the screen width on phones. On tablets (the deck art is taller
+  // than the screen, so the lower deck is already cropped) the bow is kept
+  // smaller so the hatch and walkable planks stay in view. Wheel sits on the
+  // strip's gold edge, its top third over the planks; the four tiles share
+  // the plank strip in equal cells.
+  const wideCrop = stage.height > stage.pageH + 1;
+  const barW = Math.min(stage.pageW * 1.12, stage.pageH * (wideCrop ? 0.52 : 0.66));
+  const barH = barW / BOW_ASPECT;
+  const wheelD = barW * 0.45;
+  const cell = Math.min(barW * 0.19, barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) * 0.86);
+  const stripW = Math.min(cell * 4 + 3 * Math.round(cell * 0.16), stage.pageW - 12);
+  const stripBottom = barH * (1 - BOW_STRIP_BOTTOM) + (barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) - cell) / 2;
+  return (
+  <div
+    className="pointer-events-none absolute inset-x-0 z-30"
+    style={{ height: barH, bottom: `calc(var(--safe-area-bottom, 0px) - ${Math.round(barH * BOW_BOTTOM_PAD)}px)` }}
+  >
+    {/* Dark wood under the strip so the home-indicator inset is never sky. */}
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-full"
+      style={{ height: 'var(--safe-area-bottom, 0px)', marginTop: -Math.round(barH * BOW_BOTTOM_PAD), background: '#4a2a12' }}
+    />
+    {/* Wide screens: plank-colored fill so the strip reaches both edges
+        when the bow art is narrower than the page. */}
+    {barW < stage.pageW && (
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0"
+        style={{
+          top: barH * (BOW_STRIP_TOP + 0.01),
+          height: barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP - 0.02),
+          background: 'linear-gradient(180deg, #B8743F 0%, #9A5A2C 55%, #6E3B16 100%)',
+          boxShadow: 'inset 0 3px 0 #E0A552, inset 0 -3px 0 #4a2a12',
+        }}
+      />
+    )}
+    <img
+      src={CREW_TAB_BAR}
+      alt=""
+      draggable={false}
+      className="pointer-events-none absolute bottom-0 left-1/2 max-w-none -translate-x-1/2 select-none"
+      style={{ width: barW, height: barH }}
+    />
+    <button
+      ref={wheelRef}
+      type="button"
+      disabled={disabled}
+      aria-label="Turn the wheel to change island"
+      className="pointer-events-auto absolute left-1/2 z-[2] m-0 touch-none border-0 bg-transparent p-0 disabled:opacity-60"
+      style={{
+        bottom: barH * (1 - BOW_STRIP_TOP) - wheelD * 0.06,
+        width: wheelD,
+        transform: 'translateX(-50%)',
+        filter: 'drop-shadow(0 8px 10px rgba(60, 24, 8, 0.45))',
+      }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onWheelDown(e.clientX, e.clientY);
+      }}
+      onTouchStart={(e) => onWheelDown(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchMove={(e) => {
+        e.preventDefault();
+        onWheelMove(e.touches[0].clientX, e.touches[0].clientY);
+      }}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        onWheelUp();
+      }}
+      onTouchCancel={onWheelUp}
+    >
+      <img
+        src={SAIL_STEERING_WHEEL}
+        alt=""
+        draggable={false}
+        className="pointer-events-none block h-auto w-full select-none"
+        style={{ transform: `rotate(${rotation}deg)`, transition: wheelTransition }}
+      />
+    </button>
+    <div
+      className="pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-end justify-between"
+      style={{ bottom: stripBottom, width: stripW }}
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={tab.onClick}
+          disabled={disabled}
+          aria-label={tab.aria}
+          aria-current={tab.active ? 'page' : undefined}
+          className="shrink-0 border-0 bg-transparent p-0 disabled:opacity-60"
+          style={{ width: cell, height: cell }}
+        >
+          <img
+            src={CREW_TAB_ART[tab.id]}
+            alt=""
+            draggable={false}
+            className={`pointer-events-none block h-full w-full select-none object-contain object-bottom drop-shadow-[0_4px_4px_rgba(40,18,6,0.35)] ${tab.active ? 'scale-[1.06]' : ''}`}
+          />
+        </button>
+      ))}
+    </div>
+  </div>
+  );
 };
 
 /** Hatch open hint before white fade. */
@@ -238,6 +535,17 @@ const HATCH_OPEN_MS = 320;
 /** White fade-out duration before basement / cannon navigate. */
 const WHITE_FADE_MS = 480;
 const NAVIGATE_AFTER_MS = HATCH_OPEN_MS + WHITE_FADE_MS;
+/** Sail-to-island: the island grows toward the ship this long, white fade overlapping its end. */
+const SAIL_IN_MS = 1250;
+const SAIL_IN_EASE = `transform ${SAIL_IN_MS}ms cubic-bezier(0.55, 0.05, 0.75, 0.6)`;
+/** How much the island and sea swell as the ship closes in. */
+const SAIL_IN_ISLAND_SCALE = 1.9;
+const SAIL_IN_SEA_SCALE = 1.14;
+/** My Home exit: the wheel spins this far while the white fade starts. */
+const WHEEL_SPIN_OUT_DEG = 540;
+const WHEEL_SPIN_OUT_MS = 1100;
+/** White fade begins partway through the spin so they overlap. */
+const WHEEL_SPIN_FADE_DELAY_MS = 380;
 const CANON_GAME_PATH = '/crew/canon';
 const TOAST_MS = 2200;
 
@@ -347,6 +655,11 @@ const CrewPage: React.FC = () => {
   const enteringRef = useRef(false);
   const reduceMotion = prefersReducedMotion();
   const arrivingOnboarding = isOnboardingJourneyActive();
+  const discoverShip =
+    Boolean((location.state as { discoverShip?: boolean } | null)?.discoverShip) ||
+    isDiscoverShipPending();
+  const discoverShipRef = useRef(discoverShip);
+  discoverShipRef.current = discoverShip;
 
   useEffect(() => {
     if (arrivingOnboarding) noteJourneyStep('crew');
@@ -367,7 +680,7 @@ const CrewPage: React.FC = () => {
   const deckBusy = hatchOpen || enteringGame;
   const chromeLocked = deckBusy || crewGuide || !!tour;
   const tourBeats = useMemo(
-    () => buildAdamDeckTour(kidName, gameLocks.canon),
+    () => buildAdamDeckTour(kidName, gameLocks.canon).filter((b) => JUKEBOX_ENABLED || b.id !== 'jukebox'),
     [kidName, gameLocks.canon],
   );
   const tourBeat =
@@ -386,6 +699,21 @@ const CrewPage: React.FC = () => {
   const showCrewBtn = !navHidden || tourBeat?.id === 'crew';
 
   const finishCrewGuide = useCallback(() => {
+    if (discoverShipRef.current) {
+      if (enteringRef.current) return;
+      enteringRef.current = true;
+      clearDiscoverShipPending();
+      setCrewGuide(false);
+      void resolveFirstStoryPackDestination()
+        .then((dest) => {
+          navigate(dest.path, { replace: true, state: dest.state });
+        })
+        .catch(() => {
+          enteringRef.current = false;
+          navigate('/map', { replace: true, state: { onboardingJourney: true } });
+        });
+      return;
+    }
     setCrewGuide(false);
     completeOnboardingJourney();
     setTapAdam(true);
@@ -505,16 +833,188 @@ const CrewPage: React.FC = () => {
     [],
   );
 
-  const goHome = useCallback(() => {
+  const goProfile = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
-    navigate('/world', { replace: true });
+    navigate('/profile', { state: { returnTo: '/crew' } });
   }, [enteringGame, navigate]);
 
-  /** Journey → the sail deck, where the wheel steers between islands. */
-  const goToSail = useCallback(() => {
+  const [voyageIslands, setVoyageIslands] = useState<VoyageIsland[]>([]);
+  const [lookIndex, setLookIndex] = useState(0);
+  const [wheelDrag, setWheelDrag] = useState(false);
+  const [wheelCreep, setWheelCreep] = useState(0);
+  const [wheelShift, setWheelShift] = useState(false);
+  const [sailingIsland, setSailingIsland] = useState(false);
+  const [wheelSpinOut, setWheelSpinOut] = useState(false);
+  const voyageRef = useRef<VoyageIsland[]>([]);
+  const lookRef = useRef(0);
+  const wheelRef = useRef<HTMLButtonElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const stage = useStageRect(pageRef);
+  const wheelDragRef = useRef(false);
+  const wheelAngleRef = useRef(0);
+  const wheelAccumRef = useRef(0);
+  const wheelSettleRef = useRef(0);
+  const sailingRef = useRef(false);
+  voyageRef.current = voyageIslands;
+  lookRef.current = lookIndex;
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const failSafe = window.setTimeout(() => controller.abort(), CMS_ISLANDS_TIMEOUT_MS);
+    void fetchOceanMapIslands(controller.signal)
+      .then((mapped) => {
+        if (cancelled || !mapped) return;
+        const next = mapped.map(toVoyageIsland).filter((row): row is VoyageIsland => row != null);
+        if (next.length) setVoyageIslands(next);
+      })
+      .catch(() => {
+        /* horizon stays open water */
+      })
+      .finally(() => window.clearTimeout(failSafe));
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(failSafe);
+    };
+  }, []);
+
+  const wheelAngle = useCallback((x: number, y: number) => {
+    const el = wheelRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    return Math.atan2(y - (rect.top + rect.height / 2), x - (rect.left + rect.width / 2)) * (180 / Math.PI);
+  }, []);
+
+  const shiftIsland = useCallback((direction: 1 | -1) => {
+    const count = voyageRef.current.length;
+    const next = Math.max(0, Math.min(count - 1, lookRef.current + direction));
+    if (next === lookRef.current) return false;
+    lookRef.current = next;
+    wheelAccumRef.current = 0;
+    wheelSettleRef.current = performance.now() + WHEEL_SETTLE_MS;
+    setLookIndex(next);
+    setWheelCreep(0);
+    setWheelShift(true);
+    window.setTimeout(() => setWheelShift(false), WHEEL_SETTLE_MS);
+    return true;
+  }, []);
+
+  /** Tap on a neighbor island: turn the wheel to it. */
+  const lookAtIsland = useCallback((index: number) => {
+    if (sailingRef.current || index === lookRef.current) return;
+    lookRef.current = index;
+    wheelAccumRef.current = 0;
+    setLookIndex(index);
+    setWheelCreep(0);
+  }, []);
+
+  const onWheelMove = useCallback((x: number, y: number) => {
+    if (!wheelDragRef.current || sailingRef.current) return;
+    const current = wheelAngle(x, y);
+    let delta = current - wheelAngleRef.current;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    wheelAngleRef.current = current;
+    // Right after a click the wheel settles — the hand keeps moving but the
+    // notch does not count, so one swipe is one island.
+    if (performance.now() < wheelSettleRef.current) return;
+    const accum = Math.max(-ISLAND_DETENT, Math.min(ISLAND_DETENT, wheelAccumRef.current + delta));
+    wheelAccumRef.current = accum;
+    if (accum >= ISLAND_DETENT && shiftIsland(1)) return;
+    if (accum <= -ISLAND_DETENT && shiftIsland(-1)) return;
+    const count = voyageRef.current.length;
+    const atEnd = (accum > 0 && lookRef.current >= count - 1) || (accum < 0 && lookRef.current <= 0);
+    setWheelCreep(accum * (atEnd ? 0.15 : WHEEL_FOLLOW));
+  }, [shiftIsland, wheelAngle]);
+
+  const onWheelDown = useCallback((x: number, y: number) => {
+    if (sailingRef.current) return;
+    wheelDragRef.current = true;
+    wheelAngleRef.current = wheelAngle(x, y);
+    wheelAccumRef.current = 0;
+    setWheelCreep(0);
+    setWheelDrag(true);
+  }, [wheelAngle]);
+
+  const onWheelUp = useCallback(() => {
+    if (!wheelDragRef.current) return;
+    wheelDragRef.current = false;
+    wheelAccumRef.current = 0;
+    setWheelCreep(0);
+    setWheelDrag(false);
+  }, []);
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => onWheelMove(e.clientX, e.clientY);
+    const up = () => onWheelUp();
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+  }, [onWheelMove, onWheelUp]);
+
+  const openVoyageIsland = useCallback((island: VoyageIsland) => {
+    if (sailingRef.current) return;
+    const islands = voyageRef.current;
+    const unlocked = islands[0]?.id === island.id || firstIslandDone(islands);
+    if (!unlocked) {
+      if (!hasPremiumAccess()) {
+        navigate('/onboarding/welcome', { state: { returnTo: '/map', reason: 'continue-journey' } });
+      }
+      return;
+    }
+    sailingRef.current = true;
+    setSailingIsland(true);
+    const dest = island.hasMainMap
+      ? `/map/${encodeURIComponent(island.id)}/main`
+      : `/sail/${encodeURIComponent(island.id)}/lesson`;
+    const go = () => navigate(dest, { state: { title: island.title, fromSail: true } });
+    if (prefersReducedMotion()) {
+      setWhiteFade(true);
+      window.setTimeout(go, 80);
+      return;
+    }
+    // The island swells toward the bow, then the deck fades to white.
+    window.setTimeout(() => setWhiteFade(true), SAIL_IN_MS - WHITE_FADE_MS);
+    window.setTimeout(go, SAIL_IN_MS);
+  }, [navigate]);
+
+  const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
+  const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
+  const wheelRotation =
+    lookIndex * ISLAND_STEP_DEG + (wheelDrag && !wheelShift ? wheelCreep : 0) + (wheelSpinOut ? WHEEL_SPIN_OUT_DEG : 0);
+  const wheelTransition = wheelSpinOut
+    ? `transform ${WHEEL_SPIN_OUT_MS}ms cubic-bezier(0.3, 0.1, 0.35, 1)`
+    : wheelDrag
+      ? wheelShift
+        ? 'transform 0.34s cubic-bezier(0.2, 1.35, 0.45, 1)'
+        : 'none'
+      : 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
+
+  const goLibrary = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
-    navigate('/sail');
+    navigate('/listen');
   }, [enteringGame, navigate]);
+
+  /** My Home: the wheel spins hard, the deck fades to white, then we land. */
+  const goMyHome = useCallback(() => {
+    if (enteringRef.current || enteringGame) return;
+    const go = () => navigate('/my-home', { state: { from: '/crew' } });
+    if (reduceMotion) {
+      go();
+      return;
+    }
+    enteringRef.current = true;
+    setToast(null);
+    clearTimers();
+    setWheelSpinOut(true);
+    const fadeId = window.setTimeout(() => setWhiteFade(true), WHEEL_SPIN_FADE_DELAY_MS);
+    const navId = window.setTimeout(go, WHEEL_SPIN_FADE_DELAY_MS + WHITE_FADE_MS);
+    timersRef.current = [fadeId, navId];
+  }, [clearTimers, enteringGame, navigate, reduceMotion]);
 
   /** Hatch-open hint → white fade → navigate. (Runs after any 3D descent.) */
   const beginHatchTransition = useCallback(
@@ -840,7 +1340,7 @@ const CrewPage: React.FC = () => {
   );
 
   return (
-    <div className="relative w-full h-screen overflow-hidden">
+    <div ref={pageRef} className="relative w-full h-screen overflow-hidden">
       {/* Sky/ocean slot — animated CSS scene behind a transparent-sky ship
           art (drifting cloud marquees, bobbing wave bands, sparkle drift).
           Skipped while the deck art paints its own sky. */}
@@ -965,14 +1465,227 @@ const CrewPage: React.FC = () => {
       </div>
       )}
 
-      {/* Ship art — same object-cover mapping the zone config in CrewDeck3D
-          relies on for image→screen coordinate alignment. */}
+      {/* Sea panorama: one tall tile repeated sideways, panning a little
+          with every wheel notch (islands move faster — parallax). */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 z-0"
+        style={{
+          top: 0,
+          height: stage.top + stage.height,
+          backgroundColor: SKY_TOP_COLOR,
+          backgroundImage: `url(${CREW_VOYAGE_SKY})`,
+          backgroundRepeat: 'repeat-x',
+          backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
+          backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${Math.round(stage.top)}px`,
+          transform: sailingIsland && !reduceMotion ? `scale(${SAIL_IN_SEA_SCALE})` : 'none',
+          transformOrigin: `50% ${Math.round(stage.top + (stage.height * HORIZON_PCT) / 100)}px`,
+          transition: reduceMotion
+            ? 'none'
+            : sailingIsland
+              ? `background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), ${SAIL_IN_EASE}`
+              : 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+        }}
+      />
+      {/* Tablets: the ship sits lower, so mirror the panorama's top sky into
+          the strip above it instead of showing a flat color seam. */}
+      {stage.top > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-0"
+          style={{
+            height: Math.ceil(stage.top) + 1,
+            transform: 'scaleY(-1)',
+            backgroundImage: `url(${CREW_VOYAGE_SKY})`,
+            backgroundRepeat: 'repeat-x',
+            backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
+            backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) 0`,
+            transition: reduceMotion ? 'none' : 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+          }}
+        />
+      )}
+      {/* Living water: the same panorama water, drifting a few px against
+          the base copy (soft-light) so ripples and glints move, plus a slow
+          sparkle marquee. Skipped under prefers-reduced-motion. */}
+      {!reduceMotion && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 z-[1] overflow-hidden"
+          style={{
+            top: stage.top + (stage.height * HORIZON_PCT) / 100,
+            height: stage.height * (1 - HORIZON_PCT / 100),
+            // Ripple copy can't follow the sail-in zoom; let it go.
+            opacity: sailingIsland ? 0 : 1,
+            transition: 'opacity 0.4s ease',
+          }}
+        >
+          <div
+            className="crew-sea-ripple absolute"
+            style={{
+              inset: '-6px -14px',
+              backgroundImage: `url(${CREW_VOYAGE_SKY})`,
+              backgroundRepeat: 'repeat-x',
+              backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
+              backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${-Math.round((stage.height * HORIZON_PCT) / 100) - 6}px`,
+              transition: 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+              mixBlendMode: 'soft-light',
+              opacity: 0.85,
+            }}
+          />
+          <div className="crew-sea-wave-bob absolute inset-x-0 inset-y-0" style={{ opacity: 0.45, animationDuration: '11s' }}>
+            <div
+              className="crew-sea-wave-track crew-sea-wave-reverse"
+              style={{
+                backgroundImage: CREW_SEA_SPARKLE_TILE,
+                backgroundRepeat: 'repeat',
+                backgroundSize: '12.5% 64px',
+                animationDuration: '46s',
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {/* Real voyage islands on the water line, sliding the way the world
+          wheel carousel does. Bases sit just below the horizon. */}
+      <div
+        className="pointer-events-none absolute z-[2]"
+        style={{
+          left: stage.left,
+          width: stage.width,
+          top: stage.top,
+          height: (stage.height * (HORIZON_PCT + 5)) / 100,
+          // Sail-in: the whole band swells toward the bow (bob lives on the
+          // inner wrapper so the keyframes don't fight this transform).
+          transform: sailingIsland && !reduceMotion ? `scale(${SAIL_IN_ISLAND_SCALE})` : 'scale(1)',
+          transformOrigin: '50% 100%',
+          transition: reduceMotion ? 'none' : SAIL_IN_EASE,
+        }}
+        aria-hidden
+      >
+        <div className={`absolute inset-0${reduceMotion ? '' : ' crew-sea-bob-far'}`}>
+        {voyageIslands.map((island, i) => {
+          const offset = i - lookIndex;
+          const distance = Math.abs(offset);
+          if (distance > 2.4) return null;
+          const scale = Math.max(0.46, 1 - distance * 0.3);
+          return (
+            <img
+              key={island.id}
+              src={island.src}
+              alt=""
+              draggable={false}
+              className="absolute bottom-0 h-auto max-w-none select-none"
+              style={{
+                left: `${50 - offset * 50}%`,
+                width: `${ISLAND_WIDTH_FRAC * 100}%`,
+                transform: `translateX(-50%) scale(${scale})`,
+                transformOrigin: '50% 100%',
+                opacity: Math.max(0.4, 1 - distance * 0.28),
+                filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
+                transition: 'left 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), transform 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), opacity 0.42s ease',
+                zIndex: 4 - Math.round(distance),
+              }}
+            />
+          );
+        })}
+        </div>
+      </div>
+      {/* Tap layer over the islands (above the 3D canvas): the whole island
+          is the target, its name floats centered above it. Tapping the
+          island you are looking at sails there; a neighbor turns to it. */}
+      {voyageIslands.map((island, i) => {
+        const offset = i - lookIndex;
+        const distance = Math.abs(offset);
+        if (distance > 1.6) return null;
+        const scale = Math.max(0.46, 1 - distance * 0.3);
+        const size = stage.width * ISLAND_WIDTH_FRAC * scale;
+        const cx = stage.left + stage.width * (0.5 - offset * 0.5);
+        const bottom = stage.top + (stage.height * (HORIZON_PCT + 5)) / 100;
+        const isActive = offset === 0;
+        const unlocked = voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands);
+        const label = isActive && sailingIsland ? 'Sailing…' : unlocked ? island.title : `Complete ${voyageIslands[0]?.title || 'Beginnings'}`;
+        const progress = unlocked && !(isActive && sailingIsland)
+          ? `${Math.min(island.storiesComplete, island.storiesTotal)}/${island.storiesTotal} stories complete`
+          : null;
+        // Neighbors whose center is off the phone screen keep the tap target
+        // (a sliver of island peeks in) but not a half-visible label.
+        const showLabel = cx > 24 && cx < stage.pageW - 24;
+        return (
+          <button
+            key={`tap-${island.id}`}
+            type="button"
+            aria-label={isActive ? `Sail to ${island.title}` : `Look at ${island.title}`}
+            onClick={() => (isActive ? openVoyageIsland(island) : lookAtIsland(i))}
+            disabled={sailingIsland}
+            className="absolute z-[6] m-0 border-0 bg-transparent p-0"
+            style={{
+              left: cx - size / 2,
+              top: bottom - size,
+              width: size,
+              height: size,
+              opacity: sailingIsland && !isActive ? 0 : 1,
+              transition: 'left 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), top 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), width 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), height 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), opacity 0.3s ease',
+            }}
+          >
+            <span
+              className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1"
+              style={{
+                top: `max(calc(var(--safe-area-top, 0px) + 6px - ${Math.round(bottom - size)}px), 0px)`,
+                opacity: !showLabel ? 0 : isActive ? 1 : 0.8,
+                transition: 'opacity 0.3s ease',
+              }}
+            >
+              <span
+                className="whitespace-nowrap rounded-full px-2.5 py-0.5 font-black leading-tight text-[#7A3E12]"
+                style={{
+                  fontSize: isActive ? 12 : 10,
+                  background: 'linear-gradient(180deg, #FFD36A 0%, #FFB23D 100%)',
+                  boxShadow: '0 3px 0 #E09020',
+                  fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
+                  transition: 'font-size 0.3s ease',
+                }}
+              >
+                {label}
+              </span>
+              {progress && (
+                <span
+                  className="whitespace-nowrap rounded-full px-2 py-[1px] font-bold leading-tight text-[#FFF4D6]"
+                  style={{
+                    fontSize: isActive ? 10 : 8,
+                    background: 'rgba(42, 22, 12, 0.72)',
+                    boxShadow: '0 1px 0 rgba(255,230,180,0.25) inset, 0 2px 4px rgba(0,0,0,0.35)',
+                    fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
+                    transition: 'font-size 0.3s ease',
+                  }}
+                >
+                  {progress}
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+      {/* Hull fills the stage frame — same mapping as the 3D walk zone. */}
       <img
-        src={CREW_SHIP_DECK_SHIP}
+        src={CREW_VOYAGE_HULL}
         alt=""
         aria-hidden
         draggable={false}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+        className="pointer-events-none absolute z-[3] max-w-none select-none"
+        style={{ left: stage.left, top: stage.top, width: stage.width, height: stage.height }}
+      />
+      {/* Hatch art sits on the planks (under the 3D crew, who walk over it). */}
+      <img
+        src={CREW_HATCH_SPRITE}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="pointer-events-none absolute z-[3] max-w-none select-none object-fill"
+        style={{
+          ...onStage(stage, HATCH_BOX),
+          filter: hatchOpen ? 'brightness(1.25) drop-shadow(0 0 14px rgba(255, 214, 102, 0.85))' : undefined,
+          transition: 'filter 0.3s ease',
+        }}
       />
       {/* Jukebox party: night falls over the painted scene (sky + deck);
           the 3D crew canvas renders above this so the dancers stay lit. */}
@@ -980,7 +1693,7 @@ const CrewPage: React.FC = () => {
         aria-hidden
         className="absolute inset-0 pointer-events-none"
         style={{
-          zIndex: 1,
+          zIndex: 4,
           background:
             'linear-gradient(180deg, rgba(7,9,40,0.82) 0%, rgba(6,10,36,0.62) 30%, rgba(4,12,32,0.48) 100%)',
           opacity: party ? 1 : 0,
@@ -1080,7 +1793,7 @@ const CrewPage: React.FC = () => {
       {crew2d.length > 0 && (
         <div
           className="absolute z-10 flex flex-wrap content-end items-end justify-center gap-x-2.5 gap-y-2 pointer-events-none"
-          style={{ left: '3%', width: '58%', top: '34%', height: '44%' }}
+          style={onStage(stage, PLAQUE_BAND_BOX)}
           aria-label="Crew members on deck"
         >
           {crew2d.map((c) => (
@@ -1154,7 +1867,7 @@ const CrewPage: React.FC = () => {
             : 'Play Canon Golf'
         }
         className="absolute z-20 p-0 m-0 border-0 appearance-none bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-        style={{ ...CANNON_BOX, cursor: deckBusy ? 'default' : 'pointer' }}
+        style={{ ...onStage(stage, CANNON_BOX), cursor: deckBusy ? 'default' : 'pointer' }}
       >
         {gameLocks.canon.locked && (
           <GameLockOverlay islandLabel={gameLocks.canon.islandLabel} />
@@ -1169,7 +1882,7 @@ const CrewPage: React.FC = () => {
         disabled={chromeLocked}
         aria-label="Cabin door — open the Builder Shop"
         className="absolute z-30 m-0 p-0 border-0 bg-transparent appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
-        style={{ ...SHOP_DOOR_BOX, cursor: deckBusy ? 'default' : 'pointer' }}
+        style={{ ...onStage(stage, SHOP_DOOR_BOX), cursor: deckBusy ? 'default' : 'pointer' }}
       />
 
       {/* Open deck hatch — invisible tap target over the glowing hatch art
@@ -1183,7 +1896,7 @@ const CrewPage: React.FC = () => {
         aria-label="Open hatch to the basement"
         className="absolute z-20 p-0 m-0 border-0 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         style={{
-          ...HATCH_BOX,
+          ...onStage(stage, HATCH_BOX),
           borderRadius: '12%',
           cursor: deckBusy ? 'default' : 'pointer',
           background: 'transparent',
@@ -1194,109 +1907,69 @@ const CrewPage: React.FC = () => {
           target (character raycast keeps Talk working if someone stands in
           front). Tap → 8s dance party: everyone dances, night falls, disco
           ball. */}
-      <button
-        type="button"
-        onClick={onJukeboxTap}
-        disabled={chromeLocked && !jukeboxTourReady}
-        aria-label="Jukebox — start a dance party"
-        className="absolute z-30 m-0 p-0 border-0 bg-transparent appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
-        style={{
-          ...JUKEBOX_BOX,
-          cursor: deckBusy || (chromeLocked && !jukeboxTourReady) ? 'default' : 'pointer',
-        }}
-      />
+      {JUKEBOX_ENABLED && (
+        <button
+          type="button"
+          onClick={onJukeboxTap}
+          disabled={chromeLocked && !jukeboxTourReady}
+          aria-label="Jukebox — start a dance party"
+          className="absolute z-30 m-0 p-0 border-0 bg-transparent appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
+          style={{
+            ...onStage(stage, JUKEBOX_BOX),
+            cursor: deckBusy || (chromeLocked && !jukeboxTourReady) ? 'default' : 'pointer',
+          }}
+        />
+      )}
 
       {/* Adam's tour: gold ring on the feature he's describing. */}
       {tourStaging?.spot && tour?.arrived && (
-        <FeatureSpotlight box={tourStaging.spot} shape={tourStaging.shape} zIndex={34} />
+        <FeatureSpotlight box={onStage(stage, tourStaging.spot)} shape={tourStaging.shape} zIndex={34} />
       )}
 
-      {/* Home / Journey / Crew — large illustrated icons with wood labels,
-          same chrome as the hatch “Open” plaque. Hidden on the first visit
-          until Adam's tour has introduced them (tour beats pop in the one
-          he's pointing at). */}
-      {!navHidden && (
-      <button
-        type="button"
-        onClick={goHome}
-        disabled={chromeLocked}
-        aria-label="Home"
-        className="absolute z-30 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-full crew-nav-btn"
-        style={{
-          left: 'max(10px, env(safe-area-inset-left, 0px))',
-          bottom: DECK_NAV_BOTTOM,
-          width: DECK_NAV_ICON_W,
-          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.45))',
-        }}
-      >
-        <img
-          src={SAIL_STEERING_WHEEL}
-          alt=""
-          draggable={false}
-          className="block w-full h-auto select-none pointer-events-none"
+      {/* Wooden tab bar. Hidden until Adam's tour reaches Crew or Journey,
+          then the whole board stays so his spotlight has a target. */}
+      {(showJourneyBtn || showCrewBtn) && (
+        <ShipDeckTabBar
+          disabled={chromeLocked || sailingIsland || wheelSpinOut}
+          stage={stage}
+          wheelRef={wheelRef}
+          rotation={wheelRotation}
+          wheelTransition={wheelTransition}
+          onWheelDown={onWheelDown}
+          onWheelMove={onWheelMove}
+          onWheelUp={onWheelUp}
+          tabs={[
+            {
+              id: 'home',
+              label: 'My Home',
+              aria: 'My Home',
+              onClick: goMyHome,
+              icon: <MyHomeIcon />,
+            },
+            {
+              id: 'crew',
+              label: 'Crew',
+              aria: 'Pick your crew',
+              active: true,
+              onClick: () => setPickerOpen(true),
+              icon: <CrewBoatIcon />,
+            },
+            {
+              id: 'profile',
+              label: 'Profile',
+              aria: 'Profiles',
+              onClick: goProfile,
+              icon: <CrewBoatIcon />,
+            },
+            {
+              id: 'library',
+              label: 'Library',
+              aria: 'Library',
+              onClick: goLibrary,
+              icon: <LibraryBookIcon />,
+            },
+          ]}
         />
-        <span aria-hidden className={deckPlaqueClass} style={deckPlaqueStyle}>
-          Home
-        </span>
-      </button>
-      )}
-
-      {showJourneyBtn && (
-      <button
-        type="button"
-        onClick={goToSail}
-        disabled={chromeLocked}
-        aria-label="Journey — steer the ship to another island"
-        className="absolute z-30 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl crew-nav-btn"
-        style={{
-          opacity: tour ? 1 : undefined, // spotlighted during the tour, not dimmed
-          left: '50%',
-          transform: 'translateX(-50%)',
-          bottom: DECK_NAV_BOTTOM,
-          width: DECK_NAV_ICON_W,
-          cursor: deckBusy ? 'default' : 'pointer',
-          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.45))',
-        }}
-      >
-        <img
-          src={JOURNEY_MAP_ICON}
-          alt=""
-          draggable={false}
-          className="block w-full h-auto select-none pointer-events-none"
-        />
-        <span aria-hidden className={deckPlaqueClass} style={deckPlaqueStyle}>
-          Journey
-        </span>
-      </button>
-      )}
-
-      {showCrewBtn && (
-      <button
-        type="button"
-        onClick={() => setPickerOpen(true)}
-        disabled={chromeLocked}
-        aria-label="Pick your crew"
-        aria-haspopup="dialog"
-        className="absolute z-30 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl crew-nav-btn"
-        style={{
-          opacity: tour ? 1 : undefined, // spotlighted during the tour, not dimmed
-          right: 'max(10px, env(safe-area-inset-right, 0px))',
-          bottom: DECK_NAV_BOTTOM,
-          width: DECK_NAV_ICON_W,
-          cursor: deckBusy ? 'default' : 'pointer',
-          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.45))',
-        }}
-      >
-        <img
-          src={SAIL_BTN_CREW}
-          alt=""
-          draggable={false}
-          className="block w-full h-auto select-none pointer-events-none"
-        />
-        <span aria-hidden className={deckPlaqueClass} style={deckPlaqueStyle}>
-          Crew
-        </span>
-      </button>
       )}
 
       <CrewPickerDropdown open={pickerOpen} onClose={closePicker} anchor="page" />
@@ -1335,7 +2008,7 @@ const CrewPage: React.FC = () => {
         <div
           className="absolute left-1/2 z-40 -translate-x-1/2 px-4 py-2.5 rounded-2xl font-display font-bold text-sm text-[#3d2414] text-center max-w-[85vw]"
           style={{
-            bottom: 'max(28px, calc(var(--safe-area-bottom, 0px) + 16px))',
+            bottom: 'max(236px, calc(var(--safe-area-bottom, 0px) + 224px))',
             background: 'linear-gradient(180deg, #F5E6C8 0%, #E8D4A8 100%)',
             boxShadow:
               '0 6px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5)',
@@ -1349,7 +2022,7 @@ const CrewPage: React.FC = () => {
 
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard
-        variant="crewShip"
+        variant={discoverShip ? 'discoverShip' : 'crewShip'}
         active={crewGuide && !chatCharacter}
         onFinished={finishCrewGuide}
       />
@@ -1410,6 +2083,16 @@ const CrewPage: React.FC = () => {
         @keyframes crew-sea-bob-far {
           from { transform: translate3d(0, -2px, 0); }
           to { transform: translate3d(0, 2px, 0); }
+        }
+        /* Water drift — the blended water copy slides a few px so ripples move */
+        .crew-sea-ripple {
+          will-change: transform;
+          animation: crew-sea-ripple 9s ease-in-out infinite alternate;
+        }
+        @keyframes crew-sea-ripple {
+          0% { transform: translate3d(-10px, -3px, 0); }
+          50% { transform: translate3d(2px, 3px, 0); }
+          100% { transform: translate3d(10px, -2px, 0); }
         }
         @keyframes crew-sea-scroll {
           from { transform: translate3d(-50%, 0, 0); }
@@ -1491,27 +2174,132 @@ const CrewPage: React.FC = () => {
         @media (prefers-reduced-motion: reduce) {
           .ob-tap-adam { animation: none; }
         }
-        /* Nav buttons popping in once Adam introduces them. The pop runs on
-           the button's children, not the button — its inline translateX
-           centering must not be overridden by an animated transform. */
-        .crew-nav-btn:disabled { opacity: 0.5; }
-        .crew-nav-btn > * {
-          animation: crew-nav-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        .ship-tabbar {
+          position: absolute;
+          z-index: 30;
+          left: max(6px, env(safe-area-inset-left, 0px));
+          right: max(6px, env(safe-area-inset-right, 0px));
+          pointer-events: none;
         }
-        .crew-nav-btn > span {
-          /* plaque keeps its own translateX(-50%) */
-          animation-name: crew-nav-pop-plaque;
+        .ship-tabbar-inner {
+          position: relative;
+          max-width: 460px;
+          height: 214px;
+          margin: 0 auto;
+          pointer-events: none;
         }
-        @keyframes crew-nav-pop {
-          from { opacity: 0; transform: translateY(14px) scale(0.85); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+        .ship-tabbar-gable-rim,
+        .ship-tabbar-gable {
+          position: absolute;
+          left: 0;
+          right: 0;
+          clip-path: polygon(50% 0, 100% 36%, 100% 100%, 0 100%, 0 36%);
+          pointer-events: none;
         }
-        @keyframes crew-nav-pop-plaque {
-          from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.85); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        .ship-tabbar-gable-rim {
+          top: 34px;
+          bottom: -4px;
+          background: #5C3310;
+          filter: drop-shadow(0 8px 10px rgba(0,0,0,0.4));
         }
-        @media (prefers-reduced-motion: reduce) {
-          .crew-nav-btn > * { animation: none; }
+        .ship-tabbar-gable {
+          top: 40px;
+          bottom: 0;
+          background-color: #C4894A;
+          background-image:
+            linear-gradient(180deg, rgba(255, 214, 160, 0.28), rgba(90, 42, 12, 0.18)),
+            url('${SHIP_TAB_WOOD}');
+          background-size: cover;
+          background-position: center;
+          box-shadow: inset 0 0 0 3px rgba(92, 48, 16, 0.35);
+        }
+        .ship-tabbar-wheel {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          z-index: 2;
+          width: min(26vw, 104px);
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          transform: translateX(-50%);
+          filter: drop-shadow(0 8px 8px rgba(0,0,0,0.45));
+          cursor: pointer;
+          pointer-events: auto;
+        }
+        .ship-tabbar-wheel:disabled { opacity: 0.55; cursor: default; }
+        .ship-tabbar-wheel img {
+          display: block;
+          width: 100%;
+          height: auto;
+          pointer-events: none;
+          user-select: none;
+        }
+        .ship-tabbar-tiles {
+          position: absolute;
+          z-index: 1;
+          left: 10px;
+          right: 10px;
+          bottom: 10px;
+          height: 84px;
+          display: grid;
+          grid-template-columns: 1fr 1fr 22px 1fr 1fr;
+          gap: 8px;
+          pointer-events: auto;
+        }
+        .ship-tabbar-gap { display: block; }
+        .ship-tabbar-tile {
+          min-width: 0;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 0;
+          padding: 4px 2px 6px;
+          border-radius: 14px;
+          border: 3px solid #E6C98A;
+          background: linear-gradient(180deg, #FFF6E4 0%, #F3D7A2 100%);
+          box-shadow: 0 2px 0 rgba(92, 48, 16, 0.35), inset 0 1px 0 rgba(255,255,255,0.8);
+          color: #7A4A1E;
+          cursor: pointer;
+        }
+        .ship-tabbar-tile.is-active {
+          background: linear-gradient(180deg, #FFF3C4 0%, #F6C445 100%);
+          border-color: #F0B429;
+          box-shadow:
+            0 0 0 2px #FFE08A,
+            0 2px 0 rgba(92, 48, 16, 0.35),
+            inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+        .ship-tabbar-tile:disabled { opacity: 0.55; cursor: default; }
+        .ship-tabbar-tile:not(:disabled):active { transform: translateY(1px); }
+        .ship-tabbar-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 70%;
+          flex: 1 1 auto;
+          min-height: 0;
+          pointer-events: none;
+        }
+        .ship-tabbar-icon img,
+        .ship-tabbar-icon svg {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          pointer-events: none;
+          user-select: none;
+        }
+        .ship-tabbar-label {
+          font-family: Nunito, system-ui, sans-serif;
+          font-weight: 800;
+          font-size: clamp(9px, 2.5vw, 12px);
+          line-height: 1.05;
+          letter-spacing: -0.01em;
+          color: #7A4A1E;
+          white-space: nowrap;
         }
 
         /* Tab hidden → hold every backdrop loop in place */

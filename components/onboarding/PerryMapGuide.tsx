@@ -55,7 +55,7 @@ const PerryMapGuide: React.FC<PerryMapGuideProps> = ({ kidName, canSail = true, 
               marginBottom: 'calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 4.25rem)',
             }}
           >
-            Set Sail →
+            Discover the ship
           </button>
         ) : (
           <div

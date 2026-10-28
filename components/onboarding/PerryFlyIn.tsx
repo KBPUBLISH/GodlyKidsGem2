@@ -4,9 +4,14 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { fetchPerrySpeech } from '../../utils/perrySpeech';
 
-export const PERRY_INTRO_MODEL = '/models/perry-flying-introduction.glb?v=tex-2';
-/** 30 s clip: sideways fly-in, dive, then an authored hover until the end. */
-export const PERRY_DIVE_MODEL = '/models/perry-fly-dive-hover.glb?v=dh-1';
+/** Flight-only Perry: sideways fly-in, dive-and-hover, and a flapping hover. */
+export const PERRY_MODEL = '/models/perry-flight-essentials.glb?v=flight-3';
+export const PERRY_INTRO_MODEL = PERRY_MODEL;
+/** 30 s clip: dive, turn, then an authored hover until the end. */
+export const PERRY_DIVE_MODEL = PERRY_MODEL;
+export const PERRY_INTRO_CLIP = 'FlySidewaysTalking';
+export const PERRY_DIVE_CLIP = 'DiveTurnHover';
+export const PERRY_PORTRAIT_CLIP = 'HoverFlapping';
 
 const NAVY = '#12264A';
 const GOLD = '#FFC43D';
@@ -57,10 +62,12 @@ function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
-/** Authored clip carries the armature from x=-4.8 to x=+4.8. Pin XZ so we own the fly-in. */
+const RIG_POSITION = /(?:SmartRigArmature|Parrot2_Rig)\.position$/;
+
+/** Authored clip carries the rig across the scene. Pin XZ so we own the fly-in. */
 export function pinArmatureXZ(clip: THREE.AnimationClip) {
   for (const track of clip.tracks) {
-    if (!track.name.endsWith('SmartRigArmature.position')) continue;
+    if (!RIG_POSITION.test(track.name)) continue;
     const values = track.values;
     for (let i = 0; i < values.length; i += 3) {
       values[i] = 0;
@@ -71,7 +78,7 @@ export function pinArmatureXZ(clip: THREE.AnimationClip) {
 
 /** Pin the last armature pose to the origin so the dive lands in frame. */
 function recenterArmaturePath(clip: THREE.AnimationClip, pathScale: number) {
-  const track = clip.tracks.find((t) => t.name.endsWith('SmartRigArmature.position'));
+  const track = clip.tracks.find((t) => RIG_POSITION.test(t.name));
   if (!track || track.values.length < 3) return;
   const v = track.values;
   const ex = v[v.length - 3];
@@ -281,9 +288,13 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
       (gltf) => {
         if (disposed) return;
         const model = gltf.scene;
-        [...model.children].forEach((child) => {
-          if (child.name !== 'SmartRigArmature') child.removeFromParent();
-        });
+        // Older Perry files ship extra scene objects beside SmartRigArmature.
+        // Parrot 2's scene root is the rig itself, so leave that graph intact.
+        if (model.getObjectByName('SmartRigArmature')) {
+          [...model.children].forEach((child) => {
+            if (child.name !== 'SmartRigArmature') child.removeFromParent();
+          });
+        }
         model.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -294,8 +305,12 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
           mats.forEach((m) => finishPerryMaterial(m));
         });
 
+        const wanted = motion === 'dive' ? PERRY_DIVE_CLIP : PERRY_INTRO_CLIP;
         const clip =
-          gltf.animations.find((c) => /dive|hover|perry|intro|fly/i.test(c.name)) ||
+          gltf.animations.find((c) => c.name === wanted) ||
+          gltf.animations.find((c) =>
+            motion === 'dive' ? /dive/i.test(c.name) : /introduction|sideways/i.test(c.name),
+          ) ||
           gltf.animations[0];
         if (clip && !authoredPath) pinArmatureXZ(clip);
         if (clip && authoredPath) recenterArmaturePath(clip, 1);

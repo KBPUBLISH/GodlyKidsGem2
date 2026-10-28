@@ -20,6 +20,8 @@ const shouldCacheMedia = (url) => {
   if (url.origin === self.location.origin) {
     return (
       url.pathname.startsWith('/assets/') ||
+      url.pathname.startsWith('/homeworld/assets/') ||
+      url.pathname.startsWith('/homeworld/icons/') ||
       url.pathname.startsWith('/models/') ||
       url.pathname === '/world-background.webp'
     );

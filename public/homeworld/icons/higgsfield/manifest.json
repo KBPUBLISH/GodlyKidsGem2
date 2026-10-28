@@ -1,0 +1,850 @@
+{
+  "provider": "Higgsfield",
+  "jobId": "9b4e8ecb-0d19-4773-8fe1-907ed9f73b71",
+  "model": "gpt_image_2_5",
+  "style": "Soft storybook 3D game art with gently painted surfaces and rounded, slightly exaggerated toy shapes. Use confident chunky silhouettes, beveled edges and restrained warm-brown contour shading. Tools use honey wood and blue-gray metal; plants use lively leaf greens, foods use golden orange and warm red, and special materials use clear turquoise accents. Light every object from the upper left with warm diffuse daylight and soft internal shadows. Keep strong contrast on cream buttons, very few large details, and one consistent three-quarter isometric view.",
+  "icons": [
+    {
+      "id": "walk",
+      "source_rect": [
+        0,
+        0,
+        488,
+        521
+      ],
+      "trim_bbox": [
+        149,
+        80,
+        438,
+        497
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/walk.png",
+      "bytes": 46041,
+      "sha256": "f623de7bcfc3257ee6a9ed06ae2d910d821e3dc4a3ebb75ec0f2d8c20c760236"
+    },
+    {
+      "id": "axe",
+      "source_rect": [
+        488,
+        0,
+        978,
+        521
+      ],
+      "trim_bbox": [
+        76,
+        88,
+        450,
+        481
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/axe.png",
+      "bytes": 53701,
+      "sha256": "83b188bad3b699ca89f19ab011e742bd6b086753fd4d1c5eb42738d9fde76b66"
+    },
+    {
+      "id": "mine",
+      "source_rect": [
+        978,
+        0,
+        1440,
+        521
+      ],
+      "trim_bbox": [
+        55,
+        110,
+        394,
+        477
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/mine.png",
+      "bytes": 68312,
+      "sha256": "5268389100058b79c9c79d97654b434fe8c229f2334d98798f347245c3d953fa"
+    },
+    {
+      "id": "hoe",
+      "source_rect": [
+        1440,
+        0,
+        1920,
+        521
+      ],
+      "trim_bbox": [
+        81,
+        92,
+        403,
+        492
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/hoe.png",
+      "bytes": 48669,
+      "sha256": "bd4eedf21d15427bb0ddacd740b5bfbe8a66e032b10c568102c270ff9188f5af"
+    },
+    {
+      "id": "plant",
+      "source_rect": [
+        1920,
+        0,
+        2392,
+        521
+      ],
+      "trim_bbox": [
+        75,
+        136,
+        403,
+        493
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/plant.png",
+      "bytes": 60916,
+      "sha256": "0380f71140a1ff2cfb2160a590ee828b333f14b962eaf55861e83915271f07e6"
+    },
+    {
+      "id": "water",
+      "source_rect": [
+        2392,
+        0,
+        2880,
+        521
+      ],
+      "trim_bbox": [
+        51,
+        119,
+        432,
+        466
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/water.png",
+      "bytes": 74617,
+      "sha256": "cf8c28da4a7821496a1e14371806db2b331f1da7a2741170424b786ec20349ce"
+    },
+    {
+      "id": "fish",
+      "source_rect": [
+        0,
+        521,
+        493,
+        1000
+      ],
+      "trim_bbox": [
+        85,
+        25,
+        449,
+        444
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/fish.png",
+      "bytes": 41737,
+      "sha256": "9e3d170296cfa4323d87daff37fdc3f35cd065d9d00ad1aac5eac09b887c1711"
+    },
+    {
+      "id": "food",
+      "source_rect": [
+        493,
+        521,
+        976,
+        1000
+      ],
+      "trim_bbox": [
+        51,
+        99,
+        442,
+        440
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/food.png",
+      "bytes": 72617,
+      "sha256": "20879cb98d1f61a95ebfe8c47880cc9f8b6c732572338bcd060be909756845d6"
+    },
+    {
+      "id": "build",
+      "source_rect": [
+        976,
+        521,
+        1440,
+        1000
+      ],
+      "trim_bbox": [
+        57,
+        55,
+        389,
+        445
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/build.png",
+      "bytes": 50557,
+      "sha256": "8b3bbe8b79fbbfc3ab9d88908a85809a6322d7526c77050740a526c6e717c4ad"
+    },
+    {
+      "id": "book",
+      "source_rect": [
+        1440,
+        521,
+        1906,
+        1000
+      ],
+      "trim_bbox": [
+        79,
+        68,
+        401,
+        445
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/book.png",
+      "bytes": 64880,
+      "sha256": "03882583a989c2a2f15fca7116d03bcfac63c8f5f33df13a17a669b8b40758ec"
+    },
+    {
+      "id": "bag",
+      "source_rect": [
+        1906,
+        521,
+        2391,
+        1000
+      ],
+      "trim_bbox": [
+        46,
+        48,
+        440,
+        451
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/bag.png",
+      "bytes": 76112,
+      "sha256": "ae2d37eae40626728c5de426431fbeddc50aa2edc596b43805692736f1cd3e75"
+    },
+    {
+      "id": "map",
+      "source_rect": [
+        2391,
+        521,
+        2880,
+        1000
+      ],
+      "trim_bbox": [
+        46,
+        75,
+        431,
+        431
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/map.png",
+      "bytes": 75644,
+      "sha256": "3cddbbced20691dc589c6dbd3eb428ce64795e0701f5a9b8834a96d7cf6720f5"
+    },
+    {
+      "id": "zoom",
+      "source_rect": [
+        0,
+        1000,
+        491,
+        1454
+      ],
+      "trim_bbox": [
+        86,
+        37,
+        448,
+        427
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/zoom.png",
+      "bytes": 60326,
+      "sha256": "6f32208614ffceca9f0dbeee65bfe4c97839d1bee48adaca778d3d0bb5d16900"
+    },
+    {
+      "id": "sun",
+      "source_rect": [
+        491,
+        1000,
+        978,
+        1454
+      ],
+      "trim_bbox": [
+        45,
+        29,
+        447,
+        427
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/sun.png",
+      "bytes": 55054,
+      "sha256": "de19ee5e3a63f3a5277bb7b5315922918e4adbe1e10eb5d529122d8ea2b2d530"
+    },
+    {
+      "id": "energy",
+      "source_rect": [
+        978,
+        1000,
+        1430,
+        1454
+      ],
+      "trim_bbox": [
+        92,
+        32,
+        369,
+        423
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/energy.png",
+      "bytes": 43927,
+      "sha256": "e318a80495b438fe0253732880b11c714ad44fdf5c87c358220886132d187256"
+    },
+    {
+      "id": "wood",
+      "source_rect": [
+        1430,
+        1000,
+        1914,
+        1454
+      ],
+      "trim_bbox": [
+        50,
+        86,
+        443,
+        400
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/wood.png",
+      "bytes": 57332,
+      "sha256": "2be359c3a358ffde74722997039a8e18262ca3f34ce3274e4147b767d01b9bb0"
+    },
+    {
+      "id": "stone",
+      "source_rect": [
+        1914,
+        1000,
+        2408,
+        1454
+      ],
+      "trim_bbox": [
+        42,
+        98,
+        445,
+        410
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/stone.png",
+      "bytes": 57672,
+      "sha256": "d9c023ab9912f8d139cd81542dc916e1a9116251fa932ad26e4248805fa58fba"
+    },
+    {
+      "id": "copper",
+      "source_rect": [
+        2408,
+        1000,
+        2880,
+        1454
+      ],
+      "trim_bbox": [
+        51,
+        60,
+        399,
+        422
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/copper.png",
+      "bytes": 79342,
+      "sha256": "39fe2432828650795df534ee93e0e594a30177ec203a744b0c9d63c7d69ca5e1"
+    },
+    {
+      "id": "iron",
+      "source_rect": [
+        0,
+        1454,
+        505,
+        1937
+      ],
+      "trim_bbox": [
+        85,
+        105,
+        472,
+        427
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/iron.png",
+      "bytes": 56828,
+      "sha256": "c8c91622f3e1c607613d0b858140bdd75db1429a552a406953f0d9dbaf8ea490"
+    },
+    {
+      "id": "diamond",
+      "source_rect": [
+        505,
+        1454,
+        972,
+        1937
+      ],
+      "trim_bbox": [
+        46,
+        88,
+        421,
+        432
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/diamond.png",
+      "bytes": 57763,
+      "sha256": "f274563133316fc2fe43de68cfa802e2c9498b36b0547e911fc995613a2388e6"
+    },
+    {
+      "id": "carrot",
+      "source_rect": [
+        972,
+        1454,
+        1427,
+        1937
+      ],
+      "trim_bbox": [
+        71,
+        29,
+        407,
+        450
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/carrot.png",
+      "bytes": 41254,
+      "sha256": "5664d58d102794e51e39e6b5513f94ce0a6a6190c6ae72a7bcccbef09955a777"
+    },
+    {
+      "id": "pumpkin",
+      "source_rect": [
+        1427,
+        1454,
+        1906,
+        1937
+      ],
+      "trim_bbox": [
+        46,
+        34,
+        432,
+        442
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/pumpkin.png",
+      "bytes": 62934,
+      "sha256": "f05b7cc6526d2d919ad65bcae8c27f3414193d934ca4588723f634e62a34096d"
+    },
+    {
+      "id": "bread",
+      "source_rect": [
+        1906,
+        1454,
+        2382,
+        1937
+      ],
+      "trim_bbox": [
+        46,
+        105,
+        445,
+        426
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/bread.png",
+      "bytes": 60158,
+      "sha256": "ab51344b4946d1f8f63c965e6699b9aaecb8e715fb05fdb26557d88ef0b3c48b"
+    },
+    {
+      "id": "rawfish",
+      "source_rect": [
+        2382,
+        1454,
+        2880,
+        1937
+      ],
+      "trim_bbox": [
+        33,
+        109,
+        454,
+        406
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/rawfish.png",
+      "bytes": 52078,
+      "sha256": "d148633b52e7052405a10ca34c7305657ce5ae140fb0cfeeda3d8280f34780e0"
+    },
+    {
+      "id": "cookedfish",
+      "source_rect": [
+        0,
+        1937,
+        504,
+        2401
+      ],
+      "trim_bbox": [
+        62,
+        119,
+        471,
+        419
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/cookedfish.png",
+      "bytes": 64282,
+      "sha256": "38d56c1e1835716ace89dad5fbd715b3a01398bd32d26cc0271e95247785a940"
+    },
+    {
+      "id": "wheat",
+      "source_rect": [
+        504,
+        1937,
+        964,
+        2401
+      ],
+      "trim_bbox": [
+        85,
+        38,
+        415,
+        433
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/wheat.png",
+      "bytes": 62732,
+      "sha256": "5d89dd889c59e911c363c1314625cd7f23397b92cd9b7bf24475b24255a8ecc3"
+    },
+    {
+      "id": "sunflower",
+      "source_rect": [
+        964,
+        1937,
+        1441,
+        2401
+      ],
+      "trim_bbox": [
+        46,
+        35,
+        421,
+        437
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/sunflower.png",
+      "bytes": 84007,
+      "sha256": "323ded08dc27e47c0928136cdeb55742ada86c18ed64c78d566513216cdb8546"
+    },
+    {
+      "id": "pine_seed",
+      "source_rect": [
+        1441,
+        1937,
+        1920,
+        2401
+      ],
+      "trim_bbox": [
+        60,
+        45,
+        394,
+        426
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/pine_seed.png",
+      "bytes": 75789,
+      "sha256": "ff86a388b4348f2f696d208700874e54b32b7a1085e1e4ee9b7081d32287f328"
+    },
+    {
+      "id": "oak_acorn",
+      "source_rect": [
+        1920,
+        1937,
+        2386,
+        2401
+      ],
+      "trim_bbox": [
+        115,
+        64,
+        372,
+        407
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/oak_acorn.png",
+      "bytes": 57613,
+      "sha256": "b3b506cd9bf526cbec9b7400d208f890e0be1dd71eac6c01a1c95cddeed827f3"
+    },
+    {
+      "id": "maple_seed",
+      "source_rect": [
+        2386,
+        1937,
+        2880,
+        2401
+      ],
+      "trim_bbox": [
+        46,
+        74,
+        425,
+        401
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/maple_seed.png",
+      "bytes": 49213,
+      "sha256": "39142df7752d0ba015d2ebd48f8581f160f24bde88752c4a16123ddbd4847152"
+    },
+    {
+      "id": "apple_seed",
+      "source_rect": [
+        0,
+        2401,
+        486,
+        2880
+      ],
+      "trim_bbox": [
+        100,
+        28,
+        435,
+        396
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/apple_seed.png",
+      "bytes": 68972,
+      "sha256": "23cb1b991b2dd081daf1ccbf7b77bb5b07ca4b4c2c779b3550040843cc691b99"
+    },
+    {
+      "id": "coconut",
+      "source_rect": [
+        486,
+        2401,
+        961,
+        2880
+      ],
+      "trim_bbox": [
+        89,
+        41,
+        419,
+        404
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/coconut.png",
+      "bytes": 74453,
+      "sha256": "3bd0ef820f14776965eb6cb9a842c59e9bad573474351feebba00cd69034fb3b"
+    },
+    {
+      "id": "moon",
+      "source_rect": [
+        961,
+        2401,
+        1430,
+        2880
+      ],
+      "trim_bbox": [
+        70,
+        63,
+        418,
+        393
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/moon.png",
+      "bytes": 58296,
+      "sha256": "2dfc479fc7b682717b087d07aa06bb36739921f542a18a45387d51ffe55d3953"
+    },
+    {
+      "id": "harvest",
+      "source_rect": [
+        1430,
+        2401,
+        1907,
+        2880
+      ],
+      "trim_bbox": [
+        50,
+        44,
+        429,
+        401
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/harvest.png",
+      "bytes": 81433,
+      "sha256": "f46a5c3e01dbdfcb14ca316b53880cb60cdc967195bae5e569ad065cc57a0ff9"
+    },
+    {
+      "id": "rest",
+      "source_rect": [
+        1907,
+        2401,
+        2411,
+        2880
+      ],
+      "trim_bbox": [
+        47,
+        44,
+        457,
+        402
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/rest.png",
+      "bytes": 61503,
+      "sha256": "38bfaf6339b57fb2cd987f4962bd6c92cb3a4787b4bdcf604b4511fa28f02e40"
+    },
+    {
+      "id": "water_drop",
+      "source_rect": [
+        2411,
+        2401,
+        2880,
+        2880
+      ],
+      "trim_bbox": [
+        111,
+        53,
+        350,
+        396
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/water_drop.png",
+      "bytes": 45980,
+      "sha256": "bb61a1b25430399069058f9234edbf4b6628d19dfddaa5889aa39abba1ea9674"
+    },
+    {
+      "id": "mud",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/mud.png",
+      "bytes": 56055,
+      "sha256": "db81bbe2c6c6e5625e38e6b6a6a833bcdf305a0b29f489310b87b427e309f9b3"
+    },
+    {
+      "id": "clay",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/clay.png",
+      "bytes": 69073,
+      "sha256": "b110a45476fa62d041ee42e0637d1cc51481e1b4cb5b2f0a6fc0bfefe23f825a"
+    },
+    {
+      "id": "manna",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/manna.png",
+      "bytes": 82211,
+      "sha256": "291561855110c7e8272db711c1fcc9d7a5b0b8922a0ea5a7a4091382c2500cea"
+    },
+    {
+      "id": "oven",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/oven.png",
+      "bytes": 77960,
+      "sha256": "72b2cd9463685466a1ab405f025bd1aa0408d36032e5a69f20fc4ba2d4ceb73b"
+    },
+    {
+      "id": "pray",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/pray.png",
+      "bytes": 58664,
+      "sha256": "6a9f4bb0d90153b0ee4d148e8f25a571fa2f4624c4e4b0d897372311c8d90e11"
+    }
+  ]
+}

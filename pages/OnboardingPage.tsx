@@ -19,7 +19,7 @@ import { facebookPixelService } from '../services/facebookPixelService';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { Capacitor } from '@capacitor/core';
-import { ONBOARDING_FAMILY_BG_POSTER, ONBOARDING_FAMILY_BG_VIDEO, startOnboardingJourney } from '../utils/onboardingJourney';
+import { ONBOARDING_FAMILY_BG_POSTER, ONBOARDING_FAMILY_BG_VIDEO, markDiscoverShipPending, startOnboardingJourney } from '../utils/onboardingJourney';
 import { preloadCloudFlythroughAssets } from '../components/onboarding/CloudFlythrough';
 import ForParentsGate from '../components/onboarding/ForParentsGate';
 import PassPhoneHandoff from '../components/onboarding/PassPhoneHandoff';
@@ -960,7 +960,8 @@ const OnboardingPage: React.FC = () => {
     }
     void savePreferencesToBackend([], []);
     startOnboardingJourney();
-    navigate('/map', { replace: true, state: { onboardingJourney: true, perryArrive: true } });
+    markDiscoverShipPending();
+    navigate('/crew', { replace: true, state: { onboardingJourney: true, discoverShip: true } });
   };
   
   const togglePriority = (id: string) => {

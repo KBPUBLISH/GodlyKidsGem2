@@ -9,6 +9,7 @@ import StormySeaError from '../components/ui/StormySeaError';
 import {
   ONBOARDING_GENESIS_VIDEO,
   isOnboardingJourneyActive,
+  markDiscoverShipPending,
 } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
@@ -1381,8 +1382,18 @@ const MapPage: React.FC = () => {
         createPortal(
           <PerryMapGuide
             kidName={perryKidName}
-            canSail={Boolean(islands[0])}
-            onSetSail={goToFirstIsland}
+            canSail
+            onSetSail={() => {
+              markDiscoverShipPending();
+              navigate('/crew', {
+                replace: true,
+                state: {
+                  onboardingJourney: true,
+                  discoverShip: true,
+                  kidName: perryKidName,
+                },
+              });
+            }}
           />,
           document.body,
         )}

@@ -42,8 +42,8 @@ export function buildPerryReadyCopy(kidName: string): { line: string; tts: strin
 export function buildPerryIslandCopy(kidName?: string | null): { line: string; tts: string } {
   const name = perryFirstName(kidName);
   return {
-    line: `${name}! We found our first island! Lets Fly! Oh wait, you can't haha… sorry. Lets get on the Godly Ship and set sail!`,
-    tts: `[excitedly] ${name}! [happily] We found our first island! [excitedly] Let's fly! [giggles] Oh wait, you can't! Haha! [pause] Squawk! [warmly] Sorry. [happily] Let's get on the Godly Ship and set sail!`,
+    line: `${name}! This is your crew ship. You unlock characters. Let me show you how.`,
+    tts: `[excitedly] ${name}! [happily] This is your crew ship. [warmly] You unlock characters. [pause] Let me show you how.`,
   };
 }
 

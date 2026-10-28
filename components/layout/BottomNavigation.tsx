@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Anchor, Ship } from 'lucide-react';
+import { Anchor } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useTutorial } from '../../context/TutorialContext';
 
@@ -9,8 +9,6 @@ const MAP_FOOTER_FRAME = '/assets/images/map-footer-frame.png';
 const MAP_FOOTER_ASPECT = 295 / 846;
 /** Same wheel art as CrewPage / SailScenePage. */
 const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
-/** Gold star art (island quiz win) reused as the Favorites icon. */
-const GOLD_STAR = '/assets/images/island-star-win.png';
 /** Treasure-map illustration (user-provided, background removed) — Library tab. */
 const TAB_MAP = '/assets/ui/tab-map.png';
 
@@ -31,18 +29,13 @@ type NavItem = {
 };
 
 /**
- * Home (anchor) · Library (treasure map) · My Journey (ship wheel) ·
- * Favorites (gold star) · Crew (ship).
- * My Journey opens the sail deck (/sail), where the kid steers the wheel
- * between islands; the island map (/map) is reached from there.
- * The active tab sits in a cream door-shaped arch that rises above the plank.
+ * Home (anchor, left) · ship wheel (center) · Library (right).
+ * The wheel opens the crew ship. Favorites and the separate Crew tab are gone.
  */
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home', path: '/world' },
+  { id: 'journey', label: 'Crew ship', path: '/crew' },
   { id: 'library', label: 'Library', path: '/listen' },
-  { id: 'journey', label: 'My Journey', path: '/sail' },
-  { id: 'favorites', label: 'Favorites', path: '/library' },
-  { id: 'crew', label: 'Crew', path: '/crew' },
 ];
 
 /** Tutorial / programmatic tab → path (OnboardingTutorial still dispatches wheel events). */
@@ -58,10 +51,7 @@ const getActiveTab = (pathname: string): string | null => {
   if (pathname === '/world' || pathname === '/home' || pathname === '/') return 'home';
   // /read stays reachable via the Library page's Listen/Read toggle.
   if (pathname === '/listen' || pathname === '/read') return 'library';
-  // /map (island map) still lights the Journey tab; tapping it goes to /sail.
-  if (pathname === '/sail' || pathname === '/map') return 'journey';
-  if (pathname === '/library') return 'favorites';
-  if (pathname === '/crew') return 'crew';
+  if (pathname === '/crew' || pathname.startsWith('/crew/')) return 'journey';
   // /games and other main pages: no matching tab highlight
   return null;
 };
@@ -74,19 +64,14 @@ const renderTabIcon = (id: string): React.ReactNode => {
       return <img src={TAB_MAP} alt="" draggable={false} className="gk-tab-img" />;
     case 'journey':
       return <img src={SAIL_STEERING_WHEEL} alt="" draggable={false} className="gk-tab-img" />;
-    case 'favorites':
-      return <img src={GOLD_STAR} alt="" draggable={false} className="gk-tab-img" />;
-    case 'crew':
-      return <Ship className="gk-tab-ship" strokeWidth={2.4} aria-hidden />;
     default:
       return null;
   }
 };
 
 /**
- * Shared wood+rope footer with 5 tabs; the active tab pops up in a cream
- * door/arch shape. Used on every main-nav page (including Map, My Library and
- * Crew).
+ * Shared wood+rope footer: anchor, center wheel, library.
+ * Used on every main-nav page (including the crew ship and library).
  */
 const WoodTabBar: React.FC = () => {
   const navigate = useNavigate();

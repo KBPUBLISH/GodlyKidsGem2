@@ -235,11 +235,21 @@ const IslandQuizPage: React.FC = () => {
     });
   }, [navigate, sceneBackPath, islandId, returnStoryId, navState, title, onboardingJourney]);
 
+  /**
+   * True when this results screen is the kid's first ever completion of this
+   * story's quiz and its reward has not been claimed yet — the "Continue to
+   * reward" button is shown then (any score), so the first finish always leads
+   * on to the treasure instead of dead-ending at Play again.
+   */
+  const [firstTimeReward, setFirstTimeReward] = useState(false);
+
   // Persist quiz completion as soon as the results screen is shown
   useEffect(() => {
     if (phase !== 'done') return;
     const sid = storyId || searchParams.get('storyId') || '';
     if (!sid) return;
+    const before = islandStoryProgressService.get(islandId, sid);
+    if (!before.quiz && !before.rewards) setFirstTimeReward(true);
     storyPackUnlockUxService.markActivityAndFlagUnlock(islandId, sid, 'quiz');
   }, [phase, islandId, storyId, searchParams]);
 
@@ -758,11 +768,13 @@ const IslandQuizPage: React.FC = () => {
                 </button>
               ) : (
                 <>
-                  {earnedTreasure && (
+                  {(earnedTreasure || firstTimeReward) && (
                     <button
                       type="button"
                       onClick={claimTreasure}
-                      className="py-3.5 rounded-xl font-black text-lg text-[#3d2314] flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                      className={`py-3.5 rounded-xl font-black text-lg text-[#3d2314] flex items-center justify-center gap-2 active:scale-95 transition-transform ${
+                        firstTimeReward ? 'ob-claim-pulse' : ''
+                      }`}
                       style={{
                         background:
                           'linear-gradient(180deg, #F0D78C 0%, #D4A017 50%, #B8860B 100%)',
@@ -772,7 +784,7 @@ const IslandQuizPage: React.FC = () => {
                       }}
                     >
                       <Gift size={22} strokeWidth={2.4} />
-                      Claim Treasure
+                      {firstTimeReward ? 'Continue to reward' : 'Claim Treasure'}
                     </button>
                   )}
                   <button

@@ -628,18 +628,13 @@ const MainMapPage: React.FC = () => {
   }, []);
 
   const handleBack = useCallback(() => {
-    // Prefer sail (previous step); otherwise ocean map.
+    // Sailed here from the ship deck (Crew page): back returns to that ship.
     if (navState?.fromSail) {
-      navigate(`/sail/${encodeURIComponent(islandId)}`, {
-        state: {
-          title: navState.title,
-          hasMainMap: true,
-        },
-      });
+      navigate('/crew');
       return;
     }
     navigate('/map');
-  }, [navigate, islandId, navState?.fromSail, navState?.title]);
+  }, [navigate, navState?.fromSail]);
 
   const handleStoryTap = useCallback(
     (story: MainMapStory, label: string, index: number) => {
@@ -925,7 +920,7 @@ const MainMapPage: React.FC = () => {
           ...woodBtnStyle,
           top: 'max(calc(var(--safe-area-top, 0px) + 8px), 12px)',
         }}
-        aria-label="Back to ocean map"
+        aria-label={navState?.fromSail ? 'Back to the ship' : 'Back to ocean map'}
       >
         <ArrowLeft size={22} className="text-white drop-shadow" strokeWidth={2.6} />
       </button>

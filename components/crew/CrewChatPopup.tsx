@@ -18,6 +18,16 @@ import {
   selectSuggestions,
 } from './crewChatMemory';
 import { noteJourneyActivity } from '../../utils/journeyStudy';
+import {
+  parseIslandIntent,
+  taskGoLine,
+  taskGoalPrompt,
+  answerWorldQuestion,
+  sanitizeAiTask,
+  islandGreeting,
+  type IslandTask,
+  type WorldBrief,
+} from '../../utils/islandIntents';
 
 /** Shared wood texture — matches the deck plaques. */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
@@ -48,11 +58,75 @@ type Reply = {
 type Props = {
   character: UnlockedCharacter;
   onClose: () => void;
+  /** Island talks stay to one short line and skip the portrait. */
+  variant?: 'deck' | 'island';
+  /** Island only: the kid agreed on a job, hand it to the world. */
+  onTask?: (task: IslandTask) => void;
+  /** Island only: what the character knows about their island right now. */
+  world?: WorldBrief | null;
 };
+
+export type { IslandTask };
+
+/** A pending follow-up: the job plus the one detail still missing. */
+type TaskFlow = { task: IslandTask; ask: string; options: { label: string; task: IslandTask }[] };
+
+/** Tapped pills always ask the goal first (typed text only asks when the detail is missing). */
+const PILL_TASKS: Record<string, IslandTask> = {
+  'Chop some wood': { type: 'chop' },
+  'Break rocks': { type: 'mine', goal: 'any', count: 1 },
+  'Catch a fish': { type: 'fish', goal: 'one', count: 1 },
+  'Water the garden': { type: 'water', goal: 'all' },
+  'Plant seeds': { type: 'plant' },
+  'Pick the crops': { type: 'harvest' },
+  'Build something': { type: 'build' },
+  'Go to sleep': { type: 'sleep' },
+};
+const PILL_GOALS: Record<string, TaskFlow> = {
+  'Catch a fish': { task: { type: 'fish' }, ask: 'How many fish should I catch?', options: [
+    { label: 'Just one', task: { type: 'fish', goal: 'one', count: 1 } },
+    { label: 'Three for supper', task: { type: 'fish', goal: 'few', count: 3 } },
+  ] },
+  'Water the garden': { task: { type: 'water' }, ask: 'Which plants?', options: [
+    { label: 'Every thirsty plant', task: { type: 'water', goal: 'all' } },
+    { label: 'Just one', task: { type: 'water', goal: 'one', count: 1 } },
+  ] },
+  'Break rocks': { task: { type: 'mine' }, ask: 'What are we after?', options: [
+    { label: 'Any rock', task: { type: 'mine', goal: 'any', count: 1 } },
+    { label: 'Stone for building', task: { type: 'mine', goal: 'stone', count: 2 } },
+    { label: 'Shiny minerals', task: { type: 'mine', goal: 'copper', count: 1 } },
+  ] },
+};
+
+/** Pills offered after "I have a task" — picked from what makes sense right now. */
+function taskPills(w: WorldBrief | null): string[] {
+  const pills = ['Chop some wood', 'Break rocks', 'Catch a fish'];
+  if (w?.garden?.thirsty) pills.push('Water the garden');
+  if (w?.garden?.ready) pills.push('Pick the crops');
+  if (w && Object.keys(w.seeds).length) pills.push('Plant seeds');
+  pills.push('Build something');
+  if (w?.canSleep && w.energy < 60) pills.push('Go to sleep');
+  return pills.slice(0, 6);
+}
 
 /** Friendly line when the chat endpoint is unreachable. */
 const fallbackGreeting = (name: string) =>
   `Ahoy, matey! I'm ${name}. I'm so happy you came to visit me on deck!`;
+
+/** Island talk always offers something to tap next. */
+const ISLAND_OPENERS = ['I have a task', 'I just want to chat'];
+const ISLAND_CHATS = ['Tell me about your day', 'What do you like here?', 'Are you happy?'];
+/** Chat-only island talks: jobs are given with the Task button beside the character. */
+const TASK_BUTTON_LINE = 'I would love to help! Tap the Task button next to me on the island and I will get right to it.';
+
+/** One short spoken line. Island replies must not run on into a story. */
+function shortenReply(text: string) {
+  const clean = stripEmotionTags(text);
+  let sentence = (clean.split(/(?<=[.!?])\s/)[0] || clean).trim();
+  const words = sentence.split(/\s+/).filter(Boolean);
+  if (words.length > 16) sentence = `${words.slice(0, 16).join(' ').replace(/[,:;–—-]+$/, '')}.`;
+  return sentence;
+}
 
 /**
  * Face-focused portrait: full-body character art is top-anchored and zoomed
@@ -89,7 +163,7 @@ const FacePortrait: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => (
  * background once the typing is done. Degrades gracefully: no backend →
  * static friendly line, no suggestions.
  */
-const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
+const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', onTask, world = null }) => {
   const { kids, currentProfileId } = useUser();
 
   // Kid's first name from the active profile (same source as the Listen page
@@ -106,6 +180,8 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
   const [reply, setReply] = useState<Reply | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  // Island: the task waiting on its goal answer ("what's the wood for?").
+  const [pendingTask, setPendingTask] = useState<TaskFlow | null>(null);
   const [thinking, setThinking] = useState(false);
   const [retryQuestion, setRetryQuestion] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -246,24 +322,30 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
           userName,
           question,
           history: historySnapshot,
+          brief: variant === 'island',
+          world: variant === 'island' ? world ?? undefined : undefined,
         });
         if (!mountedRef.current) return;
+        const replyText = variant === 'island' ? shortenReply(res.reply) : res.reply;
+        // The character may decide to act on what the kid said ("sure, I'll
+        // go fish") — hand a validated task to the island after the line lands.
+        const aiTask = variant === 'island' && onTask ? sanitizeAiTask(res.task) : null;
+        if (aiTask) window.setTimeout(() => onTask(aiTask), 1600);
         const nextHistory: ChatTurn[] = isGreeting
-          ? [...historySnapshot, { role: 'character', text: res.reply }]
+          ? [...historySnapshot, { role: 'character', text: replyText }]
           : [
               ...historySnapshot,
               { role: 'user', text: question },
-              { role: 'character', text: res.reply },
+              { role: 'character', text: replyText },
             ];
         setHistory(nextHistory);
         // Remember the conversation so reopening picks up where we left off.
         saveChatHistory(character.id, nextHistory);
-        showReply(res.reply, true);
+        showReply(replyText, true);
         // Cached responses can suggest questions the kid already asked —
         // swap those out for fresh ones (backfilled from earlier responses).
-        setSuggestions(
-          selectSuggestions(character.id, res.suggestedQuestions.map(stripEmotionTags)),
-        );
+        const picked = selectSuggestions(character.id, res.suggestedQuestions.map(stripEmotionTags));
+        setSuggestions(variant === 'island' && picked.length === 0 ? (onTask ? ISLAND_OPENERS : ISLAND_CHATS) : picked);
       } catch {
         if (!mountedRef.current) return;
         if (isGreeting) {
@@ -276,7 +358,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
         if (mountedRef.current) setThinking(false);
       }
     },
-    [character.id, character.name, character.persona, character.sourceStoryId, userName, showReply],
+    [character.id, character.name, character.persona, character.sourceStoryId, userName, showReply, variant, world, onTask],
   );
 
   // Open with the greeting sentinel. If this character has (unexpired) saved
@@ -292,12 +374,23 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
     // Ensure past user turns count as "already asked" for suggestion picking
     // (covers histories saved before asked-question tracking existed).
     seedAskedFromHistory(character.id, saved);
-    setHistory(saved);
     setComposing(false);
     setDraft('');
+    if (variant === 'island') {
+      // Keep the last few turns so the character can refer back to them,
+      // but open with a fresh, situation-aware line rather than an AI greeting.
+      const recent = saved.slice(-6);
+      setHistory(recent);
+      setPendingTask(null);
+      setSuggestions(onTask ? ISLAND_OPENERS : ISLAND_CHATS);
+      const lastUser = [...saved].reverse().find((t) => t.role === 'user' && !ISLAND_OPENERS.includes(t.text))?.text || null;
+      showReply(islandGreeting({ characterId: character.id, userName, world, lastUserLine: lastUser }), true);
+      return;
+    }
+    setHistory(saved);
     void ask(GREETING_QUESTION, saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character.id]);
+  }, [character.id, variant, userName]);
 
   const doneTyping = !!reply && typed >= reply.text.length;
 
@@ -319,6 +412,72 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
     setLastQuestion(question);
     setComposing(false);
     setDraft('');
+    if (variant === 'island') {
+      const say = (line: string, next: string[]) => {
+        const nextHistory: ChatTurn[] = [...history, { role: 'user', text: question }, { role: 'character', text: line }];
+        setHistory(nextHistory);
+        saveChatHistory(character.id, nextHistory);
+        setSuggestions(next);
+        showReply(line, true);
+      };
+      // Hand a decided job to the island after the line is spoken.
+      const go = (task: IslandTask) => {
+        setPendingTask(null);
+        say(taskGoLine(task), []);
+        window.setTimeout(() => onTask?.(task), 1400);
+      };
+      // A job that still needs one detail: ask, offer the choices as pills.
+      const askGoal = (task: IslandTask) => {
+        const prompt = taskGoalPrompt(task);
+        if (!prompt) return go(task);
+        setPendingTask({ task, ask: prompt.ask, options: prompt.options });
+        say(prompt.ask, prompt.options.map((o) => o.label));
+      };
+      if (ISLAND_OPENERS.includes(question)) {
+        const task = question === 'I have a task';
+        setPendingTask(null);
+        say(task ? 'What should I do?' : 'What do you want to talk about?', task ? taskPills(world) : ISLAND_CHATS);
+        return;
+      }
+      if (onTask) {
+        // 1. Answer to a pending goal question.
+        const picked = pendingTask?.options.find((o) => o.label === question);
+        if (pendingTask && picked) return go(picked.task);
+        // 2. A tapped task pill.
+        if (PILL_GOALS[question]) {
+          const flow = PILL_GOALS[question];
+          setPendingTask(flow);
+          say(flow.ask, flow.options.map((o) => o.label));
+          return;
+        }
+        if (PILL_TASKS[question]) return askGoal(PILL_TASKS[question]);
+        // 3. Free text: do we understand it as a job or a question about the island?
+        const intent = parseIslandIntent(question);
+        if (intent.kind === 'task') {
+          if (['stop', 'pause', 'resume'].includes(intent.task.type)) {
+            say(taskGoLine(intent.task), ISLAND_OPENERS);
+            onTask(intent.task);
+            return;
+          }
+          return intent.needsGoal ? askGoal(intent.task) : go(intent.task);
+        }
+        if (intent.kind === 'ask') {
+          say(answerWorldQuestion(intent.topic, world), ISLAND_OPENERS);
+          return;
+        }
+      } else {
+        // Talk only: a job request points the kid at the Task button; island questions still get answered.
+        const intent = parseIslandIntent(question);
+        if (intent.kind === 'task') {
+          say(TASK_BUTTON_LINE, ISLAND_CHATS);
+          return;
+        }
+        if (intent.kind === 'ask') {
+          say(answerWorldQuestion(intent.topic, world), ISLAND_CHATS);
+          return;
+        }
+      }
+    }
     // History updates only when the reply lands — `ask` appends the user
     // turn and the character turn together (see its doc comment).
     void ask(question, history);
@@ -463,7 +622,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
             </div>
 
             {/* Bubble tail — diamond aimed at the face below-left */}
-            <span
+            {variant !== 'island' && <span
               aria-hidden
               className="absolute"
               style={{
@@ -476,7 +635,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
                 borderRight: `2px solid ${BUBBLE_BORDER}`,
                 borderBottom: `2px solid ${BUBBLE_BORDER}`,
               }}
-            />
+            />}
 
             {/* Replay — hear it again; perched on the bubble's corner */}
             {reply?.audioUrl && !thinking && !retryQuestion && (
@@ -503,7 +662,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
 
         {/* Big face (left) + floating question pills (right, on the scene) */}
         <div className="flex items-end gap-3">
-          <div className="flex flex-col items-center flex-shrink-0 pointer-events-none">
+          {variant !== 'island' && <div className="flex flex-col items-center flex-shrink-0 pointer-events-none">
             <div
               className="w-[104px] h-[104px] rounded-2xl overflow-hidden"
               style={{
@@ -531,7 +690,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose }) => {
             >
               {character.name}
             </span>
-          </div>
+          </div>}
 
           <div className="flex-1 flex flex-col gap-2 min-w-0">
             {showSuggestions &&

@@ -45,6 +45,8 @@ const MAX_HISTORY_TURNS = 8;
 export type CharacterChatResponse = {
   reply: string;
   suggestedQuestions: string[];
+  /** Island chat only: a job the character decided to do (validated by the caller). */
+  task?: unknown;
 };
 
 export async function fetchCharacterChat(params: {
@@ -56,6 +58,10 @@ export async function fetchCharacterChat(params: {
   userName?: string;
   question: string;
   history?: ChatTurn[];
+  /** Ask for one short sentence instead of a story. */
+  brief?: boolean;
+  /** Island chat: what the character knows about their island (energy, wood, buildings…). */
+  world?: Record<string, unknown>;
 }): Promise<CharacterChatResponse> {
   const base = getApiBaseUrl(); // ends with ".../api/"
   const body: Record<string, unknown> = {
@@ -66,6 +72,8 @@ export async function fetchCharacterChat(params: {
   if (params.storyId) body.storyId = params.storyId;
   if (params.storyTitle) body.storyTitle = params.storyTitle;
   if (params.userName) body.userName = params.userName;
+  if (params.brief) body.brief = true;
+  if (params.world) body.world = params.world;
   if (params.history && params.history.length > 0) {
     body.history = params.history.slice(-MAX_HISTORY_TURNS);
   }
@@ -87,7 +95,7 @@ export async function fetchCharacterChat(params: {
         .filter(Boolean)
         .slice(0, 3)
     : [];
-  return { reply, suggestedQuestions };
+  return { reply, suggestedQuestions, task: data?.task ?? undefined };
 }
 
 /**

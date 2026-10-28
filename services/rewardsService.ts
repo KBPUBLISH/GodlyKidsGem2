@@ -8,6 +8,10 @@
 
 import { getApiBaseUrl } from './apiService';
 import { islandStoryProgressService } from './islandStoryProgressService';
+import {
+  applyCharacterAppearanceToResidents,
+  readPlayersWorldResidents,
+} from '../utils/playersWorld';
 
 export type RewardType = 'character' | 'game' | 'coins' | 'book_template' | 'puzzle' | 'coloring';
 
@@ -610,11 +614,13 @@ class RewardsService {
    * away (earliest unlock wins).
    */
   async refreshUnlockedCharactersFromCms(): Promise<boolean> {
+    const held = readStore();
     const storyIds = Array.from(
       new Set(
-        readStore()
-          .characters.map((c) => (c.sourceStoryId || '').trim())
-          .filter(Boolean),
+        [
+          ...this.getClaimedStoryIds(),
+          ...held.characters.map((c) => (c.sourceStoryId || '').trim()),
+        ].filter(Boolean),
       ),
     );
     if (storyIds.length === 0) return false;
@@ -625,15 +631,28 @@ class RewardsService {
     const pools = await this.fetchRewardPoolsByStory(storyIds);
     const freshById = new Map<string, RewardDefinition>();
     const freshByStoryAndName = new Map<string, RewardDefinition>();
+    const storyOfReward = new Map<string, string>();
+    const nameHits = new Map<string, RewardDefinition[]>();
     for (const [storyId, pool] of pools) {
       for (const def of pool) {
         if (def.type !== 'character') continue;
         freshById.set(def.id, def);
+        storyOfReward.set(def.id, storyId);
         const name = normName(def.characterName || def.title);
-        if (name) freshByStoryAndName.set(`${storyId}\u0000${name}`, def);
+        if (!name) continue;
+        freshByStoryAndName.set(`${storyId}\u0000${name}`, def);
+        const hits = nameHits.get(name) || [];
+        hits.push(def);
+        nameHits.set(name, hits);
       }
     }
     if (freshById.size === 0) return false;
+
+    const storyIdFromClaim = (characterId: string) => {
+      const suffix = `:${characterId}`;
+      const key = held.claimedKeys.find((k) => k.endsWith(suffix));
+      return key ? key.slice(0, -suffix.length) : '';
+    };
 
     const store = readStore();
     let changed = false;
@@ -644,14 +663,18 @@ class RewardsService {
     store.characters = store.characters.map((c) => {
       let def = freshById.get(c.id);
       if (!def) {
-        const sid = (c.sourceStoryId || '').trim();
+        const sid = (c.sourceStoryId || '').trim() || storyIdFromClaim(c.id);
+        const named = normName(c.name);
         const fallback = sid
-          ? freshByStoryAndName.get(`${sid}\u0000${normName(c.name)}`)
-          : undefined;
+          ? freshByStoryAndName.get(`${sid}\u0000${named}`)
+          : named && (nameHits.get(named) || []).length === 1
+            ? nameHits.get(named)![0]
+            : undefined;
         if (fallback) {
           def = fallback;
           idRemap.set(c.id, def.id);
-          migratedClaimKeys.push(claimKey(sid, def.id));
+          const storyId = storyOfReward.get(def.id) || sid;
+          if (storyId) migratedClaimKeys.push(claimKey(storyId, def.id));
           console.log(
             `⚓ rewards refresh: reward id changed in CMS for "${c.name}" (${c.id} → ${def.id}) — migrating`,
           );
@@ -663,7 +686,9 @@ class RewardsService {
         id: def.id,
         name: def.characterName || def.title || c.name,
         imageUrl: def.imageUrl || c.imageUrl,
-        // CMS is the source of truth — removed fields clear the stored value
+        sourceStoryId: storyOfReward.get(def.id) || c.sourceStoryId,
+        // CMS is the source of truth — a newly uploaded GLB replaces the
+        // model this kid already collected.
         modelUrl: def.modelUrl,
         voiceId: def.voiceId,
         persona: def.persona,
@@ -693,6 +718,7 @@ class RewardsService {
     }
 
     if (changed) writeStore(store);
+    applyCharacterAppearanceToResidents(store.characters, idRemap);
     return changed;
   }
 
@@ -944,20 +970,44 @@ function purgeShipParrot(): void {
   writeStore(store);
 }
 
+/** Noah animation test from noahnewanimationg.glb, shown on the ship for a look. */
+const NOAH_HQ_MODEL = '/models/noah-new-anim.glb?v=1';
+const isNoahCharacter = (c: { name?: string }) =>
+  /^noah$/i.test(String(c.name || '').trim());
+
+/** One deck slot per friend: same reward id, or same name from the same story. */
+const crewIdentityKey = (c: UnlockedCharacter) =>
+  `${String(c.name || '').trim().toLowerCase()}\u0000${(c.sourceStoryId || '').trim()}`;
+
 /**
  * Crew currently standing on the ship (selected roster, or everyone when
- * none is picked).
+ * none is picked). Friends already dropped off on the My Home island live
+ * there now, so they are not aboard.
  */
 export function getOnDeckCrew(): UnlockedCharacter[] {
   purgeShipParrot();
+  const ashore = new Set(readPlayersWorldResidents().map((r) => r.id));
+  const seenIds = new Set<string>();
+  const seenIdentity = new Set<string>();
   const characters = rewardsService
     .getUnlockedCharacters()
-    .filter((c) => c.id !== SHIP_PARROT_ID);
+    .filter((c) => c.id !== SHIP_PARROT_ID && !ashore.has(c.id))
+    .filter((c) => {
+      // A re-minted reward can leave the same friend twice in the save;
+      // keep the first (oldest) so he never walks the deck twice.
+      const identity = String(c.name || '').trim() ? crewIdentityKey(c) : '';
+      if (seenIds.has(c.id) || (identity && seenIdentity.has(identity))) return false;
+      seenIds.add(c.id);
+      if (identity) seenIdentity.add(identity);
+      return true;
+    });
   const selected = rewardsService.getSelectedCrewIds();
   const roster = selected.length
     ? characters.filter((c) => selected.includes(c.id))
     : characters;
-  let onDeck = roster.slice(0, MAX_CREW);
+  let onDeck = roster.slice(0, MAX_CREW).map((c) =>
+    isNoahCharacter(c) ? { ...c, modelUrl: NOAH_HQ_MODEL } : c,
+  );
   // DEV ONLY debug hook: `localStorage.debugCrewModelUrl = '/models/x.glb'`
   const debugModelUrl =
     typeof localStorage !== 'undefined' ? localStorage.getItem('debugCrewModelUrl') : null;

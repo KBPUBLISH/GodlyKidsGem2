@@ -604,6 +604,7 @@ import SailBoatArcadePage from './pages/SailBoatArcadePage';
 import SailBoatBasementGamePage from './pages/SailBoatBasementGamePage';
 import SailBoatBasementDartsPage from './pages/SailBoatBasementDartsPage';
 import BuriedTreasurePage from './pages/BuriedTreasurePage';
+import MyHomePage from './pages/MyHomePage';
 import KaraokePage from './pages/KaraokePage';
 import KaraokePlayerPage from './pages/KaraokePlayerPage';
 import KaraokeSharePage from './pages/KaraokeSharePage';
@@ -1253,6 +1254,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isSailScene = location.pathname === '/sail' || location.pathname.startsWith('/sail/');
   /** Crew ship deck — fullscreen scenic (no app chrome), like sail. */
   const isCrewDeck = location.pathname === '/crew';
+  /** HomeWorld homestead opened from My Home on the ship. */
+  const isMyHome = location.pathname === '/my-home';
   /** Island main map (CMS) — fullscreen like sail / lesson. */
   const isMainMapScene = /^\/map\/[^/]+\/main\/?$/.test(location.pathname);
   const isPremiumOnboarding = location.pathname === '/premium-onboarding';
@@ -1261,7 +1264,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro;
+  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMyHome || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro;
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1531,6 +1534,7 @@ const App: React.FC = () => {
                   <Route path="/sail/:islandId/lesson/try-it" element={<IslandTryItPage />} />
                   <Route path="/crew/canon" element={<CrewCanonGolfPage />} />
                   <Route path="/crew" element={<CrewPage />} />
+                  <Route path="/my-home" element={<MyHomePage />} />
                   {/* BROWSING PAGES - No account required, users can explore freely */}
                   <Route path="/world" element={<WorldPageWithWelcomeCheck />} />
                   {/* /home redirects to /world so island buttons are the main explore view */}

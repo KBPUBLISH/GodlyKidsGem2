@@ -4,6 +4,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   PERRY_INTRO_MODEL,
+  PERRY_PORTRAIT_CLIP,
   finishPerryMaterial,
   pinArmatureXZ,
   stylePerryEye,
@@ -91,7 +92,9 @@ const PerryGuidePortrait: React.FC = () => {
 
       mixer = new THREE.AnimationMixer(model);
       const clip =
-        gltf.animations.find((c) => /perry|intro|fly/i.test(c.name)) || gltf.animations[0];
+        gltf.animations.find((c) => c.name === PERRY_PORTRAIT_CLIP) ||
+        gltf.animations.find((c) => /hover/i.test(c.name)) ||
+        gltf.animations[0];
       if (clip) {
         pinArmatureXZ(clip);
         const action = mixer.clipAction(clip);

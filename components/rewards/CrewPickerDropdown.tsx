@@ -95,13 +95,16 @@ const CrewPickerDropdown: React.FC<Props> = ({ open, onClose, anchor = 'sail' })
 
   return (
     <div className="fixed inset-0 z-[180]" role="dialog" aria-modal="true" aria-label="Crew picker">
-      <img
-        src={CREW_SHIP_DECK_BG}
-        alt=""
-        aria-hidden
-        draggable={false}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-      />
+      {/* The 'page' anchor is the ship deck itself — no backdrop art there. */}
+      {anchor === 'sail' && (
+        <img
+          src={CREW_SHIP_DECK_BG}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+        />
+      )}
       <button
         type="button"
         className="absolute inset-0 bg-black/30"

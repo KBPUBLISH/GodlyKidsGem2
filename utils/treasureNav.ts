@@ -1,4 +1,4 @@
-const FALLBACK_PATH = '/sail';
+const FALLBACK_PATH = '/crew';
 
 /** In-app path only — reject protocol-relative / open redirects. */
 export function safeAppReturnPath(path?: string, fallback = FALLBACK_PATH): string {

@@ -9,9 +9,7 @@ import {
 import {
   ONBOARDING_FAMILY_BG_VIDEO,
   SPLASH_BOAT_POSTER,
-  SPLASH_BOAT_VIDEO,
   SPLASH_CONTINUE_VIDEO,
-  SPLASH_TAGLINE,
 } from '../utils/onboardingJourney';
 
 const STORAGE_KEY = 'godly_kids_data_v6';
@@ -19,7 +17,7 @@ const STORAGE_KEY = 'godly_kids_data_v6';
 const NAVY = '#12264A';
 const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
-const CONTINUE_TIMEOUT_MS = 7500;
+const CONTINUE_TIMEOUT_MS = 12000;
 
 const SPLASH_COVER: React.CSSProperties = {
   width: '100vw',
@@ -65,7 +63,6 @@ const LandingPage: React.FC = () => {
     finished: false,
   });
   const startedRef = useRef(false);
-  const splashRef = useRef<HTMLVideoElement>(null);
   const continueRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -109,19 +106,6 @@ const LandingPage: React.FC = () => {
     }
   }, [isChecking]);
 
-  useEffect(() => {
-    const splash = splashRef.current;
-    if (!splash) return;
-    const play = () => {
-      splash.play().catch(() => {
-        /* muted + playsInline is the main autoplay fix */
-      });
-    };
-    splash.addEventListener('canplay', play);
-    play();
-    return () => splash.removeEventListener('canplay', play);
-  }, [isChecking]);
-
   const goOnboarding = useCallback(() => {
     navigate('/onboarding');
   }, [navigate]);
@@ -141,7 +125,6 @@ const LandingPage: React.FC = () => {
       return;
     }
 
-    splashRef.current?.pause();
     setPlayingContinue(true);
 
     const clip = continueRef.current;
@@ -205,29 +188,16 @@ const LandingPage: React.FC = () => {
         src={SPLASH_BOAT_POSTER}
         alt=""
         aria-hidden
-        className="absolute inset-0 pointer-events-none select-none"
-        style={SPLASH_COVER}
-      />
-
-      <video
-        ref={splashRef}
-        src={SPLASH_BOAT_VIDEO}
-        poster={SPLASH_BOAT_POSTER}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
         className={`absolute inset-0 pointer-events-none select-none transition-opacity duration-500 ${mediaReady ? 'opacity-100' : 'opacity-0'}`}
         style={SPLASH_COVER}
-        aria-hidden
-        onPlaying={() => setMediaReady(true)}
+        onLoad={() => setMediaReady(true)}
         onError={() => setMediaReady(true)}
       />
 
       <video
         ref={continueRef}
         src={SPLASH_CONTINUE_VIDEO}
+        poster={SPLASH_BOAT_POSTER}
         playsInline
         preload="auto"
         className={`absolute inset-0 z-30 pointer-events-none select-none transition-opacity duration-200 ${playingContinue ? 'opacity-100' : 'opacity-0'}`}
@@ -244,20 +214,41 @@ const LandingPage: React.FC = () => {
           top: 'max(calc(var(--safe-area-top, 0px) + 10px), 2.4vh)',
         }}
       >
-        <h1 className="w-full max-w-[22rem] m-0">
-          <img
-            src={SPLASH_TAGLINE}
-            alt="A Bible app for adventurous kids. Set sail into God's Word."
-            className="w-full h-auto select-none pointer-events-none"
-            draggable={false}
-          />
+        <p
+          className="m-0 text-center leading-none select-none"
+          style={{
+            fontFamily: "'Luckiest Guy', 'Fredoka', sans-serif",
+            fontSize: 'clamp(1.7rem, 8vw, 2.4rem)',
+            color: '#3EC6FF',
+            WebkitTextStroke: '5px #16325C',
+            paintOrder: 'stroke fill',
+            textShadow: '0 3px 0 #FFC43D',
+            letterSpacing: '0.04em',
+          }}
+        >
+          GODLY KIDS
+        </p>
+        <h1
+          className="m-0 mt-2 text-center leading-[0.86] select-none"
+          style={{
+            fontFamily: "'Luckiest Guy', 'Fredoka', sans-serif",
+            fontSize: 'clamp(2.35rem, 11vw, 3.4rem)',
+            color: '#FFB000',
+            WebkitTextStroke: '7px #16325C',
+            paintOrder: 'stroke fill',
+            textShadow: '0 4px 0 #0B2545',
+          }}
+        >
+          <span className="block">A Bible</span>
+          <span className="block">Adventure</span>
+          <span className="block">Awaits</span>
         </h1>
       </div>
 
       <div
         className={`absolute left-1/2 z-20 flex w-full max-w-sm -translate-x-1/2 flex-col items-center px-5 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         style={{
-          bottom: 'calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + max(0.85rem, 3.5vh))',
+          bottom: 'calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 0.35rem)',
         }}
       >
         <div className="relative flex w-full justify-center">
@@ -326,12 +317,24 @@ const LandingPage: React.FC = () => {
             </div>
           )}
         </div>
+        <p
+          className="mt-3 mb-1 text-center font-extrabold uppercase leading-tight select-none"
+          style={{
+            fontFamily: "'Nunito', 'Fredoka', sans-serif",
+            fontSize: 'clamp(0.85rem, 3.6vw, 1.05rem)',
+            color: '#fff',
+            letterSpacing: '0.04em',
+            textShadow: '0 2px 0 #16325C, 0 4px 10px rgba(0,0,0,0.45)',
+          }}
+        >
+          Story based Christian Learning for Families
+        </p>
         <button
           onClick={handleSignIn}
-          className="mt-3 font-medium text-base hover:underline active:opacity-70 transition-all"
+          className="mt-2 font-bold text-sm hover:underline active:opacity-70 transition-all"
           style={{
-            color: NAVY,
-            textShadow: '0 0 8px #fff, 0 1px 0 #fff',
+            color: '#fff',
+            textShadow: '0 1px 2px #16325C, 0 0 8px rgba(0,0,0,0.45)',
           }}
         >
           Sign In

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Lock, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Lock, Volume2, VolumeX } from 'lucide-react';
 import {
   getBibleMapApiRoot,
   resolveBibleMapMediaUrl,
@@ -26,10 +26,13 @@ const SAIL_SCENE_BG_STILL = '/assets/images/sail-scene-bg.png';
 /** First-person boat bow interior (1024×829) — black keyed to alpha. */
 const SAIL_SHIP_DECK = '/assets/images/sail-ship-deck.png';
 const SAIL_STEERING_WHEEL = '/assets/images/sail-steering-wheel.png';
-/** Sail-scene bottom overlay — crew roster (three characters on wood plaque). */
-const SAIL_BTN_CREW = '/assets/images/sail-btn-crew.png';
-/** Sail-scene bottom overlay — explore / world (open book on wood plaque). */
-const SAIL_BTN_EXPLORE = '/assets/images/sail-btn-explore.png';
+/** 3D carved helm rail and button tiles. */
+const SAIL_HELM_BAR = '/assets/images/sail-helm-bar.png';
+const SAIL_HELM_BTN_CREW = '/assets/images/sail-helm-btn-crew.png';
+const SAIL_HELM_BTN_WORLD = '/assets/images/sail-helm-btn-world.png';
+const SAIL_HELM_BTN_HOME = '/assets/images/sail-helm-btn-home.png';
+const SAIL_HELM_BTN_LIBRARY = '/assets/images/sail-helm-btn-library.png';
+const SAIL_WHEEL_HINT = '/assets/images/sail-wheel-hint-arrow.png';
 /** Shared wood texture for Travel Here CTA (matches IslandScene chrome). */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 /** One-time steering-wheel turn hint — hide after first drag. */
@@ -107,6 +110,7 @@ const SAIL_SKY_CLOUD_LOOP_SEC = 95;
 type SailCarouselIsland = {
   id: string;
   title: string;
+  blurb: string;
   src: string;
   hasMainMap: boolean;
   mainMapUrl?: string;
@@ -114,6 +118,13 @@ type SailCarouselIsland = {
   storiesComplete: number;
   storiesTotal: number;
 };
+
+const ISLAND_FEATURES = [
+  { id: 'stories', label: 'Stories' },
+  { id: 'characters', label: 'Meet Characters' },
+  { id: 'treasure', label: 'Find Treasure' },
+  { id: 'games', label: 'Play Games' },
+] as const;
 
 const getIslandProgress = (island: SailCarouselIsland) => ({
   completed: island.storiesComplete,
@@ -155,7 +166,7 @@ const DECK_MAX_HEIGHT = '72vh';
  * Sink the deck below the viewport so more of the bow is cropped.
  * Fraction of scaled deck height (negative bottom offset).
  */
-const DECK_SINK = 0.28;
+const DECK_SINK = 1.4;
 /**
  * Pedestal top sits ~72% up from the bottom of the deck image.
  * Wheel hub is centered on that line.
@@ -163,6 +174,8 @@ const DECK_SINK = 0.28;
 const PEDESTAL_FROM_BOTTOM = 0.72;
 /** Resolved deck height used for bottom / pedestal calc. */
 const DECK_HEIGHT_EXPR = `min(${DECK_MAX_HEIGHT}, ${DECK_SCALE * 100}vw * ${DECK_ASPECT_H_OVER_W})`;
+/** Room kept above the bottom tab bar so the wheel sits on the bow, not on the tabs. */
+const SAIL_TAB_CLEARANCE = 'max(136px, calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 128px))';
 
 /**
  * Island carousel framing uses the legacy landscape horizon aspect so island
@@ -252,9 +265,11 @@ const toCarouselIsland = (island: OceanMapIsland): SailCarouselIsland | null => 
   const src = getSailIslandArtSrc(island);
   if (!src) return null;
   const title = (island.book && island.book.trim()) || island.title;
+  const desc = island.title.trim();
   return {
     id: island.id,
     title,
+    blurb: desc && desc !== title ? desc : 'Discover this part of the Bible.',
     src,
     hasMainMap: mediaIndicatesMainMap(island.mainMapUrl, island.mainMapVideoUrl),
     mainMapUrl: island.mainMapUrl,
@@ -293,7 +308,6 @@ const SailScenePage: React.FC = () => {
   const location = useLocation();
   const { islandId } = useParams<{ islandId?: string }>();
   const navState = location.state as SailNavState;
-  const arrowMarkerId = `gk-sail-helm-arrow-${useId().replace(/:/g, '')}`;
 
   const wheelRef = useRef<HTMLDivElement>(null);
   const oceanVideoRef = useRef<HTMLVideoElement>(null);
@@ -914,8 +928,8 @@ const SailScenePage: React.FC = () => {
             const active = i === lookIndex && !isDragging;
             const unlocked = isIslandUnlocked(island.id, carouselIslands);
             // Center island reads close; each step back shrinks and lifts toward the horizon.
-            const scale = Math.max(0.4, 1.34 - distance * 0.74);
-            const yPct = -42 - distance * 16;
+            const scale = Math.max(0.42, 1.05 - distance * 0.48);
+            const yPct = -28 - distance * 10;
             const xVw = -offset * ISLAND_SPACING_VW;
             const baseTransform = `translate(-50%, ${yPct}%) scale(${scale})`;
             const sailTransform = `translate(-50%, -48%) scale(${scale * 1.28})`;
@@ -945,8 +959,8 @@ const SailScenePage: React.FC = () => {
                 }`}
                 style={{
                   left: `calc(50% + ${xVw}vw)`,
-                  top: '18%',
-                  width: 'min(34vw, 220px)',
+                  top: '0%',
+                  width: 'min(58vw, 280px)',
                   opacity: visible ? Math.max(0.38, 1 - distance * 0.34) : 0,
                   transform: isSailing && active ? sailTransform : baseTransform,
                   // Islands pop to the next slot on each detent shift (also mid-drag).
@@ -981,24 +995,12 @@ const SailScenePage: React.FC = () => {
                       Sized as % of island so it scales with carousel framing. */}
                   {!unlocked && (
                     <span
-                      className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
-                      style={{ width: '30%' }}
+                      className="absolute left-1/2 top-[8%] -translate-x-1/2 flex items-center justify-center pointer-events-none"
+                      style={{ width: '18%' }}
                       aria-hidden
                     >
-                      <span
-                        className="flex items-center justify-center w-full aspect-square rounded-full"
-                        style={{
-                          background:
-                            'linear-gradient(180deg, #D4A574 0%, #8B6914 100%)',
-                          boxShadow:
-                            '0 2px 0 #5c3a1a, 0 3px 8px rgba(0,0,0,0.4)',
-                          border: '1.5px solid #E8C060',
-                        }}
-                      >
-                        <Lock
-                          className="w-[48%] h-[48%] text-white"
-                          strokeWidth={2.8}
-                        />
+                      <span className="flex items-center justify-center w-full aspect-square rounded-full bg-white/95 shadow-lg">
+                        <Lock className="w-[52%] h-[52%] text-[#5c6b86]" strokeWidth={2.6} />
                       </span>
                     </span>
                   )}
@@ -1007,35 +1009,6 @@ const SailScenePage: React.FC = () => {
             );
           })}
 
-          {/* Travel Here — kid CTA over the focused island; same sail path as tapping it */}
-          {!isSailing && !isDragging && activeIsland && (
-            <button
-              type="button"
-              onClick={() => startSailToIsland(activeIsland)}
-              aria-label={
-                isIslandUnlocked(activeIsland.id, carouselIslands)
-                  ? `Travel here to ${activeIsland.title}`
-                  : `${activeIsland.title} locked — complete ${firstIslandTitle} to unlock`
-              }
-              className="absolute z-20 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl appearance-none whitespace-nowrap font-display font-black uppercase tracking-[0.08em] text-[0.7rem] sm:text-[0.8rem] leading-none text-[#F5E6C8] active:scale-95 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-              style={{
-                ...travelHereBtnStyle,
-                left: '50%',
-                /* Sit over the canopy of the focused island (same anchor as carousel). */
-                top: '2%',
-                transform: 'translate(-50%, -50%)',
-                textShadow:
-                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
-                pointerEvents: 'auto',
-                cursor: isIslandUnlocked(activeIsland.id, carouselIslands)
-                  ? 'pointer'
-                  : 'not-allowed',
-                opacity: isIslandUnlocked(activeIsland.id, carouselIslands) ? 1 : 0.85,
-              }}
-            >
-              Travel Here
-            </button>
-          )}
         </div>
       </div>
 
@@ -1109,13 +1082,23 @@ const SailScenePage: React.FC = () => {
             transform: rotate(0deg);
           }
         }
+        @keyframes sail-kid-arrow-bob {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-3px) scale(1.06); }
+        }
+        .sail-kid-arrow {
+          animation: sail-kid-arrow-bob 1.3s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sail-kid-arrow { animation: none; }
+        }
       `}</style>
 
       {/* Ship bow / deck — sunk below viewport so bow crops and wheel sits lower */}
       <div
         className="absolute left-0 right-0 z-10 pointer-events-none overflow-visible will-change-transform"
         style={{
-          bottom: `calc(${DECK_HEIGHT_EXPR} * ${-DECK_SINK})`,
+          bottom: `calc(${DECK_HEIGHT_EXPR} * ${-DECK_SINK} + ${SAIL_TAB_CLEARANCE})`,
           // Sail forward: deck rises toward camera and grows
           transform: isSailing
             ? 'translateY(-18%) scale(1.22)'
@@ -1148,95 +1131,59 @@ const SailScenePage: React.FC = () => {
         />
       </div>
 
-      {/* Interactive steering wheel — hub sits on the deck pedestal */}
-      <div
-        className="absolute left-0 right-0 z-20 flex justify-center pointer-events-none will-change-transform"
-        style={{
-          // Pedestal line = sunk deck bottom + fraction of scaled deck height
-          bottom: `calc(${DECK_HEIGHT_EXPR} * ${PEDESTAL_FROM_BOTTOM - DECK_SINK})`,
-          transform: isSailing
-            ? 'translateY(-28%) scale(1.18)'
-            : 'translateY(0) scale(1)',
-          transition: sailTransition,
-          transformOrigin: '50% 100%',
-        }}
-      >
+      {/* Ship bow stays behind the helm. The wheel lives in the wooden bar. */}
+
+      {activeIsland && (
         <div
-          ref={wheelRef}
-          className="relative touch-none select-none"
+          className="absolute left-0 right-0 z-[18] flex items-center justify-center px-1 pointer-events-none"
           style={{
-            width: 'min(62vw, 300px)',
-            aspectRatio: '1',
-            // Center hub on the pedestal line (bottom edge → hub)
-            transform: 'translateY(50%)',
-            cursor: isSailing ? 'default' : isDragging ? 'grabbing' : 'grab',
-            touchAction: 'none',
-            WebkitUserSelect: 'none',
-            userSelect: 'none',
-            filter: 'drop-shadow(0 8px 18px rgba(0,0,0,0.45))',
-            pointerEvents: isSailing ? 'none' : 'auto',
+            // Sit in the water between the island and the top of the wheel.
+            bottom: `calc(318px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))`,
+            opacity: isDragging || shifting ? 0 : 1,
+            transform: isSailing ? 'scale(0.9)' : 'scale(1)',
+            transition: 'opacity 0.22s ease, transform 0.45s ease',
           }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          role="slider"
-          aria-label="Steer to change island"
-          aria-valuemin={0}
-          aria-valuemax={Math.max(lookCount - 1, 0)}
-          aria-valuenow={lookIndex}
-          aria-valuetext={lookLabel}
-          aria-disabled={isSailing}
         >
-          <img
-            src={SAIL_STEERING_WHEEL}
-            alt=""
-            draggable={false}
-            className="w-full h-full object-contain pointer-events-none select-none will-change-transform"
-            style={{
-              transform: `rotate(${visualRotation}deg)`,
-              transition: wheelTransition,
+          {!isSailing && lookIndex > 0 ? (
+            <KidArrow
+              direction="left"
+              label="Previous island"
+              onClick={() => {
+                dismissWheelHint();
+                shiftDetent(-1);
+              }}
+            />
+          ) : (
+            <span className="h-11 w-9 shrink-0" />
+          )}
+          <SailIslandCard
+            index={lookIndex}
+            island={activeIsland}
+            unlocked={isIslandUnlocked(activeIsland.id, carouselIslands)}
+            sailing={isSailing}
+            lockLine={`Complete ${firstIslandTitle} to Unlock`}
+            onExplore={() => {
+              if (!isIslandUnlocked(activeIsland.id, carouselIslands)) {
+                pulseLockedFeedback(activeIsland.id);
+                return;
+              }
+              startSailToIsland(activeIsland);
             }}
           />
-          {/* One-time turn hint — hide on first wheel interaction (localStorage). */}
-          {showWheelHint && !isSailing && (
-            <div
-              className="absolute inset-0 pointer-events-none sail-wheel-hint"
-              aria-hidden
-            >
-              <svg
-                viewBox="0 0 100 100"
-                className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
-              >
-                <defs>
-                  <marker
-                    id={arrowMarkerId}
-                    viewBox="0 0 10 10"
-                    refX="0.35"
-                    refY="5"
-                    markerWidth="2.8"
-                    markerHeight="2.8"
-                    markerUnits="strokeWidth"
-                    orient="auto"
-                  >
-                    <path d="M 0 0.6 L 10 5 L 0 9.4 Z" fill="#F5E6C8" />
-                  </marker>
-                </defs>
-                {/* Clockwise rim arc; marker orients to the end tangent (down). */}
-                <path
-                  d="M 72 22 A 36 36 0 0 1 88 58"
-                  fill="none"
-                  stroke="#F5E6C8"
-                  strokeWidth="4.5"
-                  strokeLinecap="butt"
-                  markerEnd={`url(#${arrowMarkerId})`}
-                />
-              </svg>
-            </div>
+          {!isSailing && lookIndex < carouselIslands.length - 1 ? (
+            <KidArrow
+              direction="right"
+              label="Next island"
+              onClick={() => {
+                dismissWheelHint();
+                shiftDetent(1);
+              }}
+            />
+          ) : (
+            <span className="h-11 w-9 shrink-0" />
           )}
         </div>
-      </div>
+      )}
 
       <button
         type="button"
@@ -1256,69 +1203,131 @@ const SailScenePage: React.FC = () => {
         )}
       </button>
 
-      {/* Bottom overlay — Crew | Home on the ship deck (hidden during first-run). */}
-      {!hideDeckNav && (
       <div
-        className="absolute left-0 right-0 z-[25] flex items-end justify-between pointer-events-none"
-        style={{
-          // Raised a bit above the home indicator / deck edge
-          bottom: `max(calc(var(--safe-area-bottom, 0px) + 20px), calc(${DECK_HEIGHT_EXPR} * 0.07))`,
-          paddingLeft: 'min(4vw, 14px)',
-          paddingRight: 'min(4vw, 14px)',
-        }}
+        className="absolute inset-x-0 bottom-0 z-[28]"
+        role="navigation"
+        aria-label="Ship tabs"
       >
-        {(
-          [
-            {
-              id: 'crew',
-              src: SAIL_BTN_CREW,
-              label: 'CREW',
-              ariaLabel: 'Crew',
-              to: '/crew' as string | null,
-            },
-            {
-              id: 'home',
-              src: SAIL_BTN_EXPLORE,
-              label: 'Home',
-              ariaLabel: 'Home',
-              to: '/world' as string | null,
-            },
-          ] as const
-        ).map((btn) => (
-          <button
-            key={btn.id}
-            type="button"
-            disabled={isSailing}
-            onClick={() => {
-              if (!btn.to) return;
-              navigate(btn.to);
-            }}
-            className="pointer-events-auto flex flex-col items-center gap-0 p-0 m-0 border-0 bg-transparent appearance-none active:scale-95 transition-transform disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-xl"
-            style={{
-              width: 'min(18vw, 80px)',
-              filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.4))',
-            }}
-            aria-label={btn.ariaLabel}
+        <div className="relative h-[208px] w-full">
+          <img
+            src={SAIL_HELM_BAR}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full select-none object-fill"
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4"
+            style={{ paddingBottom: 'max(22px, calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 10px))' }}
           >
+            {!hideDeckNav && (
+              <div className="flex items-end gap-2">
+                {(
+                  [
+                    { id: 'crew', src: SAIL_HELM_BTN_CREW, label: 'Crew', to: '/crew' },
+                    { id: 'world', src: SAIL_HELM_BTN_WORLD, label: 'World', to: '/sail' },
+                  ] as const
+                ).map((tab) => {
+                  const active = tab.id === 'world';
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      disabled={isSailing}
+                      onClick={() => {
+                        if (!active) navigate(tab.to);
+                      }}
+                      className="w-[68px] shrink-0 disabled:opacity-60"
+                      aria-label={tab.label}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <img
+                        src={tab.src}
+                        alt=""
+                        draggable={false}
+                        className="h-auto w-full select-none pointer-events-none drop-shadow-[0_4px_4px_rgba(40,18,6,0.35)]"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!hideDeckNav && (
+              <div className="flex items-end gap-2">
+                {(
+                  [
+                    { id: 'home', src: SAIL_HELM_BTN_HOME, label: 'My Home', to: '/my-home' },
+                    { id: 'library', src: SAIL_HELM_BTN_LIBRARY, label: 'Library', to: '/listen' },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    disabled={isSailing}
+                    onClick={() =>
+                      navigate(tab.to, tab.id === 'home' ? { state: { from: location.pathname } } : undefined)
+                    }
+                    className="w-[68px] shrink-0 disabled:opacity-60"
+                    aria-label={tab.label}
+                  >
+                    <img
+                      src={tab.src}
+                      alt=""
+                      draggable={false}
+                      className="h-auto w-full select-none pointer-events-none drop-shadow-[0_4px_4px_rgba(40,18,6,0.35)]"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div
+            ref={wheelRef}
+            className="absolute left-1/2 z-[2] -translate-x-1/2 touch-none select-none"
+            style={{
+              bottom: 'calc(208px - min(42vw, 164px) / 2)',
+              width: 'min(42vw, 164px)',
+              aspectRatio: '1',
+              cursor: isSailing ? 'default' : isDragging ? 'grabbing' : 'grab',
+              touchAction: 'none',
+              filter: 'drop-shadow(0 6px 8px rgba(60, 24, 8, 0.45))',
+              pointerEvents: isSailing ? 'none' : 'auto',
+              transform: isSailing ? 'translateX(-50%) translateY(-16%) scale(1.08)' : 'translateX(-50%)',
+              transition: sailTransition,
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            role="slider"
+            aria-label="Steer to change island"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(lookCount - 1, 0)}
+            aria-valuenow={lookIndex}
+            aria-valuetext={lookLabel}
+            aria-disabled={isSailing}
+          >
+            {showWheelHint && !isSailing && (
+              <img
+                src={SAIL_WHEEL_HINT}
+                alt=""
+                draggable={false}
+                className="sail-wheel-hint absolute -right-1 -top-1 z-[4] w-[42%] pointer-events-none select-none"
+              />
+            )}
             <img
-              src={btn.src}
+              src={SAIL_STEERING_WHEEL}
               alt=""
               draggable={false}
-              className="block w-full h-auto select-none pointer-events-none"
-            />
-            <span
-              className="font-display font-black uppercase tracking-[0.1em] text-[0.5rem] sm:text-[0.55rem] leading-none text-[#F5E6C8]"
+              className="relative z-[2] h-full w-full object-contain pointer-events-none select-none will-change-transform"
               style={{
-                textShadow:
-                  '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)',
+                transform: `rotate(${visualRotation}deg)`,
+                transition: wheelTransition,
               }}
-            >
-              {btn.label}
-            </span>
-          </button>
-        ))}
+            />
+          </div>
+        </div>
       </div>
-      )}
 
       {arrivalWhite && (
         <div
@@ -1336,5 +1345,142 @@ const SailScenePage: React.FC = () => {
     </div>
   );
 };
+
+const KidArrow: React.FC<{
+  direction: 'left' | 'right';
+  label: string;
+  onClick: () => void;
+}> = ({ direction, label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    className={`sail-kid-arrow pointer-events-auto relative z-[1] h-11 w-9 shrink-0 active:scale-90 ${direction === 'right' ? '-ml-1' : '-mr-1'}`}
+  >
+    <svg viewBox="0 0 48 56" className="h-full w-full drop-shadow-[0_3px_0_rgba(180,90,40,0.35)]" aria-hidden>
+      <path
+        d={
+          direction === 'right'
+            ? 'M6 8c0-4 6-8 11-5l24 20c4 3 4 9 0 12L17 53c-5 3-11-1-11-5V8z'
+            : 'M42 8c0-4-6-8-11-5L7 23c-4 3-4 9 0 12l24 18c5 3 11-1 11-5V8z'
+        }
+        fill="#FFC48A"
+      />
+      <path
+        d={
+          direction === 'right'
+            ? 'M12 14c1-2 6-3 8-1l18 15c1 1 1 3 0 4L20 46c-2 1-6 1-8-2V14z'
+            : 'M36 14c-1-2-6-3-8-1L10 28c-1 1-1 3 0 4l18 14c2 1 6 1 8-2V14z'
+        }
+        fill="#FFE3C4"
+        opacity="0.9"
+      />
+    </svg>
+  </button>
+);
+
+const FEATURE_ICONS: Record<(typeof ISLAND_FEATURES)[number]['id'], string> = {
+  stories: '/assets/images/sail-feat-stories.png',
+  characters: '/assets/images/sail-feat-characters.png',
+  treasure: '/assets/images/sail-feat-treasure.png',
+  games: '/assets/images/sail-feat-games.png',
+};
+
+const FeatureGlyph: React.FC<{ id: (typeof ISLAND_FEATURES)[number]['id']; muted: boolean }> = ({
+  id,
+  muted,
+}) => (
+  <img
+    src={FEATURE_ICONS[id]}
+    alt=""
+    draggable={false}
+    className={`h-12 w-12 object-contain select-none pointer-events-none ${muted ? 'grayscale opacity-50' : ''}`}
+  />
+);
+
+const SailIslandCard: React.FC<{
+  index: number;
+  island: SailCarouselIsland;
+  unlocked: boolean;
+  sailing: boolean;
+  lockLine: string;
+  onExplore: () => void;
+}> = ({ index, island, unlocked, sailing, lockLine, onExplore }) => (
+  <div
+    className="pointer-events-auto relative z-[2] w-full max-w-[300px] rounded-[32px] px-3.5 pb-3.5 pt-5 text-center"
+    style={{
+      background: '#FFE2C1',
+      boxShadow: '0 10px 22px rgba(90, 40, 10, 0.22)',
+    }}
+  >
+    <p
+      className="absolute left-1/2 top-0 inline-flex -translate-x-1/2 -translate-y-1/2 rounded-full px-3.5 py-1 text-[10px] font-black tracking-[0.14em] text-white"
+      style={{
+        background: unlocked
+          ? 'linear-gradient(180deg, #F09458 0%, #E07040 100%)'
+          : '#9aa3b2',
+        boxShadow: unlocked ? '0 2px 0 #C45A30' : 'none',
+      }}
+    >
+      ISLAND {index + 1} • {unlocked ? 'UNLOCKED' : 'LOCKED'}
+    </p>
+    <h2
+      className="mt-1 font-black leading-tight text-[#3a2412]"
+      style={{ fontFamily: "'Baloo 2', 'Fredoka', sans-serif", fontSize: '1.55rem' }}
+    >
+      {island.title}
+    </h2>
+    <p className="mx-auto mt-0.5 max-w-[15rem] text-[13px] font-semibold leading-snug text-[#8a7564]">
+      {island.blurb}
+    </p>
+    <div className="mt-2.5 grid grid-cols-4 gap-1">
+      {ISLAND_FEATURES.map(({ id, label }) => (
+        <div key={id} className="flex flex-col items-center">
+          <FeatureGlyph id={id} muted={!unlocked} />
+          <span
+            className="mt-0.5 text-[10px] font-bold leading-tight"
+            style={{ color: unlocked ? '#6b5344' : '#9aa3b2' }}
+          >
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+    {unlocked ? (
+      <button
+        type="button"
+        onClick={onExplore}
+        disabled={sailing}
+        className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full text-[1.05rem] font-black text-[#7A3E12] active:scale-[0.98] disabled:opacity-90"
+        style={{
+          fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
+          background: sailing
+            ? '#f3d48a'
+            : 'linear-gradient(180deg, #FFD36A 0%, #FFB23D 100%)',
+          boxShadow: '0 4px 0 #E09020, 0 8px 14px rgba(180, 90, 20, 0.28)',
+        }}
+      >
+        {sailing ? (
+          <>
+            <Loader2 size={18} className="animate-spin" />
+            Sailing to Island...
+          </>
+        ) : (
+          'Explore Island >'
+        )}
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={onExplore}
+        className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full px-3 text-sm font-black text-[#5c6b86] active:scale-[0.98]"
+        style={{ background: '#e7edf5' }}
+      >
+        <Lock size={16} strokeWidth={2.6} />
+        {lockLine}
+      </button>
+    )}
+  </div>
+);
 
 export default SailScenePage;

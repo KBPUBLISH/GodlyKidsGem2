@@ -152,6 +152,15 @@ type RegionConfig =
 
 type ZoneConfig = {
   img: { width: number; height: number };
+  /**
+   * Wide screens (art taller than the viewport after object-cover): push the
+   * art's top down by this share of the viewport height instead of centering
+   * the overflow. The deck page positions its hull art the same way
+   * (STAGE_WIDE_TOP_PCT).
+   */
+  wideTopPct?: number;
+  /** Same, for layouts where the art is height-fit (phones): push its top down. */
+  topPct?: number;
   /** Background art path — needed to redraw occluder strips. */
   bg: string;
   /** Extra character size multiplier for this scene (basement runs larger). */
@@ -179,102 +188,49 @@ type ZoneConfig = {
  * rope coils down the right rail, stern beam + rail across the bottom.
  * ------------------------------------------------------------------------ */
 const DECK_ZONE: ZoneConfig = {
-  img: { width: 1008, height: 1344 },
-  bg: '/assets/images/crew-ship-deck-v2.jpg',
+  // sail-voyage-hull.png — perspective deck: cabin + stairs at the top,
+  // barrels left, crates right, open deck below. The hatch is a sprite the
+  // page draws mid-center just under the stairs (HATCH_BOX in CrewPage).
+  img: { width: 1520, height: 2688 },
+  wideTopPct: 0.07,
+  topPct: 0.11,
+  bg: '/assets/images/sail-voyage-hull.png?v=7',
+  // Open planks from the stair landings down to the top of the wheel/bow.
   walkable: [
-    P(0.30, 0.31), // left stair base
-    P(0.66, 0.31), // right stair base
-    P(0.72, 0.33),
-    P(0.80, 0.40), // right rail widening
-    P(0.88, 0.47),
-    P(0.93, 0.55),
-    P(0.95, 0.63),
-    P(0.92, 0.72),
-    P(0.84, 0.79),
-    P(0.70, 0.81), // bottom-right, above the stern beam
-    P(0.50, 0.82), // beam dips lowest mid-ship
-    P(0.32, 0.81), // bottom-left, above the beam
-    P(0.20, 0.78),
-    P(0.10, 0.70),
-    P(0.03, 0.62),
-    P(0.03, 0.55),
-    P(0.07, 0.45),
-    P(0.12, 0.38),
-    P(0.20, 0.32), // left rail
+    P(0.10, 0.395),
+    P(0.90, 0.395),
+    P(0.99, 0.50),
+    P(0.99, 0.665),
+    P(0.01, 0.665),
+    P(0.01, 0.50),
   ],
   obstacles: [
     {
-      // Mast foot + the painted jukebox leaning against it.
-      name: 'mast-jukebox',
-      poly: [P(0.40, 0.30), P(0.57, 0.30), P(0.57, 0.48), P(0.40, 0.48)],
-    },
-    {
-      // Two barrels + rope coil along the upper-left rail.
-      name: 'left-rail-barrels',
-      poly: [P(0.12, 0.27), P(0.30, 0.27), P(0.30, 0.40), P(0.12, 0.40)],
-    },
-    {
-      // Cannon on its carriage, left rail.
-      name: 'cannon',
-      poly: [P(0.0, 0.39), P(0.27, 0.40), P(0.27, 0.52), P(0.14, 0.56), P(0.0, 0.56)],
-    },
-    {
-      // Barrel + crates right of the right stair base.
-      name: 'right-rail-barrels',
-      poly: [P(0.69, 0.26), P(0.80, 0.26), P(0.80, 0.38), P(0.69, 0.38)],
-    },
-    {
-      // Rope coils, crate and chest down the right rail.
-      name: 'right-rail-chest',
-      poly: [P(0.76, 0.37), P(0.97, 0.37), P(0.97, 0.58), P(0.86, 0.58), P(0.78, 0.44)],
-    },
-    {
-      // Open hatch (glowing frame included).
       name: 'hatch',
-      poly: [P(0.62, 0.56), P(0.92, 0.56), P(0.92, 0.73), P(0.62, 0.73)],
+      poly: [P(0.38, 0.395), P(0.62, 0.395), P(0.62, 0.495), P(0.38, 0.495)],
     },
     {
-      // Barrels, rope and chest stacked in the bottom-left corner.
-      name: 'bottom-left-clutter',
-      poly: [P(0.0, 0.63), P(0.11, 0.63), P(0.17, 0.71), P(0.24, 0.75), P(0.24, 0.90), P(0.0, 0.90)],
+      name: 'left-barrels',
+      poly: [P(0.00, 0.37), P(0.26, 0.37), P(0.26, 0.52), P(0.00, 0.52)],
     },
     {
-      // Treasure-map crate against the bottom-right rail.
-      name: 'map-crate',
-      poly: [P(0.90, 0.68), P(1.0, 0.68), P(1.0, 0.80), P(0.90, 0.80)],
+      name: 'right-crates',
+      poly: [P(0.70, 0.37), P(1.00, 0.37), P(1.00, 0.545), P(0.70, 0.545)],
     },
     {
-      // Tilted crate just above the stern beam, right side.
-      name: 'tilted-crate',
-      poly: [P(0.80, 0.75), P(0.94, 0.75), P(0.94, 0.88), P(0.80, 0.88)],
-    },
-  ],
-  // Quarterdeck landings at the top of each staircase (railing stands
-  // behind them, so no occluder is needed).
-  platforms: [
-    {
-      id: 'bow-left',
-      poly: [P(0.27, 0.165), P(0.36, 0.165), P(0.36, 0.195), P(0.27, 0.195)],
-      stair: [P(0.33, 0.31), P(0.315, 0.25), P(0.31, 0.20)],
-    },
-    {
-      id: 'bow-right',
-      poly: [P(0.60, 0.165), P(0.70, 0.165), P(0.70, 0.195), P(0.60, 0.195)],
-      stair: [P(0.63, 0.31), P(0.64, 0.25), P(0.65, 0.20)],
+      name: 'wheel',
+      poly: [P(0.27, 0.635), P(0.73, 0.635), P(0.73, 0.90), P(0.27, 0.90)],
     },
   ],
   regions: [
-    { name: 'bow-left', platform: 'bow-left' },
-    { name: 'bow-right', platform: 'bow-right' },
-    { name: 'foredeck-left', bbox: [0.20, 0.31, 0.40, 0.42] },
-    { name: 'foredeck-right', bbox: [0.58, 0.31, 0.72, 0.42] },
-    { name: 'port', bbox: [0.05, 0.56, 0.30, 0.74] },
-    { name: 'starboard', bbox: [0.50, 0.46, 0.75, 0.56] },
-    { name: 'stern', bbox: [0.30, 0.62, 0.70, 0.80] },
+    { name: 'fore', bbox: [0.10, 0.395, 0.90, 0.47] },
+    { name: 'mid', bbox: [0.02, 0.47, 0.98, 0.58] },
+    { name: 'stern', bbox: [0.02, 0.58, 0.98, 0.665] },
   ],
+  spawn: P(0.24, 0.58),
   hatch: {
-    approach: P(0.58, 0.66), // stand just left of the hatch opening
-    center: P(0.77, 0.645), // sink toward the middle of the opening
+    approach: P(0.50, 0.53),
+    center: P(0.50, 0.45),
   },
 };
 
@@ -826,14 +782,18 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const occluderEls: HTMLDivElement[] = [];
 
     const rebuildZones = () => {
-      const scale = Math.max(
-        viewW / zoneCfg.img.width,
-        viewH / zoneCfg.img.height,
-      );
+      const scale = Math.max(viewW / zoneCfg.img.width, viewH / zoneCfg.img.height);
       const dw = zoneCfg.img.width * scale;
       const dh = zoneCfg.img.height * scale;
       const ox = (viewW - dw) / 2;
-      const oy = (viewH - dh) / 2;
+      const oy =
+        dh > viewH + 1
+          ? zoneCfg.wideTopPct != null
+            ? viewH * zoneCfg.wideTopPct
+            : (viewH - dh) / 2
+          : zoneCfg.topPct != null
+            ? viewH * zoneCfg.topPct
+            : (viewH - dh) / 2;
       const map = (p: Pt): Pt => ({
         x: (p.x * dw + ox) / viewW,
         y: (p.y * dh + oy) / viewH,

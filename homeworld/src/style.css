@@ -314,3 +314,15 @@
 .prayer-bubble .prayer-body{display:flex;flex-direction:column;gap:4px;min-width:0}.prayer-bubble strong{font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:#6a56b8}
 .prayer-bubble p{margin:0;font-size:14px;line-height:1.35;font-weight:600}.prayer-bubble small{font-size:11.5px;line-height:1.3;color:#6b6184;font-style:italic}
 .prayer-bubble.done{opacity:.92}
+
+/* Keep the island controls below native status bars, including embedded views reporting no inset. */
+.game-shell{--island-hud-top:max(18px,calc(max(env(safe-area-inset-top,0px),var(--host-safe-area-top,0px)) + 12px))}
+@media(max-width:800px),(pointer:coarse){.game-shell{--island-hud-top:max(44px,calc(max(env(safe-area-inset-top,0px),var(--host-safe-area-top,0px)) + 12px))}}
+.topbar,.friends-button{top:var(--island-hud-top)}
+.resident-profile,.friends-menu{top:calc(var(--island-hud-top) + 64px)}
+.side-buttons{top:max(156px,calc(var(--island-hud-top) + 128px))}
+@media(max-height:520px) and (min-width:650px){
+  .side-buttons{top:calc(var(--island-hud-top) + 78px);gap:7px}
+  .side-buttons button{min-height:64px;width:66px}
+  .side-buttons .picture-icon{width:32px;height:32px}
+}

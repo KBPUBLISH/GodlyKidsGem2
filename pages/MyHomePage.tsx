@@ -8,7 +8,7 @@ import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/p
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players98&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players99&players=1';
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
@@ -194,6 +194,21 @@ const MyHomePage: React.FC = () => {
   /** The prayer currently being spoken in the character's ElevenLabs voice (one at a time). */
   const prayerAudioRef = useRef<{ id: string; audio: HTMLAudioElement | null; url: string | null } | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
+  // Native safe-area variables live on the parent document, outside the island iframe.
+  useEffect(() => {
+    if (!frameLoaded) return;
+    const syncSafeArea = () => {
+      const islandRoot = frameRef.current?.contentDocument?.documentElement;
+      if (!islandRoot) return;
+      const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-top')) || 0;
+      islandRoot.style.setProperty('--host-safe-area-top', `${Math.max(0, top)}px`);
+    };
+    syncSafeArea();
+    const observer = new MutationObserver(syncSafeArea);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    window.addEventListener('resize', syncSafeArea);
+    return () => { observer.disconnect(); window.removeEventListener('resize', syncSafeArea); };
+  }, [frameLoaded]);
   const [ready, setReady] = useState(false);
   // The on-brand loading screen covers both the iframe fetch and the island
   // build (the island posts gk-players-ready); a fallback timer keeps a slow

@@ -389,9 +389,11 @@ const WHEEL_HUB_FRAC = 0.45;
 const WHEEL_SWIPE_RIM_FRAC = 0.7;
 /** Movement under this (deg) is finger jitter. */
 const WHEEL_DEAD_DEG = 0.1;
-/** Per-frame catch-up of the drawn wheel toward the hand (1 = instant). */
-const WHEEL_LERP = 0.45;
-const WHEEL_IDLE_TRANSITION = 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
+// Touch is a short, consistent left/right swipe everywhere on the wheel.
+// Never switch to polar angles as the thumb crosses its center or rim.
+const WHEEL_SWIPE_MIN_PX = 24;
+const WHEEL_SWIPE_DEG_PER_PX = 1.5;
+const WHEEL_IDLE_TRANSITION = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
 
 type VoyageIsland = {
   id: string;
@@ -488,6 +490,7 @@ const ShipDeckTabBar: React.FC<{
         transform: 'translateX(-50%)',
         filter: 'drop-shadow(0 8px 10px rgba(60, 24, 8, 0.45))',
         // iOS: no save-image callout / selection loupe on a long slow turn.
+        touchAction: 'none',
         WebkitTouchCallout: 'none',
         WebkitUserSelect: 'none',
         WebkitUserDrag: 'none',
@@ -840,6 +843,10 @@ const CrewPage: React.FC = () => {
   const wheelGestureRef = useRef({
     active: false,
     pointerId: -1,
+    swipe: false,
+    startX: 0,
+    startY: 0,
+    pickupOffset: 0,
     cx: 0,
     cy: 0,
     radius: 1,
@@ -900,7 +907,7 @@ const CrewPage: React.FC = () => {
 
   const wheelImg = () => wheelRef.current?.querySelector('img') ?? null;
 
-  /** rAF loop: ease the drawn wheel toward notch + creep while a drag owns it. */
+  /** Draw once per frame, directly following the hand without a second easing lag. */
   const startWheelLoop = useCallback(() => {
     const g = wheelGestureRef.current;
     if (g.frame) return;
@@ -911,8 +918,7 @@ const CrewPage: React.FC = () => {
         return;
       }
       const target = lookRef.current * ISLAND_STEP_DEG + g.creep;
-      g.shown += (target - g.shown) * WHEEL_LERP;
-      if (Math.abs(target - g.shown) < 0.05) g.shown = target;
+      g.shown = target;
       img.style.transform = `rotate(${g.shown}deg)`;
       g.frame = requestAnimationFrame(tick);
     };
@@ -923,6 +929,16 @@ const CrewPage: React.FC = () => {
     (e: PointerEvent) => {
       const g = wheelGestureRef.current;
       if (!g.active || e.pointerId !== g.pointerId || sailingRef.current) return;
+      if (g.swipe) {
+        // A left swipe always means next island, wherever the thumb starts.
+        // Commit one island on release; a long swipe cannot skip islands.
+        const travel = -(e.clientX - g.startX) * WHEEL_SWIPE_DEG_PER_PX;
+        const atEnd = (travel > 0 && lookRef.current >= voyageRef.current.length - 1) ||
+          (travel < 0 && lookRef.current <= 0);
+        g.creep = g.pickupOffset + Math.max(-ISLAND_STEP_DEG, Math.min(ISLAND_STEP_DEG, travel)) *
+          (atEnd ? WHEEL_END_FOLLOW : 1);
+        return;
+      }
       const dx = e.clientX - g.cx;
       const dy = e.clientY - g.cy;
       const angle = Math.atan2(dy, dx) * (180 / Math.PI);
@@ -963,6 +979,14 @@ const CrewPage: React.FC = () => {
   const onWheelPointerUp = useCallback((e: PointerEvent) => {
     const g = wheelGestureRef.current;
     if (!g.active || e.pointerId !== g.pointerId) return;
+    if (g.swipe && e.type === 'pointerup' && !sailingRef.current) {
+      // Include the final sample: a fast flick may end between pointermoves.
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dx) >= WHEEL_SWIPE_MIN_PX && Math.abs(dx) >= Math.abs(dy) * 0.75) {
+        if (shiftIsland(dx < 0 ? 1 : -1)) navigator.vibrate?.(6);
+      }
+    }
     g.active = false;
     g.accum = 0;
     g.creep = 0;
@@ -985,7 +1009,7 @@ const CrewPage: React.FC = () => {
       img.style.transform = `rotate(${lookRef.current * ISLAND_STEP_DEG}deg)`;
     }
     setWheelDrag(false);
-  }, [onWheelPointerMove]);
+  }, [onWheelPointerMove, shiftIsland]);
 
   const onWheelDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -1000,6 +1024,9 @@ const CrewPage: React.FC = () => {
       g.cx = rect.left + rect.width / 2;
       g.cy = rect.top + rect.height / 2;
       g.radius = Math.max(1, rect.width / 2);
+      g.swipe = e.pointerType !== 'mouse';
+      g.startX = e.clientX;
+      g.startY = e.clientY;
       const dx = e.clientX - g.cx;
       const dy = e.clientY - g.cy;
       g.angle = Math.atan2(dy, dx) * (180 / Math.PI);
@@ -1026,6 +1053,9 @@ const CrewPage: React.FC = () => {
         }
         img.style.transition = 'none';
       }
+      // Re-grabbing during the snap animation starts at the visible angle.
+      g.pickupOffset = g.shown - base;
+      g.creep = g.pickupOffset;
       try {
         btn.setPointerCapture(e.pointerId);
       } catch {
@@ -1566,8 +1596,8 @@ const CrewPage: React.FC = () => {
           transition: reduceMotion
             ? 'none'
             : sailingIsland
-              ? `background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), ${SAIL_IN_EASE}`
-              : 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+              ? `background-position 0.32s cubic-bezier(0.22, 1, 0.36, 1), ${SAIL_IN_EASE}`
+              : 'background-position 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
         }}
       />
       {/* Tablets: the ship sits lower, so mirror the panorama's top sky into
@@ -1583,7 +1613,7 @@ const CrewPage: React.FC = () => {
             backgroundRepeat: 'repeat-x',
             backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
             backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) 0`,
-            transition: reduceMotion ? 'none' : 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+            transition: reduceMotion ? 'none' : 'background-position 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
           }}
         />
       )}
@@ -1610,7 +1640,7 @@ const CrewPage: React.FC = () => {
               backgroundRepeat: 'repeat-x',
               backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
               backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${-Math.round((stage.height * HORIZON_PCT) / 100) - 6}px`,
-              transition: 'background-position 0.62s cubic-bezier(0.16, 1.45, 0.32, 1)',
+              transition: 'background-position 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
               mixBlendMode: 'soft-light',
               opacity: 0.85,
             }}
@@ -1665,7 +1695,7 @@ const CrewPage: React.FC = () => {
                 transformOrigin: '50% 100%',
                 opacity: Math.max(0.4, 1 - distance * 0.28),
                 filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
-                transition: 'left 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), transform 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), opacity 0.42s ease',
+                transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease',
                 zIndex: 4 - Math.round(distance),
               }}
             />
@@ -1707,7 +1737,7 @@ const CrewPage: React.FC = () => {
               width: size,
               height: size,
               opacity: sailingIsland && !isActive ? 0 : 1,
-              transition: 'left 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), top 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), width 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), height 0.62s cubic-bezier(0.16, 1.45, 0.32, 1), opacity 0.3s ease',
+              transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1), height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease',
             }}
           >
             <span

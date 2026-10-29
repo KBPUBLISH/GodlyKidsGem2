@@ -201,24 +201,12 @@ const STEP_ANGLE = 36;
 const ISLAND_SPACING_VW = 46;
 /** Degrees of movement below which we treat as a tap (same as bottom nav). */
 const TAP_THRESHOLD = 22;
-/**
- * Gear-shift detents. The wheel does NOT follow the finger smoothly: it sits
- * on the current notch, creeps a little against resistance, and once the
- * finger has turned DETENT_THRESHOLD degrees it clunks to the next notch and
- * sticks there. The island carousel shifts at the same instant.
- */
-const DETENT_THRESHOLD = STEP_ANGLE * 0.5;
-/** Fraction of finger travel shown as creep before the shift (resistance). */
-const DETENT_RESIST = 0.25;
-/** Creep at the first / last notch where there is nothing to shift into. */
-const DETENT_END_RESIST = 0.12;
-/** The clunk: quick turn with a small overshoot, then hold. */
-const DETENT_EASING = 'transform 0.2s cubic-bezier(0.2, 1.35, 0.45, 1)';
-const DETENT_LOCK_MS = 200;
-/** Release: creep springs back to the notch. */
-const SNAP_EASING = 'transform 0.78s cubic-bezier(0.22, 0.9, 0.28, 1)';
-const ISLAND_POP = '0.62s cubic-bezier(0.16, 1.45, 0.32, 1)';
-const ISLAND_FADE_MS = 420;
+/** Past the first / last island the wheel only gives this much (rubber band). */
+const END_RESIST = 0.2;
+/** Wheel and islands settle together after release, without overshoot. */
+const SNAP_EASING = 'transform 0.32s cubic-bezier(0.22, 0.9, 0.28, 1)';
+const ISLAND_POP = '0.32s cubic-bezier(0.22, 0.9, 0.28, 1)';
+const ISLAND_FADE_MS = 320;
 /** Boat sails toward the tapped island — kid-friendly ease-in-out. */
 const SAIL_DURATION_MS = 2100;
 const SAIL_EASING = 'cubic-bezier(0.45, 0.05, 0.25, 1)';
@@ -319,11 +307,10 @@ const SailScenePage: React.FC = () => {
   const draggingRef = useRef(false);
   /** Finger angle at the last move (re-based every move so wrap-around is per-step). */
   const lastAngleRef = useRef(0);
-  /** Degrees turned since the last detent (signed, clamped to ±STEP_ANGLE). */
-  const detentAccumRef = useRef(0);
+  /** Continuous drag offset in degrees from the selected island. */
+  const dragOffsetRef = useRef(0);
   const totalMoveRef = useRef(0);
   const lastTouchEndRef = useRef(0);
-  const shiftLockTimerRef = useRef<number | null>(null);
   const lookIndexRef = useRef(0);
   const isSailingRef = useRef(false);
   const sailTimerRef = useRef<number | null>(null);
@@ -335,10 +322,8 @@ const SailScenePage: React.FC = () => {
 
   const [carouselIslands, setCarouselIslands] = useState<SailCarouselIsland[]>([]);
   const [lookIndex, setLookIndex] = useState(0);
-  /** Degrees of creep off the current notch while dragging (resistance feel). */
-  const [creep, setCreep] = useState(0);
-  /** True for DETENT_LOCK_MS after a shift: wheel animates to the notch and holds. */
-  const [shifting, setShifting] = useState(false);
+  /** Degrees the wheel has turned off the selected island while a finger is on it. */
+  const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   /** True while the boat is sailing toward the tapped island. */
   const [isSailing, setIsSailing] = useState(false);
@@ -510,20 +495,11 @@ const SailScenePage: React.FC = () => {
   const firstIslandTitle = firstIsland?.title || 'the first island';
 
   const restingRotation = lookIndex * STEP_ANGLE;
-  /** Wheel sits on its notch; while dragging it only creeps until the shift. */
-  const visualRotation = isDragging && !shifting ? restingRotation + creep : restingRotation;
-  /**
-   * 0 = first island centered. Islands only move on a detent shift (never
-   * with the creep), so each notch feels like a gear change.
-   */
-  const carouselProgress = lookIndex;
-  const wheelTransition = isSailing
-    ? 'none'
-    : isDragging
-      ? shifting
-        ? DETENT_EASING
-        : 'none'
-      : SNAP_EASING;
+  /** The wheel follows the finger; on release it settles on the nearest island. */
+  const visualRotation = isDragging ? restingRotation + dragOffset : restingRotation;
+  /** 0 = first island centered; islands glide with the wheel, one per STEP_ANGLE. */
+  const carouselProgress = isDragging ? lookIndex + dragOffset / STEP_ANGLE : lookIndex;
+  const wheelTransition = isSailing ? 'none' : isDragging ? 'none' : SNAP_EASING;
 
   const sailDurationMs = prefersReducedMotion() ? SAIL_REDUCED_MS : SAIL_DURATION_MS;
   const sailTransition = isSailing
@@ -636,7 +612,7 @@ const SailScenePage: React.FC = () => {
       // Cancel any in-progress wheel drag so carousel state stays clean.
       draggingRef.current = false;
       setIsDragging(false);
-      setCreep(0);
+      setDragOffset(0);
 
       if (prefersReducedMotion()) {
         continueAfterSail(island);
@@ -708,35 +684,26 @@ const SailScenePage: React.FC = () => {
       dismissWheelHint();
       draggingRef.current = true;
       lastAngleRef.current = getAngle(clientX, clientY);
-      detentAccumRef.current = 0;
+      dragOffsetRef.current = 0;
       totalMoveRef.current = 0;
-      setCreep(0);
+      setDragOffset(0);
       setIsDragging(true);
     },
     [dismissWheelHint, getAngle],
   );
 
-  /** Clunk one notch over: islands shift, wheel animates to the notch and holds. */
-  const shiftDetent = useCallback((direction: 1 | -1) => {
+  /** Arrow buttons: move one island over; the wheel turns to match. */
+  const stepIsland = useCallback((direction: 1 | -1) => {
     const count = carouselIslandsRef.current.length;
     const next = clampIndex(lookIndexRef.current + direction, count);
-    if (next === lookIndexRef.current) return false;
+    if (next === lookIndexRef.current) return;
     lookIndexRef.current = next;
-    detentAccumRef.current = 0;
     setLookIndex(next);
-    setCreep(0);
-    setShifting(true);
-    if (shiftLockTimerRef.current != null) window.clearTimeout(shiftLockTimerRef.current);
-    shiftLockTimerRef.current = window.setTimeout(() => {
-      shiftLockTimerRef.current = null;
-      setShifting(false);
-    }, DETENT_LOCK_MS);
     try {
       navigator.vibrate?.(12);
     } catch {
       /* no haptics */
     }
-    return true;
   }, []);
 
   const onMove = useCallback(
@@ -751,44 +718,42 @@ const SailScenePage: React.FC = () => {
       lastAngleRef.current = currentAngle;
 
       totalMoveRef.current += Math.abs(delta);
-      // Degrees turned since the last notch; clamp so a long pull past the
-      // end stop doesn't bank up turns.
-      const accum = Math.max(
-        -STEP_ANGLE,
-        Math.min(STEP_ANGLE, detentAccumRef.current + delta),
-      );
-      detentAccumRef.current = accum;
 
-      // Shift when the finger has turned far enough — one notch per threshold.
-      if (accum >= DETENT_THRESHOLD && shiftDetent(1)) return;
-      if (accum <= -DETENT_THRESHOLD && shiftDetent(-1)) return;
-
-      // No shift (not far enough, or at an end stop): show resistance creep.
+      // Follow the finger; past the first / last island only rubber-band.
       const count = carouselIslandsRef.current.length;
-      const atEnd =
-        (accum > 0 && lookIndexRef.current >= count - 1) ||
-        (accum < 0 && lookIndexRef.current <= 0);
-      setCreep(accum * (atEnd ? DETENT_END_RESIST : DETENT_RESIST));
+      const minOffset = -lookIndexRef.current * STEP_ANGLE;
+      const maxOffset = (Math.max(count, 1) - 1 - lookIndexRef.current) * STEP_ANGLE;
+      let next = dragOffsetRef.current + delta;
+      if (next > maxOffset) next = maxOffset + (next - maxOffset) * END_RESIST;
+      else if (next < minOffset) next = minOffset + (next - minOffset) * END_RESIST;
+      dragOffsetRef.current = next;
+      setDragOffset(next);
     },
-    [getAngle, shiftDetent],
+    [getAngle],
   );
 
   const onEnd = useCallback(() => {
     if (!draggingRef.current || isSailingRef.current) return;
-    // Shifts already committed on the way; release just springs the creep
-    // back onto the current notch.
     draggingRef.current = false;
-    detentAccumRef.current = 0;
-    setCreep(0);
+    // Settle on whichever island the wheel is nearest.
+    const count = carouselIslandsRef.current.length;
+    const next = clampIndex(
+      lookIndexRef.current + Math.round(dragOffsetRef.current / STEP_ANGLE),
+      count,
+    );
+    if (next !== lookIndexRef.current) {
+      lookIndexRef.current = next;
+      setLookIndex(next);
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* no haptics */
+      }
+    }
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
     setIsDragging(false);
   }, []);
-
-  useEffect(
-    () => () => {
-      if (shiftLockTimerRef.current != null) window.clearTimeout(shiftLockTimerRef.current);
-    },
-    [],
-  );
 
   const handleTouchStart = (e: React.TouchEvent) => {
     onStart(e.touches[0].clientX, e.touches[0].clientY);
@@ -975,10 +940,12 @@ const SailScenePage: React.FC = () => {
                   width: 'min(58vw, 280px)',
                   opacity: visible ? Math.max(0.38, 1 - distance * 0.34) : 0,
                   transform: isSailing && active ? sailTransform : baseTransform,
-                  // Islands pop to the next slot on each detent shift (also mid-drag).
+                  // Islands track the finger live, then settle with the wheel on release.
                   transition: isSailing
                     ? sailTransition
-                    : `opacity ${ISLAND_FADE_MS}ms ease, transform ${ISLAND_POP}, left ${ISLAND_POP}`,
+                    : isDragging
+                      ? `opacity ${ISLAND_FADE_MS}ms ease`
+                      : `opacity ${ISLAND_FADE_MS}ms ease, transform ${ISLAND_POP}, left ${ISLAND_POP}`,
                   zIndex: Math.max(1, 8 - Math.round(distance * 2)),
                   pointerEvents: active && !isSailing ? 'auto' : 'none',
                   cursor:
@@ -1151,7 +1118,7 @@ const SailScenePage: React.FC = () => {
           style={{
             // Sit in the water between the island and the top of the wheel.
             bottom: `calc(318px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))`,
-            opacity: isDragging || shifting ? 0 : 1,
+            opacity: isDragging ? 0 : 1,
             transform: isSailing ? 'scale(0.9)' : 'scale(1)',
             transition: 'opacity 0.22s ease, transform 0.45s ease',
           }}
@@ -1162,7 +1129,7 @@ const SailScenePage: React.FC = () => {
               label="Previous island"
               onClick={() => {
                 dismissWheelHint();
-                shiftDetent(-1);
+                stepIsland(-1);
               }}
             />
           ) : (
@@ -1188,7 +1155,7 @@ const SailScenePage: React.FC = () => {
               label="Next island"
               onClick={() => {
                 dismissWheelHint();
-                shiftDetent(1);
+                stepIsland(1);
               }}
             />
           ) : (

@@ -9,6 +9,16 @@ import {sampleLook,daylightToProgress,lin,RAMP_POSITIONS,HORIZON_FALLOFF,MOON_DI
  * reference's blue sky: deep blue overhead fading to a pale haze at the horizon.
  */
 const DOME_RADIUS=180,STAR_RADIUS=170,MOON_DISTANCE=160;
+/**
+ * Daytime grade over the Blender look, linear RGB. The .blend's day water is a deep teal and its
+ * horizon sky is nearly as pale, so the two read as one wash. By day the sky is pulled down to a
+ * medium blue (horizon → mid → overhead) and the water lifted to a light, bright turquoise, so the
+ * white clouds and the sea both stand off the sky. Fades out through sunset so the night look is untouched.
+ */
+// Daytime look: a pale, hazy sky (near white at the horizon, soft blue overhead) with puffy white clouds
+// over a deep, saturated blue sea, so the horizon reads as a clear line. Linear RGB.
+const DAY_GRADE={sky:[[.64,.8,.97],[.3,.58,.94],[.11,.38,.85]],water:[.012,.17,.62],mist:.3,weight:.9,waterReflect:.22};
+const gradeMix=(c,target,w)=>c.lerp(new THREE.Color().setRGB(target[0],target[1],target[2],THREE.LinearSRGBColorSpace),w);
 /** Moon direction from the Blender world shader (HW60_MoonDirection), Blender (x,y,z) → three (x,z,-y). */
 const MOON_DIR=new THREE.Vector3(MOON_DIR_BLENDER[0],MOON_DIR_BLENDER[2],-MOON_DIR_BLENDER[1]).normalize();
 const smooth=(a,b,x)=>{const t=THREE.MathUtils.clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
@@ -17,9 +27,11 @@ const rand=(seed=>()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296
 // The island camera is orthographic: every view ray is parallel, so a real dome would be one flat colour.
 // For that camera the sky direction is faked from the screen position (a ~40° window above the horizon)
 // so clouds and the sunset ramp still spread across the sky. Perspective cameras use the true direction.
-const SKY_VERT=`uniform float uOrtho,uAspect;uniform vec3 uRight,uFwd;varying vec3 vDir;
+// uHorizon is the screen (NDC y) height of the sea's far edge, so the sky ramp always starts pale right at the
+// waterline and deepens toward the top of the screen, whatever the tilt.
+const SKY_VERT=`uniform float uOrtho,uAspect,uHorizon;uniform vec3 uRight,uFwd;varying vec3 vDir;
 void main(){vec4 clip=projectionMatrix*modelViewMatrix*vec4(position,1.);vec3 d=position;
-if(uOrtho>.5){vec2 n=clip.xy/max(abs(clip.w),1e-4);d=uRight*(n.x*uAspect*.8)+uFwd+vec3(0.,n.y*.8+.18,0.);}
+if(uOrtho>.5){vec2 n=clip.xy/max(abs(clip.w),1e-4);float t=clamp((n.y-uHorizon)/max(1.-uHorizon,.05),0.,1.);d=uRight*(n.x*uAspect*.8)+uFwd+vec3(0.,t*t*.85+.01,0.);}
 vDir=d;gl_Position=clip;}`;
 /**
  * Port of WORLD_HW_Daylight (GodlyKidsMap.blend): HW60_DaySunsetNight colour ramp (EASE, stops 0/.42/1) over a
@@ -36,10 +48,10 @@ float fac=clamp((z-uFalloffLo)/(uFalloffHi-uFalloffLo),0.,1.);
 vec3 col=fac<uRampMid?mix(uSky0,uSky1,smoothstep(0.,1.,fac/uRampMid)):mix(uSky1,uSky2,smoothstep(0.,1.,(fac-uRampMid)/(1.-uRampMid)));
 if(z>0.){vec2 uv=dir.xz/(z+.2)+uDrift*(1.+uTime*.03);
 float n=fbm(uv*1.3+.2*fbm(uv*2.6));
-float body=clamp(smoothstep(.38,.6,n)*1.3,0.,1.);
-float fade=clamp(z/.12,0.,1.);
-float lit=smoothstep(.5,.85,n);
-vec3 cloud=mix(uMistCol*.72,uMistCol*1.15+vec3(.04),lit);
+float body=clamp(smoothstep(.44,.58,n)*1.4,0.,1.);
+float fade=smoothstep(.03,.3,z);
+float lit=smoothstep(.5,.8,n);
+vec3 cloud=mix(uMistCol*.8,uMistCol*1.2+vec3(.08),lit);
 col=mix(col,cloud,body*fade*clamp(uMist*1.9,0.,.96));}
 gl_FragColor=vec4(col,1.);
 #include <tonemapping_fragment>
@@ -76,7 +88,7 @@ export class NightSky {
   }
   buildDome(){
     const geo=new THREE.SphereGeometry(DOME_RADIUS,32,20);
-    this.domeMaterial=new THREE.ShaderMaterial({vertexShader:SKY_VERT,fragmentShader:SKY_FRAG,side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false,uniforms:{uOrtho:{value:0},uAspect:{value:1},uRight:{value:new THREE.Vector3(1,0,0)},uFwd:{value:new THREE.Vector3(0,0,-1)},uTime:{value:0},uMist:{value:.48},uFalloffLo:{value:HORIZON_FALLOFF[0]},uFalloffHi:{value:HORIZON_FALLOFF[1]},uRampMid:{value:RAMP_POSITIONS[1]},uSky0:{value:this.sky0},uSky1:{value:this.sky1},uSky2:{value:this.sky2},uMistCol:{value:this.mistCol},uDrift:{value:new THREE.Vector2(MIST_DRIFT[0],MIST_DRIFT[1])}}});
+    this.domeMaterial=new THREE.ShaderMaterial({vertexShader:SKY_VERT,fragmentShader:SKY_FRAG,side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false,uniforms:{uOrtho:{value:0},uAspect:{value:1},uHorizon:{value:-.2},uRight:{value:new THREE.Vector3(1,0,0)},uFwd:{value:new THREE.Vector3(0,0,-1)},uTime:{value:0},uMist:{value:.48},uFalloffLo:{value:HORIZON_FALLOFF[0]},uFalloffHi:{value:HORIZON_FALLOFF[1]},uRampMid:{value:RAMP_POSITIONS[1]},uSky0:{value:this.sky0},uSky1:{value:this.sky1},uSky2:{value:this.sky2},uMistCol:{value:this.mistCol},uDrift:{value:new THREE.Vector2(MIST_DRIFT[0],MIST_DRIFT[1])}}});
     this.dome=new THREE.Mesh(geo,this.domeMaterial);this.dome.renderOrder=-1;this.dome.frustumCulled=false;this.rig.add(this.dome);
     const fwd=new THREE.Vector3(),right=new THREE.Vector3();
     this.dome.onBeforeRender=(renderer,scene,camera)=>{const u=this.domeMaterial.uniforms;if(camera.isOrthographicCamera){camera.getWorldDirection(fwd);fwd.y=0;if(fwd.lengthSq()<1e-6)fwd.set(0,0,-1);fwd.normalize();right.crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();u.uOrtho.value=1;u.uAspect.value=(camera.right-camera.left)/Math.max(1e-4,camera.top-camera.bottom);u.uRight.value.copy(right);u.uFwd.value.copy(fwd);}else u.uOrtho.value=0;};
@@ -93,7 +105,7 @@ export class NightSky {
   refreshEnvironment(p){
     if(!this.waterMaterial||Math.abs(p-this.envProgress)<.012&&this.envRT)return;
     this.envProgress=p;const rt=this.pmrem.fromScene(this.envScene,0,1,400);
-    if(this.envRT)this.envRT.dispose();this.envRT=rt;this.waterMaterial.envMap=rt.texture;this.waterMaterial.envMapIntensity=.45;this.waterMaterial.needsUpdate=true;
+    if(this.envRT)this.envRT.dispose();this.envRT=rt;this.waterMaterial.envMap=rt.texture;this.waterMaterial.envMapIntensity=this.waterMaterial.envMapIntensity||.45;this.waterMaterial.needsUpdate=true;
   }
   buildStars(){
     const count=900,bright=25,milky=420,total=count+bright+milky,pos=new Float32Array(total*3),size=new Float32Array(total),phase=new Float32Array(total),speed=new Float32Array(total),warm=new Float32Array(total);
@@ -152,18 +164,22 @@ export class NightSky {
     this.time+=dt;
     if(cameraPosition)this.rig.position.copy(cameraPosition);
     lin(look.sky[0],this.sky0);lin(look.sky[1],this.sky1);lin(look.sky[2],this.sky2);lin(look.mistCol,this.mistCol);lin(look.water,this.waterColor);lin(look.sunCol,this.sunColor);
-    const u=this.domeMaterial.uniforms;u.uTime.value=this.time;u.uMist.value=look.mist;
+    // Full grade through the day, gone by dusk (daylight .55 is late sunset).
+    const grade=THREE.MathUtils.clamp((d-.55)/.4,0,1)*DAY_GRADE.weight;
+    if(grade>0){gradeMix(this.sky0,DAY_GRADE.sky[0],grade);gradeMix(this.sky1,DAY_GRADE.sky[1],grade);gradeMix(this.sky2,DAY_GRADE.sky[2],grade);gradeMix(this.waterColor,DAY_GRADE.water,grade);}
+    // Thinner cloud cover by day, so blue sky shows between the clouds instead of one white haze.
+    const u=this.domeMaterial.uniforms;u.uTime.value=this.time;u.uMist.value=THREE.MathUtils.lerp(look.mist,Math.min(look.mist,DAY_GRADE.mist),grade/DAY_GRADE.weight);
     this.horizon.copy(this.sky0);
     if(this.scene.background?.isColor)this.scene.background.copy(this.horizon);
     // Blender has no fog; keep ours thin and tinted between the sea and the sky so the horizon keeps its contrast.
-    if(this.scene.fog)this.scene.fog.color.copy(this.waterColor).lerp(this.sky0,.22);
+    if(this.scene.fog)this.scene.fog.color.copy(this.waterColor).lerp(this.sky0,grade>0?.08:.22);
     const pr=this.game.renderer.getPixelRatio();
     this.starMaterial.uniforms.uTime.value=this.time;this.starMaterial.uniforms.uNight.value=night;this.starMaterial.uniforms.uPixelRatio.value=pr;
     const gu=this.glintMaterial.uniforms;gu.uTime.value=this.time;gu.uNight.value=night;gu.uPixelRatio.value=pr;if(this.scene.fog){gu.uFogNear.value=this.scene.fog.near;gu.uFogFar.value=this.scene.fog.far;}
     const moon=THREE.MathUtils.clamp(look.moon,0,1);
     this.stars.visible=night>.002;this.glints.visible=night>.002;this.moon.visible=moon>.002;this.moonMaterial.opacity=moon;
     const m=this.waterMaterial;
-    if(m&&this.waterDay){m.color.copy(this.waterColor).multiplyScalar(1.25);m.color.b=Math.min(1,m.color.b*1.1);m.roughness=look.wrough+.18;m.metalness=.12+.2*night;if(m.emissive){m.emissive.lerpColors(this.waterDay.emissive,this.waterNightEmissive,night);m.emissiveIntensity=this.waterDay.emissiveIntensity+(1-this.waterDay.emissiveIntensity)*night;}}
+    if(m&&this.waterDay){m.color.copy(this.waterColor).multiplyScalar(1.25);m.color.b=Math.min(1,m.color.b*1.1);if(m.envMap)m.envMapIntensity=THREE.MathUtils.lerp(.45,DAY_GRADE.waterReflect,grade/DAY_GRADE.weight);m.roughness=look.wrough+.18;m.metalness=.12+.2*night;if(m.emissive){m.emissive.lerpColors(this.waterDay.emissive,this.waterNightEmissive,night);m.emissiveIntensity=this.waterDay.emissiveIntensity+(1-this.waterDay.emissiveIntensity)*night;}}
     this.refreshEnvironment(p);
   }
   dispose(){

@@ -66,7 +66,9 @@ export class HomeWorld {
     // iPad fills a much larger canvas than a phone. Cap it at 1 device pixel per CSS pixel and skip MSAA.
     // Phones and desktop stay at min(devicePixelRatio, 1.6) with antialias on.
     this.ipadQuality=isIpadClass();
-    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.ipadQuality?1:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;if(this.ipadQuality){this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;}this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
+    // Shadows follow the sun every frame everywhere, so a walking body never drags a stale shadow. iPad pays for
+    // that with the plain PCF filter (one tap per texel instead of soft's nine) on its 1024 map.
+    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.ipadQuality?1:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
     this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;
     this.hemi=new THREE.HemisphereLight('#d7e8ef','#6c6f3d',2.4);this.scene.add(this.hemi);
     this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.set(-12,24,10);this.sun.castShadow=true;this.sun.shadow.mapSize.set(this.ipadQuality?1024:2048,this.ipadQuality?1024:2048);this.sun.shadow.camera.left=-23;this.sun.shadow.camera.right=23;this.sun.shadow.camera.top=23;this.sun.shadow.camera.bottom=-23;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;this.scene.add(this.sun,this.sun.target);
@@ -193,17 +195,21 @@ export class HomeWorld {
     mat.transparent=true;const waterFade={value:new THREE.Vector2(1e6,2e6)};mat.onBeforeCompile=sh=>{sh.uniforms.uWaterFade=waterFade;sh.fragmentShader=sh.fragmentShader.replace('#include <fog_pars_fragment>','#include <fog_pars_fragment>\nuniform vec2 uWaterFade;').replace('#include <fog_fragment>','#include <fog_fragment>\n#ifdef USE_FOG\ngl_FragColor.a*=1.0-smoothstep(uWaterFade.x,uWaterFade.y,vFogDepth);\n#endif');};mat.customProgramCacheKey=()=>'hw-water-fade';
     // Horizon placement: find where the top-of-screen ray meets sea level and cut the water a little before it,
     // so a band of sea always stays between the island and the sky, whatever the tilt.
-    const camDir=new THREE.Vector3(),camUp=new THREE.Vector3(),topPoint=new THREE.Vector3(),seaY=new THREE.Box3().setFromObject(ocean).max.y;
+    const camDir=new THREE.Vector3(),camUp=new THREE.Vector3(),topPoint=new THREE.Vector3(),edge=new THREE.Vector3(),seaY=new THREE.Box3().setFromObject(ocean).max.y;
+    const skyHorizon=v=>{const u=this.nightSky?.domeMaterial?.uniforms?.uHorizon;if(u)u.value=v;};
     ocean.onBeforeRender=(renderer,scene,camera)=>{
-      if(!camera.isOrthographicCamera||this.overview){waterFade.value.set(1e6,2e6);return;}
+      if(!camera.isOrthographicCamera||this.overview){waterFade.value.set(1e6,2e6);skyHorizon(1);return;}
       camera.getWorldDirection(camDir);const elev=Math.asin(THREE.MathUtils.clamp(-camDir.y,-1,1));
-      // The lower the tilt, the nearer the horizon: at the flattest view the sea ends ~36 units past the focus
-      // (just beyond the far shore), at the default steep view it runs out of frame.
+      // The lower the tilt, the nearer the horizon: at the flattest view the sea ends ~40 units past the focus
+      // (a band of open sea beyond the far shore), at the default steep view it runs out of frame.
       const n=THREE.MathUtils.clamp((.62-elev)/(.62-.28),0,1);
-      if(n<=0){waterFade.value.set(1e6,2e6);return;}
-      // Never closer than just past the far shore; otherwise at ~72% up the screen so a sky band always shows when tilted.
+      if(n<=0){waterFade.value.set(1e6,2e6);skyHorizon(1);return;}
+      // Never closer than a stretch past the far shore; otherwise at ~72% up the screen so a sky band always shows when tilted.
       camUp.set(0,1,0).applyQuaternion(camera.quaternion);topPoint.copy(camera.position).addScaledVector(camUp,camera.top*.6);
-      const atScreen=(seaY-topPoint.y)/camDir.y,horizon=Math.max(camera.position.distanceTo(this.focus)+22,atScreen)+150*(1-n);waterFade.value.set(horizon-7,horizon+5);
+      const atScreen=(seaY-topPoint.y)/camDir.y,horizon=Math.max(camera.position.distanceTo(this.focus)+30,atScreen)+150*(1-n);waterFade.value.set(horizon-2.5,horizon+1.5);
+      // Tell the sky dome where that sea edge lands on screen, so its pale horizon band starts right there.
+      edge.copy(camera.position).addScaledVector(camDir,horizon);if(Math.abs(camUp.y)>1e-4)edge.addScaledVector(camUp,(seaY-edge.y)/camUp.y);
+      edge.project(camera);skyHorizon(THREE.MathUtils.clamp(edge.y,-1,1));
     };
     this.water={mesh:ocean,tex,time:0};
   }
@@ -629,6 +635,19 @@ export class HomeWorld {
     if(this.overview)this.overview=false;
     this.setZoomSpan(pick([8,13,19,24,28],this.zoom));this.notify();
   }
+  /** One Zoom button: each tap steps closer; from the closest stop it jumps back out to the farthest. Pinch covers the rest. */
+  cycleZoom(){
+    if(this.mapOnly||this.fishing?.firstPerson)return;
+    const inn=this.interior;
+    if(inn){
+      if(inn.phase!=='inside')return;
+      const base=inn.homeZoom??inn.camTo?.zoom??this.zoom;
+      if(this.zoom<=base*.78+.05){this.setZoomSpan(base*1.22);this.notify();return;}
+      this.stepZoom(-1);return;
+    }
+    if(!this.overview&&this.zoom<=8.05){this.setZoomSpan(28);this.notify();return;}
+    this.stepZoom(-1);
+  }
   /** Abandon the current action without banking it (switching bodies, leaving the island). Sleep is never dropped here. */
   dropAction(){
     const a=this.action;if(!a||a.type==='sleep')return;
@@ -650,18 +669,13 @@ export class HomeWorld {
     this.placeSun();
   }
   /**
-   * Phones and desktop slide the sun with the player every frame, which rebuilds the shadow map.
-   * iPad keeps the same light, but moves it only after the player has walked about 1.2 m or 400 ms
-   * have passed, and never twice inside 280 ms — a few times a second, not on every camera tick.
+   * The sun slides with the player every frame on every device, so the shadow map is rebuilt in
+   * step with the bodies that cast into it. (A throttled iPad update left shadows hopping a few
+   * times a second behind the walk; the per-frame cost is covered by the plain PCF filter instead.)
    */
   placeSun(){
     const x=this.player.x,y=this.player.y;
-    if(!this.ipadQuality){this.sun.position.set(x-12,23,-y+12);this.sun.target.position.copy(this.actor.position);return;}
-    const now=performance.now(),moved=Math.hypot(x-(this.shadowX??x),y-(this.shadowY??y)),since=now-(this.shadowAt||0);
-    if(!((moved>=1.2||since>=400)&&since>=280))return;
-    this.shadowX=x;this.shadowY=y;this.shadowAt=now;
     this.sun.position.set(x-12,23,-y+12);this.sun.target.position.copy(this.actor.position);
-    this.renderer.shadowMap.needsUpdate=true;
   }
   /**
    * Skinned clips advance once per animation frame. On iPad that step is the real frame delta

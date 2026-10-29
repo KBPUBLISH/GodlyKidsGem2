@@ -164,16 +164,18 @@ function App(){
   const game=()=>engine.current,inventory=view.state?.inventory||{},busy=view.busy,stats=view.state?.stats||{};
   const invoke=(fn)=>{try{fn(game());}catch(e){setToast(e.message);}};
   const zoomTouchAt=useRef(0);
-  const onZoom=dir=>event=>{
+  // pointerup fires on iPad where click often does not; the click path is kept for keyboards and
+  // ignored for 700 ms after a pointer tap so one tap never zooms twice.
+  const onZoom=event=>{
     if(event.type==='pointerup'){
       if(event.pointerType==='mouse'&&event.button!==0)return;
       event.preventDefault();event.stopPropagation();
       zoomTouchAt.current=performance.now();
-      invoke(g=>g.stepZoom(dir));
+      invoke(g=>g.cycleZoom());
       return;
     }
     if(performance.now()-zoomTouchAt.current<700)return;
-    invoke(g=>g.stepZoom(dir));
+    invoke(g=>g.cycleZoom());
   };
   const [campfireId,setCampfireId]=useState(null);
   const [ovenId,setOvenId]=useState(null);
@@ -242,10 +244,7 @@ function App(){
       {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded||view.ambient} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}
       <button aria-label="Open my bag" onClick={()=>openPanel('inventory')}><Icon type="bag"/><span>My bag</span></button>
       <button ref={mapButton} aria-label="Show full island map" onClick={showFullMap} disabled={!view.loaded||!!view.building?.preview}><Icon type="map"/><span>Map</span></button>
-      <div className="zoom-pair" role="group" aria-label="Zoom">
-        <button type="button" aria-label="Zoom in" onPointerUp={onZoom(-1)} onClick={onZoom(-1)}><Icon type="zoom" size={28}/><span>In</span></button>
-        <button type="button" aria-label="Zoom out" onPointerUp={onZoom(1)} onClick={onZoom(1)}><b aria-hidden="true">−</b><span>Out</span></button>
-      </div>
+      <button type="button" aria-label="Zoom closer; from the closest view it zooms back out" onPointerUp={onZoom} onClick={onZoom}><Icon type="zoom"/><span>Zoom</span></button>
       <button ref={actionsButton} className={`actions-menu-button ${activeTool?'has-tool':''}`} aria-label="Open build" aria-expanded={actionsOpen} aria-controls="action-menu" disabled={!view.loaded||view.ambient} onClick={toggleActions}><img className="picture-icon higgsfield-icon" src="/icons/higgsfield/build_home.png?v=cottage1" width={44} height={44} alt="" aria-hidden="true" draggable={false} decoding="async" data-game-icon="build_home" data-icon-source="higgsfield"/><span>Build</span>{activeTool&&<i className="equipped-mark" aria-hidden="true">✓</i>}</button>
       <button className="tools-chip" aria-label="Open tools and upgrades" disabled={!view.loaded||view.ambient} onClick={()=>openPanel('tools')}><Icon type="mine"/><span>Tools</span></button>
     </nav>
@@ -274,7 +273,7 @@ function App(){
     {view.loaded&&<section className={`bottom-hud ${view.building?.preview?'placing':''} ${actionsOpen?'actions-open':''}`}>
       {view.building?.preview?.stroke?<StrokeBar preview={view.building.preview} onDone={()=>invoke(g=>g.building.cancelPreview())}/>:view.building?.preview?<PlacementControls preview={view.building.preview} onPlace={()=>invoke(g=>g.building.place())} onCrew={ids=>invoke(g=>g.building.setCrew(ids))} onRotate={()=>invoke(g=>g.building.rotate())} onCancel={()=>invoke(g=>g.building.cancelPreview())} onMove={(x,y)=>invoke(g=>g.building.nudge(x,y))} onFind={()=>invoke(g=>g.building.findAnother())} onClear={()=>invoke(g=>g.building.clearSpot())} onClearWith={id=>invoke(g=>g.building.beginClear(id))} onGoal={()=>invoke(g=>g.building.setGoalFromPreview())}/>:<>
       {view.building?.items?.filter(b=>b.status!=='complete'&&!b.project).map(b=><div className="build-progress panel" key={b.id} role="status"><span><Icon type="build" size={34}/></span><div><strong>{b.name}</strong><small>{b.status==='queued'?'Walking to build…':`Building… ${b.remaining}s`}</small><progress value={b.progress} max="1"/></div></div>)}
-      {showRecent&&<div className="recent-tools" role="toolbar" aria-label="Recent tools"><span className="recent-tools-label">Recent Tools</span><div className="recent-tools-row">{activeTool&&<button type="button" className="recent-put-away" aria-label={`Put away ${activeTool.name} tool`} title="Put tool away. Walk normally." onClick={()=>runAction(g=>{g.unequipTool();g.renderer.domElement.focus({preventScroll:true});})}>×</button>}{view.recentTools.map(id=>QUICK_TOOLS.find(t=>t.id===id)).filter(Boolean).slice(0,4).map(t=>{const selected=view.tool===t.id;return <button key={t.id} type="button" className={`tool-button recent-tool ${selected?'selected':''}`} style={{'--tool-color':t.color,'--tool-soft':t.soft}} aria-label={t.name} aria-pressed={t.id==='food'||t.id==='harvest'?undefined:selected} onClick={()=>{if(t.id==='food'){invoke(g=>g.noteTool('food'));openPanel('food');}else if(t.id==='harvest')runAction(g=>{g.noteTool('harvest');g.nutrition.harvestFood();});else invoke(g=>{g.setTool(t.id);g.renderer.domElement.focus({preventScroll:true});});}}><span className="tool-picture"><Icon type={t.id}/></span><span className="tool-name">{t.name}</span>{selected&&<span className="chosen-mark" aria-hidden="true">✓</span>}</button>;})}</div></div>}
+      {showRecent&&<div className="recent-tools" role="toolbar" aria-label="Recent tools"><span className="recent-tools-label">Recent Tools</span><div className="recent-tools-row">{activeTool&&<button type="button" className="recent-put-away" aria-label={`Put away ${activeTool.name} tool`} title="Put tool away. Walk normally." onClick={()=>runAction(g=>{g.unequipTool();g.renderer.domElement.focus({preventScroll:true});})}><span className="put-away-x" aria-hidden="true">×</span><span className="tool-name">Put away</span></button>}{view.recentTools.map(id=>QUICK_TOOLS.find(t=>t.id===id)).filter(Boolean).slice(0,4).map(t=>{const selected=view.tool===t.id;return <button key={t.id} type="button" className={`tool-button recent-tool ${selected?'selected':''}`} style={{'--tool-color':t.color,'--tool-soft':t.soft}} aria-label={t.name} aria-pressed={t.id==='food'||t.id==='harvest'?undefined:selected} onClick={()=>{if(t.id==='food'){invoke(g=>g.noteTool('food'));openPanel('food');}else if(t.id==='harvest')runAction(g=>{g.noteTool('harvest');g.nutrition.harvestFood();});else invoke(g=>{g.setTool(t.id);g.renderer.domElement.focus({preventScroll:true});});}}><span className="tool-picture"><Icon type={t.id}/></span><span className="tool-name">{t.name}</span>{selected&&<span className="chosen-mark" aria-hidden="true">✓</span>}</button>;})}</div></div>}
       </>}
     </section>}
     {view.loaded&&actionsOpen&&!view.building?.preview&&<ActionMenu view={view} tab={actionsTab} onTab={setActionsTab} seed={seed} onClose={()=>{setActionsOpen(false);actionsButton.current?.focus();}} onPanel={openPanel} onPick={id=>{if(id==='food'||id==='harvest')invoke(g=>g.noteTool(id));}} onEquip={id=>{setActionsOpen(false);invoke(g=>{g.setTool(id);g.renderer.domElement.focus({preventScroll:true});});}} onRun={runAction} buildProps={{onTools:()=>openPanel('tools'),onPause:(id,paused)=>invoke(g=>g.building.pauseProject(id,paused)),onFind:id=>runAction(g=>g.building.focusProject(id)),onChoose:id=>runAction(g=>g.building.startPreview(id)),onResume:id=>runAction(g=>g.building.go(id)),onCancel:id=>invoke(g=>g.building.cancelQueued(id)),onMove:id=>runAction(g=>g.building.moveExisting(id)),onUpgrade:id=>runAction(g=>g.building.startUpgrade(id))}}/>}

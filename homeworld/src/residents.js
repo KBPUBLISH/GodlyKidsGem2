@@ -314,6 +314,10 @@ export class Residents {
    * someone else. Anything else (building, crafting, planting, sleeping) still needs the body.
    */
   static HELPER_JOBS = { water: 'Watering the garden', harvest: 'Picking ripe crops', stoke: 'Feeding the campfire', fish: 'Fishing', chop: 'Chopping wood', mine: 'Breaking rocks' };
+  /** Real seconds a worn-out helper rests before carrying on. */
+  static REST_BREAK_SECONDS = 8;
+  /** Chore scans (~1.2s apart) a job may come up empty while work still exists, before it is called off. */
+  static JOB_STALL_LIMIT = 40;
 
   canHelp(task) { return !!task && !!Residents.HELPER_JOBS[task.type]; }
 
@@ -371,6 +375,32 @@ export class Residents {
     game.toast(`${home.name} took a snack break (${best[1].name.toLowerCase()}) and kept going.`);
     game.notify?.();
     return true;
+  }
+
+  /**
+   * Out of energy in the middle of a job: a snack from the shared bag if there is one,
+   * otherwise a rest break on the spot (same +energy a rest gives you). The job is kept
+   * either way, so a friend never just quits because the tank ran dry.
+   */
+  pauseTired(actor, c, dwell = 1) {
+    const home = actor.userData, game = this.game;
+    if (!home.job) return false;
+    if (this.snack(actor)) { home.chore = { ...c, path: [], dwell }; this.claims.set(c.key, home.id); return true; }
+    home.chore = { ...c, path: [], dwell, swingT: 0, swung: 0, resting: Residents.REST_BREAK_SECONDS };
+    this.claims.set(c.key, home.id);
+    home.job.rests = (home.job.rests || 0) + 1;
+    if (home.job.rests === 1) game.toast(`${home.name} is out of energy and is taking a rest break, then carrying on. A snack in the bag would get ${home.name} going faster.`);
+    game.notify?.();
+    return true;
+  }
+
+  /** The rest break is over: take the rest, then pick the job back up. */
+  endRest(actor) {
+    const game = this.game, home = actor.userData, c = home.chore;
+    if (!c) return;
+    c.resting = 0;
+    try { game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'rest', actionId: `helper:${home.id}:rest:${Date.now()}` }); } catch { /* reported by the store */ }
+    game.notify?.();
   }
 
   stopJob(actor, note = true) {
@@ -442,6 +472,7 @@ export class Residents {
         options.push({ kind: j.type, key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: j.label });
       }
       options.sort((a, b) => dist(a.target, here) - dist(b.target, here));
+      j.candidates = options.length;
       return tryPaths(options);
     }
     if (j.type === 'stoke') {
@@ -467,16 +498,18 @@ export class Residents {
       if (!woodRoom(s)) return null;
       const options = activeTrees(game.world, s, min).filter((t) => t.id !== busyId && !this.claims.has(`tree:${t.id}`) && !t.cell)
         .map((t) => ({ kind: 'chop', key: `tree:${t.id}`, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.18 + (t.radius || 0) * .2, dwell: 1, label: j.label }))
-        .sort((a, b) => dist(a.target, here) - dist(b.target, here)).slice(0, 14);
-      return tryPaths(options);
+        .sort((a, b) => dist(a.target, here) - dist(b.target, here));
+      j.candidates = options.length;
+      return tryPaths(options.slice(0, 14));
     }
     if (j.type === 'mine') {
       const tier = toolTier(s), deposit = j.goal && j.goal !== 'any' ? j.goal : null;
       const options = activeRocks(game.world, s).filter((r) => { const p = rockProfile(r); return r.id !== busyId && !this.claims.has(`rock:${r.id}`) && p.minTier <= tier.tier && (!deposit || p.deposit === deposit); })
         .filter((r) => { const node = game.mining?.nodes?.get(r.id); return !node || node.bounds.min.y <= heightAt(game.world, r.position[0], r.position[1]) + .75; })
         .map((r) => ({ kind: 'mine', key: `rock:${r.id}`, rockId: r.id, target: { x: r.position[0], y: r.position[1] }, reach: (r.radius || .6) + .85, dwell: 1, label: j.label }))
-        .sort((a, b) => dist(a.target, here) - dist(b.target, here)).slice(0, 14);
-      return tryPaths(options);
+        .sort((a, b) => dist(a.target, here) - dist(b.target, here));
+      j.candidates = options.length;
+      return tryPaths(options.slice(0, 14));
     }
     return null;
   }
@@ -488,8 +521,11 @@ export class Residents {
   pickChore(home, actor = null) {
     if (home.job) {
       const chore = this.pickJobChore(home);
+      if (chore) home.job.stalls = 0;
       if (!chore && actor) {
         const s = this.game.store?.state, j = home.job;
+        // Work still exists (claimed by a friend, or no path right now): wait for it instead of quitting.
+        if (j.candidates > 0 && (j.stalls = (j.stalls || 0) + 1) < Residents.JOB_STALL_LIMIT) return null;
         if (j.done > 0) { home.job = null; this.game.toast(`${home.name} finished: ${this.jobProgress(j)}. Nothing more to do there.`); this.game.notify?.(); return null; }
         let why = j.type === 'chop' && s && !woodRoom(s) ? 'the wood store is full.' : j.type === 'stoke' ? 'there is no wood for the fire.' : 'nothing left to do here.';
         if (j.type === 'mine' && s) {
@@ -542,7 +578,7 @@ export class Residents {
         const before = game.store.state;
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'water', key: c.cellKey, actionId: `helper:${home.id}:${Date.now()}` });
         if (game.store.state !== before) { game.burst?.(c.target, 'water', .3); game.toast(`${who} watered the ${g.seed.name.toLowerCase()}.`); }
-        else if (energyFor(game.store.state, home.id) < 5) { if (home.job && this.snack(actor)) { home.chore = { ...c, path: [], dwell: 1 }; this.claims.set(c.key, home.id); return; } home.job = null; game.toast(`${who} is too tired to keep working.`); game.notify?.(); }
+        else if (energyFor(game.store.state, home.id) < 5) { if (this.pauseTired(actor, c, 1)) return; game.toast(`${who} is too tired to keep working.`); game.notify?.(); }
       } else if (c.kind === 'stoke') {
         const fire = completedFires(s).find((b) => b.id === c.fireId);
         if (!fire || !fireCanTakeLog(fire, min)) return;
@@ -578,8 +614,8 @@ export class Residents {
         if (after === before) {
           const tired = energyFor(after, home.id) < 5;
           if (tired) {
-            if (home.job && this.snack(actor)) { home.chore = { ...c, path: [], dwell: 1.2 }; this.claims.set(c.key, home.id); return; }
-            home.job = null; game.toast(`${who} is too tired to keep working.`); game.notify?.();
+            if (this.pauseTired(actor, c, 1.2)) return;
+            game.toast(`${who} is too tired to keep working.`); game.notify?.();
           } else if (c.kind === 'mine' && profile && toolTier(after).tier < profile.minTier) {
             this.claims.delete(c.key);
             game.toast(toolNeedMessage(profile), 2000);
@@ -989,6 +1025,15 @@ export class Residents {
     if (game.store?.state?.night) { home.strollState = null; this.idleActor(actor, dt); return; }
     if (home.chore) {
       const c = home.chore;
+      if (c.resting > 0) {
+        // Rest break: stand by the work, catch a breath, then the job carries on.
+        c.resting -= dt;
+        this.hideHelperTool(home);
+        if (c.target) turnToward(actor, Math.atan2(c.target.x - home.x, -(c.target.y - home.y)), dt);
+        this.idleActor(actor, dt);
+        if (c.resting <= 0) this.endRest(actor);
+        return;
+      }
       if ((c.kind === 'chop' || c.kind === 'mine') && home.bones?.mixamorigRightHand) {
         if (c.path?.length) { this.hideHelperTool(home); this.walkAlong(actor, c.path, 1.7, dt); return; }
         const here = { x: home.x, y: home.y }, reach = c.reach || 1.2;

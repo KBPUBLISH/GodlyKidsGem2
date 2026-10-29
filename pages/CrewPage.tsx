@@ -89,14 +89,25 @@ const ISLAND_LANDSCAPE_PAD_SCALE = 0.58;
 /** Plain sky color for the strip above the panorama on tablets. */
 const SKY_TOP_COLOR = '#91dff9';
 /**
- * Shore line as a fraction of the VISIBLE page, not the stage. The stage is
- * often much taller than the screen, so a stage percentage left every island
- * high in the sky with a wide band of water above the bow. 60 puts the shore
- * just above the ship's lanterns on phones and iPads. The sea panorama is
- * slid so its painted sky/sea line lands on this same y. The name pill stays
- * anchored to each island's painted top and clamps just under the safe area.
+ * Shore line as a fraction of the stage (the hull art frame), so it keeps the
+ * same relation to the painted ship on every screen. The cabin's arched top
+ * is at 0.200 of the hull art and its side rails at 0.230. 20.2 puts the
+ * water line level with the cabin's peak and a little above the side rails,
+ * so the sea shows beside the cabin and each island's shore rests just
+ * behind the rail: it sits on the water right behind the ship instead of
+ * floating on a band of open sea above the bow (18.4) or sinking out of
+ * sight behind the cabin (25.5). The sea panorama is slid so its painted
+ * sky/sea line lands on this same y. The name pill stays anchored to each
+ * island's painted top and clamps just under the safe area.
  */
-const HORIZON_VIEW_PCT = 60;
+const HORIZON_PCT = 20.2;
+/**
+ * Where the sea panorama's painted sky/sea line sits, as a fraction of the
+ * stage. It is a little above the island shore (HORIZON_PCT), so the islands
+ * rest on open water with the far horizon behind them rather than exactly
+ * on the horizon line.
+ */
+const SEA_LINE_PCT = 16.2;
 /** Where the sky/sea line is painted in crew-voyage-sea-pano.jpg (row 201 of 1229). */
 const PANO_HORIZON_PCT = 16.35;
 /**
@@ -121,9 +132,10 @@ const ISLAND_SUBMERGE_PX = 8;
 /** Hides the sunk share and feathers the shore line just above it. */
 const islandShoreMask = (sinkPct: number) =>
   `linear-gradient(to top, transparent ${sinkPct}%, rgba(0,0,0,0.5) ${sinkPct + 2}%, #000 ${sinkPct + 5.5}%)`;
-/** Gap between an island's painted top and the name pill above it (the sea
- * bob moves the island ±2px, so the visual gap stays ≥ 6px). */
-const ISLAND_PILL_GAP_PX = 8;
+/** The name pill overlays the island art: its top edge sits this share of
+ * the island's painted height below the painted top, over the rainbow /
+ * treetops rather than floating in the sky above them. */
+const ISLAND_PILL_INSET_FRAC = 0.12;
 
 /** Where an island PNG's paint actually is, as fractions of its height. */
 type IslandArtFit = { paintedTop: number; paintedBottom: number; aspect: number };
@@ -1284,10 +1296,20 @@ const CrewPage: React.FC = () => {
     stage.pageW > stage.pageH && Math.min(stage.pageW, stage.pageH) >= 700
       ? ISLAND_WIDTH_FRAC * ISLAND_LANDSCAPE_PAD_SCALE
       : ISLAND_WIDTH_FRAC;
-  const waterlineY = (stage.pageH * HORIZON_VIEW_PCT) / 100;
+  const waterlineY = stage.top + (stage.height * HORIZON_PCT) / 100;
   const islandBaseY = waterlineY + stage.height * ISLAND_SHORE_SINK_FRAC;
-  /** Top edge of the sea panorama tile: its painted horizon meets waterlineY. */
-  const panoTop = waterlineY - (stage.height * PANO_HORIZON_PCT) / 100;
+  /** Page y of the panorama's painted sky/sea line (above the island shore). */
+  const seaLineY = stage.top + (stage.height * SEA_LINE_PCT) / 100;
+  /** Painted sky band of the panorama tile, in px at this stage height. */
+  const panoSkyPx = (stage.height * PANO_HORIZON_PCT) / 100;
+  /** Top edge of the sea panorama tile: its painted horizon meets seaLineY. */
+  const panoTop = seaLineY - panoSkyPx;
+  /**
+   * The strip above the tile mirrors the tile's top sky. It can only mirror
+   * as much as the sky band is tall; past that it would flip water up into
+   * the sky, so cap it and let the flat sky color fill the rest.
+   */
+  const skyMirrorH = Math.min(Math.ceil(panoTop) + 1, Math.floor(panoSkyPx) - 1);
   /** Measured paint bounds per island art src (see measureIslandArt). */
   const [islandFits, setIslandFits] = useState<Record<string, IslandArtFit>>({});
   useEffect(() => {
@@ -1796,7 +1818,7 @@ const CrewPage: React.FC = () => {
           backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
           backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${Math.round(panoTop)}px`,
           transform: sailingIsland && !reduceMotion ? `scale(${SAIL_IN_SEA_SCALE})` : 'none',
-          transformOrigin: `50% ${Math.round(waterlineY)}px`,
+          transformOrigin: `50% ${Math.round(seaLineY)}px`,
           transition: reduceMotion
             ? 'none'
             : sailingIsland
@@ -1806,12 +1828,13 @@ const CrewPage: React.FC = () => {
       />
       {/* Tablets: the ship sits lower, so mirror the panorama's top sky into
           the strip above it instead of showing a flat color seam. */}
-      {panoTop > 0 && (
+      {panoTop > 0 && skyMirrorH > 0 && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-0"
+          className="pointer-events-none absolute inset-x-0 z-0"
           style={{
-            height: Math.ceil(panoTop) + 1,
+            top: Math.ceil(panoTop) + 1 - skyMirrorH,
+            height: skyMirrorH,
             transform: 'scaleY(-1)',
             backgroundImage: `url(${CREW_VOYAGE_SKY})`,
             backgroundRepeat: 'repeat-x',
@@ -1829,7 +1852,7 @@ const CrewPage: React.FC = () => {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 z-[1] overflow-hidden"
           style={{
-            top: waterlineY,
+            top: seaLineY,
             height: stage.height * (1 - PANO_HORIZON_PCT / 100),
             // Ripple copy can't follow the sail-in zoom; let it go.
             opacity: sailingIsland ? 0 : 1,
@@ -1961,7 +1984,13 @@ const CrewPage: React.FC = () => {
         const showLabel = cx > 24 && cx < stage.pageW - 24;
         // Page y of the island's painted top (its box top is often padding),
         // so the label hugs the art instead of a fixed offset above the square.
-        const islandTopY = bottom - scale * islandSeat(island).topAboveShore;
+        const seat = islandSeat(island);
+        const islandTopY = bottom - scale * seat.topAboveShore;
+        // Pill top rides inside the art, but never under the safe area.
+        const pillTopY = Math.max(
+          islandTopY + scale * seat.topAboveShore * ISLAND_PILL_INSET_FRAC,
+          0,
+        );
         return (
           <button
             key={`tap-${island.id}`}
@@ -1982,11 +2011,10 @@ const CrewPage: React.FC = () => {
             <span
               className="pointer-events-none absolute left-1/2 flex flex-col items-center gap-1"
               style={{
-                // Bottom edge ISLAND_PILL_GAP_PX above the painted top
-                // (translateY(-100%) lifts the stack by its own height), unless
-                // that would push the top edge within 4px of the safe area.
-                top: Math.round(islandTopY - ISLAND_PILL_GAP_PX - (bottom - size)),
-                transform: `translate(-50%, max(-100%, calc(var(--safe-area-top, 0px) + 4px - ${Math.round(islandTopY - ISLAND_PILL_GAP_PX)}px)))`,
+                // Top edge a little way into the painted island, so the pill
+                // overlays the art; clamped at least 4px under the safe area.
+                top: Math.round(pillTopY - (bottom - size)),
+                transform: `translate(-50%, max(0px, calc(var(--safe-area-top, 0px) + 4px - ${Math.round(pillTopY)}px)))`,
                 opacity: !showLabel ? 0 : isActive ? 1 : 0.8,
                 transition: 'opacity 0.3s ease, top 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
               }}

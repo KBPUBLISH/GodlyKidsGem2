@@ -249,6 +249,7 @@ export class Construction {
       this.lastStrokeKey=p.key;p.rotation=placed.rotation;
       if(buildingById(p.kind)?.stack)p.stackId=placed.id;
     }
+    g.music?.sfx?.play(p.kind==='fence'?'place':'brick');
     g.refreshDynamic();this.updateStroke();g.notify();return true;
   }catch(e){g.toast(e.message,1500);return false;}
  }

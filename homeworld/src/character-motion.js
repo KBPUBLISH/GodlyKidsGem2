@@ -15,7 +15,7 @@ export function updateLocomotion(character,idlePose,dt,speed,seconds){
  if(state.weight>0){
   character.restPose.forEach((p,i)=>{state.pose[i].p.copy(p.bone.position);state.pose[i].q.copy(p.bone.quaternion);});
   if(!action.isRunning()){action.reset().setEffectiveWeight(1).play();}
-  const pace=THREE.MathUtils.clamp(speed/WALK_REFERENCE_SPEED,.45,1.5);action.setEffectiveTimeScale(damp(action.getEffectiveTimeScale(),pace,10,dt));character.mixer.update(dt);
+  const pace=THREE.MathUtils.clamp(speed/WALK_REFERENCE_SPEED,.45,1.5);action.setEffectiveTimeScale(damp(action.getEffectiveTimeScale(),pace,10,dt));if(character.stepMixer)character.stepMixer(character.mixer,dt);else character.mixer.update(dt);
   // Blend from the sampled walk toward idle. slerpQuaternions cannot use its
   // destination as the second input: copying the first would erase the walk.
   character.restPose.forEach((p,i)=>{p.bone.position.lerp(state.pose[i].p,1-state.weight);p.bone.quaternion.slerp(state.pose[i].q,1-state.weight);});

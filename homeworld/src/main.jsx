@@ -163,6 +163,18 @@ function App(){
   const lastToast=view.toasts?.[0];useEffect(()=>{if(!lastToast){setToast('');setToastLife(0);return;}setToast(lastToast.text);setToastLife(lastToast.ms||0);const timer=setTimeout(()=>{setToast('');setToastLife(0);},lastToast.ms||6000);return()=>clearTimeout(timer);},[lastToast?.id]);
   const game=()=>engine.current,inventory=view.state?.inventory||{},busy=view.busy,stats=view.state?.stats||{};
   const invoke=(fn)=>{try{fn(game());}catch(e){setToast(e.message);}};
+  const zoomTouchAt=useRef(0);
+  const onZoom=dir=>event=>{
+    if(event.type==='pointerup'){
+      if(event.pointerType==='mouse'&&event.button!==0)return;
+      event.preventDefault();event.stopPropagation();
+      zoomTouchAt.current=performance.now();
+      invoke(g=>g.stepZoom(dir));
+      return;
+    }
+    if(performance.now()-zoomTouchAt.current<700)return;
+    invoke(g=>g.stepZoom(dir));
+  };
   const [campfireId,setCampfireId]=useState(null);
   const [ovenId,setOvenId]=useState(null);
   const [wellId,setWellId]=useState(null);
@@ -206,7 +218,7 @@ function App(){
   const activeTool=TOOLS.find(t=>t.id===view.tool);
   const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
-  return <main className={`game-shell ${mapOnly?'map-only':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>engine.current?.community?.activity()} onWheelCapture={()=>engine.current?.community?.activity()}>
+  return <main className={`game-shell ${mapOnly?'map-only':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
     <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>
     <header className="topbar">
@@ -225,12 +237,15 @@ function App(){
     {showTime&&<div className="time-shade" onClick={()=>setShowTime(false)}><section ref={timeDialog} tabIndex={-1} className="time-panel panel" role="dialog" aria-modal="true" aria-label="Day and time" onClick={e=>e.stopPropagation()}><div className="panel-title"><strong><Icon type="sun" size={28}/> Day & night</strong><button data-dialog-close className="close" onClick={()=>setShowTime(false)} aria-label="Back to island">← Back</button></div><p>A full island day takes 10 minutes. Dusk arrives in the last minute before 10 PM bedtime. Everyone rests through a 10-second night, then wakes at 7 AM. Homes give a full energy refill. Plants keep growing overnight.</p><details className="grownup-tools"><summary>Grown-up test tools</summary><p>These buttons change time or restart this local game.</p><div className="time-buttons"><button disabled={!view.loaded} onClick={()=>invoke(g=>g.clockChange(0,!view.state.clock.paused))}>{view.state?.clock.paused?'▶ Start time':'Ⅱ Pause time'}</button><button onClick={()=>invoke(g=>g.previewTime('dusk'))}>Preview dusk</button><button onClick={()=>{setShowTime(false);invoke(g=>g.previewTime('bedtime'));}}>Preview bedtime</button><button onClick={()=>invoke(g=>g.clockChange(360))}>Skip 6 hours</button><button onClick={()=>invoke(g=>g.clockChange(1440))}>Skip 1 day</button></div><label className="slow"><input type="checkbox" checked={view.animationRate<1} onChange={e=>invoke(g=>g.setAnimationRate(e.target.checked?.35:1))}/>Slow down tool moves</label><div className="reset-row"><button disabled={busy} onClick={()=>setConfirmReset(true)}>Start a new test</button><button disabled={busy} onClick={()=>invoke(g=>g.reset(true))}>Bring back previous test</button></div>{confirmReset&&<div className="reset-question" role="group" aria-label="Start a new test?"><p>Start again? We’ll keep your current game as the previous test.</p><button onClick={()=>{invoke(g=>g.reset());setConfirmReset(false);}}>Start new test</button><button onClick={()=>setConfirmReset(false)}>Keep playing</button></div>}</details></section></div>}
 
     {view.inside&&<div className="home-outside-bar"><button type="button" className="home-outside" onClick={()=>invoke(g=>g.building.leaveHome())}>Outside</button><span className="home-inside-status" role="status">Inside the {view.inside.name}</span></div>}
-    {view.playersOnly&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onClick={()=>{const g=engine.current;if(g?.interior){g.building.leaveHome();return;}window.parent?.postMessage({type:'gk-back-to-ship'},location.origin);}}><img src={SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
+    {view.playersOnly&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onPointerUp={e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.stopPropagation();const g=engine.current;if(g?.interior){g.building.leaveHome();return;}window.parent?.postMessage({type:'gk-back-to-ship'},location.origin);}}><img src={SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
       {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded||view.ambient} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}
       <button aria-label="Open my bag" onClick={()=>openPanel('inventory')}><Icon type="bag"/><span>My bag</span></button>
       <button ref={mapButton} aria-label="Show full island map" onClick={showFullMap} disabled={!view.loaded||!!view.building?.preview}><Icon type="map"/><span>Map</span></button>
-      <button aria-label="Zoom view" onClick={()=>invoke(g=>g.toggleClose())}><Icon type="zoom"/><span>Zoom</span></button>
+      <div className="zoom-pair" role="group" aria-label="Zoom">
+        <button type="button" aria-label="Zoom in" onPointerUp={onZoom(-1)} onClick={onZoom(-1)}><Icon type="zoom" size={28}/><span>In</span></button>
+        <button type="button" aria-label="Zoom out" onPointerUp={onZoom(1)} onClick={onZoom(1)}><b aria-hidden="true">−</b><span>Out</span></button>
+      </div>
       <button ref={actionsButton} className={`actions-menu-button ${activeTool?'has-tool':''}`} aria-label="Open build" aria-expanded={actionsOpen} aria-controls="action-menu" disabled={!view.loaded||view.ambient} onClick={toggleActions}><img className="picture-icon higgsfield-icon" src="/icons/higgsfield/build_home.png?v=cottage1" width={44} height={44} alt="" aria-hidden="true" draggable={false} decoding="async" data-game-icon="build_home" data-icon-source="higgsfield"/><span>Build</span>{activeTool&&<i className="equipped-mark" aria-hidden="true">✓</i>}</button>
       <button className="tools-chip" aria-label="Open tools and upgrades" disabled={!view.loaded||view.ambient} onClick={()=>openPanel('tools')}><Icon type="mine"/><span>Tools</span></button>
     </nav>

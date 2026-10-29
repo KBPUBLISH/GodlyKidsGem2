@@ -1,3 +1,5 @@
+import { IslandSfx } from './island-sfx.js';
+
 /** Two gentle tracks, played one after the other, then again. */
 const TRACKS = [
   '/assets/music/gentle-gameplay.mp3',
@@ -25,6 +27,9 @@ export class IslandMusic {
     this.ctx = null;
     this.gain = null;
     this.audio.addEventListener('ended', () => this.advance());
+    // Action effects share this speaker switch. Their context is separate,
+    // so a chop does not restart the music element.
+    this.sfx = new IslandSfx(() => this.on);
   }
 
   remember() {
@@ -73,12 +78,14 @@ export class IslandMusic {
 
   /** First tap on the island, or coming back to the page. */
   unlock() {
+    this.sfx?.unlock();
     if (this.on) this.play();
   }
 
   setOn(on) {
     this.on = !!on;
     this.remember();
+    this.sfx?.setAudible(this.on);
     if (this.on) {
       if (!this.audio.src) this.audio.src = TRACKS[this.index];
       this.play();
@@ -90,6 +97,7 @@ export class IslandMusic {
   dispose() {
     this.audio.pause();
     this.audio.src = '';
+    this.sfx?.dispose();
     this.ctx?.close?.();
   }
 }

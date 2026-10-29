@@ -83,7 +83,8 @@ export class Animals {
           if (!obj.isMesh) return;
           obj.castShadow = true;
           obj.receiveShadow = false;
-          if (obj.isSkinnedMesh) obj.frustumCulled = false;
+          // iPad keeps frustum culling so animals off to the side are not shadowed. Phones and desktop leave it off.
+          if (obj.isSkinnedMesh) obj.frustumCulled = !!this.game.ipadQuality;
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           for (const material of mats) {
             if (!material) continue;
@@ -384,7 +385,7 @@ export class Animals {
     if (this.herdClock > 0.45) { this.herdClock = 0; this.refreshHerd(); }
     for (const inst of this.instances.values()) {
       if (!inst.root) continue;
-      inst.mixer.update(dt);
+      this.game.stepMixer(inst.mixer, dt);
       if (inst.model && (inst.kind === 'rabbit' || inst.kind === 'squirrel')) {
         for (const child of inst.model.children) {
           if (Math.abs(child.position.x) > 2 || Math.abs(child.position.z) > 2) { child.position.x = 0; child.position.z = 0; }

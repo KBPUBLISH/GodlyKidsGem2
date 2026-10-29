@@ -59,7 +59,7 @@ const ShopModal = React.lazy(() => import('../components/features/ShopModal'));
  */
 /**
  * Wide sea panorama (repeat-x, mirror-tiled, painted horizon at
- * PANO_HORIZON_PCT, slid so it sits at HORIZON_PCT). It pans with the wheel
+ * PANO_HORIZON_PCT, slid so it sits on the shore line). It pans with the wheel
  * so the islands feel like the ship is turning.
  */
 const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
@@ -81,16 +81,22 @@ const STAGE_TOP_PCT = 0.11;
 const STAGE_WIDE_TOP_PCT = 0.07;
 /** Island art width as a fraction of the stage width (active island). */
 const ISLAND_WIDTH_FRAC = 0.42;
+/**
+ * iPad landscape is wide, so 42% of the stage makes the islands huge behind
+ * the deck. Shrink them there only. Phones and iPad portrait stay at 0.42.
+ */
+const ISLAND_LANDSCAPE_PAD_SCALE = 0.58;
 /** Plain sky color for the strip above the panorama on tablets. */
 const SKY_TOP_COLOR = '#91dff9';
 /**
- * Water line, as a fraction of the stage height (islands sit on it). The sea
- * panorama is slid up so its painted sky/sea line lands here — lower numbers
- * mean more water and less sky. The ceiling is the tallest island: at 12 the
- * Beginnings rainbow still clears the top of the screen (±2px bob) on
- * 375×667 / 390×844 / 430×932; its name pill clamps and sits over the arc.
+ * Shore line as a fraction of the VISIBLE page, not the stage. The stage is
+ * often much taller than the screen, so a stage percentage left every island
+ * high in the sky with a wide band of water above the bow. 60 puts the shore
+ * just above the ship's lanterns on phones and iPads. The sea panorama is
+ * slid so its painted sky/sea line lands on this same y. The name pill stays
+ * anchored to each island's painted top and clamps just under the safe area.
  */
-const HORIZON_PCT = 12;
+const HORIZON_VIEW_PCT = 60;
 /** Where the sky/sea line is painted in crew-voyage-sea-pano.jpg (row 201 of 1229). */
 const PANO_HORIZON_PCT = 16.35;
 /**
@@ -309,10 +315,11 @@ const CREW_SEA_WAVES = [
   { id: 'wave-hull', fill: '#0A5A96', topPct: 84, tilePct: 12.5, driftSec: 18, bobSec: 8, reverse: false, opacity: 1 },
 ] as const;
 const SAIL_STEERING_WHEEL = '/assets/images/sail-voyage-wheel.png?v=2';
-const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.png?v=2';
+const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.png?v=3';
 /**
- * Bow art (2048×1360): arch peak at 30% of its height, lanterns at x 14% /
- * 86%, plank strip from 61.3% to 88.5%, last opaque row at 90.7%.
+ * Bow art (2048×1360): curved rails, lanterns, and ropes. The full-width
+ * plank behind the wheel (61.3%–88.5% of the art) is transparent. Those
+ * fractions still place the wheel and the four tiles.
  */
 const BOW_ASPECT = 2048 / 1360;
 const BOW_BOTTOM_PAD = 0.093;
@@ -327,6 +334,8 @@ const CREW_TAB_ART: Record<string, string> = {
 const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.png';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+/** Dark rounded plank behind the four bow buttons. Matches the headboard. */
+const CREW_BUTTON_PLANK = '/assets/images/crew-button-plank.png?v=1';
 
 const DECK_NAV_BOTTOM = 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))';
 /** Adam's tour card sits just above the wheel, clear of the button bow. */
@@ -547,36 +556,32 @@ const ShipDeckTabBar: React.FC<{
   const cell = Math.min(barW * 0.19, barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) * 0.86);
   const stripW = Math.min(cell * 4 + 3 * Math.round(cell * 0.16), stage.pageW - 12);
   const stripBottom = barH * (1 - BOW_STRIP_BOTTOM) + (barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) - cell) / 2;
+  // Plank reaches the wooden ends of the headboard, not the screen edges.
+  const plankW = Math.min(barW * 0.9, stage.pageW - 24);
+  const plankH = cell * 1.38;
   return (
   <div
     className="pointer-events-none absolute inset-x-0 z-30"
     style={{ height: barH, bottom: `calc(var(--safe-area-bottom, 0px) - ${Math.round(barH * BOW_BOTTOM_PAD)}px)` }}
   >
-    {/* Dark wood under the strip so the home-indicator inset is never sky. */}
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-full"
-      style={{ height: 'var(--safe-area-bottom, 0px)', marginTop: -Math.round(barH * BOW_BOTTOM_PAD), background: '#4a2a12' }}
+    {/* Dark rounded plank behind the four buttons, only as wide as the headboard. */}
+    <img
+      src={CREW_BUTTON_PLANK}
+      alt=""
+      draggable={false}
+      className="pointer-events-none absolute left-1/2 z-0 max-w-none -translate-x-1/2 select-none"
+      style={{
+        width: plankW,
+        height: plankH,
+        bottom: stripBottom - cell * 0.18,
+        filter: 'drop-shadow(0 6px 8px rgba(40, 16, 4, 0.35))',
+      }}
     />
-    {/* Wide screens: plank-colored fill so the strip reaches both edges
-        when the bow art is narrower than the page. */}
-    {barW < stage.pageW && (
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0"
-        style={{
-          top: barH * (BOW_STRIP_TOP + 0.01),
-          height: barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP - 0.02),
-          background: 'linear-gradient(180deg, #B8743F 0%, #9A5A2C 55%, #6E3B16 100%)',
-          boxShadow: 'inset 0 3px 0 #E0A552, inset 0 -3px 0 #4a2a12',
-        }}
-      />
-    )}
     <img
       src={CREW_TAB_BAR}
       alt=""
       draggable={false}
-      className="pointer-events-none absolute bottom-0 left-1/2 max-w-none -translate-x-1/2 select-none"
+      className="pointer-events-none absolute bottom-0 left-1/2 z-[1] max-w-none -translate-x-1/2 select-none"
       style={{ width: barW, height: barH }}
     />
     <button
@@ -608,7 +613,7 @@ const ShipDeckTabBar: React.FC<{
       />
     </button>
     <div
-      className="pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-end justify-between"
+      className="pointer-events-auto absolute left-1/2 z-[3] flex -translate-x-1/2 items-end justify-between"
       style={{ bottom: stripBottom, width: stripW }}
     >
       {tabs.map((tab) => (
@@ -1275,10 +1280,14 @@ const CrewPage: React.FC = () => {
   const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
   const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
   /** Sky/sea line of the panorama, and the y where island shores rest. */
-  const waterlineY = stage.top + (stage.height * HORIZON_PCT) / 100;
+  const islandWidthFrac =
+    stage.pageW > stage.pageH && Math.min(stage.pageW, stage.pageH) >= 700
+      ? ISLAND_WIDTH_FRAC * ISLAND_LANDSCAPE_PAD_SCALE
+      : ISLAND_WIDTH_FRAC;
+  const waterlineY = (stage.pageH * HORIZON_VIEW_PCT) / 100;
   const islandBaseY = waterlineY + stage.height * ISLAND_SHORE_SINK_FRAC;
   /** Top edge of the sea panorama tile: its painted horizon meets waterlineY. */
-  const panoTop = stage.top + (stage.height * (HORIZON_PCT - PANO_HORIZON_PCT)) / 100;
+  const panoTop = waterlineY - (stage.height * PANO_HORIZON_PCT) / 100;
   /** Measured paint bounds per island art src (see measureIslandArt). */
   const [islandFits, setIslandFits] = useState<Record<string, IslandArtFit>>({});
   useEffect(() => {
@@ -1300,7 +1309,7 @@ const CrewPage: React.FC = () => {
    */
   const islandSeat = (island: VoyageIsland) => {
     const fit = islandFits[island.src];
-    const renderedH = stage.width * ISLAND_WIDTH_FRAC * (fit?.aspect ?? 1);
+    const renderedH = stage.width * islandWidthFrac * (fit?.aspect ?? 1);
     const sinkPct = fit
       ? Math.min(60, (1 - fit.paintedBottom) * 100 + (ISLAND_SUBMERGE_PX / Math.max(1, renderedH)) * 100)
       : ISLAND_SINK_PCT;
@@ -1891,7 +1900,7 @@ const CrewPage: React.FC = () => {
                 className="absolute bottom-0"
                 style={{
                   left: `${50 - offset * 50}%`,
-                  width: `${ISLAND_WIDTH_FRAC * 92}%`,
+                  width: `${islandWidthFrac * 92}%`,
                   height: Math.max(10, Math.round(stage.height * 0.024)),
                   transform: `translateX(-50%) translateY(58%) scale(${scale})`,
                   transformOrigin: '50% 50%',
@@ -1909,7 +1918,7 @@ const CrewPage: React.FC = () => {
                 className="absolute bottom-0 h-auto max-w-none select-none"
                 style={{
                   left: `${50 - offset * 50}%`,
-                  width: `${ISLAND_WIDTH_FRAC * 100}%`,
+                  width: `${islandWidthFrac * 100}%`,
                   // translateY runs inside scale() so the sink is a share of
                   // the island's rendered height (per island, from its
                   // measured paint bounds); the mask hides that share and
@@ -1938,7 +1947,7 @@ const CrewPage: React.FC = () => {
         const distance = Math.abs(offset);
         if (distance > 1.6) return null;
         const scale = Math.max(0.46, 1 - distance * 0.3);
-        const size = stage.width * ISLAND_WIDTH_FRAC * scale;
+        const size = stage.width * islandWidthFrac * scale;
         const cx = stage.left + stage.width * (0.5 - offset * 0.5);
         const bottom = islandBaseY;
         const isActive = offset === 0;

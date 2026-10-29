@@ -54,7 +54,7 @@ const MAIN_MAP_SKY_CLOUDS: MainMapSkyCloudSpec[] = [
 const MAIN_MAP_SKY_CLOUD_LOOP_SEC = 90;
 
 /** Form-factor layout keys (must match CMS / backend). */
-export type MainMapLayoutKey = 'phone_se' | 'phone' | 'phone_max' | 'tablet';
+export type MainMapLayoutKey = 'phone_se' | 'phone' | 'phone_max' | 'tablet' | 'tablet_landscape';
 
 type MainMapPoint = { x: number; y: number };
 type MainMapSize = { w: number; h: number };
@@ -62,10 +62,11 @@ type MainMapPositionAnchor = 'topLeft' | 'badgeCenter';
 
 /** Missing key → walk this chain (phone_max → phone → phone_se → tablet, etc.). */
 const FALLBACK_CHAIN: Record<MainMapLayoutKey, MainMapLayoutKey[]> = {
-  phone_se: ['phone_se', 'phone', 'phone_max', 'tablet'],
-  phone: ['phone', 'phone_se', 'phone_max', 'tablet'],
-  phone_max: ['phone_max', 'phone', 'phone_se', 'tablet'],
-  tablet: ['tablet', 'phone_max', 'phone', 'phone_se'],
+  phone_se: ['phone_se', 'phone', 'phone_max', 'tablet', 'tablet_landscape'],
+  phone: ['phone', 'phone_se', 'phone_max', 'tablet', 'tablet_landscape'],
+  phone_max: ['phone_max', 'phone', 'phone_se', 'tablet', 'tablet_landscape'],
+  tablet: ['tablet', 'phone_max', 'phone', 'phone_se', 'tablet_landscape'],
+  tablet_landscape: ['tablet_landscape', 'tablet', 'phone_max', 'phone', 'phone_se'],
 };
 
 const DEFAULT_ICON_SIZE: Record<MainMapLayoutKey, MainMapSize> = {
@@ -73,6 +74,7 @@ const DEFAULT_ICON_SIZE: Record<MainMapLayoutKey, MainMapSize> = {
   phone: { w: 16, h: 12 },
   phone_max: { w: 15, h: 11 },
   tablet: { w: 14, h: 11 },
+  tablet_landscape: { w: 10, h: 14 },
 };
 
 /** Aspect long/short below this → compact SE-class phones (~16:9). */
@@ -272,7 +274,7 @@ function coverSizeToImagePercent(
  * Despia UA is only a soft boost, not the sole signal.
  *
  * Thresholds:
- * - width ≥ 768 (or short side ≥ 768) → tablet
+ * - width ≥ 768 (or short side ≥ 768) → tablet, or tablet_landscape when wider than tall
  * - long/short aspect < 1.92 → phone_se
  * - short side ≥ 425 → phone_max
  * - else → phone
@@ -293,7 +295,7 @@ export function detectMainMapLayoutKey(
   const despiaIphone = isDespia && ua.includes('iphone');
 
   if (vw >= TABLET_MIN_WIDTH || short >= TABLET_MIN_WIDTH || despiaIpad) {
-    return 'tablet';
+    return vw > vh ? 'tablet_landscape' : 'tablet';
   }
 
   if (aspect < PHONE_SE_ASPECT_MAX) {

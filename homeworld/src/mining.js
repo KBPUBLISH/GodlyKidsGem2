@@ -143,7 +143,7 @@ export class Mining {
     const g=this.g;try{
       if(g.nutrition&&!g.nutrition.check('mine_hit')){a.failed=true;return;}
       const before=g.store.state;g.store.commit({type:'mine_hit',id:a.id,...(a.gatherId?{actionId:`${a.gatherId}:${a.hits}`}:{})});if(g.store.state===before){a.failed=true;const profile=this.work?.profile;g.toast(profile&&toolTier(g.store.state).tier<profile.minTier?toolNeedMessage(profile):'The rock needs a stronger tool.',ROCK_REVEAL_MS);return;}
-      g.touchResourceHealth?.('rock',a.id);this.emit(a.contact,'stone',13);a.broken=g.store.state.removedRocks.includes(a.id);
+      g.music?.sfx?.play('rock');g.touchResourceHealth?.('rock',a.id);this.emit(a.contact,'stone',13);a.broken=g.store.state.removedRocks.includes(a.id);
       const left=rockRemaining(a.rock,g.store.state);
       if(a.broken){a.breakTime=a.t;for(const id of Object.keys(this.work.profile.drops))if(id!=='stone')this.emit(a.contact,id,8);a.reward=rockFindLine(this.work.profile);g.status=a.reward;g.toast(a.reward,ROCK_REVEAL_MS);}
       else g.status=`Mining · ${a.hits} / ${a.workHits} hits · ${left} strength left`;

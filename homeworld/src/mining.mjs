@@ -84,7 +84,7 @@ export function forgeProgress(state,minutes){
   const job=forgeJob(state);if(!job)return null;
   const total=jobForgeMinutes(job);if(!total)return null;
   const elapsed=Math.max(0,(minutes??0)-job.startedAt),progress=Math.min(1,elapsed/total);
-  return {tier:job.tier,progress,remaining:Math.max(0,total-elapsed),total,done:progress>=1};
+  return {kind:job.kind==='shovel'?'shovel':'tools',tier:job.tier,progress,remaining:Math.max(0,total-elapsed),total,done:progress>=1};
 }
 /** Keep a finished tool tier exactly as saved. Only a well-formed job for the next tier is kept. */
 export function normalizeTools(tools){

@@ -554,7 +554,7 @@ export class Residents {
         if (!g || g.stage !== 'ready') return;
         const before = game.store.state;
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'harvest', key: c.cellKey, actionId: `helper:${home.id}:${Date.now()}` });
-        if (game.store.state !== before) { game.burst?.(c.target, 'seed', .3); if (home.job) this.creditJob(actor); else game.toast(`${who} picked the ${g.seed.name.toLowerCase()}.`); }
+        if (game.store.state !== before) { game.music?.sfx?.play('harvest'); game.burst?.(c.target, 'seed', .3); if (home.job) this.creditJob(actor); else game.toast(`${who} picked the ${g.seed.name.toLowerCase()}.`); }
       } else if (c.kind === 'fish') {
         const before = game.store.state;
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'fish', spotId: c.spotId, actionId: `helper:${home.id}:${Date.now()}` });
@@ -587,6 +587,7 @@ export class Residents {
           } else this.failJob(actor, c.kind === 'chop' ? 'the wood store is full.' : 'that rock needs stronger tools.');
           return;
         }
+        game.music?.sfx?.play(c.kind === 'chop' ? 'chop' : 'rock');
         game.burst?.(c.target, c.kind === 'chop' ? 'wood' : 'dirt', .9);
         const gone = c.kind === 'chop' ? after.removedTrees.includes(c.treeId) : (after.removedRocks || []).includes(c.rockId);
         if (gone) { if (c.kind === 'mine' && profile) game.toast(rockFindLine(profile), 2000); if (home.job) this.creditJob(actor); }
@@ -609,7 +610,7 @@ export class Residents {
     const walk = home.clips?.Walking;
     if (walk) {
       if (!walk.isRunning() || home.idling || home.flourish) { home.mixer.stopAllAction(); walk.reset().setLoop(THREE.LoopRepeat, Infinity).play(); walk.setEffectiveTimeScale(speed / 1.5); home.idling = false; home.flourish = null; }
-      home.mixer.update(dt);
+      this.game.stepMixer(home.mixer, dt);
     }
     return path.length > 0;
   }
@@ -752,7 +753,7 @@ export class Residents {
   stepWave(dt, actor = this.game.actor) {
     const home = actor?.userData;
     if (!home?.waving || !home.waveAction) return;
-    home.mixer.update(dt);
+    this.game.stepMixer(home.mixer, dt);
     const clip = home.waveAction.getClip();
     if (home.waveAction.time >= clip.duration - 0.04) this.cancelWave(actor);
   }
@@ -813,7 +814,7 @@ export class Residents {
     const home = actor.userData;
     const now = performance.now();
     if (home.flourish) {
-      home.mixer.update(dt);
+      this.game.stepMixer(home.mixer, dt);
       if (home.flourish.time >= home.flourish.getClip().duration - 0.05) { home.flourish.stop(); home.flourish = null; home.idling = false; }
       return;
     }
@@ -824,13 +825,13 @@ export class Residents {
       home.mixer.stopAllAction();
       stretch.reset().setLoop(THREE.LoopOnce, 1); stretch.clampWhenFinished = false; stretch.play();
       home.flourish = stretch; home.idling = true;
-      home.mixer.update(dt);
+      this.game.stepMixer(home.mixer, dt);
       return;
     }
     const calm = this.calmIdle(home);
     if (calm) {
       if (!home.idling || !calm.isRunning()) { home.mixer.stopAllAction(); calm.reset().setLoop(THREE.LoopRepeat, Infinity).play(); home.idling = true; }
-      home.mixer.update(dt);
+      this.game.stepMixer(home.mixer, dt);
       return;
     }
     // No calm clip: rest pose + the shared relaxed upper-body idle (what the island uses for the hero).
@@ -880,7 +881,7 @@ export class Residents {
       const walk = home.clips?.Walking;
       if (walk) {
         if (!walk.isRunning() || home.idling || home.flourish) { home.mixer.stopAllAction(); walk.reset().setLoop(THREE.LoopRepeat, Infinity).play(); walk.setEffectiveTimeScale(1); home.idling = false; home.flourish = null; }
-        home.mixer.update(dt);
+        this.game.stepMixer(home.mixer, dt);
       }
       return true;
     }
@@ -1021,7 +1022,7 @@ export class Residents {
       const walk = home.clips?.Walking;
       if (walk) {
         if (!walk.isRunning() || home.idling || home.flourish) { home.mixer.stopAllAction(); walk.reset().setLoop(THREE.LoopRepeat, Infinity).play(); walk.setEffectiveTimeScale(speed / 1.5); home.idling = false; home.flourish = null; }
-        home.mixer.update(dt);
+        this.game.stepMixer(home.mixer, dt);
       }
       if (!st.path.length) home.strollState = { wait: 5 + Math.random() * 9 };
       return;
@@ -1036,11 +1037,27 @@ export class Residents {
     this.idleActor(actor, dt);
   }
 
+  /**
+   * iPad: frustum-cull friends the camera is not following, so they are not shadowed
+   * while they stand off to the side. The followed friend stays uncullled — a skinned
+   * bind-pose sphere can sit away from the bones, and hiding the body you are playing
+   * would be worse than drawing it. Phones and desktop never reach this.
+   */
+  followCull(actor) {
+    const game = this.game;
+    if (!game.ipadQuality) return;
+    const follow = actor === game.actor;
+    if (actor.userData.cullFollow === follow) return;
+    actor.userData.cullFollow = follow;
+    actor.traverse((obj) => { if (obj.isSkinnedMesh) obj.frustumCulled = !follow; });
+  }
+
   /** Friends waiting their turn keep breathing. The one you control is animated by the island. */
   update(dt) {
     const game = this.game;
     const night = !!game.store?.state?.night;
     for (const actor of this.models.values()) {
+      this.followCull(actor);
       const driving = actor === game.actor && actor.userData.id === this.activeId && !night && !game.action;
       if (driving) {
         const home = actor.userData;
@@ -1078,7 +1095,7 @@ export class Residents {
         continue;
       }
       if (actor.userData.waving) {
-        actor.userData.mixer?.update(dt);
+        this.game.stepMixer(actor.userData.mixer, dt);
         const action = actor.userData.waveAction;
         if (action && action.time >= action.getClip().duration - 0.04) this.cancelWave(actor);
         continue;
@@ -1129,7 +1146,8 @@ export class Residents {
         }
         if (obj.isMesh) {
           obj.castShadow = true;
-          if (obj.isSkinnedMesh) obj.frustumCulled = false;
+          // iPad leaves frustum culling on so friends off to the side are not shadowed. Phones and desktop keep it off.
+          if (obj.isSkinnedMesh) obj.frustumCulled = !!this.game.ipadQuality;
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           for (const material of mats) {
             if (!material) continue;

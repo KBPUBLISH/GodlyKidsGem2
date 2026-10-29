@@ -46,14 +46,30 @@ const stageName={seeded:'Seed planted',seedling:'Seedling',growing:'Growing',rea
 import {BAKE_FRAME,WATER_RIPPLE} from './blender-look.js';
 const assetUrl=p=>`${p}?v=${typeof __HW_BUILD__!=='undefined'?__HW_BUILD__:'dev'}`;
 
+/**
+ * iPad-class only: "iPad" in the user agent (Safari, Despia's despia-ipad) or a touch
+ * device whose shorter screen side is at least 744 CSS px (iPad mini). Phones are
+ * narrower than that, and a desktop has no touch, so both keep the sharper path.
+ */
+function isIpadClass(){
+  if(typeof navigator==='undefined')return false;
+  if(/iPad/i.test(navigator.userAgent||''))return true;
+  if((navigator.maxTouchPoints||0)<=0)return false;
+  const short=Math.min(window.screen?.width||0,window.screen?.height||0);
+  return short>=744;
+}
+
 export class HomeWorld {
   constructor(container,onUpdate) {
     this.container=container;this.onUpdate=onUpdate;this.disposed=false;this.tool='walk';this.seed='carrot_seed';this.path=[];this.order=null;this.action=null;this.status='Loading your island…';this.toasts=[];this.labels=[];this.lastRefresh=0;this.lastSave=0;this.animationRate=1;this.keys=new Set();
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#99b9b0');this.scene.fog=new THREE.Fog('#99b9b0',110,420);
-    this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
+    // iPad fills a much larger canvas than a phone. Cap it at 1 device pixel per CSS pixel and skip MSAA.
+    // Phones and desktop stay at min(devicePixelRatio, 1.6) with antialias on.
+    this.ipadQuality=isIpadClass();
+    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.ipadQuality?1:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;if(this.ipadQuality){this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;}this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
     this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;
     this.hemi=new THREE.HemisphereLight('#d7e8ef','#6c6f3d',2.4);this.scene.add(this.hemi);
-    this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.set(-12,24,10);this.sun.castShadow=true;this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.camera.left=-23;this.sun.shadow.camera.right=23;this.sun.shadow.camera.top=23;this.sun.shadow.camera.bottom=-23;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;this.scene.add(this.sun,this.sun.target);
+    this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.set(-12,24,10);this.sun.castShadow=true;this.sun.shadow.mapSize.set(this.ipadQuality?1024:2048,this.ipadQuality?1024:2048);this.sun.shadow.camera.left=-23;this.sun.shadow.camera.right=23;this.sun.shadow.camera.top=23;this.sun.shadow.camera.bottom=-23;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;this.scene.add(this.sun,this.sun.target);
     this.lantern=new THREE.PointLight('#ffd28b',0,8,1.6);this.scene.add(this.lantern);
     this.dynamic=new THREE.Group();this.scene.add(this.dynamic);this.fields=new THREE.Group();this.scene.add(this.fields);this.seedGroup=new THREE.Group();this.scene.add(this.seedGroup);this.particles=[];this.particleGeometry=new THREE.IcosahedronGeometry(.045,0);this.particleMaterials={wood:new THREE.MeshStandardMaterial({color:'#b17a35',roughness:1}),dirt:new THREE.MeshStandardMaterial({color:'#806139',roughness:1}),seed:new THREE.MeshStandardMaterial({color:'#e1b35a',roughness:.8}),water:new THREE.MeshStandardMaterial({color:'#87e0e7',roughness:.2}),smoke:new THREE.MeshStandardMaterial({color:'#9a9a94',roughness:1,transparent:true,opacity:.55}),ember:new THREE.MeshStandardMaterial({color:'#ffb347',emissive:'#ff7a1a',emissiveIntensity:1.4,roughness:.6})};
     this.marker=new THREE.Mesh(new THREE.RingGeometry(.36,.43,32),new THREE.MeshBasicMaterial({color:'#fff6c3',transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false}));this.marker.rotation.x=-Math.PI/2;this.marker.visible=false;this.scene.add(this.marker);
@@ -62,17 +78,26 @@ export class HomeWorld {
     this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Drag or swipe sideways to turn the view, and up or down to tilt it. Tap the ground to walk; choose a tool to interact.');
     this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),tap:e=>this.click(e)});
     this.wheel=e=>{e.preventDefault();this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
-    // Native app shells (pull-to-refresh / edge bounce) only stand down when the page actively
-    // consumes the touch — CSS touch-action alone is not enough. The canvas never scrolls, so
-    // swallow every touch move that starts on it (camera drags and ground taps use pointer events).
-    this.touchGuard=e=>{if(e.cancelable)e.preventDefault();};
-    this.renderer.domElement.addEventListener('touchstart',this.touchGuard,{passive:false});
-    this.renderer.domElement.addEventListener('touchmove',this.touchGuard,{passive:false});
-    this.onStrokePointer=e=>{if(this.building?.preview?.stroke)this.building.aimFromEvent(e);};
+    // Pinch zooms the camera. preventDefault only while two fingers are on the canvas, so the
+    // browser does not scale the page. One-finger drags and taps stay on pointer events.
+    this.renderer.domElement.style.touchAction='none';
+    this.pinching=false;this.pinch=null;
+    this.onCanvasTouchStart=e=>{if(e.touches.length<2)return;if(e.cancelable)e.preventDefault();this.armPinch(e);};
+    this.onCanvasTouchMove=e=>{if(e.touches.length<2)return;if(e.cancelable)e.preventDefault();if(!this.pinch)this.armPinch(e);this.movePinch(e);};
+    this.onCanvasTouchEnd=e=>{if(e.touches.length<2)this.endPinch();};
+    this.blockGesture=e=>{e.preventDefault();};
+    const canvas=this.renderer.domElement;
+    canvas.addEventListener('touchstart',this.onCanvasTouchStart,{passive:false});
+    canvas.addEventListener('touchmove',this.onCanvasTouchMove,{passive:false});
+    canvas.addEventListener('touchend',this.onCanvasTouchEnd,{passive:true});
+    canvas.addEventListener('touchcancel',this.onCanvasTouchEnd,{passive:true});
+    canvas.addEventListener('gesturestart',this.blockGesture,{passive:false});
+    canvas.addEventListener('gesturechange',this.blockGesture,{passive:false});
+    this.onStrokePointer=e=>{if(this.pinching)return;if(this.building?.preview?.stroke)this.building.aimFromEvent(e);};
     this.renderer.domElement.addEventListener('pointerdown',this.onStrokePointer);
     this.renderer.domElement.addEventListener('pointermove',this.onStrokePointer);
     this.keyDown=e=>{if(e.key==='Escape'&&this.interior){e.preventDefault();this.building?.leaveHome();return;}if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
-    this.onBlur=()=>{this.mapGesture.cancel();this.keys.clear();};window.addEventListener('blur',this.onBlur);
+    this.onBlur=()=>{this.mapGesture.cancel();this.endPinch();this.keys.clear();};window.addEventListener('blur',this.onBlur);
     this.markAway=()=>{this.persist();if(this.store&&!this.store.locked)try{this.store.noteAway();}catch(e){this.toast(e.message);}};this.onHide=()=>{if(document.hidden){this.markAway();this.music?.audio?.pause();}else if(this.loaded){this.music?.unlock();this.community?.step({offline:true});this.community?.activity();this.notify();}};this.onUnload=()=>this.markAway();document.addEventListener('visibilitychange',this.onHide);window.addEventListener('pagehide',this.onUnload);this.onStorage=e=>{if(e.key!==SAVE_KEY||!this.store)return;const latest=this.store.readLatest();if(!latest||latest.revision<=this.store.state.revision)return;const moved=dist(latest.player,this.store.state.player)>.6;const changed=JSON.stringify([latest.activeCharacter,latest.removedTrees,latest.removedRocks,latest.rockDamage,latest.treeDamage,latest.woodDrops,latest.inventory,latest.cells,latest.tools,latest.characters?.[latest.activeCharacter],latest.buildings])!==JSON.stringify([this.store.state.activeCharacter,this.store.state.removedTrees,this.store.state.removedRocks,this.store.state.rockDamage,this.store.state.treeDamage,this.store.state.woodDrops,this.store.state.inventory,this.store.state.cells,this.store.state.tools,this.store.state.characters?.[this.store.state.activeCharacter],this.store.state.buildings]);const playing=this.playersOnly&&latest.activeCharacter===this.store.state.activeCharacter&&Date.now()-(this.community?.lastInput||0)<30000;this.store.state=latest;
     // Another HomeWorld window (a second tab with the same save) writes every second while a crew is building. The window
     // being played keeps its walk and position; the idle window follows. Otherwise every tap to walk was undone within a second.
@@ -473,6 +498,7 @@ export class HomeWorld {
       if(nutritionAction)this.nutrition.finish(a);
       const previous=this.store.state;if(a.type!=='chop'&&a.type!=='mine'&&a.type!=='build'&&!nutritionAction)this.store.commit(a);if(previous!==this.store.state){
         const gained=woodTotal(this.store.state)-woodTotal(previous);this.status={chop:`+${gained} ${label(a.tree?.species||'')} wood · +1 seed${gained<3?' · extra logs wait here':''}`,plow:'Your garden spot is ready! Choose Plant to add a seed.',clear_weeds:'Weeds cleared! This spot is ready to plant.',dig_stump:'Stump dug out! The ground is clear.',dig_mud:`+1 mud · ${this.store.state.inventory.mud||0} in the bag`,pick_apples:`+${APPLES_PER_PICK} apples · ${this.store.state.inventory.apple||0} in the bag`,plant:`${SEEDS.find(s=>s.id===a.seed)?.name} planted. Water it or it will not grow.`,water:'Watered · it is growing again.',harvest:'Crops picked! +3 crops and +1 seed'}[a.type];this.toast(this.status);
+        const fx=a.type==='harvest'?'harvest':a.type==='plant'?'plant':null;if(fx)this.music?.sfx?.play(fx);
       }
     }catch(e){this.toast(e.message);}
     if(a.type==='pick_apples')this.pinJob=null;
@@ -483,7 +509,7 @@ export class HomeWorld {
       if(this.nutrition&&!this.nutrition.check('chop_hit')){a.failed=true;return;}
       const before=this.store.state;this.store.commit({type:'chop_hit',id:a.id,actionId:`${a.gatherId}:${a.hits}`});
       if(this.store.state===before){a.failed=true;this.toast('This tree could not be hit. Check your wood space and try again.');return;}
-      this.burst(a.target,'wood',.95);this.touchResourceHealth('tree',a.id);a.broken=treeRemaining(a.tree,this.store.state)===0;
+      this.music?.sfx?.play('chop');this.burst(a.target,'wood',.95);this.touchResourceHealth('tree',a.id);a.broken=treeRemaining(a.tree,this.store.state)===0;
       this.status=`Chopping · ${treeRemaining(a.tree,this.store.state)} / ${TREE_MAX_HEALTH} health left`;
       if(a.broken){const gained=woodTotal(this.store.state)-woodTotal(before);a.reward=`+${gained} ${label(a.tree.species)} wood · +1 seed${gained<3?' · extra logs wait here':''}`;this.status=a.reward;this.toast(a.reward);}
       this.notify();
@@ -548,7 +574,61 @@ export class HomeWorld {
   reset(undo=false){if(this.action)return;try{undo?this.store.undoReset():this.store.reset();this.store.enableNightCycle();this.player={...this.store.state.player};this.nutrition?.clear();this.building?.clearWork();this.building?.cancelPreview();this.path=[];this.order=null;this.animationRate=1;this.zoom=19;this.overview=false;this.resize();this.refreshDynamic();this.toast(undo?'Previous test restored.':'Fresh test started. You can restore the previous test.');}catch(e){this.toast(e.message);}}
   setAnimationRate(value){this.animationRate=value;this.notify();}
   toggleMap(){this.overview=!this.overview;this.refreshDynamic();this.resize();this.notify();}
-  toggleClose(){this.overview=false;this.zoom=this.zoom<14?19:10;this.resize();this.notify();}
+  toggleClose(){this.stepZoom(this.zoom<14?1:-1);}
+  touchSpan(e){const a=e.touches[0],b=e.touches[1];return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+  /** Two fingers landed. Cancel the one-finger turn so the pinch cannot also walk or spin. */
+  armPinch(e){
+    this.mapGesture.cancel();this.pinching=true;
+    const dist=this.touchSpan(e);if(!(dist>12))return;
+    const inn=this.interior,inside=inn?.phase==='inside';
+    if(inside&&inn.homeZoom==null)inn.homeZoom=inn.camTo?.zoom??this.zoom;
+    const blocked=!inside&&(!!inn||this.overview||this.mapOnly||!!this.fishing?.firstPerson);
+    this.pinch={dist,zoom:this.zoom,mode:blocked?'blocked':inside?'inside':'outside',id:inside?inn.id:null};
+  }
+  movePinch(e){
+    const p=this.pinch;if(!p||p.mode==='blocked')return;
+    const dist=this.touchSpan(e);if(!(dist>12)||!(p.dist>12))return;
+    const inn=this.interior;
+    if(p.mode==='inside'){if(!inn||inn.phase!=='inside'||inn.id!==p.id){p.mode='blocked';return;}}
+    else if(inn||this.overview||this.mapOnly||this.fishing?.firstPerson){p.mode='blocked';return;}
+    // Fingers apart (pinch out) = closer = a smaller vertical span.
+    this.setZoomSpan(p.zoom*(p.dist/dist));
+  }
+  endPinch(){this.pinch=null;this.pinching=false;}
+  /**
+   * Ortho vertical span in metres. Smaller is closer.
+   * Outside play stays between 8 and 28. Inside, the span stays near the room
+   * framing and never overwrites the outside zoom saved for the Outside button.
+   */
+  setZoomSpan(next){
+    if(!Number.isFinite(next)||this.fishing?.firstPerson)return;
+    const inn=this.interior;
+    if(inn){
+      if(inn.phase!=='inside')return;
+      const base=inn.homeZoom??inn.camTo?.zoom??this.zoom;
+      if(inn.homeZoom==null)inn.homeZoom=base;
+      const zoom=THREE.MathUtils.clamp(next,base*0.72,base*1.32);
+      inn.camFrom.zoom=zoom;inn.camTo.zoom=zoom;this.zoom=zoom;this.updateProjection();return;
+    }
+    if(this.overview||this.mapOnly)return;
+    this.zoom=THREE.MathUtils.clamp(next,8,28);this.updateProjection();
+  }
+  /** dir -1 steps closer, +1 steps farther. */
+  stepZoom(dir){
+    const toward=dir<0?-1:1,pick=(stops,current)=>{
+      if(toward<0){for(let i=stops.length-1;i>=0;i--)if(stops[i]<current-.05)return stops[i];return stops[0];}
+      for(const z of stops)if(z>current+.05)return z;return stops[stops.length-1];
+    };
+    const inn=this.interior;
+    if(inn?.phase==='inside'){
+      const base=inn.homeZoom??inn.camTo?.zoom??this.zoom;
+      if(inn.homeZoom==null)inn.homeZoom=base;
+      this.setZoomSpan(pick([base*.78,base,base*1.22],this.zoom));this.notify();return;
+    }
+    if(this.mapOnly||inn)return;
+    if(this.overview)this.overview=false;
+    this.setZoomSpan(pick([8,13,19,24,28],this.zoom));this.notify();
+  }
   /** Abandon the current action without banking it (switching bodies, leaving the island). Sleep is never dropped here. */
   dropAction(){
     const a=this.action;if(!a||a.type==='sleep')return;
@@ -567,7 +647,30 @@ export class HomeWorld {
     this.animateWater(dt);
     const day=islandLight(this.store.state.clock,Date.now()).daylight;this.daylight=day;const d=day;
     this.sun.intensity=.26+d*2.61;this.hemi.intensity=.56+d*1.77;this.nightSky?.update(dt,d,(this.fishing?.firstPerson?this.fishing.camera:this.camera).position);if(this.nightSky){this.sun.color.copy(this.nightSky.sunColor);this.hemi.color.copy(this.nightSky.sky1).lerp(new THREE.Color('#adc3e3'),.5);}else{this.sun.color.setRGB(1,.78+d*.13,.62+d*.16);this.hemi.color.set('#adc3e3');}this.lantern.intensity=0;
-    this.sun.position.set(this.player.x-12,23,-this.player.y+12);this.sun.target.position.copy(this.actor.position);
+    this.placeSun();
+  }
+  /**
+   * Phones and desktop slide the sun with the player every frame, which rebuilds the shadow map.
+   * iPad keeps the same light, but moves it only after the player has walked about 1.2 m or 400 ms
+   * have passed, and never twice inside 280 ms — a few times a second, not on every camera tick.
+   */
+  placeSun(){
+    const x=this.player.x,y=this.player.y;
+    if(!this.ipadQuality){this.sun.position.set(x-12,23,-y+12);this.sun.target.position.copy(this.actor.position);return;}
+    const now=performance.now(),moved=Math.hypot(x-(this.shadowX??x),y-(this.shadowY??y)),since=now-(this.shadowAt||0);
+    if(!((moved>=1.2||since>=400)&&since>=280))return;
+    this.shadowX=x;this.shadowY=y;this.shadowAt=now;
+    this.sun.position.set(x-12,23,-y+12);this.sun.target.position.copy(this.actor.position);
+    this.renderer.shadowMap.needsUpdate=true;
+  }
+  /**
+   * Skinned clips advance once per animation frame. On iPad that step is the real frame delta
+   * (capped at 250 ms so a hidden tab does not fast-forward). A second call in the same tick is ignored.
+   */
+  stepMixer(mixer,dt){
+    if(!mixer||mixer._hwFrame===this.frameSerial)return;
+    mixer._hwFrame=this.frameSerial;
+    mixer.update(this.ipadQuality&&this.frameDt>0?Math.min(this.frameDt,.25):dt);
   }
   /** The island's own to-do list (see island-plan.js). */
   plan(){return planFor(this);}
@@ -688,7 +791,7 @@ export class HomeWorld {
     return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
   }
   tick() {
-    if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const dt=Math.min(.08,this.clock.getDelta()),now=performance.now();
+    if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const frameDt=this.clock.getDelta(),dt=Math.min(.08,frameDt),now=performance.now();this.frameDt=frameDt;this.frameSerial=(this.frameSerial||0)+1;
     if(this.loaded){
       this.mining?.settleForge();
       if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
@@ -707,7 +810,8 @@ export class HomeWorld {
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
       this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
       if(this.interior) this.building.stepInterior(dt);
-      else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));this.focus.lerp(target,1-Math.exp(-dt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
+      // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
+      else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');if(sig!==this.fieldSignature.join('|')||dist(this.player,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...this.player};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.
@@ -720,5 +824,5 @@ export class HomeWorld {
     }
     this.renderer.render(this.scene,this.fishing?.firstPerson?this.fishing.camera:this.camera);
   }
-  dispose(){this.disposed=true;this.music?.dispose();this.residents?.dispose();this.animals?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.touchGuard);this.renderer.domElement.removeEventListener('touchmove',this.touchGuard);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
+  dispose(){this.disposed=true;this.music?.dispose();this.residents?.dispose();this.animals?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
 }

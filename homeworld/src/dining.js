@@ -1,6 +1,6 @@
 // Dining Hall scene: ring the bell and every friend (and the character you play) walks to the hall,
 // sits at the long table, the meal is served from the bag in one go, and everyone eats together.
-// Eve's morning routine lives here too (fish → grill → ring the bell at ten). Rules are in dining.mjs.
+// The meal routine lives here too: Eve fishes and picks, Noah grills the catch, Eve rings the bell. Rules are in dining.mjs.
 import * as THREE from 'three';
 import {dist,gameTime,timeLabel,heightAt,growth} from './core.mjs';
 import {FOODS,hungerFor,activeCharacter} from './nutrition.mjs';
@@ -9,6 +9,7 @@ import {HALL_SEATS,TABLE_TOP_Y,completedHalls,hallById,hallPoint,hallApproach,se
 import {skillFor,MEAL_FISH,MEAL_TIMES,mealAt,hourLabel} from './character-skills.mjs';
 import {turnToward,resetAnimatedPose} from './character-motion.js';
 import {fishModel} from './nutrition.js';
+import {noteEvent} from './island-feed.mjs';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const ease=t=>t<0?0:t>1?1:t*t*(3-2*t);
@@ -40,7 +41,7 @@ export function sitPose(rig,bones,eat=0,t=0){
 const walkClip=(g,home,speed,dt)=>{const walk=home.clips?.Walking;if(!walk)return;if(!walk.isRunning()||home.idling||home.flourish){home.mixer.stopAllAction();walk.reset().setLoop(THREE.LoopRepeat,Infinity).play();walk.setEffectiveTimeScale(speed/1.5);home.idling=false;home.flourish=null;}g.stepMixer(home.mixer,dt);};
 
 export class Dining {
-  constructor(game){this.g=game;this.meal=null;this.owned=new Map();this.props=[];this.bell=null;this.routine={key:null,meal:null,stage:'idle',noted:false};this.grill=null;}
+  constructor(game){this.g=game;this.meal=null;this.owned=new Map();this.props=[];this.bell=null;this.routine={key:null,meal:null,stage:'idle',grill:'idle',noted:false,woodTried:false};this.grill=null;}
   hall(id){const s=this.g.store?.state;return s?hallById(s,id):null;}
   halls(){const s=this.g.store?.state;return s?completedHalls(s):[];}
   /** True while this scene drives a friend (seated, walking in, or grilling) — Residents.update then leaves them alone. */
@@ -58,7 +59,7 @@ export class Dining {
     const minutes=gameTime(s),diners=this.diners(),plan=planMeal(s,diners,minutes);
     const hungry=diners.map(d=>({id:d.id,name:d.name,hunger:Math.round(hungerFor(s,minutes,d.id)),player:d.player})).sort((a,b)=>a.hunger-b.hunger);
     const shelf=Object.keys(FOODS).filter(id=>(s.inventory[id]||0)>0).map(id=>({id,name:FOODS[id].name,count:s.inventory[id]}));
-    return {hallId:hall.id,hungry,shelf,served:plan.served,servedLabel:servedLabel(plan.served),servings:plan.servings.length,empty:!shelf.length,everyoneFull:!!shelf.length&&!plan.servings.length,inProgress:!!this.meal,lastMeal:s.lastMeal||null,cook:this.cookActor()?.userData.name||null,mealTimes:MEAL_TIMES,night:!!s.night};
+    return {hallId:hall.id,hungry,shelf,served:plan.served,servedLabel:servedLabel(plan.served),servings:plan.servings.length,empty:!shelf.length,everyoneFull:!!shelf.length&&!plan.servings.length,inProgress:!!this.meal,lastMeal:s.lastMeal||null,cook:this.cookActor()?.userData.name||null,griller:(g=>{const a=this.grillActor();return a&&a!==this.cookActor()?a.userData.name:null;})(),mealTimes:MEAL_TIMES,night:!!s.night};
   }
   /** Ring the bell: gather everyone at the hall. Returns false (with a toast) when there is nothing to serve. */
   ring(hallId,{cook=null,quiet=false}={}){
@@ -90,8 +91,10 @@ export class Dining {
       }
     }
     if(!seated.size){this.meal=null;say('Nobody can reach the hall. Clear a path to it first.');return false;}
-    this.swingBell(hall.id);g.music?.sfx?.play?.('harvest');
-    g.toast(`${cook?`${cook} rings the bell · `:''}Mealtime! Everyone to the Dining Hall.`);g.notify();return true;
+    this.swingBell(hall.id);g.music?.sfx?.play?.('bell');
+    g.toast(`${cook?`${cook} rings the bell · `:''}Mealtime! Everyone to the Dining Hall.`);
+    if(cook)try{noteEvent('meal',`${cook} rang the bell · Mealtime!`,{who:cook});}catch{/* feed is best-effort */}
+    g.notify();return true;
   }
   swingBell(hallId){const root=this.g.building?.nodes?.get(hallId)?.root,bell=root?.getObjectByName('bell');if(bell)this.bell={bell,t:0};}
   /** Everyone is seated: feed everyone from the bag in one commit and put the plates on the table. */
@@ -107,6 +110,7 @@ export class Dining {
     }
     const fed=meal.diners.length-meal.hungry.length;
     g.toast(`${servedLabel(meal.served)} served · ${fed} fed${meal.hungry.length?` · ${meal.hungry.length} still a little hungry`:''} · leftovers back in the bag.`);
+    if(m.cook)try{noteEvent('meal',`${m.cook} served ${servedLabel(meal.served).toLowerCase()} · ${fed} fed.`,{who:m.cook});}catch{/* feed is best-effort */}
     m.phase='eat';m.eatUntil=performance.now()+EAT_SECONDS*1000;g.status='Eating together…';g.notify();
   }
   clearProps(){for(const {root,p} of this.props)root.remove(p);this.props=[];}
@@ -169,17 +173,28 @@ export class Dining {
     this.routineUpdate();
   }
 
-  // ---- Eve's meals: an hour before each meal she fishes, grills the catch, picks what is ripe, then rings the bell. ----
+  // ---- Meals: an hour before each meal Eve fishes and picks what is ripe while Noah grills the catch; Eve rings the bell. ----
   cookActor(){for(const [,actor] of this.g.residents?.models||[])if(skillFor(actor.userData.name)?.id==='cook')return actor;return null;}
+  /** Who grills before meals: the friend whose skill says `grills` (Noah). Eve covers it when he is away or being played. */
+  grillActor(){
+    const g=this.g;let cook=null;
+    for(const [,actor] of g.residents?.models||[]){const sk=skillFor(actor.userData.name);if(sk?.grills&&actor!==g.actor)return actor;if(sk?.id==='cook')cook=actor;}
+    return cook&&cook!==g.actor?cook:null;
+  }
   /** The meal Eve is working toward right now (null between windows). Used by residents so her own chores wait. */
   cooking(){const r=this.routine;return r.meal&&r.stage!=='done'&&r.stage!=='idle'?r.meal:null;}
+  /** True while a friend is grilling or fetching a log for the fire — their own chores wait. */
+  grilling(actor){const r=this.routine;return this.grill?.actor===actor||(r.grill==='wood'&&actor.userData.job?.type==='chop'&&!actor.userData.job.explicit);}
   routineUpdate(){
     const g=this.g,s=g.store.state;if(!g.playersOnly||s.night||g.ambient)return;
     const minutes=gameTime(s),{day,hour}=timeLabel(minutes),r=this.routine,meal=mealAt(hour);
     const key=meal?`${day}:${meal.id}`:null;
-    if(r.key!==key){r.key=key;r.meal=meal;r.stage='idle';r.noted=false;r.woodTried=false;if(this.grill)this.stopGrill();}
-    const eve=this.cookActor();if(!eve||!meal)return;const home=eve.userData,isMe=eve===g.actor,when=hourLabel(meal.hour),what=meal.name.toLowerCase();
-    if(isMe&&this.grill)this.stopGrill();
+    if(r.key!==key){r.key=key;r.meal=meal;r.stage='idle';r.grill='idle';r.noted=false;r.woodTried=false;if(this.grill)this.stopGrill();}
+    if(!meal)return;
+    const eve=this.cookActor();
+    if(this.grill&&this.grill.actor===g.actor)this.stopGrill();
+    if(hour<meal.hour&&!this.meal)this.grillUpdate(eve,meal);
+    if(!eve)return;const home=eve.userData,isMe=eve===g.actor,when=hourLabel(meal.hour),what=meal.name.toLowerCase();
     if(r.stage==='done')return;
     if(hour>=meal.hour){
       if(this.meal)return;
@@ -196,18 +211,14 @@ export class Dining {
     if(r.stage==='idle'){
       if(home.job?.explicit){r.stage='ready';return;}
       if(home.job)g.residents.stopJob(eve,false);
-      if(!g.world.fishingSpots?.length){r.stage='grill';return;}
-      if(g.residents.assignJob(eve,{type:'fish',count:MEAL_FISH,background:true,quick:true,note:`${home.name} is fishing for ${what}.`}))r.stage='fishing';else r.stage='grill';
+      if(!g.world.fishingSpots?.length){r.stage='gather';return;}
+      if(g.residents.assignJob(eve,{type:'fish',count:MEAL_FISH,background:true,quick:true,note:`${home.name} is fishing for ${what}.`}))r.stage='fishing';else r.stage='gather';
       return;
     }
-    if(r.stage==='fishing'){if(!home.job||home.job.type!=='fish')r.stage='grill';return;}
-    if(r.stage==='wood'){if(!home.job||home.job.type!=='chop')r.stage='grill';return;}
-    if(r.stage==='grill'){
-      if((s.inventory.fish||0)<=0){if(this.grill)this.stopGrill();r.stage='gather';return;}
-      if(!this.grill)this.beginGrill(eve);
-      return;
-    }
+    if(r.stage==='fishing'){if(!home.job||home.job.type!=='fish')r.stage='gather';return;}
     if(r.stage==='gather'){
+      // If Eve is the one grilling (Noah away), the garden waits until the fish are done.
+      if(this.grilling(eve))return;
       // Whatever is ripe in the garden goes on the table too.
       const ripe=Object.values(s.cells||{}).some(c=>{const gr=growth(c,minutes);return gr&&gr.seed.kind==='crop'&&gr.stage==='ready';});
       if(ripe&&g.residents.assignJob(eve,{type:'harvest',count:8,background:true,note:`${home.name} is picking garden food for ${what}.`}))r.stage='picking';else r.stage='ready';
@@ -215,17 +226,37 @@ export class Dining {
     }
     if(r.stage==='picking'){if(!home.job||home.job.type!=='harvest')r.stage='ready';return;}
   }
+  /** Noah's side of the meal: while Eve fishes he fetches a log if the fire is cold, then grills whatever she caught. */
+  grillUpdate(eve,meal){
+    const g=this.g,s=g.store.state,minutes=gameTime(s),r=this.routine;if(r.grill==='done')return;
+    const who=this.grillActor();if(!who)return;const home=who.userData,what=meal.name.toLowerCase();
+    if(r.grill==='grilling'){if(!this.grill)r.grill='done';return;}
+    if(r.grill==='wood'){if(home.job?.type==='chop')return;r.grill='idle';}
+    if(home.job?.explicit||this.owns(who))return;
+    const waiting=eve&&eve!==g.actor&&who!==eve&&(r.stage==='idle'||r.stage==='fishing');
+    if(waiting||(s.inventory.fish||0)<=0){
+      // Eve is still at the water: get the fire ready — a cold campfire with no log in the bag means chopping one now.
+      if(waiting&&!r.woodTried&&!litFires(s,minutes).length&&completedFires(s).some(b=>fireCanTakeLog(b,minutes))&&!this.hasLog(s)){
+        if(home.job)g.residents.stopJob(who,false);
+        if(g.residents.assignJob(who,{type:'chop',goal:'few',count:1,background:true,note:`${home.name} is fetching a log to light the campfire for ${what}.`})){r.woodTried=true;r.grill='wood';}
+      }
+      if(!waiting)r.grill='done';
+      return;
+    }
+    if(home.job)g.residents.stopJob(who,false);
+    if(this.beginGrill(who))r.grill='grilling';
+  }
+  hasLog(s){return Object.entries(s.inventory).some(([id,n])=>id.endsWith('_wood')&&n>0);}
   beginGrill(actor){
-    const g=this.g,s=g.store.state,minutes=gameTime(s),home=actor.userData;
+    const g=this.g,s=g.store.state,minutes=gameTime(s),home=actor.userData,r=this.routine;
     let fire=litFires(s,minutes).sort((a,b)=>dist(footprint(g.world,a).center,home)-dist(footprint(g.world,b).center,home))[0];
     if(!fire){
-      const cold=completedFires(s).find(b=>fireCanTakeLog(b,minutes)),hasLog=Object.entries(s.inventory).some(([id,n])=>id.endsWith('_wood')&&n>0);
-      if(!cold){if(!this.routine.noted){this.routine.noted=true;g.toast(`${home.name} has fish to grill but there is no campfire. Build one and she will light it before meals.`);}this.routine.stage='gather';return;}
-      if(!hasLog){
+      const cold=completedFires(s).find(b=>fireCanTakeLog(b,minutes));
+      if(!cold){if(!r.noted){r.noted=true;g.toast(`${home.name} has fish to grill but there is no campfire. Build one and it will be lit before meals.`);}r.grill='done';return false;}
+      if(!this.hasLog(s)){
         // No log in the bag: chop one first (once per meal), then come back and light the fire.
-        const r=this.routine;
-        if(!r.woodTried&&g.residents.assignJob(actor,{type:'chop',goal:'few',count:1,background:true,note:`${home.name} needs a log to light the campfire. Off to chop one.`})){r.woodTried=true;r.stage='wood';return;}
-        if(!r.noted){r.noted=true;g.toast(`${home.name} has fish to grill, but the campfire is cold and there are no logs in the bag.`);}r.stage='gather';return;
+        if(!r.woodTried&&g.residents.assignJob(actor,{type:'chop',goal:'few',count:1,background:true,note:`${home.name} needs a log to light the campfire. Off to chop one.`})){r.woodTried=true;r.grill='wood';return false;}
+        if(!r.noted){r.noted=true;g.toast(`${home.name} has fish to grill, but the campfire is cold and there are no logs in the bag.`);}r.grill='done';return false;
       }
       fire=cold;
     }
@@ -233,16 +264,18 @@ export class Dining {
     const spot=workPoint(g.world,fire),path=g.nav.path({x:home.x,y:home.y},spot)||[];
     const stick=new THREE.Group(),rod=new THREE.Mesh(new THREE.CylinderGeometry(.012,.016,.95,6),new THREE.MeshStandardMaterial({color:'#8a5a2b',roughness:1}));rod.rotation.z=Math.PI/2;rod.position.x=.42;stick.add(rod);const fish=fishModel(false);fish.position.set(.86,.02,0);fish.rotation.z=-.15;stick.add(fish);stick.visible=false;g.scene.add(stick);
     this.grill={actor,fireId:fire.id,spot,path,t:0,stick,stoked:false,grilled:0};
-    g.toast(`${home.name} is grilling the catch for ${this.routine.meal?.name.toLowerCase()||'the meal'}.`);
+    g.toast(`${home.name} is grilling the catch for ${r.meal?.name.toLowerCase()||'the meal'}.`);
+    g.residents.reelEvent?.(actor);
+    return true;
   }
-  stopGrill(){const gr=this.grill;if(!gr)return;this.g.scene.remove(gr.stick);const home=gr.actor.userData;resetAnimatedPose(home);home.idling=false;home.flourish=null;home.strollState={wait:2};this.grill=null;}
+  stopGrill(){const gr=this.grill;if(!gr)return;this.g.scene.remove(gr.stick);const home=gr.actor.userData;resetAnimatedPose(home);home.idling=false;home.flourish=null;home.strollState={wait:2};this.grill=null;if(this.routine.grill==='grilling')this.routine.grill='done';}
   driveGrill(dt){
     const g=this.g,gr=this.grill,actor=gr.actor,home=actor.userData,s=g.store.state,minutes=gameTime(s);
     if(gr.path.length){g.residents.walkAlong(actor,gr.path,1.6,dt);return;}
-    const fire=completedFires(s).find(b=>b.id===gr.fireId);if(!fire){this.stopGrill();this.routine.stage='gather';return;}
+    const fire=completedFires(s).find(b=>b.id===gr.fireId);if(!fire){this.stopGrill();return;}
     if(dist(home,gr.spot)>1.3){const p=g.nav.path({x:home.x,y:home.y},gr.spot);if(p?.length){gr.path=p;return;}g.residents.place(actor,gr.spot.x,gr.spot.y);}
     if(!litFires(s,minutes).some(b=>b.id===fire.id)){
-      if(gr.stoked){this.stopGrill();this.routine.stage='gather';return;}
+      if(gr.stoked){this.stopGrill();return;}
       gr.stoked=true;const before=s;g.store.commitAs(home.id,home.name,{x:home.x,y:home.y},{type:'stoke',fireId:fire.id,actionId:`helper:${home.id}:stoke:${Date.now()}`});
       if(g.store.state!==before){g.burst?.(gr.spot,'wood',.2);g.toast(`${home.name} lit the campfire to grill.`);}return;
     }
@@ -255,12 +288,12 @@ export class Dining {
     if(gr.t>=GRILL_SECONDS){
       gr.t=0;const before=g.store.state;
       g.store.commitAs(home.id,home.name,{x:home.x,y:home.y},{type:'cook',recipe:'grill_fish',fireId:fire.id,actionId:`helper:${home.id}:grill:${Date.now()}`});
-      if(g.store.state!==before){gr.grilled++;g.burst?.(fc,'ember',.6);if((g.store.state.inventory.fish||0)<=0){g.toast(`${home.name} grilled ${gr.grilled} fish for ${this.routine.meal?.name.toLowerCase()||'the meal'}.`);this.stopGrill();this.routine.stage='gather';}}
-      else{this.stopGrill();this.routine.stage='gather';}
+      if(g.store.state!==before){gr.grilled++;g.burst?.(fc,'ember',.6);if((g.store.state.inventory.fish||0)<=0){const line=`${home.name} grilled ${gr.grilled} fish for ${this.routine.meal?.name.toLowerCase()||'the meal'}.`;g.toast(line);try{noteEvent('fire',line,{who:home.name});}catch{/* feed is best-effort */}this.stopGrill();}}
+      else this.stopGrill();
     }
   }
   snapshot(){
     const g=this.g,s=g.store?.state;if(!s)return null;
-    return {halls:this.halls().map(h=>h.id),meal:this.meal?{hallId:this.meal.hallId,phase:this.meal.phase}:null,lastMeal:s.lastMeal||null,cook:this.cookActor()?.userData.name||null,routine:this.routine.stage};
+    return {halls:this.halls().map(h=>h.id),meal:this.meal?{hallId:this.meal.hallId,phase:this.meal.phase}:null,lastMeal:s.lastMeal||null,cook:this.cookActor()?.userData.name||null,griller:this.grillActor()?.userData.name||null,routine:this.routine.stage,grillStage:this.routine.grill};
   }
 }

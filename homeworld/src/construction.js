@@ -417,7 +417,7 @@ export class Construction {
   const current=activeBuildings(g.store.state).find(b=>b.status!=='complete'&&!b.project);
   if(current&&current.status==='building'&&buildingProgress(current,now)>=1&&g.action?.type!=='build'){
    try{g.store.commit({type:'finish_building',id:current.id,actionId:jobToken('finish',current)});if(g.order?.id===current.id){g.order=null;g.path=[];}g.refreshDynamic();g.status=`${buildingById(current.kind).name} built!`;g.toast(g.status);}catch(e){g.toast(e.message);}
-  }else if(current&&!g.action&&!g.order&&!this.preview&&!g.interior&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
+  }else if(current&&!g.action&&!g.order&&!this.preview&&!g.interior&&!g.residents?.claims?.has(`build:${current.id}`)&&!String(current.id).startsWith('village:')&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
   this.refresh();
  }
  snapshot(){

@@ -37,6 +37,8 @@ import {registerWellAssets} from './well-model.js';
 import {registerOvenAssets} from './oven-model.js';
 import {registerDiningHallAssets} from './dining-hall-model.js';
 import {Dining} from './dining.js';
+import {Village} from './village.js';
+import {noteEvent} from './island-feed.mjs';
 import {registerForgeAssets} from './forge-model.js';
 import {registerFarmAssets} from './fencing.mjs';
 import {IslandMusic} from './island-music.js';
@@ -137,7 +139,7 @@ export class HomeWorld {
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
     this.bones={};this.model.traverse(o=>{if(o.isBone)this.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
     this.tools={};for(const id of ['axe','hoe','pickaxe','seed_pouch','watering_can','sickle']){const obj=this.asset(`tool_${id}`);this.tools[id]=obj;obj.visible=false;this.scene.add(obj);}this.mining.prepareTools();
-    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.dining=new Dining(this);this.animals=new Animals(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
+    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.dining=new Dining(this);this.village=new Village(this);this.animals=new Animals(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
   }
   asset(id) {
     const source=this.library[id];if(!source)throw Error(`Missing asset: ${id}`);
@@ -600,7 +602,9 @@ export class HomeWorld {
   persist(){if(!this.store||this.store.locked)return;try{this.store.persistPlayer(this.player);}catch(e){this.toast(e.message);}}
   toast(text,ms){if(!text)return;const item={text,id:Date.now()+Math.random(),...(ms?{ms}:{})};this.toastQueue??=[];if(this.toasts?.length)this.toastQueue.push(item);else{this.toasts=[item];this.toastUntil=performance.now()+(item.ms||2800);}this.notify();}
   drainToasts(){if(!this.toasts?.length||performance.now()<(this.toastUntil||0))return;const next=this.toastQueue?.shift();this.toasts=next?[next]:[];if(next)this.toastUntil=performance.now()+(next.ms||2800);this.notify();}
-  pullFarmToasts(){const pending=this.store?.state?.farm?.pendingToasts;if(!pending?.length||!this.store||this.store.locked)return;const next=structuredClone(this.store.state),lines=next.farm.pendingToasts.splice(0,next.farm.pendingToasts.length);try{this.store.save(next);}catch(e){this.toast(e.message);return;}for(const line of lines)this.toast(line);}
+  pullFarmToasts(){this.feedMorning();const pending=this.store?.state?.farm?.pendingToasts;if(!pending?.length||!this.store||this.store.locked)return;const next=structuredClone(this.store.state),lines=next.farm.pendingToasts.splice(0,next.farm.pendingToasts.length);try{this.store.save(next);}catch(e){this.toast(e.message);return;}for(const line of lines)this.toast(line);}
+  /** Night and dawn lines (fencing.mjs farmNightfall/farmDawn, bundled into farm.morning) go to the island feed once per day, keyed by day so a reload never repeats them. */
+  feedMorning(){const m=this.store?.state?.farm?.morning;if(!m||m.dismissed||m.day===this._fedMorningDay)return;this._fedMorningDay=m.day;try{(m.lines||[]).forEach((line,i)=>{if(!line||/^quiet night/i.test(line))return;noteEvent(/coyote|chased|guard|fence/i.test(line)?'night':'dawn',/[.!]$/.test(line)?line:`${line}.`,{id:`morning:${m.day}:${i}`});});}catch{/* feed is best-effort */}}
   dismissMorning(){const report=this.store?.state?.farm?.morning;if(!report||report.dismissed||!this.store||this.store.locked)return;const next=structuredClone(this.store.state);next.farm.morning={...next.farm.morning,dismissed:true};try{this.store.save(next);}catch(e){this.toast(e.message);return;}this.notify();}
   previewTime(kind){const target=kind==='dusk'?420+900*530/590:1320;const current=gameTime(this.store.state);this.clockChange(Math.floor(current/1440)*1440+target-current,false);this.community.step({active:true});this.syncNight();this.notify();}
   clockChange(delta,pause){if(!this.store)return;try{this.store.clockChange(delta,pause);this.refreshDynamic();this.animals?.sync();this.pullFarmToasts();this.notify();}catch(e){this.toast(e.message);}}
@@ -881,7 +885,7 @@ export class HomeWorld {
       if(this.action){resetAnimatedPose(this);this.actor.updateMatrixWorld(true);this.animateWork(dt);}
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
-      this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
+      this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.village?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
       if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
       else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}

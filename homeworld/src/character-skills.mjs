@@ -22,11 +22,12 @@ export const BREAKFAST_PREP_HOUR=MEALS[0].prep,BREAKFAST_HOUR=MEALS[0].hour,BREA
 
 export const CHARACTER_SKILLS={
   eve:{id:'cook',name:'Cook',icon:'cookedfish',short:`meals at ${MEAL_TIMES} · plants & seeds`,
-    blurb:`Before every meal she fishes, grills the catch and picks what is ripe in the garden, then rings the Dining Hall bell at ${MEAL_TIMES} so everyone eats together. Between meals she plants seeds and gathers the ones lying around.`},
+    blurb:`Before every meal she fishes and picks what is ripe in the garden while Noah grills the catch, then rings the Dining Hall bell at ${MEAL_TIMES} so everyone eats together. Between meals she plants seeds and gathers the ones lying around.`},
   abel:{id:'gardener',name:'Garden keeper',icon:'water',short:'weeds · tilling · guards at dusk',
     blurb:'The garden is his daily mission: he pulls weeds, waters and picks, tills new rows so it keeps growing, and at dusk he stands guard so a coyote is chased off. Wants fences and a scarecrow so crows and coyotes leave our food alone.'},
-  noah:{id:'woodcutter',name:'Woodcutter',icon:'axe',short:'stumps · 10 trees a day',
-    blurb:'Clears stumps wherever trees were felled and cuts up to 10 trees a day, and has ideas about what to build next and why.'},
+  // `grills`: the friend who lights the campfire and grills Eve's catch before each meal (Eve covers it if he is away).
+  noah:{id:'woodcutter',name:'Woodcutter',icon:'axe',short:'stumps · trees · grills the fish',grills:true,
+    blurb:'Clears stumps wherever trees were felled and cuts up to 10 trees a day. Before every meal he lights the campfire and grills the fish Eve catches, and he has ideas about what to build next and why.'},
   adam:{id:'farmer',name:'Farmer',icon:'fence',short:'trees · stone · animals',
     blurb:'Cuts trees and breaks stone for the build pile, knows which animals to bring home, and wants a fenced farm and a stable so the coyotes stay out.'},
 };

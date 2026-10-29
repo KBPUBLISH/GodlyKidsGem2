@@ -1,7 +1,7 @@
 /**
- * Short island action effects. Synthesized here so the kids' app does not
- * ship a downloaded sound pack. Each clip is one shot, under half a second,
- * and quiet. Playback follows the speaker toggle on IslandMusic: sound off
+ * Short island action effects. Most are synthesized here so the kids' app
+ * does not ship a downloaded sound pack; the Dining Hall bell is a small
+ * recorded clip (CLIPS). Each clip is one shot and quiet. Playback follows the speaker toggle on IslandMusic: sound off
  * means nothing starts, and a clip already playing is ducked at once.
  * This uses its own AudioContext, so a chop never restarts the music bed
  * or the prayer voice.
@@ -9,6 +9,15 @@
 
 const MASTER = 0.3;
 const GAP = 0.08;
+
+/**
+ * Recorded one-shots, fetched once the context exists. Paths use the same
+ * "/assets/" prefix as the music tracks; the build rewrites it to
+ * "/homeworld/assets/" so files resolve from public/homeworld.
+ */
+const CLIPS = {
+  bell: '/assets/sfx/dinner-bell.mp3',
+};
 
 function noiseAt(i) {
   const s = Math.imul(i + 1, 16807) % 2147483647;
@@ -114,6 +123,7 @@ export class IslandSfx {
     this.ctx = null;
     this.master = null;
     this.buffers = null;
+    this.loading = {};
     this.recent = {};
   }
 
@@ -133,6 +143,8 @@ export class IslandSfx {
         buffer.copyToChannel(data, 0);
         this.buffers[name] = buffer;
       }
+      this.loading = {};
+      for (const [name, url] of Object.entries(CLIPS)) this.loadClip(name, url);
       return true;
     } catch {
       this.ctx = null;
@@ -140,6 +152,20 @@ export class IslandSfx {
       this.buffers = null;
       return false;
     }
+  }
+
+  /** Fetch and decode a recorded clip into the buffer table. Missing files just stay silent. */
+  loadClip(name, url) {
+    const ctx = this.ctx;
+    if (!ctx || this.buffers?.[name] || this.loading?.[name]) return this.loading?.[name] || null;
+    const job = fetch(url)
+      .then((r) => { if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); })
+      .then((bytes) => ctx.decodeAudioData(bytes))
+      .then((buffer) => { if (this.ctx === ctx && this.buffers) this.buffers[name] = buffer; })
+      .catch(() => {})
+      .finally(() => { if (this.loading) delete this.loading[name]; });
+    this.loading[name] = job;
+    return job;
   }
 
   /** First tap, or coming back to the page. Does not start the music. */
@@ -178,11 +204,14 @@ export class IslandSfx {
           src.onended = () => { try { src.disconnect(); } catch { /* already stopped */ } };
         } catch { /* audio cannot start */ }
       };
+      // A recorded clip asked for before its first decode finished plays as soon as it lands.
+      const pending = !this.buffers?.[name] && (this.loading?.[name] || (CLIPS[name] && this.loadClip(name, CLIPS[name])));
+      const go = () => { if (pending) pending.then(start); else start(); };
       if (this.ctx.state === 'suspended') {
-        this.ctx.resume().then(start).catch(() => {});
+        this.ctx.resume().then(go).catch(() => {});
         return;
       }
-      start();
+      go();
     } catch { /* audio cannot start */ }
   }
 
@@ -191,5 +220,6 @@ export class IslandSfx {
     this.ctx = null;
     this.master = null;
     this.buffers = null;
+    this.loading = null;
   }
 }

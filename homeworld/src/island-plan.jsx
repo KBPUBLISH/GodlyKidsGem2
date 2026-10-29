@@ -24,7 +24,25 @@ function joinNames(names){
  * With more than one friend, the chips are a multi-select and Go sends the
  * same task to everyone who is on.
  */
-export function IslandPlan({plan,crew=[],working,goal,onGo,onClose,onDropGoal}){
+/** The village strip: stage ladder, what the friends are raising next, and who has grown into which role. */
+function VillageStrip({village,goal,onDropGoal}){
+  if(!village)return null;
+  const g=village.goal,stage=village.stage;
+  const needLine=g&&!g.blocked?['wood','stone'].filter(r=>g.missing[r]>0).map(r=>`${g.missing[r]} more ${r}`).join(' and '):'';
+  const status=!g?'Everything on the plan is built. The friends keep the island running.':g.blocked?g.blocked:g.underway?`${g.name}: the friends are on it.`:g.ready?`${g.name}: materials ready, waiting for a free builder.`:`${g.name}: the friends are gathering ${needLine||'what it needs'}.`;
+  return <div className="plan-village">
+    <div className="plan-village-head">
+      <div><small>OUR VILLAGE · {stage.name.toUpperCase()}</small><strong>{g?(g.focus?'Your pick: ':'Next: ')+g.name:'All built!'}</strong></div>
+      <span className="plan-stage-dots" aria-label={`Stage ${stage.index+1} of ${stage.total}`}>{Array.from({length:stage.total},(_,i)=><i key={i} className={i<stage.index?'done':i===stage.index?'now':''}/>)}</span>
+    </div>
+    <p className="plan-village-status">{status}</p>
+    <div className="plan-village-goals">{village.upcoming.map(u=><span key={u.kind} className={u.done?'done':''}>{u.done?'✓ ':''}{u.upgrade?`Upgrade to ${u.name}`:u.name}{u.count>1?` ${Math.min(u.have,u.count)}/${u.count}`:''}</span>)}</div>
+    {village.roster.some(r=>r.role)&&<div className="plan-village-roles">{village.roster.filter(r=>r.role).map(r=><span key={r.id}>{r.name} · {r.role.levelName} {r.role.name.toLowerCase()}</span>)}</div>}
+    {goal&&g?.focus&&<button type="button" className="plan-village-drop" onClick={onDropGoal}>Let the friends choose instead</button>}
+  </div>;
+}
+
+export function IslandPlan({plan,crew=[],working,goal,village,onGo,onClose,onDropGoal}){
   const [choosing,setChoosing]=useState(null);
   const [picked,setPicked]=useState({});
   if(!plan)return null;
@@ -53,6 +71,7 @@ export function IslandPlan({plan,crew=[],working,goal,onGo,onClose,onDropGoal}){
         <div><div className="eyebrow">TODAY ON THE ISLAND</div><h2 id="plan-title">{!plan.length||!plan[0].task?'All caught up!':many?'What the crew could do':`What ${name} could do`}</h2></div>
         <button type="button" className="close" onClick={onClose} aria-label="Close the to-do list">Later</button>
       </div>
+      <VillageStrip village={village} goal={goal} onDropGoal={onDropGoal}/>
       {goal&&<div className="plan-goal">
         <img src={`/assets/build_${goal.kind}.png`} alt=""/>
         <div className="plan-goal-body">

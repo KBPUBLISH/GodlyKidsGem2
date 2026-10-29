@@ -17,6 +17,7 @@ import {validAnimals,animalSiteStatus} from './animals.mjs';
 import {applyFarmSpan,dayIndex as farmDay,gardenFocus} from './fencing.mjs';
 import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
 import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
+import {creditSkill} from './settlement.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
 export const SAVE_KEY_BASE = 'godlykids_homeworld_playtest_v1';
 export const SAVE_KEY = scopeKey(SAVE_KEY_BASE);
@@ -496,6 +497,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   } else return state;
   if(cost)setEnergy(next,energyFor(next)-cost);
   if(a.actionId)next.recentActions=[...(state.recentActions||[]),a.actionId].slice(-128);
+  next.village=creditSkill(state.village,state.activeCharacter,a.type);
   return next;
 }
 

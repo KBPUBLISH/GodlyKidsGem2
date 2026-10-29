@@ -42,12 +42,6 @@ const SPARKLES: Array<{
   { top: '76%', right: '-1.25rem', rotate: '-42deg', h: 10 },
 ];
 
-const preloadPercent = (progress: AdventurePreloadProgress): number => {
-  if (progress.finished) return 100;
-  if (progress.totalBytes <= 0) return 8;
-  return Math.max(8, Math.min(100, Math.round((progress.loadedBytes / progress.totalBytes) * 100)));
-};
-
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -291,15 +285,31 @@ const LandingPage: React.FC = () => {
               >
                 Getting your adventure ready
               </p>
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/25">
+              {/* Indeterminate: a gold bead sweeps the track until the preload finishes. */}
+              <div
+                className="relative mt-2 h-3 overflow-hidden rounded-full bg-white/25"
+                aria-busy={!preload.finished}
+              >
                 <div
-                  className="h-full rounded-full transition-[width] duration-200"
+                  className="absolute inset-y-0 w-[38%] rounded-full"
                   style={{
-                    width: `${preloadPercent(preload)}%`,
                     background: GOLD,
+                    animation: 'landing-loader-sweep 1.3s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate',
                   }}
                 />
               </div>
+              <style>{`
+                @keyframes landing-loader-sweep {
+                  from { left: 0; }
+                  to { left: 62%; }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                  @keyframes landing-loader-sweep {
+                    from { left: 31%; opacity: .55; }
+                    to { left: 31%; opacity: 1; }
+                  }
+                }
+              `}</style>
               <button
                 type="button"
                 onClick={handleStartExplore}

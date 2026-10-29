@@ -15,6 +15,7 @@ import type { CrewDeckHandle } from '../components/crew/CrewDeck3D';
 import { BASEMENT_CHARACTER_KEY, canWalkOnDeck } from '../components/crew/basementCharacter';
 import { danceMusic } from '../services/danceMusicService';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   clearDiscoverShipPending,
   completeOnboardingJourney,
@@ -337,11 +338,12 @@ const BOW_ASPECT = 2048 / 1360;
 const BOW_BOTTOM_PAD = 0.093;
 const BOW_STRIP_TOP = 0.613;
 const BOW_STRIP_BOTTOM = 0.885;
+/** Word-free tiles; the label is live text so it can be translated. All four share one icon size. */
 const CREW_TAB_ART: Record<string, string> = {
-  crew: '/assets/images/sail-voyage-btn-crew.webp?v=1',
-  profile: '/assets/images/sail-voyage-btn-profile.webp?v=1',
-  home: '/assets/images/sail-voyage-btn-home.webp?v=1',
-  library: '/assets/images/sail-voyage-btn-library.webp?v=1',
+  crew: '/assets/images/sail-voyage-tab-crew.webp?v=1',
+  profile: '/assets/images/sail-voyage-tab-profile.webp?v=1',
+  home: '/assets/images/sail-voyage-tab-home.webp?v=1',
+  library: '/assets/images/sail-voyage-tab-library.webp?v=1',
 };
 const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.webp?v=1';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
@@ -433,17 +435,17 @@ const DECK_TOUR_STAGING: Record<
     walkTo: { x: 0.20, y: 0.62 },
     control: 'home',
   },
-  crew: {
+  library: {
     walkTo: { x: 0.36, y: 0.60 },
+    control: 'library',
+  },
+  crew: {
+    walkTo: { x: 0.64, y: 0.60 },
     control: 'crew',
   },
   profile: {
-    walkTo: { x: 0.64, y: 0.60 },
-    control: 'profile',
-  },
-  library: {
     walkTo: { x: 0.80, y: 0.62 },
-    control: 'library',
+    control: 'profile',
   },
   journey: {
     walkTo: { x: 0.50, y: 0.60 },
@@ -579,6 +581,38 @@ const firstIslandDone = (islands: VoyageIsland[]) => {
   return first.storiesTotal > 0 && first.storiesComplete >= first.storiesTotal;
 };
 
+/**
+ * Live tab label drawn over the bottom band of the tile (where the words used
+ * to be painted). Runs through the app translator so it follows the family's
+ * language; two-word labels wrap to two lines inside the tile.
+ */
+const ShipTabLabel: React.FC<{ text: string; cell: number }> = ({ text, cell }) => {
+  const { currentLanguage, translateText } = useLanguage();
+  const [shown, setShown] = useState(text);
+  useEffect(() => {
+    let live = true;
+    if (currentLanguage === 'en') { setShown(text); return undefined; }
+    translateText(text).then((t) => { if (live) setShown(t || text); }).catch(() => { if (live) setShown(text); });
+    return () => { live = false; };
+  }, [text, currentLanguage, translateText]);
+  const long = shown.length > 8;
+  return (
+    <span
+      className="absolute inset-x-[8%] flex items-center justify-center text-center font-black leading-[0.95] text-white"
+      style={{
+        bottom: cell * 0.085,
+        height: cell * 0.26,
+        fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
+        fontSize: Math.max(10, Math.round(cell * (long ? 0.13 : 0.165))),
+        letterSpacing: '0.01em',
+        textShadow: '0 1px 0 rgba(40,18,6,0.55), 0 2px 4px rgba(0,0,0,0.35)',
+      }}
+    >
+      {shown}
+    </span>
+  );
+};
+
 const ShipDeckTabBar: React.FC<{
   tabs: ShipTab[];
   disabled?: boolean;
@@ -674,12 +708,15 @@ const ShipDeckTabBar: React.FC<{
           className="shrink-0 border-0 bg-transparent p-0 disabled:opacity-60"
           style={{ width: cell, height: cell }}
         >
-          <img
-            src={CREW_TAB_ART[tab.id]}
-            alt=""
-            draggable={false}
-            className={`pointer-events-none block h-full w-full select-none object-contain object-bottom drop-shadow-[0_4px_4px_rgba(40,18,6,0.35)] ${tab.active ? 'scale-[1.06]' : ''}`}
-          />
+          <span className="pointer-events-none relative block h-full w-full">
+            <img
+              src={CREW_TAB_ART[tab.id]}
+              alt=""
+              draggable={false}
+              className="block h-full w-full select-none object-contain object-bottom drop-shadow-[0_4px_4px_rgba(40,18,6,0.35)]"
+            />
+            <ShipTabLabel text={tab.label} cell={cell} />
+          </span>
         </button>
       ))}
     </div>
@@ -2351,10 +2388,17 @@ const CrewPage: React.FC = () => {
           tabs={[
             {
               id: 'home',
-              label: 'My Home',
-              aria: 'My Home',
+              label: 'My Friends',
+              aria: 'My Friends island',
               onClick: goMyHome,
               icon: <MyHomeIcon />,
+            },
+            {
+              id: 'library',
+              label: 'Library',
+              aria: 'Library',
+              onClick: goLibrary,
+              icon: <LibraryBookIcon />,
             },
             {
               id: 'crew',
@@ -2370,13 +2414,6 @@ const CrewPage: React.FC = () => {
               aria: 'Profiles',
               onClick: goProfile,
               icon: <CrewBoatIcon />,
-            },
-            {
-              id: 'library',
-              label: 'Library',
-              aria: 'Library',
-              onClick: goLibrary,
-              icon: <LibraryBookIcon />,
             },
           ]}
         />

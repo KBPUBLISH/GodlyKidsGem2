@@ -238,7 +238,7 @@ const HomeOnboarding: React.FC<Props> = ({ ready, collected, residents, placing,
             className="rounded-full px-3 py-0.5 text-[12px] font-black uppercase tracking-[0.12em] text-[#7A3E12]"
             style={{ background: 'linear-gradient(180deg, #FFD36A 0%, #FFB23D 100%)', boxShadow: '0 3px 0 #E09020', fontFamily: FONT }}
           >
-            My Home
+            My Friends
           </span>
           <p className="mt-3 text-[26px] font-black leading-[1.1] text-[#F5E6C8]" style={{ fontFamily: FONT, textShadow: CARVED }}>
             Your island needs a friend!

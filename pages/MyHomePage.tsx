@@ -18,7 +18,7 @@ const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURI
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
 const LOADING_WHEEL = '/assets/images/sail-voyage-wheel.webp?v=1';
-const LOADING_HOME_ICON = '/assets/images/sail-voyage-btn-home.webp?v=1';
+const LOADING_HOME_ICON = '/assets/images/sail-voyage-tab-home.webp?v=1';
 const LOADING_WOOD = '/assets/images/wheel-background-wood.png';
 const LOADING_FADE_MS = 520;
 /** Give up waiting for the island's ready message this long after the frame loads. */
@@ -148,7 +148,7 @@ const MyHomeLoading: React.FC<{ hiding: boolean; frameLoaded: boolean }> = ({ hi
               fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
             }}
           >
-            My Home
+            My Friends
           </span>
           <p
             className="mt-2.5 text-[20px] font-black leading-tight text-[#F5E6C8]"

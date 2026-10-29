@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush, Music } from 'lucide-react';
-import WoodButton from '../components/ui/WoodButton';
+import { ChevronLeft, SlidersHorizontal, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush, Music } from 'lucide-react';
+import './ProfileSelectionPage.css';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -246,50 +246,31 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#fdf6e3]">
-      
-      {/* Fixed Wood Header */}
-      <div className="relative z-30 pt-8 pb-4 px-6 bg-[#CD853F] shadow-md border-b border-[#8B4513] shrink-0">
-        {/* Wood Texture */}
-         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #3E1F07 10px, #3E1F07 12px)'}}></div>
-        
-        <div className="relative flex items-center justify-between z-10">
-            <button 
-                onClick={handleBack}
-                className="w-12 h-12 bg-[#8B4513] hover:bg-[#A0522D] rounded-full flex items-center justify-center text-[#f3e5ab] border-2 border-[#eecaa0] active:scale-95 transition-transform shadow-md"
-                aria-label="Go Back"
-            >
-                <ChevronLeft size={28} strokeWidth={3} />
-            </button>
-            
-            <h1 className="flex-1 text-center font-display font-extrabold text-[#5c2e0b] text-2xl tracking-widest drop-shadow-sm uppercase">
-                {t('settings')}
-            </h1>
-            
-            <div className="w-12" /> {/* Spacer to balance header */}
-        </div>
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
-        <div className="max-w-md mx-auto w-full space-y-6 pt-6">
+    <main className="explorer-page">
+      <div className="explorer-shell explorer-settings">
+        <header className="explorer-topbar">
+          <button className="explorer-icon-button" aria-label="Go Back" onClick={handleBack}><ChevronLeft size={24}/></button>
+          <span><SlidersHorizontal size={20}/>{t('settings')}</span>
+          <span className="explorer-topbar-spacer" aria-hidden="true" />
+        </header>
+        <div className="w-full space-y-4">
             
             {/* Audio Settings */}
-            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">{t('audioNotifications')}</h3>
+            <section className="explorer-section">
+                <h3 className="explorer-section-title mb-4">{t('audioNotifications')}</h3>
                 
                 <div className="space-y-5">
                     {/* Sound Effects Toggle */}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-[#5c2e0b]">
-                            <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
+                        <div className="flex items-center gap-3 text-[#244750]">
+                            <div className="w-8 h-8 rounded-full bg-[#fff0cf] flex items-center justify-center text-[#c7811a]">
                                 <Volume2 size={18} />
                             </div>
                             <span className="font-bold">{t('soundEffects')}</span>
                         </div>
                         <button 
                             onClick={toggleSfx}
-                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${sfxEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${sfxEnabled ? 'bg-[#287b68] border-[#1f6354]' : 'bg-[#d5dcd6] border-[#c3ccc5]'}`}
                         >
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${sfxEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
@@ -298,13 +279,13 @@ const SettingsPage: React.FC = () => {
                     {/* App background music (API: Music target app-background; plays on Explore when enabled) */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 text-[#5c2e0b] flex-1 min-w-0 pr-2">
-                                <div className="w-8 h-8 rounded-full bg-[#e1bee7] flex items-center justify-center text-[#7b1fa2] shrink-0">
+                            <div className="flex items-center gap-3 text-[#244750] flex-1 min-w-0 pr-2">
+                                <div className="w-8 h-8 rounded-full bg-[#e9e3f6] flex items-center justify-center text-[#6a4fb3] shrink-0">
                                     <Music size={18} />
                                 </div>
                                 <div className="min-w-0">
                                     <span className="font-bold block">{t('backgroundMusic')}</span>
-                                    <span className="text-xs text-[#8B4513]/75 leading-tight block">
+                                    <span className="text-xs text-[#5e7a7f] leading-tight block">
                                         Soft loop on Explore. Off during books, playlists, and lessons.
                                     </span>
                                 </div>
@@ -315,14 +296,14 @@ const SettingsPage: React.FC = () => {
                                     playBack();
                                     toggleMusic();
                                 }}
-                                className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                                className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-200 border-2 ${musicEnabled ? 'bg-[#287b68] border-[#1f6354]' : 'bg-[#d5dcd6] border-[#c3ccc5]'}`}
                                 aria-pressed={musicEnabled}
                             >
                                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${musicEnabled ? 'left-5' : 'left-0.5'}`}></div>
                             </button>
                         </div>
                         <div className={`flex items-center gap-3 pl-11 pr-2 ${musicEnabled ? '' : 'opacity-50'}`}>
-                            <span className="text-xs font-bold text-[#8B4513]/80 w-14 shrink-0">Volume</span>
+                            <span className="text-xs font-bold text-[#5e7a7f] w-14 shrink-0">Volume</span>
                             <input
                                 type="range"
                                 min={0}
@@ -330,10 +311,10 @@ const SettingsPage: React.FC = () => {
                                 value={Math.round(musicVolume * 100)}
                                 disabled={!musicEnabled}
                                 onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
-                                className="flex-1 h-2 bg-[#d7ccc8] rounded-lg appearance-none cursor-pointer accent-[#7b1fa2] disabled:cursor-not-allowed"
+                                className="flex-1 h-2 bg-[#dfe6e0] rounded-lg appearance-none cursor-pointer accent-[#287b68] disabled:cursor-not-allowed"
                                 aria-label="Background music volume"
                             />
-                            <span className="text-xs font-bold text-[#8B4513]/70 w-10 text-right tabular-nums">
+                            <span className="text-xs font-bold text-[#5e7a7f] w-10 text-right tabular-nums">
                                 {Math.round(musicVolume * 100)}%
                             </span>
                         </div>
@@ -341,8 +322,8 @@ const SettingsPage: React.FC = () => {
 
                     {/* Notifications Toggle */}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-[#5c2e0b]">
-                            <div className="w-8 h-8 rounded-full bg-[#ffe0b2] flex items-center justify-center text-[#f57c00]">
+                        <div className="flex items-center gap-3 text-[#244750]">
+                            <div className="w-8 h-8 rounded-full bg-[#fff0cf] flex items-center justify-center text-[#c7811a]">
                                 <Bell size={18} />
                             </div>
                             <span className="font-bold">{t('notifications')}</span>
@@ -371,7 +352,7 @@ const SettingsPage: React.FC = () => {
                                     }
                                 }
                             }}
-                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${notificationsEnabled ? 'bg-[#8bc34a] border-[#689f38]' : 'bg-gray-300 border-gray-400'}`}
+                            className={`w-12 h-7 rounded-full relative transition-colors duration-200 border-2 ${notificationsEnabled ? 'bg-[#287b68] border-[#1f6354]' : 'bg-[#d5dcd6] border-[#c3ccc5]'}`}
                         >
                             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${notificationsEnabled ? 'left-5' : 'left-0.5'}`}></div>
                         </button>
@@ -380,36 +361,36 @@ const SettingsPage: React.FC = () => {
             </section>
 
             {/* Language Settings */}
-            {true && <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">{t('language')}</h3>
+            {true && <section className="explorer-section">
+                <h3 className="explorer-section-title mb-4">{t('language')}</h3>
                 
                 <div className="space-y-3">
                     <button 
                         onClick={() => setShowLanguageSelector(!showLanguageSelector)}
-                        className="w-full flex items-center justify-between bg-white/60 rounded-xl p-4 border border-[#eecaa0] hover:bg-white/80 transition-colors"
+                        className="w-full flex items-center justify-between bg-white rounded-xl p-4 border border-[#e4e6d9] hover:bg-white/80 transition-colors"
                     >
-                        <div className="flex items-center gap-3 text-[#5c2e0b]">
-                            <div className="w-8 h-8 rounded-full bg-[#bbdefb] flex items-center justify-center text-[#1976d2]">
+                        <div className="flex items-center gap-3 text-[#244750]">
+                            <div className="w-8 h-8 rounded-full bg-[#dcefee] flex items-center justify-center text-[#267482]">
                                 <Globe size={18} />
                             </div>
                             <div className="text-left">
                                 <span className="font-bold block">{t('appLanguage')}</span>
-                                <span className="text-sm text-[#8B4513]/70">
+                                <span className="text-sm text-[#5e7a7f]">
                                     {supportedLanguages[currentLanguage]?.flag} {supportedLanguages[currentLanguage]?.nativeName || 'English'}
                                 </span>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
                             {isTranslating && (
-                                <div className="w-4 h-4 border-2 border-[#8B4513] border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-4 h-4 border-2 border-[#287b68] border-t-transparent rounded-full animate-spin"></div>
                             )}
-                            <ChevronRight className={`w-5 h-5 text-[#8B4513]/50 transition-transform ${showLanguageSelector ? 'rotate-90' : ''}`} />
+                            <ChevronRight className={`w-5 h-5 text-[#8aa0a4] transition-transform ${showLanguageSelector ? 'rotate-90' : ''}`} />
                         </div>
                     </button>
 
                     {/* Language Selector Dropdown */}
                     {showLanguageSelector && (
-                        <div className="bg-white/80 rounded-xl border border-[#eecaa0] overflow-hidden">
+                        <div className="bg-white rounded-xl border border-[#e4e6d9] overflow-hidden">
                             <div className="max-h-64 overflow-y-auto">
                                 {Object.entries(supportedLanguages).filter(([code]) => ['en','tl','pt','fr','de','it','ko','es','pl'].includes(code)).map(([code, lang]) => (
                                     <button
@@ -418,21 +399,21 @@ const SettingsPage: React.FC = () => {
                                             setLanguage(code);
                                             setShowLanguageSelector(false);
                                         }}
-                                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[#fff8e1] transition-colors border-b border-[#eecaa0]/30 last:border-b-0 ${
-                                            currentLanguage === code ? 'bg-[#fff8e1]' : ''
+                                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[#eef5ef] transition-colors border-b border-[#e4e6d9] last:border-b-0 ${
+                                            currentLanguage === code ? 'bg-[#e8f5ee]' : ''
                                         }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className="text-xl">{lang.flag}</span>
                                             <div className="text-left">
-                                                <div className={`font-medium text-[#5c2e0b] ${currentLanguage === code ? 'font-bold' : ''}`}>
+                                                <div className={`font-medium text-[#244750] ${currentLanguage === code ? 'font-bold' : ''}`}>
                                                     {lang.nativeName}
                                                 </div>
-                                                <div className="text-xs text-[#8B4513]/60">{lang.name}</div>
+                                                <div className="text-xs text-[#6b8489]">{lang.name}</div>
                                             </div>
                                         </div>
                                         {currentLanguage === code && (
-                                            <Check className="w-5 h-5 text-[#8bc34a]" />
+                                            <Check className="w-5 h-5 text-[#287b68]" />
                                         )}
                                     </button>
                                 ))}
@@ -440,7 +421,7 @@ const SettingsPage: React.FC = () => {
                         </div>
                     )}
 
-                    <p className="text-xs text-[#8B4513]/60 px-2">
+                    <p className="text-xs text-[#6b8489] px-2">
                         Changes the language of the app interface and automatically translates book text.
                     </p>
                 </div>
@@ -448,23 +429,23 @@ const SettingsPage: React.FC = () => {
 
             {/* Voice Library - Hidden */}
             {false && clonedVoices.length > 0 && (
-              <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Voice Library</h3>
+              <section className="explorer-section">
+                <h3 className="explorer-section-title mb-4">Voice Library</h3>
                 
                 <div className="space-y-3">
                   {clonedVoices.map((voice) => (
                     <div
                       key={voice.voice_id}
-                      className="bg-white/60 rounded-xl p-4 border border-[#eecaa0] flex items-center justify-between group hover:bg-white/80 transition-colors"
+                      className="bg-white rounded-xl p-4 border border-[#e4e6d9] flex items-center justify-between group hover:bg-white/80 transition-colors"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#ffb300] flex items-center justify-center border border-[#B8860B] shadow-sm shrink-0">
                           <Mic size={18} className="text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-[#5c2e0b] text-sm truncate">{voice.name}</div>
+                          <div className="font-bold text-[#244750] text-sm truncate">{voice.name}</div>
                           {cleanVoiceDescription(voice.description) && (
-                            <div className="text-xs text-[#8B4513]/70 truncate">{cleanVoiceDescription(voice.description)}</div>
+                            <div className="text-xs text-[#5e7a7f] truncate">{cleanVoiceDescription(voice.description)}</div>
                           )}
                         </div>
                       </div>
@@ -487,18 +468,18 @@ const SettingsPage: React.FC = () => {
             )}
 
             {/* Voice Management - Only show unlocked voices */}
-            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Your Voices</h3>
-                <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">Manage voices you've unlocked. Hide voices you don't want to see in the reader.</p>
+            <section className="explorer-section">
+                <h3 className="explorer-section-title mb-4">Your Voices</h3>
+                <p className="text-[#244750] text-sm mb-4 opacity-70">Manage voices you've unlocked. Hide voices you don't want to see in the reader.</p>
                 
                 {loadingVoices ? (
-                    <div className="text-center text-[#5c2e0b] py-4">Loading voices...</div>
+                    <div className="text-center text-[#244750] py-4">Loading voices...</div>
                 ) : unlockedVoices.length === 0 ? (
-                    <div className="text-center text-[#5c2e0b] py-4">
+                    <div className="text-center text-[#244750] py-4">
                         <p className="mb-2">No voices unlocked yet</p>
                         <button
                             onClick={() => navigate('/profile', { state: { openShop: true, shopTab: 'voices' } })}
-                            className="text-[#FFD700] font-bold underline"
+                            className="text-[#287b68] font-bold underline"
                         >
                             Unlock voices in the Shop
                         </button>
@@ -510,23 +491,23 @@ const SettingsPage: React.FC = () => {
                             return (
                                 <div
                                     key={voice.voice_id}
-                                    className="flex items-center gap-3 p-3 bg-white/50 rounded-lg border border-[#eecaa0]/50 hover:bg-white/80 transition-colors"
+                                    className="flex items-center gap-3 p-3 bg-white rounded-lg border border-[#e4e6d9] hover:bg-white/80 transition-colors"
                                 >
                                     {voice.characterImage ? (
                                         <img 
                                             src={voice.characterImage} 
                                             alt={voice.name}
-                                            className="w-12 h-12 rounded-full object-cover border-2 border-[#eecaa0]"
+                                            className="w-12 h-12 rounded-full object-cover border-2 border-[#e4e6d9]"
                                         />
                                     ) : (
-                                        <div className="w-12 h-12 rounded-full bg-[#eecaa0] flex items-center justify-center border-2 border-[#8B4513]/20">
-                                            <Mic size={20} className="text-[#8B4513]" />
+                                        <div className="w-12 h-12 rounded-full bg-[#e7f0e7] flex items-center justify-center border-2 border-[#d2e0d2]">
+                                            <Mic size={20} className="text-[#3f6a70]" />
                                         </div>
                                     )}
                                     <div className="flex-1">
-                                        <div className="text-[#5c2e0b] font-bold text-sm">{voice.name}</div>
+                                        <div className="text-[#244750] font-bold text-sm">{voice.name}</div>
                                         {cleanVoiceDescription(voice.description) && (
-                                            <div className="text-[#5c2e0b]/60 text-xs">{cleanVoiceDescription(voice.description)}</div>
+                                            <div className="text-[#244750]/60 text-xs">{cleanVoiceDescription(voice.description)}</div>
                                         )}
                                     </div>
                                     <button
@@ -553,11 +534,11 @@ const SettingsPage: React.FC = () => {
             {(() => {
                 const userEmail = authService.getUser()?.email || localStorage.getItem('godlykids_user_email');
                 return userEmail ? (
-                    <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                        <h3 className="font-display font-bold text-[#8B4513] text-lg mb-3 uppercase tracking-wide opacity-80">Account</h3>
-                        <div className="bg-white/50 rounded-xl p-4 border border-white/60">
-                            <p className="text-[#5c2e0b] text-sm font-semibold">Signed in as:</p>
-                            <p className="text-[#8B4513] text-base font-bold truncate">{userEmail}</p>
+                    <section className="explorer-section">
+                        <h3 className="explorer-section-title mb-3">Account</h3>
+                        <div className="bg-white rounded-xl p-4 border border-[#e4e6d9]">
+                            <p className="text-[#244750] text-sm font-semibold">Signed in as:</p>
+                            <p className="text-[#3f6a70] text-base font-bold truncate">{userEmail}</p>
                         </div>
                         <button
                             type="button"
@@ -572,32 +553,32 @@ const SettingsPage: React.FC = () => {
                                 }
                                 setShowDeleteAccountGate(true);
                             }}
-                            className="mt-4 w-full text-center text-sm font-semibold text-red-800/90 underline underline-offset-2 disabled:opacity-50"
+                            className="mt-4 w-full text-center text-sm font-semibold text-[#a4382b] underline underline-offset-2 disabled:opacity-50"
                         >
                             {deleteAccountBusy ? 'Deleting…' : 'Delete my account'}
                         </button>
                     </section>
                 ) : (
                     /* Sign In / Sign Up Section - Show when NOT signed in */
-                    <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                        <h3 className="font-display font-bold text-[#8B4513] text-lg mb-3 uppercase tracking-wide opacity-80">Account</h3>
-                        <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">
+                    <section className="explorer-section">
+                        <h3 className="explorer-section-title mb-3">Account</h3>
+                        <p className="text-[#244750] text-sm mb-4 opacity-70">
                             Optional. An account lets your family use one membership on several devices and restores purchases on a new phone or tablet.
                         </p>
                         <div className="space-y-3">
                             <button
                                 onClick={() => navigate('/signin')}
-                                className="w-full flex items-center justify-center gap-2 bg-[#8B4513] hover:bg-[#A0522D] text-[#f3e5ab] font-bold py-3 px-4 rounded-xl border-2 border-[#5c2e0b] shadow-md transition-all active:scale-95"
+                                className="explorer-action explorer-teal w-full"
                             >
                                 <LogIn size={20} />
-                                <span>SIGN IN</span>
+                                <span>Sign in</span>
                             </button>
                             <button
                                 onClick={() => navigate('/onboarding')}
-                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-bold py-3 px-4 rounded-xl border-2 border-[#B8860B] shadow-md transition-all active:scale-95"
+                                className="explorer-action explorer-shop w-full"
                             >
                                 <UserPlus size={20} />
-                                <span>CREATE ACCOUNT</span>
+                                <span>Create account</span>
                             </button>
                         </div>
                     </section>
@@ -605,11 +586,11 @@ const SettingsPage: React.FC = () => {
             })()}
 
             {/* Subscription */}
-            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">Membership</h3>
+            <section className="explorer-section">
+                <h3 className="explorer-section-title mb-4">Membership</h3>
                 
                 {isSubscribed ? (
-                    <div className="bg-[#fff3cd] border border-[#ffeeba] rounded-xl p-4 flex items-center justify-between mb-4 shadow-sm">
+                    <div className="bg-[#fff4d6] border border-[#f0d9a0] rounded-xl p-4 flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gradient-to-br from-[#FFD700] to-[#ffb300] rounded-full flex items-center justify-center border border-[#B8860B] shadow-md">
                                 <Crown size={20} className="text-white" fill="white" />
@@ -646,17 +627,16 @@ const SettingsPage: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    <div className="bg-white/50 rounded-xl p-4 border border-white/60 mb-4 text-center">
-                        <p className="text-[#5c2e0b] text-sm mb-3 font-semibold">Unlock the full library and exclusives!</p>
-                        <WoodButton 
-                            variant="gold" 
-                            fullWidth 
+                    <div className="bg-white rounded-xl p-4 border border-[#e4e6d9] mb-4 text-center">
+                        <p className="text-[#244750] text-sm mb-3 font-semibold">Unlock the full library and exclusives!</p>
+                        <button
+                            type="button"
                             onClick={() => navigate('/onboarding/welcome', { state: { returnTo: '/settings' } })}
-                            className="flex items-center justify-center gap-2 text-sm py-3"
+                            className="explorer-action explorer-shop w-full"
                         >
                             <Crown size={18} />
-                            <span>UPGRADE TO PREMIUM</span>
-                        </WoodButton>
+                            <span>Upgrade to Premium</span>
+                        </button>
                     </div>
                 )}
                 
@@ -665,7 +645,7 @@ const SettingsPage: React.FC = () => {
                     <button 
                         onClick={handleRestorePurchases}
                         disabled={isRestoring}
-                        className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-left px-3 py-3 text-[#244750] font-bold text-sm bg-white hover:bg-[#f2f8f3] rounded-xl border border-[#e4e6d9] hover:border-[#a4c7bc] transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <span className="flex items-center gap-2">
                             {isRestoring && <RefreshCw size={16} className="animate-spin" />}
@@ -676,7 +656,7 @@ const SettingsPage: React.FC = () => {
                     </button>
                     {/* Show current email if signed in */}
                     {authService.getUser()?.email && (
-                        <p className="text-xs text-[#8B4513]/60 px-3">
+                        <p className="text-xs text-[#6b8489] px-3">
                             Using: {authService.getUser()?.email}
                         </p>
                     )}
@@ -690,7 +670,7 @@ const SettingsPage: React.FC = () => {
                             window.dispatchEvent(new CustomEvent('revenuecat:premiumChanged', { detail: { isPremium: false } }));
                             window.location.reload();
                         }}
-                        className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-amber-100/80 hover:bg-amber-100 rounded-lg border border-amber-300/60 mt-2"
+                        className="w-full text-left px-3 py-3 text-[#244750] font-bold text-sm bg-amber-100/80 hover:bg-amber-100 rounded-lg border border-amber-300/60 mt-2"
                     >
                         Turn off premium (testing)
                     </button>
@@ -712,8 +692,8 @@ const SettingsPage: React.FC = () => {
             </section>
 
             {/* Legal & Support */}
-            <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm space-y-2">
-                <h3 className="font-display font-bold text-[#8B4513] text-lg mb-2 uppercase tracking-wide opacity-80">{t('support')}</h3>
+            <section className="explorer-section space-y-2">
+                <h3 className="explorer-section-title mb-2">{t('support')}</h3>
                 
                 <button 
                     onClick={() => {
@@ -721,9 +701,9 @@ const SettingsPage: React.FC = () => {
                         setWebViewTitle(t('privacyPolicy'));
                         setShowWebView(true);
                     }}
-                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
+                    className="w-full text-left px-3 py-3 text-[#244750] font-bold text-sm bg-white hover:bg-[#f2f8f3] rounded-xl border border-[#e4e6d9] hover:border-[#a4c7bc] transition-all flex items-center gap-3 group"
                 >
-                    <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-[#e7f0e7] flex items-center justify-center text-[#34786b] group-hover:bg-[#287b68] group-hover:text-white transition-colors">
                         <Shield size={12} />
                     </div>
                     <span>{t('privacyPolicy')}</span>
@@ -734,18 +714,18 @@ const SettingsPage: React.FC = () => {
                         setWebViewTitle(t('termsAndConditions'));
                         setShowWebView(true);
                     }}
-                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
+                    className="w-full text-left px-3 py-3 text-[#244750] font-bold text-sm bg-white hover:bg-[#f2f8f3] rounded-xl border border-[#e4e6d9] hover:border-[#a4c7bc] transition-all flex items-center gap-3 group"
                 >
-                    <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-[#e7f0e7] flex items-center justify-center text-[#34786b] group-hover:bg-[#287b68] group-hover:text-white transition-colors">
                         <FileText size={12} />
                     </div>
                     <span>{t('termsAndConditions')}</span>
                 </button>
                 <button 
                     onClick={() => setShowHelpCenterGate(true)}
-                    className="w-full text-left px-3 py-3 text-[#5c2e0b] font-bold text-sm bg-white/40 hover:bg-white/80 rounded-lg border border-transparent hover:border-[#eecaa0] transition-all flex items-center gap-3 group"
+                    className="w-full text-left px-3 py-3 text-[#244750] font-bold text-sm bg-white hover:bg-[#f2f8f3] rounded-xl border border-[#e4e6d9] hover:border-[#a4c7bc] transition-all flex items-center gap-3 group"
                 >
-                    <div className="w-6 h-6 rounded-full bg-[#d7ccc8] flex items-center justify-center text-[#5d4037] group-hover:bg-[#8d6e63] group-hover:text-white transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-[#e7f0e7] flex items-center justify-center text-[#34786b] group-hover:bg-[#287b68] group-hover:text-white transition-colors">
                         <HelpCircle size={12} />
                     </div>
                     <span>{t('helpCenter')}</span>
@@ -787,14 +767,14 @@ const SettingsPage: React.FC = () => {
                         // Force immediate redirect
                         window.location.replace(logoutUrl);
                     }}
-                    className="w-full bg-[#ffcdd2] hover:bg-[#ef9a9a] text-[#c62828] font-bold py-4 rounded-xl border-b-4 border-[#e57373] active:border-b-0 active:translate-y-1 shadow-sm flex items-center justify-center gap-2 transition-all"
+                    className="explorer-action explorer-danger w-full"
                 >
                     <LogOut size={20} />
-                    <span>LOG OUT</span>
+                    <span>Log out</span>
                 </button>
             )}
             
-            <div className="text-center text-[#8B4513]/40 text-[10px] font-bold font-mono pt-4 pb-8">
+            <div className="text-center text-white/70 text-[11px] font-bold font-mono pt-2 pb-6 drop-shadow">
                 Version 1.0.3 (Build 52) • ID: 8F29A
             </div>
         </div>
@@ -826,7 +806,7 @@ const SettingsPage: React.FC = () => {
           void runDeleteAccountAfterParentGate();
         }}
       />
-    </div>
+    </main>
   );
 };
 

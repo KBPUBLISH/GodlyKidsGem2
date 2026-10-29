@@ -292,4 +292,23 @@ function App(){
     {!view.loaded&&<div className="loading"><div className="loading-mark">✦</div><h1>{view.error?'The island needs another try':'A little world, ready to grow.'}</h1><p>{view.status}</p>{view.error?<><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<div className="loading-track"><i/></div>}</div>}
   </main>;
 }
+// Native shells (Despia / WKWebView) only drop their pull-to-refresh when the page itself consumes the
+// touch; `touch-action:none` alone is not enough once a finger is dragging (reeling, tilting, pinching).
+// Nothing on the island page scrolls except the panels that opt in with overflow:auto, so swallow every
+// other one-finger drag. Registered before React mounts so the very first touch is covered.
+{
+  const scrollsInside=target=>{
+    let node=target instanceof Element?target:null;
+    while(node&&node!==document.body){
+      const {overflowY}=getComputedStyle(node);
+      if((overflowY==='auto'||overflowY==='scroll')&&node.scrollHeight>node.clientHeight)return true;
+      node=node.parentElement;
+    }
+    return false;
+  };
+  let swallow=false;
+  document.addEventListener('touchstart',e=>{swallow=!scrollsInside(e.target);},{passive:true,capture:true});
+  document.addEventListener('touchmove',e=>{if(swallow&&e.cancelable)e.preventDefault();},{passive:false,capture:true});
+  document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+}
 createRoot(document.getElementById('root')).render(<App/>);

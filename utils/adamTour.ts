@@ -172,20 +172,15 @@ const firstName = (kidName?: string | null): string | null => {
 const unlockLine = (lock: TourLock, playLine: string): string =>
   lock.locked ? `It's locked for now — finish ${lock.islandLabel} and it's yours!` : playLine;
 
-/** Top deck: hello → cannon → jukebox → crew → journey → hatch. */
+/** Top deck: hello → jukebox → door → home → crew → profile → library → journey → hatch. */
 export function buildAdamDeckTour(kidName: string | null | undefined): TourBeat[] {
   const name = firstName(kidName);
   const hello = name ? `Hi ${name}!` : 'Hi there!';
   return [
     {
       id: 'hello',
-      line: `${hello} I'm Adam, your very first crew mate. Welcome aboard! Come on, let me show you around the ship.`,
-      tts: `[happily] ${hello} [warmly] I'm Adam, your very first crew mate. [excitedly] Welcome aboard! Come on, let me show you around the ship.`,
-    },
-    {
-      id: 'cannon',
-      line: `See that cannon? Tap it to play Canon Golf! Lots of things on this ship unlock as you finish story packs.`,
-      tts: `[curious] See that cannon? [excitedly] Tap it to play Canon Golf! [warmly] Lots of things on this ship unlock as you finish story packs.`,
+      line: `${hello} I'm Adam, your very first crew mate. Welcome aboard! Come on, let me show you around the ship. Lots of things here unlock as you finish story packs.`,
+      tts: `[happily] ${hello} [warmly] I'm Adam, your very first crew mate. [excitedly] Welcome aboard! Come on, let me show you around the ship. [warmly] Lots of things here unlock as you finish story packs.`,
     },
     {
       id: 'jukebox',
@@ -198,14 +193,29 @@ export function buildAdamDeckTour(kidName: string | null | undefined): TourBeat[
       tts: `[happily] That door at the front of the ship is the Builder Shop. [excitedly] Spend the coins you dig up to dress up your very own avatar!`,
     },
     {
+      id: 'home',
+      line: `Down here is My Home. That's your very own island! Chop wood, plant a garden, and build a whole world with your crew.`,
+      tts: `[excitedly] Down here is My Home. [warmly] That's your very own island! [happily] Chop wood, plant a garden, and build a whole world with your crew.`,
+    },
+    {
       id: 'crew',
-      line: `Down here is the Crew button. Every story pack you finish can unlock a new friend to join us on deck!`,
-      tts: `[warmly] Down here is the Crew button. [happily] Every story pack you finish can unlock a new friend to join us on deck!`,
+      line: `Next is the Crew button. Every story pack you finish can unlock a new friend to join us on deck!`,
+      tts: `[warmly] Next is the Crew button. [happily] Every story pack you finish can unlock a new friend to join us on deck!`,
+    },
+    {
+      id: 'profile',
+      line: `This one is Profile. Pick who's playing, so brothers and sisters each get their own ship and treasure.`,
+      tts: `[happily] This one is Profile. [warmly] Pick who's playing, so brothers and sisters each get their own ship and treasure.`,
+    },
+    {
+      id: 'library',
+      line: `And here's the Library, packed with amazing books and audio stories. You can open it any time!`,
+      tts: `[excitedly] And here's the Library, [warmly] packed with amazing books and audio stories. [happily] You can open it any time!`,
     },
     {
       id: 'journey',
-      line: `And Journey steers the ship to new islands, with brand new stories to explore.`,
-      tts: `[excitedly] And Journey steers the ship to new islands, [warmly] with brand new stories to explore.`,
+      line: `The big wheel is Journey. Turn it to steer the ship to new islands, with brand new stories to explore.`,
+      tts: `[excitedly] The big wheel is Journey. Turn it to steer the ship to new islands, [warmly] with brand new stories to explore.`,
     },
     {
       id: 'hatch',

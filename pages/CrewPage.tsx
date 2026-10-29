@@ -409,46 +409,79 @@ const SHOP_DOOR_BOX: React.CSSProperties = {
  */
 const DECK_TOUR_STAGING: Record<
   string,
-  { walkTo?: { x: number; y: number }; spot?: React.CSSProperties; shape?: 'circle' | 'rounded' }
+  {
+    walkTo?: { x: number; y: number };
+    spot?: React.CSSProperties;
+    /** Spotlight a tab-bar control instead: measured from its `data-tour-id` button. */
+    control?: string;
+    shape?: 'circle' | 'rounded';
+  }
 > = {
   hello: {},
-  // Standing spots keep him beside the feature (not on top of it) and above
-  // the tour card, which covers roughly the bottom 30% of the screen.
-  cannon: {
-    walkTo: { x: 0.28, y: 0.53 },
-    spot: CANNON_BOX,
-  },
+  // Standing spots keep him beside the feature (not on top of it), off the
+  // open hatch (0.38–0.62 × 0.395–0.495 is a no-walk hole), and above the
+  // tour card, which covers roughly the bottom 30% of the screen.
   jukebox: {
     walkTo: { x: 0.64, y: 0.56 },
     spot: JUKEBOX_BOX,
   },
   door: {
-    walkTo: { x: 0.50, y: 0.42 },
+    walkTo: { x: 0.31, y: 0.47 },
     spot: SHOP_DOOR_BOX,
   },
+  home: {
+    walkTo: { x: 0.20, y: 0.62 },
+    control: 'home',
+  },
   crew: {
-    walkTo: { x: 0.22, y: 0.64 },
-    spot: {
-      left: 'calc(50vw - 42vw)',
-      bottom: 'calc(var(--safe-area-bottom, 0px) + 3vh)',
-      width: '20vw',
-      height: '9vh',
-    },
+    walkTo: { x: 0.36, y: 0.60 },
+    control: 'crew',
+  },
+  profile: {
+    walkTo: { x: 0.64, y: 0.60 },
+    control: 'profile',
+  },
+  library: {
+    walkTo: { x: 0.80, y: 0.62 },
+    control: 'library',
   },
   journey: {
-    walkTo: { x: 0.50, y: 0.62 },
-    spot: {
-      left: '50vw',
-      transform: 'translateX(-50%)',
-      bottom: 'calc(var(--safe-area-bottom, 0px) + 11vh)',
-      width: 'min(50vw, 29vh)',
-      height: 'min(50vw, 29vh)',
-    },
+    walkTo: { x: 0.50, y: 0.60 },
+    control: 'wheel',
+    shape: 'circle',
   },
   hatch: {
     walkTo: { x: 0.34, y: 0.52 },
     spot: HATCH_BOX,
   },
+};
+/** Tour beats that point at the wooden tab bar (it stays hidden until Adam reaches one). */
+const TAB_BAR_TOUR_BEATS = new Set(['home', 'crew', 'profile', 'library', 'journey']);
+
+/** Viewport box of a tab-bar control, padded a little for the gold ring. */
+const useControlBox = (control: string | null | undefined, ready: boolean): React.CSSProperties | null => {
+  const [box, setBox] = useState<React.CSSProperties | null>(null);
+  useEffect(() => {
+    if (!control || !ready) {
+      setBox(null);
+      return;
+    }
+    const measure = () => {
+      const el = document.querySelector<HTMLElement>(`[data-tour-id="${control}"]`);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const pad = Math.round(Math.min(r.width, r.height) * 0.12);
+      setBox({ left: r.left - pad, top: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+    };
+    measure();
+    const t = window.setTimeout(measure, 350); // after the bar's pop-in settles
+    window.addEventListener('resize', measure);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('resize', measure);
+    };
+  }, [control, ready]);
+  return box;
 };
 
 type ShipTab = {
@@ -601,6 +634,7 @@ const ShipDeckTabBar: React.FC<{
       type="button"
       disabled={disabled}
       aria-label="Turn the wheel to change island"
+      data-tour-id="wheel"
       className="pointer-events-auto absolute left-1/2 z-[2] m-0 touch-none select-none border-0 bg-transparent p-0 disabled:opacity-60"
       style={{
         bottom: barH * (1 - BOW_STRIP_TOP) - wheelD * 0.06,
@@ -636,6 +670,7 @@ const ShipDeckTabBar: React.FC<{
           disabled={disabled}
           aria-label={tab.aria}
           aria-current={tab.active ? 'page' : undefined}
+          data-tour-id={tab.id}
           className="shrink-0 border-0 bg-transparent p-0 disabled:opacity-60"
           style={{ width: cell, height: cell }}
         >
@@ -813,8 +848,10 @@ const CrewPage: React.FC = () => {
   // talking about pops in.
   const firstTimeLock = (crewGuide || tapAdam) && !hasSeenAdamTour();
   const navHidden = firstTimeLock || !!tour;
-  const showJourneyBtn = !navHidden || tourBeat?.id === 'journey';
-  const showCrewBtn = !navHidden || tourBeat?.id === 'crew';
+  const tabBarTourBeat = !!tourBeat && TAB_BAR_TOUR_BEATS.has(tourBeat.id);
+  const showJourneyBtn = !navHidden || tabBarTourBeat;
+  const showCrewBtn = showJourneyBtn;
+  const tourControlBox = useControlBox(tourStaging?.control, !!tour?.arrived && !tour?.leaving);
 
   const finishCrewGuide = useCallback(() => {
     if (discoverShipRef.current) {
@@ -2299,6 +2336,9 @@ const CrewPage: React.FC = () => {
       {/* Adam's tour: gold ring on the feature he's describing. */}
       {tourStaging?.spot && tour?.arrived && (
         <FeatureSpotlight box={onStage(stage, tourStaging.spot)} shape={tourStaging.shape} zIndex={34} />
+      )}
+      {tourControlBox && tour?.arrived && (
+        <FeatureSpotlight box={tourControlBox} shape={tourStaging?.shape} zIndex={34} />
       )}
 
       {/* Wooden tab bar. Hidden until Adam's tour reaches Crew or Journey,

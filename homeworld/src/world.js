@@ -697,6 +697,11 @@ export class HomeWorld {
       this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
       if(this.residents?.waveActive()&&speed>0.08)this.residents.cancelWave();
       if(!this.path.length&&this.order&&!this.action)this.startAction(this.order);
+      if(!this.path.length&&!this.order&&!this.action&&this.status==='Walking…'){
+        if(this.marker)this.marker.visible=false;
+        const idle={walk:'Tap land to walk. Open Actions to choose a tool.',axe:'Axe ready! Tap land to walk or a tree to chop.',mine:'Pickaxe ready! Tap land to walk or a rock to smash.',hoe:'Dig ready! Tap clear grass to dig, or weeds to clear a garden spot.',plant:'Seeds ready! Tap land to walk or an empty garden spot to plant.',water:'Watering can ready! Tap land to walk or a growing plant to water.',fish:'Rod ready! Tap land to walk or water to fish.'}[this.tool];
+        if(idle)this.status=idle;
+      }
       if(this.action){resetAnimatedPose(this);this.actor.updateMatrixWorld(true);this.animateWork(dt);}
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);

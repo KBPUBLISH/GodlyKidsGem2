@@ -321,6 +321,10 @@ export class Residents {
     const game = this.game, home = actor?.userData;
     if (!home || !this.canHelp(task)) return false;
     if (task.background && home.job?.explicit) return false;
+    if (task.type === 'chop' && game.store?.state && !woodRoom(game.store.state)) {
+      game.toast(`${home.name || 'Your friend'} can't chop yet. The wood store is full. Build a bigger store first.`);
+      return false;
+    }
     const type = task.type, count = task.count > 0 ? Math.min(20, Math.round(task.count)) : null;
     let target = 1;
     if (type === 'water') target = task.goal === 'one' ? 1 : 60;

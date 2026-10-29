@@ -214,20 +214,13 @@ const LandingPage: React.FC = () => {
           top: 'max(calc(var(--safe-area-top, 0px) + 10px), 2.4vh)',
         }}
       >
-        <p
-          className="m-0 text-center leading-none select-none"
-          style={{
-            fontFamily: "'Luckiest Guy', 'Fredoka', sans-serif",
-            fontSize: 'clamp(1.7rem, 8vw, 2.4rem)',
-            color: '#3EC6FF',
-            WebkitTextStroke: '5px #16325C',
-            paintOrder: 'stroke fill',
-            textShadow: '0 3px 0 #FFC43D',
-            letterSpacing: '0.04em',
-          }}
-        >
-          GODLY KIDS
-        </p>
+        <img
+          src="/assets/images/godly-kids-logo.png?v=1"
+          alt="Godly Kids"
+          draggable={false}
+          className="m-0 block h-auto select-none"
+          style={{ width: 'min(78vw, 420px)' }}
+        />
         <h1
           className="m-0 mt-2 text-center leading-[0.86] select-none"
           style={{

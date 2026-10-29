@@ -13,8 +13,14 @@ import {buildingById,completedFires,litFires,firesNeedingLog,woodTotal} from './
 import {toolTier,TOOL_TIERS,MINERALS,upgradeStatus} from './mining.mjs';
 
 const MAX_ITEMS=4;
+const WOOD_STORES=['wood_store_20','wood_store_50','wood_store_100','wood_store_200'];
 const mineralName=id=>MINERALS[id]?.name||id.replace(/_ore$/,'').replace(/_/g,' ');
 const goalFor=id=>({stone:'stone',copper_ore:'copper',iron_ore:'iron',diamond:'diamond'})[id]||'any';
+/** Smallest wood building that can hold the logs the goal still needs. */
+function nextWoodStore(space){
+  const stores=WOOD_STORES.map(id=>buildingById(id)).filter(Boolean);
+  return stores.find(b=>b.woodCapacity>=Math.max(1,space))||stores[stores.length-1];
+}
 
 /** @returns {Array<{id:string,icon:string,title:string,why:string,task:object|null}>} */
 export function planFor(game){
@@ -39,7 +45,13 @@ export function planFor(game){
   if(goal){
     const def=buildingById(goal.kind);
     const needWood=Math.max(0,def.wood-wood),needStone=Math.max(0,def.stone-stone);
-    if(needWood>0)add('goal_wood','axe',`Chop ${needWood} more wood`,`${def.name} needs ${def.wood} wood · we have ${wood}/${def.wood}.`,{type:'chop',goal:'build',until:{wood:def.wood}});
+    if(needWood>0&&storage.free<=0){
+      const next=nextWoodStore(needWood);
+      add('goal_store','build',`Build a ${next.name}`,`The wood store is full (${wood}/${storage.capacity}). ${def.name} still needs ${needWood} more wood. A ${next.name} adds room for ${next.woodCapacity}.`,{type:'build',item:next.id});
+    }else if(needWood>0){
+      const tight=storage.free<needWood?` The store only has room for ${storage.free} more.`:'';
+      add('goal_wood','axe',`Chop ${needWood} more wood`,`${def.name} needs ${def.wood} wood · we have ${wood}/${def.wood}.${tight}`,{type:'chop',goal:'build',until:{wood:def.wood}});
+    }
     if(needStone>0)add('goal_stone','mine',`Break rocks for ${needStone} more stone`,`${def.name} needs ${def.stone} stone · we have ${stone}/${def.stone}.`,{type:'mine',goal:'stone',until:{stone:def.stone}});
     if(!needWood&&!needStone)add('goal_build','build',`Build the ${def.name}!`,'Everything is in the bag. Pick the spot, clear it if needed, and press Place.',{type:'build',item:goal.kind});
   }

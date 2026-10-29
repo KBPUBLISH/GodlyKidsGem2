@@ -4,7 +4,7 @@ export function NightRest({night}){
  if(!night?.sleeping)return null;
  return <div className="night-curtain"><section className="night-rest" role="status" aria-live="polite"><small className="night-bedtime">10 PM · Bedtime</small><Icon type="moon" size={48}/><strong>Good night, island!</strong><p>Everyone is resting.</p><small>Morning in {night.remaining} {night.remaining===1?'second':'seconds'}…</small><progress aria-label="Night rest" value={night.nightProgress} max="1"/></section></div>;
 }
-/** Small morning card. The island stays visible. One list per dawn; OK, a tap outside, or about 8 seconds closes it. */
+/** Centered parchment popup. The island stays visible behind a light dim. One list per dawn; OK, a tap outside, or about 8 seconds closes it. */
 export function MorningNote({report,onDismiss}){
  const dismiss=useRef(onDismiss);dismiss.current=onDismiss;
  const [fading,setFading]=useState(false);

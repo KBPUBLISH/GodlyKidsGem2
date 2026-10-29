@@ -188,7 +188,13 @@ export class AutoWork {
         return true;
       }
       case 'chop':{
-        if(!woodRoom(s)){this.finish(`${this.name()} filled the wood store.${t.done?` ${this.progress()} chopped.`:''}`);return true;}
+        if(!woodRoom(s)){
+          const have=woodTotal(s),want=t.until?.wood;
+          const bag=want?` ${have}/${want} wood is saved.`:'';
+          const more=want&&have<want?' Build a bigger store, then chop the rest.':'';
+          this.finish(`${this.name()} filled the wood store.${bag}${more}`);
+          return true;
+        }
         const drops=(s.woodDrops||[]).filter(d=>dist(g.player,d)<6).sort((a,b)=>dist(g.player,a)-dist(g.player,b));
         if(drops.length){g.walk(drops[0]);if(g.path.length)return true;}
         const res=g.nearestTree();return res!==false&&!!(g.order||g.path.length);

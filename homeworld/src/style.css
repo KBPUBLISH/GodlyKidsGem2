@@ -324,13 +324,16 @@
 .well-card>button:not(.well-card-close){min-height:48px;border-radius:14px;border:2px solid #3d7ea8;background:#4aa0c8;color:#fffdf6;font-size:16px;font-weight:900;box-shadow:0 3px 0 #2d6d90}
 .well-card>button:disabled{background:#e6e9df;border-color:#cbd2c2;color:#697363;box-shadow:none}
 .well-card-close{position:absolute;top:6px;right:6px;width:32px;min-height:32px;padding:0;border-radius:50%;border:2px solid #e4d4a7;background:#fff8e9;font-size:18px;font-weight:900;line-height:1;color:#5c6b4f}
-.morning-note-layer{position:absolute;inset:0;z-index:46;display:flex;justify-content:center;align-items:flex-start;padding:max(72px,calc(env(safe-area-inset-top,0px) + 58px)) 14px 0;background:transparent;pointer-events:auto}
+.morning-note-layer{position:absolute;inset:0;z-index:46;display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) 12px max(16px,env(safe-area-inset-bottom,0px));background:#2a1c0c47;pointer-events:auto}
 .morning-note-layer.fading{opacity:0;transition:opacity 1s linear}
-.morning-note{width:min(300px,calc(100% - 28px));padding:12px 14px 12px;border-radius:18px;background:#fffaee;border:2px solid #e8d7ae;box-shadow:0 5px 0 #8f9b7245,0 8px 22px #1b3e3028;color:#3e4e34;text-align:left;pointer-events:auto}
-.morning-note strong{display:block;margin:0 0 6px;font-size:16px;font-weight:900;color:#57723d}
-.morning-note ul{margin:0;padding:0 0 0 18px;display:grid;gap:4px}
-.morning-note li{font-size:15px;font-weight:800;line-height:1.35;color:#314b35}
-.morning-note button{margin-top:10px;width:100%;min-height:44px;border-radius:14px;border:2px solid #3d7ea8;background:#4aa0c8;color:#fffdf6;font-size:16px;font-weight:900;box-shadow:0 3px 0 #2d6d90}
+.morning-note{width:min(88vw,360px);max-height:min(78dvh,520px);overflow:auto;scrollbar-width:none;margin:0;padding:28px 26px 18px;text-align:left;color:#5c381c;pointer-events:auto;background-color:#f0d7a8;background-image:repeating-linear-gradient(0deg,#0000 0 3px,#7a4e2412 3px 4px),radial-gradient(130% 80% at 10% 0%,#fff8e6e6,transparent 42%),radial-gradient(90% 70% at 100% 100%,#b5783a33,transparent 48%),radial-gradient(ellipse at 50% 45%,#f6e4c4 0%,#ecd3a4 55%,#e0bc84 100%);border:0;border-radius:0;box-shadow:inset 0 0 0 9px #8a5a2c24,inset 0 0 28px #6b4018a8,inset 0 0 0 1px #6a3e1c8c;filter:drop-shadow(0 12px 8px #24160873);clip-path:polygon(1% 4.5%,8% 0%,16% 3.8%,24% .4%,33% 4.2%,42% .2%,51% 3.6%,60% .6%,69% 4%,78% .2%,87% 3.4%,95% .8%,99.2% 4%,100% 12%,97.2% 20%,100% 29%,96.8% 38%,100% 48%,97% 57%,100% 67%,96.6% 76%,100% 86%,97.4% 94%,99% 99%,90% 96.2%,81% 100%,72% 96%,63% 100%,54% 95.8%,45% 100%,36% 96.2%,27% 100%,18% 96%,9% 100%,1.2% 96.5%,0% 88%,2.8% 79%,0% 69%,3.2% 59%,0% 49%,2.6% 39%,0% 29%,3% 19%,.4% 10%)}
+.morning-note strong{display:block;margin:0 0 14px;text-align:center;font-family:"Iowan Old Style",Palatino,"Palatino Linotype",Georgia,"Times New Roman",serif;font-size:28px;font-weight:700;letter-spacing:.01em;line-height:1.15;color:#4a2c14}
+.morning-note strong::after{content:"";display:block;width:84px;height:1px;margin:9px auto 0;background:#6b442459}
+.morning-note ul{margin:0;padding:0 2px 0 1.15em;display:grid;gap:8px}
+.morning-note li{font-size:17px;font-weight:700;line-height:1.4;color:#5c381c}
+.morning-note li::marker{color:#8a5a32}
+.morning-note button{margin-top:16px;width:100%;min-height:48px;border-radius:12px;border:2px solid #6b4424;background:#f6e6c8;color:#4a2c14;font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:18px;font-weight:700;box-shadow:inset 0 0 0 1px #fff4dc99,0 2px 0 #8a5a30}
+.morning-note button:hover:not(:disabled){filter:none;background:#faecd2}
 .object-prompt button{display:grid;justify-items:center;gap:2px;min-height:0;padding:0;border:0;background:none;box-shadow:none;color:#4a3414;font:inherit;-webkit-tap-highlight-color:transparent}
 .object-prompt-icon{display:grid;place-items:center;width:50px;height:50px;border-radius:50%;border:3px solid #f0b24a;background:radial-gradient(circle at 50% 35%,#fff7ea,#ffd9a1);box-shadow:0 4px 0 #a86a2c,0 6px 14px #0005;transition:transform .12s}
 .object-prompt button:active .object-prompt-icon{transform:translateY(3px);box-shadow:0 1px 0 #a86a2c,0 3px 8px #0005}

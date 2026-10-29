@@ -48,6 +48,19 @@ import {BAKE_FRAME,WATER_RIPPLE} from './blender-look.js';
 const assetUrl=p=>`${p}?v=${typeof __HW_BUILD__!=='undefined'?__HW_BUILD__:'dev'}`;
 
 /**
+ * Sun shadow box. The sun sits at a fixed offset from the player (placeSun), so the light-space axes
+ * never change; only the box extents do. Each frame the box is fitted to the ground the camera can
+ * see plus a caster column above it (tall trees, roofs) and a little padding, clamped to the old
+ * fixed ±SHADOW_HALF. At the default zoom that is roughly half the old box per side, which is 3-4×
+ * the shadow texels per metre — the pixelated walking shadow on iPad came from 1024 texels spread
+ * over the whole 46 m box.
+ */
+const SUN_OFFSET=V(-12,23,12),SHADOW_HALF=23,SHADOW_PAD=2.5,SHADOW_CASTER_HEIGHT=10;
+const SUN_Z=SUN_OFFSET.clone().normalize(),SUN_X=V(0,1,0).cross(SUN_Z).normalize(),SUN_Y=SUN_Z.clone().cross(SUN_X);
+const SHADOW_CORNERS=[[-1,-1],[1,-1],[1,1],[-1,1]];
+const _shadowRay=new THREE.Raycaster(),_shadowNdc=new THREE.Vector2(),_shadowHit=V(),_shadowP=V();
+
+/**
  * iPad-class only: "iPad" in the user agent (Safari, Despia's despia-ipad) or a touch
  * device whose shorter screen side is at least 744 CSS px (iPad mini). Phones are
  * narrower than that, and a desktop has no touch, so both keep the sharper path.
@@ -64,16 +77,18 @@ export class HomeWorld {
   constructor(container,onUpdate) {
     this.container=container;this.onUpdate=onUpdate;this.disposed=false;this.tool='walk';this.seed='carrot_seed';this.path=[];this.order=null;this.action=null;this.status='Loading your island…';this.toasts=[];this.labels=[];this.lastRefresh=0;this.lastSave=0;this.animationRate=1;this.keys=new Set();
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#99b9b0');this.scene.fog=new THREE.Fog('#99b9b0',110,420);
-    // Start iPads sharper, then adapt resolution to sustained frame time. Keep MSAA off to limit GPU cost.
-    // Phones and desktop stay at min(devicePixelRatio, 1.6) with antialias on.
+    // Start iPads sharper, then adapt resolution to sustained frame time. MSAA stays on everywhere: on Apple's
+    // tile-based GPUs the 4× resolve happens in tile memory and is close to free, and without it the walking
+    // character's edges crawl. Phones and desktop stay at min(devicePixelRatio, 1.6).
     this.ipadQuality=isIpadClass();
     this.resolution=this.ipadQuality?new AdaptiveResolution(window.devicePixelRatio||1):null;
     // Shadows follow the sun every frame everywhere, so a walking body never drags a stale shadow. iPad pays for
-    // that with the plain PCF filter (one tap per texel instead of soft's nine) on its 1024 map.
-    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.resolution?this.resolution.ratio:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
+    // that with the plain PCF filter (hardware 4-tap + 5 rotated samples) on a 1536 map fitted to the view
+    // (fitShadow); a slightly wider filter radius hides what staircase is left.
+    this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.resolution?this.resolution.ratio:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
     this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;
     this.hemi=new THREE.HemisphereLight('#d7e8ef','#6c6f3d',2.4);this.scene.add(this.hemi);
-    this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.set(-12,24,10);this.sun.castShadow=true;this.sun.shadow.mapSize.set(this.ipadQuality?1024:2048,this.ipadQuality?1024:2048);this.sun.shadow.camera.left=-23;this.sun.shadow.camera.right=23;this.sun.shadow.camera.top=23;this.sun.shadow.camera.bottom=-23;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;this.scene.add(this.sun,this.sun.target);
+    this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.copy(SUN_OFFSET);this.sun.castShadow=true;const shadowSize=this.ipadQuality?1536:2048;this.sun.shadow.mapSize.set(shadowSize,shadowSize);this.sun.shadow.camera.left=-SHADOW_HALF;this.sun.shadow.camera.right=SHADOW_HALF;this.sun.shadow.camera.top=SHADOW_HALF;this.sun.shadow.camera.bottom=-SHADOW_HALF;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;if(this.ipadQuality)this.sun.shadow.radius=1.5;this.scene.add(this.sun,this.sun.target);
     this.lantern=new THREE.PointLight('#ffd28b',0,8,1.6);this.scene.add(this.lantern);
     this.dynamic=new THREE.Group();this.scene.add(this.dynamic);this.fields=new THREE.Group();this.scene.add(this.fields);this.seedGroup=new THREE.Group();this.scene.add(this.seedGroup);this.particles=[];this.particleGeometry=new THREE.IcosahedronGeometry(.045,0);this.particleMaterials={wood:new THREE.MeshStandardMaterial({color:'#b17a35',roughness:1}),dirt:new THREE.MeshStandardMaterial({color:'#806139',roughness:1}),seed:new THREE.MeshStandardMaterial({color:'#e1b35a',roughness:.8}),water:new THREE.MeshStandardMaterial({color:'#87e0e7',roughness:.2}),smoke:new THREE.MeshStandardMaterial({color:'#9a9a94',roughness:1,transparent:true,opacity:.55}),ember:new THREE.MeshStandardMaterial({color:'#ffb347',emissive:'#ff7a1a',emissiveIntensity:1.4,roughness:.6})};
     this.marker=new THREE.Mesh(new THREE.RingGeometry(.36,.43,32),new THREE.MeshBasicMaterial({color:'#fff6c3',transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false}));this.marker.rotation.x=-Math.PI/2;this.marker.visible=false;this.scene.add(this.marker);
@@ -115,7 +130,7 @@ export class HomeWorld {
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerForgeAssets(this.library);registerFarmAssets(this.library,THREE);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
     this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
-    this.restPose=[];this.model.traverse(o=>{if(o.isBone)this.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});if(o.isMesh){o.castShadow=true;o.receiveShadow=false;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);m.needsUpdate=true;}}});
+    this.restPose=[];this.model.traverse(o=>{if(o.isBone)this.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});if(o.isMesh){o.castShadow=true;o.receiveShadow=false;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);if(m.map&&m.map.anisotropy<4)m.map.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());m.needsUpdate=true;}}});
     this.mixer=new THREE.AnimationMixer(this.model);this.clips={};
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
     this.bones={};this.model.traverse(o=>{if(o.isBone)this.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
@@ -682,7 +697,38 @@ export class HomeWorld {
    */
   placeSun(){
     const x=this.player.x,y=this.player.y;
-    this.sun.position.set(x-12,23,-y+12);this.sun.target.position.copy(this.actor.position);
+    this.sun.position.set(x+SUN_OFFSET.x,SUN_OFFSET.y,-y+SUN_OFFSET.z);this.sun.target.position.copy(this.actor.position);
+    this.fitShadow();
+  }
+  /**
+   * Fit the sun's orthographic shadow box to what the camera can see: the four screen corners dropped onto
+   * the ground plane, each also lifted by SHADOW_CASTER_HEIGHT so trees and roofs standing on visible ground
+   * still cast, projected onto the light's fixed axes and padded. Overview, missed corners, or a camera that
+   * sees past the clamp fall back to the full ±SHADOW_HALF box. Uses the previous frame's camera matrix
+   * (one frame of lag is well inside the padding).
+   */
+  fitShadow(){
+    const sc=this.sun.shadow.camera,eye=this.sun.position;
+    let l=-SHADOW_HALF,r=SHADOW_HALF,b=-SHADOW_HALF,t=SHADOW_HALF;
+    const cam=this.fishing?.firstPerson?this.fishing.camera:this.camera;
+    if(!this.overview&&cam){
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,ok=true;
+      for(const [nx,ny] of SHADOW_CORNERS){
+        _shadowRay.setFromCamera(_shadowNdc.set(nx,ny),cam);
+        if(!_shadowRay.ray.intersectPlane(this.groundPlane,_shadowHit)){ok=false;break;}
+        for(let k=0;k<2;k++){
+          _shadowP.copy(_shadowHit);_shadowP.y+=k*SHADOW_CASTER_HEIGHT;_shadowP.sub(eye);
+          const px=_shadowP.dot(SUN_X),py=_shadowP.dot(SUN_Y);
+          if(px<minX)minX=px;if(px>maxX)maxX=px;if(py<minY)minY=py;if(py>maxY)maxY=py;
+        }
+      }
+      if(ok){
+        l=Math.max(-SHADOW_HALF,minX-SHADOW_PAD);r=Math.min(SHADOW_HALF,maxX+SHADOW_PAD);
+        b=Math.max(-SHADOW_HALF,minY-SHADOW_PAD);t=Math.min(SHADOW_HALF,maxY+SHADOW_PAD);
+        if(!(r-l>2&&t-b>2)){l=-SHADOW_HALF;r=SHADOW_HALF;b=-SHADOW_HALF;t=SHADOW_HALF;}
+      }
+    }
+    if(Math.abs(sc.left-l)>.05||Math.abs(sc.right-r)>.05||Math.abs(sc.bottom-b)>.05||Math.abs(sc.top-t)>.05){sc.left=l;sc.right=r;sc.bottom=b;sc.top=t;sc.updateProjectionMatrix();}
   }
   /**
    * Skinned clips advance once per animation frame. On iPad that step is the real frame delta

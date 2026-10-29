@@ -288,7 +288,7 @@ const StoryBookCard: React.FC<{
           src={book.coverUrl}
           alt={book.title}
           fallback={DEFAULT_BOOK_COVER}
-          variant="full"
+          variant="thumb"
           className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
         />
 
@@ -352,7 +352,7 @@ const LibraryPlaylistCard: React.FC<{
           <CoverImage
             src={playlist.coverImage}
             alt={playlist.title}
-            variant="full"
+            variant="thumb"
             className={`w-full h-full object-cover ${isPlaylistLocked ? 'brightness-75' : ''}`}
           />
         ) : (
@@ -1670,7 +1670,7 @@ const ListenPagePanorama: React.FC = () => {
                   >
                     <HardcoverCover>
                       {playlist.coverImage ? (
-                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="full" className="w-full h-full object-cover" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="thumb" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
                           {playlist.type === 'Audiobook' ? (
@@ -1793,7 +1793,7 @@ const ListenPagePanorama: React.FC = () => {
                   >
                     <HardcoverCover>
                       {playlist.coverImage ? (
-                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="full" className="w-full h-full object-cover" />
+                        <CoverImage src={playlist.coverImage} alt={playlist.title} variant="thumb" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
                           {playlist.type === 'Audiobook' ? (
@@ -1984,7 +1984,7 @@ const ListenPagePanorama: React.FC = () => {
                       >
                         <HardcoverCover>
                           {series.coverImage ? (
-                            <CoverImage src={series.coverImage} alt={series.title} variant="full" className="w-full h-full object-cover" />
+                            <CoverImage src={series.coverImage} alt={series.title} variant="thumb" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 text-5xl">📚</div>
                           )}

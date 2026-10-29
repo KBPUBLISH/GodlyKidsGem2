@@ -47,7 +47,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         <CoverImage
           src={book.coverUrl}
           alt={book.title}
-          variant="full"
+          variant="thumb"
           fallback={DEFAULT_BOOK_COVER}
           className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
         />

@@ -86,7 +86,7 @@ const SeriesCard: React.FC<{ series: any; onClick: () => void; isSubscribed?: bo
             <CoverImage
               src={series.coverImage}
               alt={series.title}
-              variant="full"
+              variant="thumb"
               className="w-full h-full object-cover pointer-events-none"
               draggable={false}
             />

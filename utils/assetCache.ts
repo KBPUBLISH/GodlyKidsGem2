@@ -26,6 +26,26 @@ const SAIL_ASSET_URLS = [
   '/assets/images/sail-bg-cloud-b.png',
 ];
 
+/**
+ * The crew ship (first screen after onboarding): hull, sea panorama, bow with
+ * the wheel and the four tab tiles, hatch, horizon islands. Keep the `?v=`
+ * tags in step with pages/CrewPage.tsx — the cache key is the full URL.
+ */
+const CREW_SHIP_ASSET_URLS = [
+  '/assets/images/sail-voyage-hull.png?v=7',
+  '/assets/images/crew-voyage-sea-pano.jpg?v=2',
+  '/assets/images/crew-voyage-bow.png?v=3',
+  '/assets/images/crew-button-plank.png?v=1',
+  '/assets/images/sail-voyage-wheel.png?v=2',
+  '/assets/images/crew-voyage-hatch.png?v=1',
+  '/assets/images/sail-voyage-btn-home.png?v=5',
+  '/assets/images/sail-voyage-btn-crew.png?v=4',
+  '/assets/images/sail-voyage-btn-profile.png?v=1',
+  '/assets/images/sail-voyage-btn-library.png?v=4',
+  '/assets/images/crew-horizon-island-a.png',
+  '/assets/images/crew-horizon-island-b.png',
+];
+
 const ONBOARDING_MEDIA_URLS = [
   ONBOARDING_FAMILY_BG_VIDEO,
   ONBOARDING_FAMILY_BG_POSTER,
@@ -254,11 +274,14 @@ export function startAdventurePreload(): Promise<void> {
   if (adventureRun) return adventureRun;
   adventureRun = (async () => {
     registerAssetCacheWorker();
+    // Queue order is what a new family sees first: onboarding media, then the
+    // crew ship they land on, then the journey map and the rest of the shell.
     const staticUrls = [
+      ...ONBOARDING_MEDIA_URLS,
+      ...PARROT_MODEL_URLS,
+      ...CREW_SHIP_ASSET_URLS,
       ...SHELL_ASSET_URLS,
       ...SAIL_ASSET_URLS,
-      ...PARROT_MODEL_URLS,
-      ...ONBOARDING_MEDIA_URLS,
     ];
     const islandUrlsPromise = islandMediaUrls();
     let cache: Cache | null = null;

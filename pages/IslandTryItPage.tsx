@@ -438,10 +438,10 @@ const IslandTryItPage: React.FC = () => {
           <div
             className="absolute left-0 right-0 bottom-0 z-30 flex items-end"
             style={{
-              height: 'max(52px, calc(var(--safe-area-bottom) + 40px))',
-              paddingLeft: 16,
-              paddingRight: 16,
-              paddingBottom: 'max(10px, var(--safe-area-bottom))',
+              height: 'max(64px, calc(var(--safe-area-bottom) + 52px))',
+              paddingLeft: 'max(32px, 9vw)',
+              paddingRight: 'max(32px, 9vw)',
+              paddingBottom: 'max(22px, calc(var(--safe-area-bottom) + 12px))',
               touchAction: 'none',
             }}
             onPointerDown={onScrubPointerDown}

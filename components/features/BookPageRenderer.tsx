@@ -1,3 +1,4 @@
+import { languageDirection } from '../../localization/languageDirection';
 import {useLocalizedString} from '../../localization/LocalizedText';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
@@ -119,6 +120,7 @@ function resolveScrollHeights(
 }
 
 interface BookPageRendererProps {
+    language?: string;
     page: PageData;
     activeTextBoxIndex: number | null;
     scrollState: ScrollState;
@@ -160,6 +162,7 @@ interface BookPageRendererProps {
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     page,
+    language = 'en',
     activeTextBoxIndex,
     scrollState,
     onScrollStateChange,
@@ -1260,6 +1263,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     if (!box?.text) return null;
                     return (
                         <ReaderCaptions
+                            language={language}
                             text={box.text}
                             highlightedWordIndex={
                                 activeTextBoxIndex === boxIdx && wordAlignment
@@ -1338,6 +1342,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
                             data-scroll-container="true"
+                            lang={language}
+                            dir={languageDirection(language)}
                             className="absolute pointer-events-auto overflow-y-auto p-2 group"
                             aria-hidden={hideThisBoxSequential}
                             style={{
@@ -1350,7 +1356,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 width: bibleMapMobile
                                     ? 'calc(84% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))'
                                     : `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
-                                textAlign: bibleMapMobile ? 'center' : (box.alignment || 'left'),
+                                textAlign: bibleMapMobile ? 'center' : (languageDirection(language) === 'rtl' && (!box.alignment || box.alignment === 'left') ? 'start' : (box.alignment || 'start')),
                                 color: box.color || '#4a3b2a',
                                 // Use Google Font with fallbacks for iOS compatibility
                                 // Comic Sans MS may not be available on iOS
@@ -1396,13 +1402,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                             <div className={`
                                 relative rounded-xl transition-all duration-300
                                 ${isActive && !bibleMapMobile
-                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-105'
+                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)]'
                                     : isActive
                                       ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)]'
-                                      : 'hover:scale-102 cursor-pointer'
+                                      : 'cursor-pointer'
                                 }
                             `}>
-                                <p className={`${bibleMapMobile ? 'leading-snug' : 'leading-relaxed'} relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]`} style={{ whiteSpace: 'pre-wrap' }}>
+                                <p className={`reader-story-text ${bibleMapMobile ? 'leading-snug' : 'leading-relaxed'} relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]`} style={{ whiteSpace: 'pre-wrap' }}>
                                     {(() => {
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);

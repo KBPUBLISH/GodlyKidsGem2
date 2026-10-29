@@ -1,12 +1,20 @@
+import { languageDirection } from '../../localization/languageDirection';
 import React, { useState } from 'react';
 import { Check, ArrowRight, Compass } from 'lucide-react';
 import './LanguagePicker.css';
 import { useLanguage } from '../../context/LanguageContext';
 import { LAUNCH_LANGUAGES } from '../../services/translationService';
 export { LAUNCH_LANGUAGES } from '../../services/translationService';
-const CONTINUE: Record<string,string> = {en:'Continue',tl:'Magpatuloy',pt:'Continuar',fr:'Continuer',de:'Weiter',it:'Continua',ko:'계속',es:'Continuar',pl:'Dalej',id:'Lanjutkan'};
-const REGIONS: Record<string,string> = {en:'United States',tl:'Pilipinas',pt:'Brasil',fr:'France',de:'Deutschland',it:'Italia',ko:'대한민국',es:'Latinoamérica',pl:'Polska',id:'Indonesia'};
+const CONTINUE: Record<string,string> = {en:'Continue',tl:'Magpatuloy',pt:'Continuar',fr:'Continuer',de:'Weiter',it:'Continua',ko:'계속',es:'Continuar',pl:'Dalej',id:'Lanjutkan',"hi":"जारी रखें","ta":"தொடரவும்","ml":"തുടരുക","ar":"متابعة","sw":"Endelea","zh-TW":"繼續"};
+const REGIONS: Record<string,string> = {en:'United States',tl:'Pilipinas',pt:'Brasil',fr:'France',de:'Deutschland',it:'Italia',ko:'대한민국',es:'Latinoamérica',pl:'Polska',id:'Indonesia',"hi":"भारत","ta":"தமிழ்","ml":"മലയാളം","ar":"العالم العربي","sw":"Afrika Mashariki","zh-TW":"繁體中文"};
 const COPY: Record<string,[string,string,string]> = {
+"hi":["अपनी भाषा चुनें", "आपका रोमांच, आपकी भाषा में।", "संगीत और वीडियो की आवाज़ मूल भाषा में ही रहेगी। आप सेटिंग में भाषा बदल सकते हैं।"],
+"ta":["உங்கள் மொழியைத் தேர்ந்தெடுங்கள்", "உங்கள் சாகசம், உங்கள் மொழியில்.", "இசையும் வீடியோக்களின் ஒலியும் அவற்றின் அசல் மொழியிலேயே இருக்கும். அமைப்புகளில் மொழியை மாற்றலாம்."],
+"ml":["നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കൂ", "നിങ്ങളുടെ സാഹസികയാത്ര, നിങ്ങളുടെ ഭാഷയിൽ.", "സംഗീതവും വീഡിയോകളിലെ ശബ്ദവും അവയുടെ യഥാർത്ഥ ഭാഷയിൽ തുടരും. ക്രമീകരണങ്ങളിൽ ഭാഷ മാറ്റാം."],
+"ar":["اختر لغتك", "مغامرتك، بلغتك.", "تبقى الموسيقى وأصوات الفيديوهات بلغتها الأصلية. يمكنك تغيير اللغة في الإعدادات."],
+"sw":["Chagua lugha yako", "Matukio yako ya kusisimua, kwa lugha yako.", "Muziki na sauti za video hubaki katika lugha yake ya asili. Unaweza kubadilisha lugha katika Mipangilio."],
+"zh-TW":["選擇你的語言", "用你的語言，展開冒險。", "音樂和影片音訊會保留原始語言。你可以在設定中更改語言。"],
+
 id:['Pilih bahasamu','Petualanganmu, dalam bahasamu.','Musik dan audio video tetap dalam bahasa aslinya. Kamu bisa mengganti bahasa di Pengaturan.'],
 en:['Choose your language','Your adventure, in your language.','Music and video audio stay in their original language. You can change your language in Settings.'],
 tl:['Piliin ang iyong wika','Ang iyong pakikipagsapalaran, sa iyong wika.','Mananatili sa orihinal na wika ang musika at audio ng video. Maaari mong baguhin ang wika sa Mga Setting.'],
@@ -22,10 +30,10 @@ export default function LanguagePicker({onComplete}: {onComplete:()=>void}) {
   const {currentLanguage, setLanguage, supportedLanguages} = useLanguage();
   const [selected,setSelected] = useState(LAUNCH_LANGUAGES.includes(currentLanguage) ? currentLanguage : 'en');
   const copy = COPY[selected] || COPY.en;
-  return <main className="language-screen" aria-labelledby="language-title" lang={selected}>
+  return <main className="language-screen" aria-labelledby="language-title" lang={selected} dir={languageDirection(selected)}>
     <div className="language-ocean" aria-hidden="true"><div/><div/><div/></div>
     <div className="language-shell">
-      <div className="language-brand" aria-hidden="true"><Compass size={22}/><span data-no-localize="true">GODLY KIDS</span></div>
+      <div className="language-brand" dir="ltr" aria-hidden="true"><Compass size={22}/><span data-no-localize="true">GODLY KIDS</span></div>
       <section className="language-panel">
         <header className="language-header">
           <div className="language-globe" aria-hidden="true"><img src="/assets/images/language/language-globe-v1.png" alt="" width="112" height="112"/></div>
@@ -36,7 +44,7 @@ export default function LanguagePicker({onComplete}: {onComplete:()=>void}) {
           {LAUNCH_LANGUAGES.map(code=>{
             const lang=supportedLanguages[code];
             const active=selected===code;
-            return <button key={code} type="button" lang={code} aria-pressed={active} onClick={()=>setSelected(code)} className={`language-option${active?' is-selected':''}`}>
+            return <button key={code} type="button" lang={code} dir={languageDirection(code)} aria-pressed={active} onClick={()=>setSelected(code)} className={`language-option${active?' is-selected':''}`}>
               <span className="language-flag" aria-hidden="true">{lang.flag}</span>
               <span className="language-name"><strong>{lang.nativeName}</strong><span>{REGIONS[code]}</span></span>
               <span className="language-check" aria-hidden="true">{active&&<Check size={14} strokeWidth={3}/>}</span>

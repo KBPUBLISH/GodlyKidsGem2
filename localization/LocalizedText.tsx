@@ -1,11 +1,15 @@
+import { staticTranslation } from './staticTranslations';
+import { observeDocumentLanguage } from './languageDirection';
+import './direction.css';
+observeDocumentLanguage();
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 const key = 'godlykids_app_language';
 const subscribe = (fn:()=>void) => {window.addEventListener('storage',fn);window.addEventListener('gk:language',fn);return ()=>{window.removeEventListener('storage',fn);window.removeEventListener('gk:language',fn);};};
 export const getLanguage = () => localStorage.getItem(key)||'en';
 // Short role labels need human context: Google can interpret 'Parent' as a plant or ancestor.
 const roleLabels: Record<string,Record<string,string>> = {
-  Parent: {id:'Orang Tua',tl:'Magulang',pt:'Responsável',fr:'Parent',de:'Elternteil',it:'Genitore',ko:'부모 또는 보호자',es:'Madre, padre o tutor',pl:'Rodzic'},
-  Kid: {id:'Anak',tl:'Bata',pt:'Criança',fr:'Enfant',de:'Kind',it:'Bambino',ko:'어린이',es:'Niño',pl:'Dziecko'},
+  Parent: {"hi":"अभिभावक","ta":"பெற்றோர்","ml":"രക്ഷിതാവ്","ar":"ولي الأمر","sw":"Mzazi","zh-TW":"家長",id:'Orang Tua',tl:'Magulang',pt:'Responsável',fr:'Parent',de:'Elternteil',it:'Genitore',ko:'부모 또는 보호자',es:'Madre, padre o tutor',pl:'Rodzic'},
+  Kid: {"hi":"बच्चा","ta":"குழந்தை","ml":"കുട്ടി","ar":"طفل","sw":"Mtoto","zh-TW":"孩子",id:'Anak',tl:'Bata',pt:'Criança',fr:'Enfant',de:'Kind',it:'Bambino',ko:'어린이',es:'Niño',pl:'Dziecko'},
 };
 const cache = new Map<string,string>();
 const pending = new Map<string,Promise<string>>();
@@ -35,6 +39,8 @@ async function flush() {
 }
 export function translate(text:string,lang:string = getLanguage(), template = false): Promise<string> {
   if(lang === 'en' || !text.trim()) return Promise.resolve(text);
+  const prepared = roleLabels[text]?.[lang] || staticTranslation(text, lang);
+  if (prepared) return Promise.resolve(prepared);
   // Reuse timer/count translations instead of making a new request every game tick.
   if(!template && /\d/.test(text)) {
     const numbers:string[]=[];

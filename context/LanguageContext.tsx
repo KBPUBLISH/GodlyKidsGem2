@@ -1,3 +1,5 @@
+import { applyDocumentLanguage } from '../localization/languageDirection';
+import { EXPANDED_UI } from '../localization/expandedLanguages';
 import {translate as translateShared} from '../localization/LocalizedText';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -7,6 +9,7 @@ import { getApiBaseUrl } from '../services/apiService';
 // Pre-translated UI strings for all supported languages
 // This ensures instant language switching without API calls
 const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
+    ...EXPANDED_UI,
     id: INDONESIAN_UI,
     en: {
         // Navigation
@@ -1513,13 +1516,13 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         return localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en';
     });
     const [isTranslating, setIsTranslating] = useState(false);
-    useEffect(() => { document.documentElement.lang = currentLanguage; }, [currentLanguage]);
+    useEffect(() => { applyDocumentLanguage(currentLanguage); }, [currentLanguage]);
     const [apiTranslations, setApiTranslations] = useState<Record<string, Record<string, string>>>({});
 
     // Save language preference and sync with book reader
     const setLanguage = useCallback((lang: string) => {
         if (!SUPPORTED_LANGUAGES[lang]) return;
-        document.documentElement.lang = lang;
+        applyDocumentLanguage(lang);
         setCurrentLanguage(lang);
         localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
         window.dispatchEvent(new Event('gk:language'));

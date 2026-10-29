@@ -1,3 +1,4 @@
+import { languageDirection } from '../../localization/languageDirection';
 import React, { useMemo } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 
@@ -10,6 +11,7 @@ import { removeEmotionalCues } from '../../utils/textProcessing';
  * uses for read-along highlighting on the parchment.
  */
 interface ReaderCaptionsProps {
+  language?: string;
   text: string;
   /** Index (into whitespace-split words) of the word being spoken; -1 when idle. */
   highlightedWordIndex: number;
@@ -29,7 +31,7 @@ export function chunkWordsIntoPhrases(words: string[]): number[][] {
   let current: number[] = [];
   words.forEach((w, i) => {
     current.push(i);
-    const endsClause = /[.!?;:,—–]["”’)]?$/.test(w);
+    const endsClause = /[.!?;:,—–؟،؛。！？]["”’)]?$/.test(w);
     if (
       current.length >= MAX_WORDS_PER_PHRASE ||
       (endsClause && current.length >= MIN_WORDS_BEFORE_PUNCT_BREAK)
@@ -48,6 +50,7 @@ export function chunkWordsIntoPhrases(words: string[]): number[][] {
 
 const ReaderCaptions: React.FC<ReaderCaptionsProps> = ({
   text,
+  language = 'en',
   highlightedWordIndex,
   fontSize = 30,
   fontFamily = 'Patrick Hand',
@@ -87,6 +90,8 @@ const ReaderCaptions: React.FC<ReaderCaptionsProps> = ({
       />
       <p
         key={phraseIdx}
+        lang={language}
+        dir={languageDirection(language)}
         className="reader-caption relative text-center font-bold leading-[1.25] max-w-[94%]"
         style={{
           fontFamily: `"${fontFamily}", "Nunito", sans-serif`,

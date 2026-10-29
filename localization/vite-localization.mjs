@@ -34,7 +34,7 @@ export default function localization(root) {
         if(!game && /\b(name|email|password|prayer|chat|transcript|message|t|translatedText|translatedTexts|reply)\b/i.test(raw))return;
         if(game && /^(name|.*resident.*\.name|.*character.*\.name|.*prayer\.name)$/i.test(raw.trim()))return;
         // Translate only textual data fields and literal choices, never arbitrary render trees.
-        if(!game && !(t.isIdentifier(e) && /^(title|description|subtitle|label|hint|toast|q|bubble|blurb|note)$/.test(e.name)) && !(t.isStringLiteral(e)||t.isTemplateLiteral(e)||t.isConditionalExpression(e)||(/\.(title|description|subtitle|verse|status|label|hint|text)\b/.test(raw)&&!raw.includes('('))))return;
+        if(!game && !(t.isIdentifier(e) && /^(title|description|subtitle|label|hint|toast|q|bubble|blurb|note|progress)$/.test(e.name)) && !(t.isStringLiteral(e)||t.isTemplateLiteral(e)||t.isConditionalExpression(e)||(/\.(title|description|subtitle|verse|status|label|hint|text)\b/.test(raw)&&!raw.includes('('))))return;
         changed=true;p.replaceWith(t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('GKLocalizedText'),[t.jsxAttribute(t.jsxIdentifier('value'),t.jsxExpressionContainer(e))],true),null,[],true));p.skip();
       },
       Program:{exit(p){if(changed)p.unshiftContainer('body',t.importDeclaration([t.importDefaultSpecifier(t.identifier('GKLocalizedText')), ...(elements?[t.importSpecifier(t.identifier('GKLocalizedElement'),t.identifier('LocalizedElement'))]:[])],t.stringLiteral(path.resolve(root,'localization/LocalizedText.tsx'))));}}

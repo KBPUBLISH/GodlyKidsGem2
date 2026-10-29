@@ -1,3 +1,4 @@
+import { languageDirection } from '../localization/languageDirection';
 import {translate as translateStoryText} from '../localization/LocalizedText';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -4854,6 +4855,7 @@ const BookReaderPage: React.FC = () => {
 
     return (
         <div
+            dir="ltr"
             className={`relative bg-gray-900 overflow-hidden flex flex-col ${isLandscape ? '' : 'w-full h-screen'}`}
             style={{
                 ...landscapeContainerStyle,
@@ -5006,6 +5008,8 @@ const BookReaderPage: React.FC = () => {
                                     {Object.entries(SUPPORTED_LANGUAGES).map(([code, lang]) => (
                                         <button
                                             key={code}
+                                        lang={code}
+                                        dir={languageDirection(code)}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedLanguage(code);
@@ -5558,6 +5562,7 @@ const BookReaderPage: React.FC = () => {
                         ) : (
                             /* Regular Book Page - renders background, scroll, text boxes */
                             <BookPageRenderer
+                                language={selectedLanguage}
                                 page={{
                                     ...currentPage,
                                     // Use translated textBoxes if available

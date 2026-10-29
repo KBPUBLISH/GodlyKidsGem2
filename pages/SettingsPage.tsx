@@ -1,3 +1,4 @@
+import { languageDirection } from '../localization/languageDirection';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, SlidersHorizontal, Volume2, Bell, Shield, FileText, LogOut, Crown, HelpCircle, Mic, Trash2, RefreshCw, CheckCircle, AlertCircle, Globe, Check, ChevronRight, UserPlus, LogIn, Paintbrush, Music } from 'lucide-react';
@@ -396,6 +397,8 @@ const SettingsPage: React.FC = () => {
                                 {Object.entries(supportedLanguages).filter(([code]) => LAUNCH_LANGUAGES.includes(code)).map(([code, lang]) => (
                                     <button
                                         key={code}
+                                        lang={code}
+                                        dir={languageDirection(code)}
                                         onClick={() => {
                                             setLanguage(code);
                                             setShowLanguageSelector(false);

@@ -18,11 +18,17 @@ const SUPPORTED_LANGUAGES = {
     'nl': 'Dutch',
     'pl': 'Polish',
     'ru': 'Russian',
-    'zh': 'Chinese',
+    'zh': 'Chinese (Simplified)',
     'ja': 'Japanese',
     'ko': 'Korean',
     'tl': 'Filipino',
     'id': 'Indonesian',
+    'hi': 'Hindi',
+    'ta': 'Tamil',
+    'ml': 'Malayalam',
+    'ar': 'Arabic',
+    'sw': 'Swahili',
+    'zh-TW': 'Chinese (Traditional)',
 };
 
 // Generate hash of text for change detection

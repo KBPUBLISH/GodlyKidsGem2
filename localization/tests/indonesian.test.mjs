@@ -17,7 +17,7 @@ test('Indonesian has complete nonempty coverage of the English interface catalog
   let english;
   function visit(node) {
     if(ts.isVariableDeclaration(node) && node.name.getText(ast)==='UI_TRANSLATIONS')
-      english=node.initializer.properties.find(p=>p.name.getText(ast)==='en').initializer;
+      english=node.initializer.properties.find(p=>p.name?.getText(ast)==='en').initializer;
     ts.forEachChild(node,visit);
   }
   visit(ast);

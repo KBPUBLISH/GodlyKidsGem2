@@ -582,7 +582,7 @@ const SettingsPage: React.FC = () => {
                     <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
                         <h3 className="font-display font-bold text-[#8B4513] text-lg mb-3 uppercase tracking-wide opacity-80">Account</h3>
                         <p className="text-[#5c2e0b] text-sm mb-4 opacity-70">
-                            Sign in to sync your progress across devices, restore purchases, and more!
+                            Optional. An account lets your family use one membership on several devices and restores purchases on a new phone or tablet.
                         </p>
                         <div className="space-y-3">
                             <button

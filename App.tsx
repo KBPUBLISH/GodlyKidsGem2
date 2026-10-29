@@ -10,6 +10,7 @@ import ChallengeIntroPage from './pages/ChallengeIntroPage';
 import WorldPage from './pages/WorldPage';
 import ReferralPromptModal from './components/features/ReferralPromptModal';
 import CreateAccountModal from './components/modals/CreateAccountModal';
+import { Crown } from 'lucide-react';
 import ReverseTrialExpiredModal from './components/modals/ReverseTrialExpiredModal';
 import { useUser } from './context/UserContext';
 
@@ -715,72 +716,102 @@ const GuestFriendlyRoute: React.FC<{ children: React.ReactNode; contentType?: 'b
   return <>{children}</>;
 };
 
-// Protected route wrapper - requires account AND completed onboarding for content access
-// Exceptions: 
-// 1. Allows full access during active tutorial
-// 2. Allows first daily session without account (first-time user experience)
+// Route wrapper for member content. Guests are always let through — an account is only
+// suggested after a purchase (so a family can use one subscription on several devices).
+// The one thing it still enforces: an account holder who never finished onboarding is sent there,
+// except during the tutorial or their first daily session.
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [hasAccount, setHasAccount] = useState(() => hasUserAccount());
-  const navigate = useNavigate();
   const location = useLocation();
-  
-  // Allow FULL access during ANY active tutorial (don't interrupt tutorial flow)
-  const tutorialActive = isTutorialInProgress();
-  if (tutorialActive) {
+  const hasAccount = hasUserAccount();
+  if (!hasAccount || isTutorialInProgress() || hasCompletedOnboarding()) {
     return <>{children}</>;
   }
-  
-  // Allow access during first daily session (user hasn't completed any session yet)
-  // Check if coming from daily session flow
+
+  // First daily session is allowed before onboarding is complete
   const fromDailySession = (location.state as any)?.fromDailySession === true;
   if (fromDailySession) {
-    // Import dynamically to avoid circular dependency
-    const sessionHistoryKey = 'godlykids_session_history';
     const hasCompletedPreviousSession = (() => {
       try {
-        const history = localStorage.getItem(sessionHistoryKey);
+        const history = localStorage.getItem('godlykids_session_history');
         if (!history) return false;
         const sessions = JSON.parse(history);
         return sessions.some((s: any) => s.completed);
       } catch { return false; }
     })();
-    
-    // If this is user's first session (no completed sessions), allow access without account
-    if (!hasCompletedPreviousSession) {
-      return <>{children}</>;
-    }
+    if (!hasCompletedPreviousSession) return <>{children}</>;
   }
-  
-  // Check if user has completed onboarding
-  const onboardingComplete = hasCompletedOnboarding();
-  
-  // If user has account AND completed onboarding, allow access
-  if (hasAccount && onboardingComplete) {
-    return <>{children}</>;
+
+  return <Navigate to="/onboarding" replace />;
+};
+
+// After a guest pays we ask (once, and only once) whether they want a free account so the
+// subscription follows them to other devices. Skipping is fine — premium already works here.
+const POST_PURCHASE_ACCOUNT_FLAG = 'godlykids_prompt_account_after_purchase';
+const PostPurchaseAccountPrompt: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (localStorage.getItem(POST_PURCHASE_ACCOUNT_FLAG) !== '1') return;
+      if (hasUserAccount()) { localStorage.removeItem(POST_PURCHASE_ACCOUNT_FLAG); return; }
+      // Stay out of the way on checkout / auth screens; show it once the user lands somewhere calm.
+      if (/^\/(paywall|signin|onboarding|premium-onboarding|payment-success|reset-password)/.test(location.pathname)) return;
+      setOpen(true);
+    };
+    const timer = setTimeout(check, 900);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
+
+  const dismiss = () => {
+    localStorage.removeItem(POST_PURCHASE_ACCOUNT_FLAG);
+    setOpen(false);
+    setShowForm(false);
+  };
+
+  if (!open) return null;
+  if (showForm) {
+    return (
+      <CreateAccountModal
+        isOpen={true}
+        navigateToOnboarding={false}
+        onClose={dismiss}
+        onAccountCreated={dismiss}
+        onSignIn={() => { dismiss(); navigate('/signin', { state: { returnTo: location.pathname } }); }}
+      />
+    );
   }
-  
-  // If user has account but NOT completed onboarding, redirect to onboarding
-  if (hasAccount && !onboardingComplete) {
-    return <Navigate to="/onboarding" replace />;
-  }
-  
-  // No account - show account creation modal
   return (
-    <CreateAccountModal
-      isOpen={true}
-      navigateToOnboarding={true} // After account creation, go to onboarding
-      onClose={() => {
-        // Go back to previous page
-        window.history.back();
-      }}
-      onAccountCreated={() => {
-        setHasAccount(true);
-        // Will redirect to onboarding via navigateToOnboarding={true}
-      }}
-      onSignIn={() => {
-        navigate('/signin', { state: { returnTo: window.location.hash.replace('#', '') || '/world' } });
-      }}
-    />
+    <div className="fixed inset-0 z-[190] flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="post-purchase-account-title">
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={dismiss} />
+      <div className="relative w-full max-w-sm bg-[#fff8e1] rounded-3xl border-4 border-[#CD853F] shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+        <div className="w-14 h-14 mx-auto -mt-12 mb-3 rounded-full bg-[#CD853F] border-4 border-[#fff8e1] shadow-md flex items-center justify-center text-[#fff3cd]">
+          <Crown size={26} fill="currentColor" />
+        </div>
+        <h2 id="post-purchase-account-title" className="font-display font-extrabold text-[#5c2e0b] text-xl text-center leading-tight">
+          Use Godly Kids on every device?
+        </h2>
+        <p className="text-[#8B4513] text-sm text-center mt-2">
+          Your membership already works on this device. Add a free account and the whole family can sign in on a tablet, phone or second device with the same subscription.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          className="mt-5 w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-display font-extrabold py-3 rounded-xl border-2 border-[#B8860B] shadow-md active:scale-95 transition-transform"
+        >
+          CREATE FREE ACCOUNT
+        </button>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="mt-3 w-full text-[#8B4513] font-bold text-sm py-2"
+        >
+          Maybe later — it is in Settings too
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -1500,6 +1531,7 @@ const App: React.FC = () => {
               <CdSpinHost />
               {/* <DemoTimer /> - Disabled for now */}
               <ReferralPromptWrapper>
+              <PostPurchaseAccountPrompt />
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
@@ -1588,7 +1620,8 @@ const App: React.FC = () => {
                   <Route path="/paywall" element={<PaywallPage />} />
                   <Route path="/premium-onboarding" element={<PremiumOnboardingPage />} />
                   <Route path="/trial-stats" element={<TrialStatsPage />} />
-                  <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                  {/* Settings are open to everyone — an account is only suggested after a purchase (multi-device sync). */}
+                  <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/demo/video-lesson" element={<VideoLessonDemo />} />
                   {/* Games are playable without an account — do not wrap in ProtectedRoute
                       (that showed Create Account when Island Scene / Games opened a URL). */}

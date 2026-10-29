@@ -344,14 +344,9 @@ const PaywallPage: React.FC = () => {
       noteJourneyStep('paywall_clicked', { source: paywallAnalyticsSource || fromState || 'paywall' });
     }
     
-    // Require sign-in before ANY in-app purchase so RevenueCat webhook receives email as app_user_id.
-    // Otherwise purchase is tied to device ID and user won't get premium after signing in on another device.
-    if (!hasAccount()) {
-      console.log('⚠️ No account found, showing account required modal');
-      activityTrackingService.trackOnboardingEvent('paywall_account_required', { planType: selectedPlan, ...paywallSourceMeta });
-      setShowAccountRequired(true);
-      return;
-    }
+    // Guests can buy without an account: the purchase is keyed to this device's RevenueCat id and the
+    // backend links it to an email when they create an account or sign in later (deviceInfo.purchaseDeviceId).
+    // We only *suggest* an account after the purchase succeeds — it is what makes multi-device use possible.
 
     // Trial billing reminder + optional notifications, then return here with resumeSubscribe
     console.log('🔔 Navigating to trial reminder step');
@@ -423,6 +418,10 @@ const PaywallPage: React.FC = () => {
         }
         
         subscribe();
+        // Guest checkout: ask once, after landing, whether they want a free account for other devices.
+        if (!hasAccount()) {
+          try { localStorage.setItem('godlykids_prompt_account_after_purchase', '1'); } catch { /* ignore */ }
+        }
         if (isLibraryPaywall) {
           markShipsLibraryPaywallSeen();
           navigate(returnTo || '/listen');

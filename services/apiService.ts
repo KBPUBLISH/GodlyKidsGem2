@@ -863,6 +863,8 @@ export const ApiService = {
           password: credentials.password,
           deviceInfo: {
             deviceId: getDeviceId(),
+            // Id used as RevenueCat external_id for purchases made before signing in (guest checkout)
+            purchaseDeviceId: localStorage.getItem('godlykids_device_id') || undefined,
             pushToken: '', // Can be set later if needed
             platform: getPlatform()
           }
@@ -1090,6 +1092,8 @@ export const ApiService = {
         ...additionalData,
         deviceInfo: {
           deviceId: getDeviceId(),
+          // Id used as RevenueCat external_id for purchases made before creating the account (guest checkout)
+          purchaseDeviceId: localStorage.getItem('godlykids_device_id') || undefined,
           pushToken: '',
           platform: getPlatform()
         }

@@ -379,8 +379,8 @@ const SettingsPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* Language Settings - Hidden until more testing is done */}
-            {false && <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
+            {/* Language Settings */}
+            {true && <section className="bg-[#fff8e1] rounded-2xl p-5 border-2 border-[#eecaa0] shadow-sm">
                 <h3 className="font-display font-bold text-[#8B4513] text-lg mb-4 uppercase tracking-wide opacity-80">{t('language')}</h3>
                 
                 <div className="space-y-3">
@@ -411,7 +411,7 @@ const SettingsPage: React.FC = () => {
                     {showLanguageSelector && (
                         <div className="bg-white/80 rounded-xl border border-[#eecaa0] overflow-hidden">
                             <div className="max-h-64 overflow-y-auto">
-                                {Object.entries(supportedLanguages).map(([code, lang]) => (
+                                {Object.entries(supportedLanguages).filter(([code]) => ['en','tl','pt','fr','de','it','ko','es','pl'].includes(code)).map(([code, lang]) => (
                                     <button
                                         key={code}
                                         onClick={() => {

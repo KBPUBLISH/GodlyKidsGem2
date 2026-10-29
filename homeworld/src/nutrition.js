@@ -1,3 +1,4 @@
+import {translate, getLanguage} from '../../localization/LocalizedText';
 import * as THREE from 'three';
 import {dist,heightAt,cellFromKey,growth,gameTime} from './core.mjs';
 import {prayGain,prayerWait,prayerFor,PRAY_GAIN,FOODS,FOOD_RECIPES,RECIPES,CRAFT_RECIPES,WATER_MAX,MAX_ENERGY,activeCharacter,energyFor,energyCost,canAffordEnergy,canCook,restGain,isLowEnergy,completedHomes,sleepHome,homeName,canSleep,sleepProgress,SLEEP_SECONDS,MAX_HUNGER,hungerFor,isHungry,isStarving,workRate,needsFood,mealGain} from './nutrition.mjs';
@@ -146,11 +147,14 @@ export class Nutrition {
     else if(msg.status==='ended'){v.status='ended';if(a?.type==='pray'&&a.actionId===v.id)a.duration=Math.max(4,Math.min(a.duration,a.t+1));}
     else if(msg.status==='failed'&&v.status!=='local'){v.status='local';this.speakPrayer(v.text);}
   }
-  speakPrayer(text){
+  async speakPrayer(text){
+    const language = getLanguage();
+    const spoken = await translate(text, language);
+    if (getLanguage() !== language) return;
     try{
       const synth=window.speechSynthesis;if(!synth||typeof SpeechSynthesisUtterance==='undefined')return;
-      synth.cancel();this.speaking=true;const u=new SpeechSynthesisUtterance(text);u.rate=.92;u.pitch=1.08;u.onend=u.onerror=()=>{this.speaking=false;};
-      const voices=synth.getVoices?.()||[],pick=voices.find(v=>/en/i.test(v.lang)&&/(samantha|karen|moira|female|zira|google us english)/i.test(v.name))||voices.find(v=>/^en/i.test(v.lang));if(pick)u.voice=pick;
+      synth.cancel();this.speaking=true;const u=new SpeechSynthesisUtterance(spoken);u.lang=({tl:'fil-PH',pt:'pt-BR',es:'es-MX',en:'en-US',fr:'fr-FR',de:'de-DE',it:'it-IT',ko:'ko-KR',pl:'pl-PL'})[language]||language;u.rate=.92;u.pitch=1.08;u.onend=u.onerror=()=>{this.speaking=false;};
+      const voices=synth.getVoices?.()||[],pick=voices.find(v=>v.lang.toLowerCase()===u.lang.toLowerCase())||voices.find(v=>v.lang.split('-')[0]===u.lang.split('-')[0]);if(pick)u.voice=pick;
       synth.speak(u);
     }catch{/* speech is a bonus, never a blocker */}
   }

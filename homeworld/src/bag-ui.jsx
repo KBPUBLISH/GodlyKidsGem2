@@ -1,3 +1,4 @@
+import LocalizedText from '../../localization/LocalizedText';
 import React from 'react';
 import {SEEDS,label,realDuration} from './core.mjs';
 import {MINERALS} from './mining.mjs';
@@ -37,7 +38,7 @@ function Shelf({icon,title,count,hint,children}){
 function Tile({id,name,count,note,action,tone}){
   return <article className={`bag-tile ${tone||''}`}>
     <span className="bag-tile-icon"><ItemIcon id={id} size={40}/><b className="bag-tile-count">×{count}</b></span>
-    <strong>{name}</strong>
+    <strong><LocalizedText value={name}/></strong>
     {note&&<small>{note}</small>}
     {action}
   </article>;

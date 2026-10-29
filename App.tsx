@@ -1,3 +1,4 @@
+import LanguagePage from './components/language/LanguagePage';
 
 import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
@@ -1502,6 +1503,7 @@ const App: React.FC = () => {
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
+                  <Route path="/language" element={<LanguagePage />} />
                   {/* Parent Quiz Funnel - web-to-app conversion */}
                   <Route path="/parentquiz" element={<ParentQuizPage />} />
                   {/* Public shareable links - no authentication required */}

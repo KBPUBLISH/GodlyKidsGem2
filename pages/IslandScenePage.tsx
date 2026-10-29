@@ -1,3 +1,4 @@
+import LocalizedText from '../localization/LocalizedText';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Check, Lock, Volume2, VolumeX, List } from 'lucide-react';
@@ -1614,7 +1615,7 @@ const IslandScenePage: React.FC = () => {
                 className="flex-1 text-center font-display font-black text-white text-[1.05rem] sm:text-lg tracking-wide truncate px-1"
                 style={{ textShadow: '0 2px 4px rgba(0,0,0,0.55)' }}
               >
-                {sceneTitle}
+                <LocalizedText value={sceneTitle}/>
               </h1>
 
               <button

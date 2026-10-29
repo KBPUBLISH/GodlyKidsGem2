@@ -1,3 +1,4 @@
+import LanguagePicker from '../components/language/LanguagePicker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
@@ -44,6 +45,11 @@ const SPARKLES: Array<{
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const [languageDestination, setLanguageDestination] = useState<string | null>(null);
+  const goWithLanguage = useCallback((destination: string) => {
+    if (localStorage.getItem('godlykids_language_selected') !== 'true') setLanguageDestination(destination);
+    else navigate(destination, {replace: true});
+  }, [navigate]);
   const location = useLocation();
   const replaySplash = Boolean(
     (location.state as { replaySplash?: boolean } | null)?.replaySplash,
@@ -75,7 +81,8 @@ const LandingPage: React.FC = () => {
 
         if (hasCompletedOnboarding) {
           const hasKids = userData.kids && userData.kids.length > 0;
-          navigate(hasKids ? '/profile' : '/world', { replace: true });
+          goWithLanguage(hasKids ? '/profile' : '/world');
+          setIsChecking(false);
           return;
         }
       }
@@ -101,8 +108,8 @@ const LandingPage: React.FC = () => {
   }, [isChecking]);
 
   const goOnboarding = useCallback(() => {
-    navigate('/onboarding');
-  }, [navigate]);
+    goWithLanguage('/onboarding');
+  }, [goWithLanguage]);
 
   const handleStartExplore = () => {
     if (startedRef.current) return;
@@ -150,6 +157,8 @@ const LandingPage: React.FC = () => {
     activityTrackingService.trackOnboardingEvent('splash_signin_clicked');
     navigate('/signin');
   };
+
+  if (languageDestination) return <LanguagePicker onComplete={() => navigate(languageDestination, {replace:true})}/>;
 
   if (isChecking) {
     return (

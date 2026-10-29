@@ -3,8 +3,8 @@ import { getApiBaseUrl } from './apiService';
 // Supported languages with their display names and flag emojis
 export const SUPPORTED_LANGUAGES: Record<string, { name: string; flag: string; nativeName: string }> = {
     'en': { name: 'English', flag: '🇺🇸', nativeName: 'English' },
-    'es': { name: 'Spanish', flag: '🇪🇸', nativeName: 'Español' },
-    'pt': { name: 'Portuguese', flag: '🇧🇷', nativeName: 'Português' },
+    'es': { name: 'Latin American Spanish', flag: '🌎', nativeName: 'Español (Latinoamérica)' },
+    'pt': { name: 'Brazilian Portuguese', flag: '🇧🇷', nativeName: 'Português (Brasil)' },
     'fr': { name: 'French', flag: '🇫🇷', nativeName: 'Français' },
     'de': { name: 'German', flag: '🇩🇪', nativeName: 'Deutsch' },
     'it': { name: 'Italian', flag: '🇮🇹', nativeName: 'Italiano' },

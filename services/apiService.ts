@@ -6,6 +6,12 @@ import { authService } from './authService';
 import { DespiaService } from './despiaService';
 import NotificationService from './notificationService';
 
+
+type NarrationResult = {audioUrl:string; alignment:any};
+const narrationCache = new Map<string,{result:NarrationResult;expires:number}>();
+const narrationRequests = new Map<string,Promise<NarrationResult|null>>();
+let narrationRetryAt = 0;
+
 // ============================================
 // LocalStorage-backed caching to survive WebView restarts
 // iOS kills WebView when app is backgrounded, clearing module-level vars
@@ -1410,6 +1416,12 @@ export const ApiService = {
     pageNumber?: number,
     textBoxIndex?: number
   ): Promise<{ audioUrl: string; alignment: any } | null> => {
+    const requestKey = JSON.stringify([text,voiceId,languageCode || 'en']);
+    const cached = narrationCache.get(requestKey);
+    if(cached && cached.expires > Date.now()) return cached.result;
+    if(narrationRequests.has(requestKey)) return narrationRequests.get(requestKey)!;
+    if(Date.now() < narrationRetryAt) return null;
+    const request = (async () => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}tts/generate`, {
@@ -1421,7 +1433,13 @@ export const ApiService = {
 
       if (response.ok) {
         const result = await response.json();
+        if(narrationCache.size >= 200) narrationCache.delete(narrationCache.keys().next().value!);
+        narrationCache.set(requestKey,{result,expires:Date.now()+60*60*1000});
         return result;
+      }
+      if(response.status === 429) {
+        const retrySeconds = Number(response.headers.get('Retry-After') || response.headers.get('RateLimit-Reset') || 60);
+        narrationRetryAt = Date.now() + Math.max(1,Number.isFinite(retrySeconds)?retrySeconds:60)*1000;
       }
       console.error('TTS Generation failed:', await response.text());
       return null;
@@ -1434,6 +1452,9 @@ export const ApiService = {
       console.error('TTS Error:', error);
       return null;
     }
+    })();
+    narrationRequests.set(requestKey,request);
+    return request.finally(()=>narrationRequests.delete(requestKey));
   },
 
   /** One HTTP request: synthesize multiple text boxes (sequential narration). Uses same caches as singles. */

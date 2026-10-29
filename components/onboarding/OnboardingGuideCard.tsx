@@ -1,3 +1,4 @@
+import {useLocalizedString, getLanguage} from '../../localization/LocalizedText';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
@@ -99,8 +100,8 @@ const OnboardingGuideCard: React.FC<Props> = ({
   const beatsRef = useRef(beats);
 
   const beat = beats[Math.min(beatIndex, beats.length - 1)] ?? beats[0];
-  const line = beat?.line ?? '';
-  const tts = beat?.tts ?? '';
+  const line = useLocalizedString(beat?.line ?? '');
+  const tts = line;
   const lastBeat = beatIndex >= beats.length - 1;
   const doneTyping = typed >= line.length;
   beatsRef.current = beats;
@@ -185,6 +186,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
     setTyped(0);
     setTypingActive(false);
     setMsPerChar(TYPE_MS_DEFAULT);
+    if (!line) return;
     const waitMs = compact ? SCENE_AUDIO_WAIT_MS : AUDIO_WAIT_MS;
     waitTimerRef.current = window.setTimeout(() => {
       if (mountedRef.current) setTypingActive(true);
@@ -196,7 +198,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
     void (async () => {
       const cached = ttsCacheRef.current[spoken];
       const url = cached || (await (async () => {
-        const result = await ApiService.generateTTS(spoken, ONBOARDING_GUIDE_VOICE_ID);
+        const result = await ApiService.generateTTS(spoken, ONBOARDING_GUIDE_VOICE_ID, undefined, getLanguage());
         if (!result?.audioUrl) return null;
         const resolved = resolveAudioUrl(result.audioUrl);
         ttsCacheRef.current[spoken] = resolved;
@@ -209,12 +211,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
         return;
       }
       playAudio(url, line.length);
-      if (nextTts && !ttsCacheRef.current[nextTts]) {
-        void ApiService.generateTTS(nextTts, ONBOARDING_GUIDE_VOICE_ID).then((result) => {
-          if (!result?.audioUrl) return;
-          ttsCacheRef.current[nextTts] = resolveAudioUrl(result.audioUrl);
-        });
-      }
+
     })();
 
     return () => {

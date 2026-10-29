@@ -1,3 +1,4 @@
+import {translate as translateShared} from '../localization/LocalizedText';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { SUPPORTED_LANGUAGES } from '../services/translationService';
 import { getApiBaseUrl } from '../services/apiService';
@@ -1510,12 +1511,16 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         return localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en';
     });
     const [isTranslating, setIsTranslating] = useState(false);
+    useEffect(() => { document.documentElement.lang = currentLanguage; }, [currentLanguage]);
     const [apiTranslations, setApiTranslations] = useState<Record<string, Record<string, string>>>({});
 
     // Save language preference and sync with book reader
     const setLanguage = useCallback((lang: string) => {
+        if (!SUPPORTED_LANGUAGES[lang]) return;
+        document.documentElement.lang = lang;
         setCurrentLanguage(lang);
         localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+        window.dispatchEvent(new Event('gk:language'));
         // Also sync with book reader language preference
         localStorage.setItem('godlykids_reader_language', lang);
     }, []);
@@ -1537,47 +1542,18 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         return UI_TRANSLATIONS.en[key] || key;
     }, [currentLanguage, apiTranslations]);
 
-    // Fetch translations from API for languages not pre-translated
+    // Fill individual catalog gaps even when a language already has a partial catalog.
     useEffect(() => {
-        const fetchMissingTranslations = async () => {
-            // Skip if we have pre-translated strings for this language
-            if (UI_TRANSLATIONS[currentLanguage]) return;
-            if (currentLanguage === 'en') return;
-            if (apiTranslations[currentLanguage]) return; // Already fetched
-
-            setIsTranslating(true);
-            try {
-                const englishStrings = UI_TRANSLATIONS.en;
-                const keys = Object.keys(englishStrings);
-                const texts = Object.values(englishStrings);
-
-                const response = await fetch(`${getApiBaseUrl()}translate/ui`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ texts, lang: currentLanguage }),
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    const translated: Record<string, string> = {};
-                    keys.forEach((key, index) => {
-                        translated[key] = data.translations[index] || englishStrings[key];
-                    });
-
-                    setApiTranslations(prev => ({
-                        ...prev,
-                        [currentLanguage]: translated,
-                    }));
-                }
-            } catch (error) {
-                console.error('Failed to translate UI strings:', error);
-            } finally {
-                setIsTranslating(false);
-            }
-        };
-
-        fetchMissingTranslations();
-    }, [currentLanguage, apiTranslations]);
+        if (currentLanguage === 'en') return;
+        let cancelled = false;
+        const keys = Object.keys(UI_TRANSLATIONS.en).filter(key => !getTranslationForLanguage(currentLanguage,key));
+        if (!keys.length) return;
+        setIsTranslating(true);
+        Promise.all(keys.map(async key => [key, await translateShared(UI_TRANSLATIONS.en[key],currentLanguage)] as const))
+            .then(entries => {if(!cancelled)setApiTranslations(prev=>({...prev,[currentLanguage]:Object.fromEntries(entries)}));})
+            .finally(()=>{if(!cancelled)setIsTranslating(false);});
+        return ()=>{cancelled=true;};
+    }, [currentLanguage]);
 
     // Translate dynamic content (book titles, descriptions, etc.)
     const translateText = useCallback(async (text: string): Promise<string> => {
@@ -1614,7 +1590,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     const translateTexts = useCallback(async (texts: string[]): Promise<string[]> => {
         if (currentLanguage === 'en') return texts;
 
-        const results: string[] = [];
+        const results: string[] = [...texts];
         const uncachedTexts: string[] = [];
         const uncachedIndices: number[] = [];
 

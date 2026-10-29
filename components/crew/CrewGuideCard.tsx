@@ -1,3 +1,4 @@
+import {useLocalizedString, getLanguage} from '../../localization/LocalizedText';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Users } from 'lucide-react';
@@ -62,8 +63,8 @@ const CrewGuideCard: React.FC<Props> = ({
   lastBeatHint = 'Tap to finish',
 }) => {
   const beat = beats[Math.min(beatIndex, beats.length - 1)];
-  const line = beat?.line ?? '';
-  const tts = beat?.tts ?? '';
+  const line = useLocalizedString(beat?.line ?? '');
+  const tts = line;
   const lastBeat = beatIndex >= beats.length - 1;
 
   const [typed, setTyped] = useState(0);
@@ -128,7 +129,7 @@ const CrewGuideCard: React.FC<Props> = ({
   useEffect(() => {
     if (!tts || ttsCacheRef.current[tts]) return;
     let cancelled = false;
-    void ApiService.generateTTS(tts, voiceId).then((result) => {
+    void ApiService.generateTTS(tts, voiceId, undefined, getLanguage()).then((result) => {
       if (cancelled || !result?.audioUrl) return;
       ttsCacheRef.current[tts] = resolveAudioUrl(result.audioUrl);
     });
@@ -157,7 +158,7 @@ const CrewGuideCard: React.FC<Props> = ({
       const url =
         cached ||
         (await (async () => {
-          const result = await ApiService.generateTTS(tts, voiceId);
+          const result = await ApiService.generateTTS(tts, voiceId, undefined, getLanguage());
           if (!result?.audioUrl) return null;
           const resolved = resolveAudioUrl(result.audioUrl);
           ttsCacheRef.current[tts] = resolved;
@@ -170,12 +171,7 @@ const CrewGuideCard: React.FC<Props> = ({
         return;
       }
       playAudio(url, line.length);
-      if (nextTts && !ttsCacheRef.current[nextTts]) {
-        void ApiService.generateTTS(nextTts, voiceId).then((result) => {
-          if (!result?.audioUrl) return;
-          ttsCacheRef.current[nextTts] = resolveAudioUrl(result.audioUrl);
-        });
-      }
+
     })();
 
     return () => {

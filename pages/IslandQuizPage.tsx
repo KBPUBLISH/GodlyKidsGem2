@@ -1,3 +1,4 @@
+import LocalizedText, {translate, getLanguage} from '../localization/LocalizedText';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Check, Gift, PartyPopper, X } from 'lucide-react';
@@ -140,6 +141,16 @@ const shuffleQuestionOptions = (q: QuizQuestion): QuizQuestion => {
     correctIndex: correctIndex >= 0 ? correctIndex : 0,
   };
 };
+
+/** Load quiz copy before the timed feedback begins, so English never consumes its reading time. */
+async function prepareLocalizedQuiz(questions: QuizQuestion[]) {
+  const chosen = preparePlayQuestions(questions);
+  const language = getLanguage();
+  await Promise.all([...chosen.flatMap(q=>[q.question,...q.options,q.explanation || '']),
+    "Great job! That's right.", 'Not quite — the correct answer is ', 'Tap anywhere for the next question…',
+  ].map(text=>translate(text,language)));
+  return chosen;
+}
 
 /** Kids play this many questions, even when a story pack has more saved. */
 const QUIZ_LENGTH = 5;
@@ -351,7 +362,9 @@ const IslandQuizPage: React.FC = () => {
       setDifficulty(resolved);
 
       if (diffs.length === 1 || searchParams.get('difficulty')) {
-        setQuestions(preparePlayQuestions(levels[resolved] || []));
+        const prepared = await prepareLocalizedQuiz(levels[resolved] || []);
+        if(controller.signal.aborted) return;
+        setQuestions(prepared);
         setIndex(0);
         setSelected(null);
         setRevealed(false);
@@ -368,7 +381,7 @@ const IslandQuizPage: React.FC = () => {
   useEffect(() => {
     const controller = new AbortController();
     setPhase('loading');
-    void loadStoryQuiz(controller).catch(() => setPhase('missing'));
+    void loadStoryQuiz(controller).catch(() => {if(!controller.signal.aborted)setPhase('missing');});
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [islandId]);
@@ -399,7 +412,7 @@ const IslandQuizPage: React.FC = () => {
         const qs = levelsFromStory(story).levels[level] || [];
         if (story) setRewardStory(story);
         setDifficulty(level);
-        setQuestions(preparePlayQuestions(qs));
+        setQuestions(await prepareLocalizedQuiz(qs));
         setIndex(0);
         setSelected(null);
         setRevealed(false);
@@ -597,12 +610,13 @@ const IslandQuizPage: React.FC = () => {
             {available.map((level) => (
               <button
                 key={level}
+                data-testid={`quiz-level-${level}`}
                 type="button"
                 onClick={() => startLevel(level)}
                 className="w-full max-w-xs py-3 rounded-xl text-white text-lg font-black active:scale-95 transition-transform"
                 style={woodBtnStyle}
               >
-                {LEVEL_LABEL[level]}
+                <LocalizedText value={LEVEL_LABEL[level]}/>
               </button>
             ))}
           </div>
@@ -613,7 +627,7 @@ const IslandQuizPage: React.FC = () => {
             <div className="mb-3">
               <div className="flex justify-between text-white/90 text-xs font-bold mb-1">
                 <span>
-                  {LEVEL_LABEL[difficulty]} · {index + 1}/{questions.length}
+                  <LocalizedText value={LEVEL_LABEL[difficulty]}/> · {index + 1}/{questions.length}
                 </span>
                 <span>{score} correct</span>
               </div>
@@ -627,10 +641,12 @@ const IslandQuizPage: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto rounded-2xl bg-[#FFF8E7]/95 border-2 border-[#6B4423] p-4 shadow-lg">
               <h2
+                data-testid="quiz-question"
+                data-question={index + 1}
                 className="text-[#3E2723] text-xl font-black mb-4 leading-snug"
                 style={{ fontFamily: '"Nunito", "Segoe UI", system-ui, sans-serif' }}
               >
-                {current.question}
+                <LocalizedText value={current.question}/>
               </h2>
 
               <div className="space-y-2.5">
@@ -652,6 +668,7 @@ const IslandQuizPage: React.FC = () => {
                   return (
                     <button
                       key={oi}
+                      data-testid={`quiz-answer-${oi}`}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -667,7 +684,7 @@ const IslandQuizPage: React.FC = () => {
                         <span className="w-7 h-7 rounded-full bg-[#d4c59a] text-[#3E2723] text-sm flex items-center justify-center shrink-0">
                           {String.fromCharCode(65 + oi)}
                         </span>
-                        <span className="flex-1">{opt}</span>
+                        <span className="flex-1"><LocalizedText value={opt}/></span>
                         {revealed && isCorrect && (
                           <Check className="w-5 h-5 text-[#2E7D32] shrink-0" />
                         )}
@@ -695,12 +712,12 @@ const IslandQuizPage: React.FC = () => {
                       <p className="mb-1">
                         Not quite — the correct answer is{' '}
                         <span className="font-black">
-                          {current.options[current.correctIndex]}
+                          <LocalizedText value={current.options[current.correctIndex]}/>
                         </span>
                         .
                       </p>
                       {current.explanation ? (
-                        <p className="text-[#5D4037] font-medium">{current.explanation}</p>
+                        <p className="text-[#5D4037] font-medium"><LocalizedText value={current.explanation}/></p>
                       ) : null}
                     </>
                   )}

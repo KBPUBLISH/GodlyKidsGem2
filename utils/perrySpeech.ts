@@ -1,3 +1,4 @@
+import {getLanguage} from '../localization/LocalizedText';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
 import { ONBOARDING_GUIDE_DEFAULT_NAME, ONBOARDING_GUIDE_VOICE_ID } from './onboardingJourney';
 
@@ -48,11 +49,12 @@ export function buildPerryIslandCopy(kidName?: string | null): { line: string; t
 }
 
 export function fetchPerrySpeech(text: string): Promise<string | null> {
-  const key = text.trim();
-  if (!key) return Promise.resolve(null);
+  const source = text.trim();
+  const key = getLanguage() + '\0' + source;
+  if (!source) return Promise.resolve(null);
   const hit = cache.get(key);
   if (hit) return Promise.resolve(hit);
-  return fetchTtsAudioUrl(PERRY_VOICE_ID, key).then((url) => {
+  return fetchTtsAudioUrl(PERRY_VOICE_ID, source).then((url) => {
     if (url) cache.set(key, url);
     return url;
   });

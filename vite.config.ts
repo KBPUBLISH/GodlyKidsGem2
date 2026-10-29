@@ -1,3 +1,4 @@
+import localization from './localization/vite-localization.mjs';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -21,7 +22,7 @@ export default defineConfig(({ mode }) => {
         host: '127.0.0.1',
         strictPort: true,
       },
-      plugins: [react()],
+      plugins: [localization(__dirname), react()],
       // SECURITY: Never inject GEMINI_API_KEY (or any other server-side secret) into the
       // client bundle via Vite's `define`. Vite's `define` performs a raw text replacement
       // at build time, so any `process.env.API_KEY` reference in the frontend would bake

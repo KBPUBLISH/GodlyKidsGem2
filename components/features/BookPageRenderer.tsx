@@ -1,3 +1,4 @@
+import {useLocalizedString} from '../../localization/LocalizedText';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { attachPlaybackTrim } from '../../utils/playbackTrim';
@@ -177,6 +178,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     bibleMapLayout = false,
     pageNav,
 }) => {
+    const sayLabel = useLocalizedString('Say');
     const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page, {
         ensureVisibleResize: !bibleMapLayout,
     });
@@ -1135,6 +1137,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                             ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
                                             : 'opacity-100 border-white/30 bg-black/40 text-white hover:bg-black/55'
                                     }`}
+                                    data-testid="story-previous-page"
                                     aria-label="Previous page"
                                     title="Previous page"
                                 >
@@ -1157,6 +1160,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         if (nextDisabled) return;
                                         pageNav.onNext(e);
                                     }}
+                                    data-testid="story-next-page"
                                     disabled={nextDisabled}
                                     className={`pointer-events-auto shrink-0 min-w-[52px] h-12 sm:min-w-[56px] sm:h-14 px-2 rounded-full flex flex-col items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
                                         navDisabled || !pageNav.canGoNext
@@ -1421,6 +1425,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                         ) => (
                                             <span
                                                 key={wIdx}
+                                                data-no-localize="true"
                                                 data-word-index={wIdx}
                                                 data-speak-word={canSpeakWords ? '1' : undefined}
                                                 role={canSpeakWords ? 'button' : undefined}
@@ -1436,7 +1441,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                         : undefined
                                                 }
                                                 aria-label={
-                                                    canSpeakWords ? `Say ${wordForSpeech(word) || word}` : undefined
+                                                    canSpeakWords ? `${sayLabel} ${wordForSpeech(word) || word}` : undefined
                                                 }
                                             >
                                                 {word}{' '}

@@ -12,6 +12,7 @@
  * - POST {API}/api/tts body { voiceId, text } → audio/mpeg stream.
  */
 
+import { getLanguage, translate } from '../localization/LocalizedText';
 import { getApiBaseUrl } from './apiService';
 
 export type ChatTurn = { role: 'user' | 'character'; text: string };
@@ -106,15 +107,23 @@ export async function fetchCharacterChat(params: {
 export async function fetchTtsAudioUrl(
   voiceId: string,
   text: string,
+  translated = false,
 ): Promise<string | null> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}tts`, {
+    const languageCode = getLanguage();
+    const spoken = translated ? stripEmotionTags(text) : await translate(stripEmotionTags(text), languageCode);
+    const res = await fetch(`${getApiBaseUrl()}tts/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voiceId, text }),
+      body: JSON.stringify({ voiceId, text: spoken, languageCode }),
+      signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) return null;
-    const blob = await res.blob();
+    const data = await res.json();
+    if (typeof data.audioUrl !== 'string') return null;
+    const audio = await fetch(new URL(data.audioUrl, getApiBaseUrl()), {signal: AbortSignal.timeout(30000)});
+    if (!audio.ok) return null;
+    const blob = await audio.blob();
     if (!blob || blob.size === 0) return null;
     return URL.createObjectURL(blob);
   } catch {

@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Translation = require('../models/Translation');
 const Page = require('../models/Page');
+const ContentTranslation = require('../models/ContentTranslation');
+const {classifyTranslationError} = require('../utils/translationError');
 
 // Supported languages
 const SUPPORTED_LANGUAGES = {
@@ -44,24 +46,29 @@ const decodeHtmlEntities = (text) => {
 
 // Translate text using Google Cloud Translation API
 const translateText = async (text, targetLanguage) => {
-    if (!text || text.trim() === '') return '';
+    if (typeof text !== 'string') throw new Error('Invalid translation text');
+    if (text.trim() === '') return '';
     if (targetLanguage === 'en') return text; // No translation needed for English
     
-    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+    if (typeof text !== 'string' || text.length > 30000) throw new Error('Invalid translation text');
+    const sourceHash = crypto.createHash('sha256').update(text).digest('hex');
+    const cached = await ContentTranslation.findOne({sourceHash, languageCode:targetLanguage});
+    if (cached) return cached.translatedText;
+    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY?.trim();
     
     if (!apiKey) {
-        console.warn('⚠️ GOOGLE_TRANSLATE_API_KEY not set, using mock translation');
-        // Return mock translation for testing (just adds language prefix)
-        return `[${targetLanguage.toUpperCase()}] ${text}`;
+        throw new Error('Translation service is not configured');
     }
     
     try {
         const response = await fetch(
-            `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`,
+            'https://translation.googleapis.com/language/translate/v2',
             {
                 method: 'POST',
+                signal: AbortSignal.timeout(20000),
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': apiKey,
                 },
                 body: JSON.stringify({
                     q: text,
@@ -73,14 +80,17 @@ const translateText = async (text, targetLanguage) => {
         );
         
         if (!response.ok) {
-            const error = await response.text();
-            console.error('Translation API error:', error);
-            throw new Error(`Translation failed: ${response.status}`);
+            const payload = await response.json().catch(() => null);
+            const code = classifyTranslationError(response.status, payload);
+            console.error('Translation provider rejected request', {status:response.status, code});
+            throw new Error(code);
         }
         
         const data = await response.json();
         // Decode HTML entities that Google Translate returns
-        return decodeHtmlEntities(data.data.translations[0].translatedText);
+        const translatedText = decodeHtmlEntities(data.data.translations[0].translatedText);
+        await ContentTranslation.updateOne({sourceHash,languageCode:targetLanguage},{$set:{originalText:text,translatedText,status:'published'}},{upsert:true});
+        return translatedText;
     } catch (error) {
         console.error('Translation error:', error);
         throw error;
@@ -307,7 +317,7 @@ router.post('/ui', async (req, res) => {
     try {
         const { texts, lang } = req.body;
 
-        if (!texts || !Array.isArray(texts)) {
+        if (!Array.isArray(texts) || texts.length > 500 || texts.some(t => typeof t !== 'string' || t.length > 30000) || texts.join('').length > 100000) {
             return res.status(400).json({ message: 'texts array is required' });
         }
 
@@ -364,7 +374,7 @@ router.post('/texts', async (req, res) => {
         const { texts } = req.body;
         const { lang } = req.query;
 
-        if (!texts || !Array.isArray(texts)) {
+        if (!Array.isArray(texts) || texts.length > 500 || texts.some(t => typeof t !== 'string' || t.length > 30000) || texts.join('').length > 100000) {
             return res.status(400).json({ message: 'texts array is required' });
         }
 

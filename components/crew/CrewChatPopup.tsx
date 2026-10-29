@@ -1,3 +1,4 @@
+import LocalizedText, { translate, getLanguage } from '../../localization/LocalizedText';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, RefreshCw, Send, Users, Volume2, X } from 'lucide-react';
 import type { UnlockedCharacter } from '../../services/rewardsService';
@@ -257,7 +258,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', 
 
   const speakReply = useCallback(
     async (spoken: string, replyId: number, displayChars: number) => {
-      const url = await fetchTtsAudioUrl(character.voiceId!, spoken);
+      const url = await fetchTtsAudioUrl(character.voiceId!, spoken, true);
       if (!mountedRef.current) {
         if (url) URL.revokeObjectURL(url);
         return;
@@ -280,9 +281,14 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', 
 
   /** Show a new character reply and kick off typewriter (+ voice when able). */
   const showReply = useCallback(
-    (text: string, withVoice: boolean) => {
+    async (text: string, withVoice: boolean) => {
       const id = ++replyIdRef.current;
-      const display = stripEmotionTags(text) || text;
+      audioRef.current?.pause();
+      clearAudioWait();
+      setTypingActive(false);
+      const language = getLanguage();
+      const display = await translate(stripEmotionTags(text) || text, language);
+      if (!mountedRef.current || replyIdRef.current !== id || getLanguage() !== language) return;
       setReply({ id, text: display });
       setTyped(0);
       setMsPerChar(TYPE_MS_DEFAULT);
@@ -293,7 +299,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', 
         audioWaitTimerRef.current = window.setTimeout(() => {
           if (mountedRef.current && replyIdRef.current === id) setTypingActive(true);
         }, AUDIO_WAIT_MS);
-        void speakReply(spokenTextForTts(text), id, display.length);
+        void speakReply(spokenTextForTts(display), id, display.length);
       } else {
         setTypingActive(true);
       }
@@ -708,7 +714,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', 
                       '0 3px 0 rgba(107,68,35,0.55), 0 5px 12px rgba(0,0,0,0.35)',
                   }}
                 >
-                  {q}
+                  <LocalizedText value={q}/>
                 </button>
               ))}
 

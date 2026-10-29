@@ -1,3 +1,4 @@
+import localization from '../localization/vite-localization.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
@@ -14,9 +15,11 @@ function rewriteHomeworldAssets(code) {
 /** Players World build. Assets stay in public/homeworld; this only emits the app bundle. */
 export default defineConfig({
   root: dir,
+  envDir: path.resolve(dir, '..'),
   base: '/homeworld/',
   publicDir: false,
   plugins: [
+    localization(path.resolve(dir,'..')),
     {
       name: 'rewrite-homeworld-assets',
       generateBundle(_options, bundle) {

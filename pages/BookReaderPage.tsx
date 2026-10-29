@@ -1,3 +1,4 @@
+import {translate as translateStoryText} from '../localization/LocalizedText';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ChevronDown, X, Play, Pause, Volume2, Mic, Check, Music, Speaker, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
@@ -183,6 +184,13 @@ function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Pag
             textBoxes: [textBox],
         },
     };
+}
+
+/** Translate the selected age variant, not the CMS page's default text. */
+async function translateReaderPage(page: Page, language: string) {
+    const boxes = page.content?.textBoxes?.length ? page.content.textBoxes : page.textBoxes?.length ? page.textBoxes : [{text:page.content?.text || ''}];
+    const translatedTextBoxes = await Promise.all(boxes.map(async box => ({translatedText: await translateStoryText(box.text || '', language)})));
+    return {translatedText: translatedTextBoxes.map(box=>box.translatedText).join(' '),translatedTextBoxes};
 }
 
 /** Page has video soundtrack the kid can mute/unmute (layered audio or native video track). */
@@ -466,7 +474,7 @@ const BookReaderPage: React.FC = () => {
     // Tutorial: Auto-jump to end page when book_end_quiz step starts
     // Also handles case where user swiped too fast - ensures they're on the end page
     useEffect(() => {
-        if (isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
+        if (!isIslandRead && !isBibleMapBook && isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
             const lastPageIndex = pages.length - 1;
             const isAlreadyAtEnd = currentPageIndex === lastPageIndex;
             
@@ -482,7 +490,7 @@ const BookReaderPage: React.FC = () => {
                 onBookEndModalOpen();
             }, 100);
         }
-    }, [isTutorialActive, currentStep, pages.length, currentPageIndex, onBookEndModalOpen]);
+    }, [isIslandRead, isBibleMapBook, isTutorialActive, currentStep, pages.length, currentPageIndex, onBookEndModalOpen]);
 
     // Pause audiobook playlist when entering book reader to prevent audio overlap
     useEffect(() => {
@@ -2310,7 +2318,7 @@ const BookReaderPage: React.FC = () => {
             if (showLoading) setIsTranslating(true);
 
             try {
-                const result = await translationService.getTranslatedPage(page._id, selectedLanguage);
+                const result = await translateReaderPage(page, selectedLanguage);
                 if (result) {
                     setTranslatedContent(prev => {
                         const newMap = new Map(prev);
@@ -2352,12 +2360,8 @@ const BookReaderPage: React.FC = () => {
         // Save language preference
         translationService.setPreferredLanguage(selectedLanguage);
         
-        // Clear audio cache when translations are being fetched for non-English
-        // This ensures we don't use cached English audio
-        if (selectedLanguage !== 'en') {
-            audioPreloadCacheRef.current.clear();
-            preloadingInProgressRef.current.clear();
-        }
+        // Audio keys include language; the language-change effect clears old entries.
+        // Keep preloaded clips when only the page changes.
     }, [selectedLanguage, currentPageIndex, pages]);
 
     // Track if this is the first render for voice change effect
@@ -2511,7 +2515,7 @@ const BookReaderPage: React.FC = () => {
     // Tutorial: Automatically advance to quiz step when user naturally reaches The End page
     // This handles the case where user reads through the whole book without clicking "Skip to Quiz"
     useEffect(() => {
-        if (!isTutorialActive || !isTheEndPage || pages.length === 0) return;
+        if (isIslandRead || isBibleMapBook || !isTutorialActive || !isTheEndPage || pages.length === 0) return;
         
         // List of book reading steps where we should auto-advance to quiz
         const bookReadingSteps = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3'];
@@ -2520,7 +2524,7 @@ const BookReaderPage: React.FC = () => {
             console.log('📖 Tutorial: User reached The End naturally - advancing to quiz step');
             goToStep('book_end_quiz');
         }
-    }, [isTutorialActive, isTheEndPage, pages.length, currentStep, goToStep]);
+    }, [isIslandRead, isBibleMapBook, isTutorialActive, isTheEndPage, pages.length, currentStep, goToStep]);
 
     // Handle unlocking the reward voice when book is completed
     const handleUnlockRewardVoice = async () => {
@@ -4005,10 +4009,17 @@ const BookReaderPage: React.FC = () => {
             
             // Get translated text if available
             const currentPage = pages[actualPageIndex];
-            const rawTextToSpeak = currentPage?._id 
+            let rawTextToSpeak = currentPage?._id
                 ? getTranslatedText(currentPage._id, index, text) 
                 : text;
             
+            if(currentLang !== 'en' && currentPage && !translatedContent.has(`${currentPage._id}_${currentLang}`)) {
+                const translated = await translateReaderPage(currentPage,currentLang);
+                if(playRequestId !== playRequestIdRef.current || selectedLanguageRef.current !== currentLang || currentPageIndexRef.current !== actualPageIndex) return;
+                rawTextToSpeak = translated.translatedTextBoxes[index]?.translatedText || rawTextToSpeak;
+                setTranslatedContent(prev=>new Map(prev).set(`${currentPage._id}_${currentLang}`,{text:translated.translatedText,textBoxes:translated.translatedTextBoxes}));
+            }
+
             // ============ MULTI-SEGMENT TTS ============
             // Parse text into segments for alternating narrator/character voices
             console.log('🔍 RAW TEXT for parsing:', rawTextToSpeak);
@@ -4711,7 +4722,7 @@ const BookReaderPage: React.FC = () => {
                 autoPlayModeRef.current = false;
                 setActiveTextBoxIndex(null);
                 setShowLoadingPopup(false);
-                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
+                alert(await translateStoryText("Sorry, the story narration couldn't start right now. Please try again later.", selectedLanguageRef.current));
             }
         } catch (error) {
             console.error('Failed to play audio:', error);
@@ -4723,7 +4734,7 @@ const BookReaderPage: React.FC = () => {
             ) {
                 setAutoPlayMode(false);
                 autoPlayModeRef.current = false;
-                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
+                alert(await translateStoryText("Sorry, the story narration couldn't start right now. Please try again later.", selectedLanguageRef.current));
             }
             setActiveTextBoxIndex(null);
             setShowLoadingPopup(false);
@@ -5803,6 +5814,11 @@ const BookReaderPage: React.FC = () => {
             {/* Hidden for Web View pages */}
             {!currentPage?.isWebViewPage && (
             <div
+                data-testid="story-narration"
+                data-language={selectedLanguage}
+                data-page={currentPageIndex + 1}
+                data-state={loadingAudio ? 'loading' : playing ? 'playing' : 'paused'}
+                data-translation-ready={selectedLanguage === 'en' || translatedContent.has(`${currentPage?._id}_${selectedLanguage}`)}
                 className="absolute left-4 z-40 flex items-center gap-3"
                 style={{
                     bottom: 'max(calc(var(--safe-area-bottom, 0px) + 1rem), 1rem)',
@@ -5826,6 +5842,8 @@ const BookReaderPage: React.FC = () => {
                 
                 {/* Auto-Play Toggle Switch - Beside play button */}
                 <button
+                    data-testid="story-auto-turn"
+                    data-mode={ttsMode}
                     onClick={toggleTtsMode}
                     className="flex flex-col items-center gap-1"
                     title={ttsMode === 'auto' ? 'Auto Page Turn ON - Tap to disable' : 'Auto Page Turn OFF - Tap to enable'}

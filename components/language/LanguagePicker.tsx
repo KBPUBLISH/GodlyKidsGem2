@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Check, ArrowRight, Compass } from 'lucide-react';
 import './LanguagePicker.css';
 import { useLanguage } from '../../context/LanguageContext';
-export const LAUNCH_LANGUAGES = ['en', 'tl', 'pt', 'fr', 'de', 'it', 'ko', 'es', 'pl'];
-const CONTINUE: Record<string,string> = {en:'Continue',tl:'Magpatuloy',pt:'Continuar',fr:'Continuer',de:'Weiter',it:'Continua',ko:'계속',es:'Continuar',pl:'Dalej'};
-const REGIONS: Record<string,string> = {en:'United States',tl:'Pilipinas',pt:'Brasil',fr:'France',de:'Deutschland',it:'Italia',ko:'대한민국',es:'Latinoamérica',pl:'Polska'};
+import { LAUNCH_LANGUAGES } from '../../services/translationService';
+export { LAUNCH_LANGUAGES } from '../../services/translationService';
+const CONTINUE: Record<string,string> = {en:'Continue',tl:'Magpatuloy',pt:'Continuar',fr:'Continuer',de:'Weiter',it:'Continua',ko:'계속',es:'Continuar',pl:'Dalej',id:'Lanjutkan'};
+const REGIONS: Record<string,string> = {en:'United States',tl:'Pilipinas',pt:'Brasil',fr:'France',de:'Deutschland',it:'Italia',ko:'대한민국',es:'Latinoamérica',pl:'Polska',id:'Indonesia'};
 const COPY: Record<string,[string,string,string]> = {
+id:['Pilih bahasamu','Petualanganmu, dalam bahasamu.','Musik dan audio video tetap dalam bahasa aslinya. Kamu bisa mengganti bahasa di Pengaturan.'],
 en:['Choose your language','Your adventure, in your language.','Music and video audio stay in their original language. You can change your language in Settings.'],
 tl:['Piliin ang iyong wika','Ang iyong pakikipagsapalaran, sa iyong wika.','Mananatili sa orihinal na wika ang musika at audio ng video. Maaari mong baguhin ang wika sa Mga Setting.'],
 pt:['Escolha seu idioma','Sua aventura, no seu idioma.','As músicas e o áudio dos vídeos permanecem no idioma original. Você pode mudar o idioma nas Configurações.'],

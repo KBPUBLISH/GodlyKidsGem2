@@ -22,6 +22,7 @@ const SUPPORTED_LANGUAGES = {
     'ja': 'Japanese',
     'ko': 'Korean',
     'tl': 'Filipino',
+    'id': 'Indonesian',
 };
 
 // Generate hash of text for change detection

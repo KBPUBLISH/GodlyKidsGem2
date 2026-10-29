@@ -4,8 +4,8 @@ const subscribe = (fn:()=>void) => {window.addEventListener('storage',fn);window
 export const getLanguage = () => localStorage.getItem(key)||'en';
 // Short role labels need human context: Google can interpret 'Parent' as a plant or ancestor.
 const roleLabels: Record<string,Record<string,string>> = {
-  Parent: {tl:'Magulang',pt:'Responsável',fr:'Parent',de:'Elternteil',it:'Genitore',ko:'부모 또는 보호자',es:'Madre, padre o tutor',pl:'Rodzic'},
-  Kid: {tl:'Bata',pt:'Criança',fr:'Enfant',de:'Kind',it:'Bambino',ko:'어린이',es:'Niño',pl:'Dziecko'},
+  Parent: {id:'Orang Tua',tl:'Magulang',pt:'Responsável',fr:'Parent',de:'Elternteil',it:'Genitore',ko:'부모 또는 보호자',es:'Madre, padre o tutor',pl:'Rodzic'},
+  Kid: {id:'Anak',tl:'Bata',pt:'Criança',fr:'Enfant',de:'Kind',it:'Bambino',ko:'어린이',es:'Niño',pl:'Dziecko'},
 };
 const cache = new Map<string,string>();
 const pending = new Map<string,Promise<string>>();

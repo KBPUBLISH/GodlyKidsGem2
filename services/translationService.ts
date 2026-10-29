@@ -15,7 +15,11 @@ export const SUPPORTED_LANGUAGES: Record<string, { name: string; flag: string; n
     'ja': { name: 'Japanese', flag: '🇯🇵', nativeName: '日本語' },
     'ko': { name: 'Korean', flag: '🇰🇷', nativeName: '한국어' },
     'tl': { name: 'Filipino', flag: '🇵🇭', nativeName: 'Filipino' },
+    'id': { name: 'Indonesian', flag: '🇮🇩', nativeName: 'Bahasa Indonesia' },
 };
+
+// Keep onboarding and Settings on the same language list.
+export const LAUNCH_LANGUAGES = ['en', 'tl', 'pt', 'fr', 'de', 'it', 'ko', 'es', 'pl', 'id'];
 
 // ElevenLabs multilingual voice IDs for different languages
 export const LANGUAGE_VOICES: Record<string, string> = {
@@ -32,6 +36,7 @@ export const LANGUAGE_VOICES: Record<string, string> = {
     'ja': 'ThT5KcBeYPX3keUQqHPh', // Japanese
     'ko': 'ThT5KcBeYPX3keUQqHPh', // Korean
     'tl': 'ThT5KcBeYPX3keUQqHPh', // Filipino (use multilingual)
+    'id': 'ThT5KcBeYPX3keUQqHPh', // Indonesian (use multilingual)
 };
 
 interface TranslatedTextBox {

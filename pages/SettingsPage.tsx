@@ -5,6 +5,7 @@ import './ProfileSelectionPage.css';
 import { useUser } from '../context/UserContext';
 import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
+import { LAUNCH_LANGUAGES } from '../services/translationService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { ApiService } from '../services/apiService';
 import { getHiddenVoices, isVoiceHidden, toggleVoiceVisibility } from '../services/voiceManagementService';
@@ -392,7 +393,7 @@ const SettingsPage: React.FC = () => {
                     {showLanguageSelector && (
                         <div className="bg-white rounded-xl border border-[#e4e6d9] overflow-hidden">
                             <div className="max-h-64 overflow-y-auto">
-                                {Object.entries(supportedLanguages).filter(([code]) => ['en','tl','pt','fr','de','it','ko','es','pl'].includes(code)).map(([code, lang]) => (
+                                {Object.entries(supportedLanguages).filter(([code]) => LAUNCH_LANGUAGES.includes(code)).map(([code, lang]) => (
                                     <button
                                         key={code}
                                         onClick={() => {

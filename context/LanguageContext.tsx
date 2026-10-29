@@ -1,11 +1,13 @@
 import {translate as translateShared} from '../localization/LocalizedText';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { SUPPORTED_LANGUAGES } from '../services/translationService';
+import { INDONESIAN_UI } from '../localization/indonesian';
 import { getApiBaseUrl } from '../services/apiService';
 
 // Pre-translated UI strings for all supported languages
 // This ensures instant language switching without API calls
 const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
+    id: INDONESIAN_UI,
     en: {
         // Navigation
         home: 'Home',

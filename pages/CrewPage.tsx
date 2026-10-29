@@ -1872,6 +1872,14 @@ const CrewPage: React.FC = () => {
       </div>
       )}
 
+      {/* Everything beyond the rail — sky, sea, and the islands on it —
+          rolls and heaves a touch while the ship (and the camera on it)
+          stays put: that is what a gentle rock looks like from the deck. */}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-[2]${reduceMotion ? '' : ' crew-horizon-rock'}${pageHidden ? ' crew-sea-paused' : ''}`}
+        style={{ transformOrigin: `50% ${Math.round(seaLineY)}px` }}
+      >
       {/* Sea panorama: one tall tile repeated sideways, panning a little
           with every wheel notch (islands move faster — parallax). */}
       <div
@@ -2032,6 +2040,7 @@ const CrewPage: React.FC = () => {
           );
         })}
         </div>
+      </div>
       </div>
       {/* Tap layer over the islands (above the 3D canvas): the whole island
           is the target, its name floats centered above it. Tapping the
@@ -2506,6 +2515,19 @@ const CrewPage: React.FC = () => {
           will-change: transform;
           animation: crew-sea-bob ease-in-out infinite alternate;
         }
+        /* The world outside the ship rolls ±0.6° and heaves a few px on a
+           slow swell; scaled a hair so the tilt never shows a corner gap. */
+        .crew-horizon-rock {
+          will-change: transform;
+          animation: crew-horizon-rock 7.5s ease-in-out infinite;
+        }
+        @keyframes crew-horizon-rock {
+          0%   { transform: rotate(-0.6deg) translate3d(0, 0px, 0) scale(1.03); }
+          28%  { transform: rotate(0.15deg) translate3d(0, 3px, 0) scale(1.03); }
+          52%  { transform: rotate(0.6deg) translate3d(0, 1px, 0) scale(1.03); }
+          78%  { transform: rotate(-0.1deg) translate3d(0, -2px, 0) scale(1.03); }
+          100% { transform: rotate(-0.6deg) translate3d(0, 0px, 0) scale(1.03); }
+        }
         /* Distant scenery barely sways — it's far away */
         .crew-sea-bob-far {
           will-change: transform;
@@ -2734,7 +2756,7 @@ const CrewPage: React.FC = () => {
         }
 
         /* Tab hidden → hold every backdrop loop in place */
-        .crew-sea-paused * {
+        .crew-sea-paused, .crew-sea-paused * {
           animation-play-state: paused !important;
         }
         /* Reduced motion → freeze to a static scene */

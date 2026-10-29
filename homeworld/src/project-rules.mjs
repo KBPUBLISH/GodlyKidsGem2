@@ -1,4 +1,4 @@
-export const PROJECT_PLANS={oven:{crew:1,days:1},hut:{crew:1,days:1},cottage:{crew:3,days:3},townhouse:{crew:5,days:5},church:{crew:8,days:7}};
+export const PROJECT_PLANS={oven:{crew:1,days:1},hut:{crew:1,days:1},cottage:{crew:3,days:3},townhouse:{crew:5,days:5},church:{crew:8,days:7},dining_hall:{crew:2,days:2}};
 export const CONSTRUCTION_BASIS='island';
 export const WORK_SHIFT_SECONDS=450,REST_SHIFT_SECONDS=200,ENERGY_SECONDS=25,ENERGY_PER_TICK=2;
 export const ACTIVE_FRACTION=WORK_SHIFT_SECONDS/(WORK_SHIFT_SECONDS+REST_SHIFT_SECONDS);

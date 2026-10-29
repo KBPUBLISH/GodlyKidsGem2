@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { heightAt, dist, gameTime, growth, cellFromKey, activeTrees, activeRocks, pruneBuiltIns } from './core.mjs';
+import { heightAt, dist, gameTime, timeLabel, growth, cellFromKey, activeTrees, activeRocks, activeStumps, stumpRadius, plotWeedy, canPlow, seedById, label, pruneBuiltIns } from './core.mjs';
+import { skillFor, SKILL_LIMITS } from './character-skills.mjs';
+import { THREAT_DAY, dayIndex as farmDay, gardenFocus } from './fencing.mjs';
 import { woodRoom } from './wood-storage.mjs';
 import { toolTier, rockProfile, toolNeedMessage, rockFindLine } from './mining.mjs';
 import { woodTotal, buildingById } from './building.mjs';
@@ -57,6 +59,8 @@ export class Residents {
     this.draco = new DRACOLoader();
     this.draco.setDecoderPath('/draco/');
     this.loader = new GLTFLoader();
+    this.onInput = () => this.noteInput();
+    for (const type of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(type, this.onInput, { capture: true, passive: true });
     this.loader.setDRACOLoader(this.draco);
     this.models = new Map();
     this.claims = new Map(); // chore key -> resident id, so two helpers never chase the same job
@@ -339,12 +343,12 @@ export class Residents {
     if (type === 'mine' && !until && count > 1 && (!task.goal || task.goal === 'any' || task.goal === 'stone')) until = { stone: (game.store.state.inventory.stone || 0) + count };
     if (until) target = 99;
     if (home.chore) { this.claims.delete(home.chore.key); home.chore = null; }
-    home.job = { type, goal: task.goal || null, until, target, done: 0, fails: 0, label: Residents.HELPER_JOBS[type], explicit: !task.background };
+    home.job = { type, goal: task.goal || null, until, target, done: 0, fails: 0, label: Residents.HELPER_JOBS[type], explicit: !task.background, quick: !!task.quick };
     home.strollState = { wait: 0 };
     this.lastChoreScan = 0;
     const s = game.store?.state;
     const slow = s && !['fish', 'harvest'].includes(type) && isStarving(s, gameTime(s), home.id) && !this.snack(actor);
-    game.toast(`${home.name || 'Your friend'} is off: ${home.job.label.toLowerCase()}.${slow ? ` An empty tummy makes it slow going · feed ${home.name || 'them'} when you can.` : ''}`);
+    game.toast(`${task.note || `${home.name || 'Your friend'} is off: ${home.job.label.toLowerCase()}.`}${slow ? ` An empty tummy makes it slow going · feed ${home.name || 'them'} when you can.` : ''}`);
     game.notify?.();
     return true;
   }
@@ -492,7 +496,7 @@ export class Residents {
       if (!spot) return null;
       const key = `spot:${spot.id}`;
       if (this.claims.has(key)) return null;
-      return tryPaths([{ kind: 'fish', key, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, exact: true, reach: 1.05, dwell: 6, label: j.label }]);
+      return tryPaths([{ kind: 'fish', key, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, exact: true, reach: 1.05, dwell: j.quick ? 3 : 6, label: j.label }]);
     }
     if (j.type === 'chop') {
       if (!woodRoom(s)) return null;
@@ -554,13 +558,98 @@ export class Residents {
       if (this.claims.has(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
       options.push({ kind: 'water', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Watering the garden', rank: 1 });
     }
+    options.push(...this.pickSkillChores(home, s, min, here, busyKey));
     if (!options.length) return null;
     options.sort((a, b) => a.rank - b.rank || dist(a.target, here) - dist(b.target, here));
-    for (const o of options) {
+    for (const o of options.slice(0, 18)) {
       const path = game.nav?.approach(here, o.target, o.reach);
-      if (path?.length) return { ...o, path };
+      if (path?.length || dist(here, o.target) <= (o.reach || 1)) return { ...o, path: path || [] };
     }
     return null;
+  }
+
+  /** Hoe work a helper swings at, like chopping: one commit when the hoe lands. */
+  static HOE_KINDS = ['stump', 'weeds', 'plow'];
+
+  /**
+   * What a friend does on their own, by skill, when nothing on the island is calling for help:
+   * Noah digs stumps and cuts trees, Adam cuts trees and breaks stone, Abel weeds, picks and tills new
+   * rows beside the garden, Eve plants seeds and gathers the ones lying around (between meals).
+   * Daily caps live in SKILL_LIMITS so nobody strips the island bare.
+   */
+  pickSkillChores(home, s, min, here, busyKey) {
+    const game = this.game, skill = skillFor(home.name);
+    if (!skill) return [];
+    const { day } = timeLabel(min);
+    const auto = home.auto && home.auto.day === day ? home.auto : (home.auto = { day, trees: 0, rocks: 0, plots: 0 });
+    const busyId = game.order?.id || game.action?.id || null, free = (key) => !this.claims.has(key), options = [];
+    const near = (o) => dist(o.target, here) <= 60;
+    if (skill.id === 'woodcutter') {
+      for (const t of activeStumps(game.world, s)) {
+        const key = `stump:${t.id}`;
+        if (!free(key) || t.id === busyId) continue;
+        options.push({ kind: 'stump', key, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.1 + stumpRadius(t) * .3, label: 'Digging out a stump', rank: 2 });
+      }
+    }
+    if ((skill.id === 'woodcutter' || skill.id === 'farmer') && auto.trees < SKILL_LIMITS.trees && woodRoom(s)) {
+      for (const t of activeTrees(game.world, s, min)) {
+        if (t.cell || t.id === busyId || !free(`tree:${t.id}`)) continue;
+        options.push({ kind: 'chop', key: `tree:${t.id}`, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.18 + (t.radius || 0) * .2, dwell: 1, label: 'Chopping wood', rank: 3, auto: 'trees' });
+      }
+    }
+    if (skill.id === 'farmer' && auto.rocks < SKILL_LIMITS.rocks) {
+      const tier = toolTier(s);
+      for (const r of activeRocks(game.world, s)) {
+        if (r.id === busyId || !free(`rock:${r.id}`) || rockProfile(r).minTier > tier.tier) continue;
+        const node = game.mining?.nodes?.get(r.id);
+        if (node && node.bounds.min.y > heightAt(game.world, r.position[0], r.position[1]) + .75) continue;
+        options.push({ kind: 'mine', key: `rock:${r.id}`, rockId: r.id, target: { x: r.position[0], y: r.position[1] }, reach: (r.radius || .6) + .85, dwell: 1, label: 'Breaking rocks', rank: 3, auto: 'rocks' });
+      }
+    }
+    if (skill.id === 'gardener') {
+      const cells = s.cells || {};
+      // Dusk: coyotes come at nightfall, so Abel walks to the garden and stands guard (turns one away tonight).
+      const { hour } = timeLabel(min), fday = farmDay(min);
+      if (hour >= 20.4 && fday >= THREAT_DAY && s.farm?.guard?.day !== fday && Object.values(cells).some((c) => c.seed) && !this.claims.has('garden:guard')) {
+        options.push({ kind: 'guard', key: 'garden:guard', target: gardenFocus(game.world, s), reach: 1.6, dwell: 1.5, label: 'Guarding the garden', rank: 0 });
+      }
+      for (const [cellKey, cell] of Object.entries(cells)) {
+        const key = `cell:${cellKey}`;
+        if (!free(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
+        if (plotWeedy(cell, min)) { options.push({ kind: 'weeds', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Pulling weeds', rank: 2 }); continue; }
+        const g = growth(cell, min);
+        if (g && g.seed.kind === 'crop' && g.stage === 'ready') options.push({ kind: 'harvest', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Picking ripe crops', rank: 3 });
+      }
+      // The garden grows a row at a time: till beside it once the empty plots are nearly all planted.
+      const empty = Object.values(cells).filter((c) => c.soil && !c.seed).length;
+      if (auto.plots < SKILL_LIMITS.plots && empty < 4) {
+        const seen = new Set();
+        for (const cellKey of Object.keys(cells)) {
+          const [cx, cy] = cellKey.split(':').map(Number);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const k = `${cx + dx}:${cy + dy}`;
+            if (seen.has(k) || cells[k]) continue;
+            seen.add(k);
+            if (k === busyKey || !free(`cell:${k}`) || !canPlow(game.world, s, k)) continue;
+            options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Tilling a new row', rank: 4, auto: 'plots' });
+          }
+        }
+      }
+    }
+    if (skill.id === 'cook' && !game.dining?.cooking()) {
+      const inv = s.inventory || {}, seeds = Object.entries(inv).filter(([id, n]) => n > 0 && seedById(id)?.kind === 'crop').sort((a, b) => b[1] - a[1]);
+      if (seeds.length) for (const [cellKey, cell] of Object.entries(s.cells || {})) {
+        if (cell.seed || !['tilled', 'harvested'].includes(cell.soil) || plotWeedy(cell, min)) continue;
+        const key = `cell:${cellKey}`;
+        if (!free(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
+        options.push({ kind: 'plant', key, cellKey, seed: seeds[0][0], target: cellFromKey(game.world, cellKey), reach: .9, label: 'Planting seeds', rank: 2 });
+      }
+      for (const seed of game.world.seeds || []) {
+        if ((s.pickedSeeds || []).includes(seed.id) || !free(`seed:${seed.id}`)) continue;
+        options.push({ kind: 'pickup', key: `seed:${seed.id}`, seedId: seed.id, target: { x: seed.position[0], y: seed.position[1] }, reach: Math.max(seed.radius || 0, 1), label: 'Gathering seeds', rank: 3 });
+      }
+    }
+    return options.filter(near);
   }
 
   finishChore(actor) {
@@ -596,6 +685,24 @@ export class Residents {
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'fish', spotId: c.spotId, actionId: `helper:${home.id}:${Date.now()}` });
         if (game.store.state !== before) { game.burst?.(c.target, 'water', .4); if (home.job) this.creditJob(actor); }
         else this.failJob(actor, 'could not fish from there.');
+      } else if (c.kind === 'guard') {
+        const before = game.store.state;
+        game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'guard_garden', actionId: `helper:${home.id}:guard:${Date.now()}` });
+        if (game.store.state === before) return;
+        home.anchor = { ...c.target };
+        game.toast(`${who} is standing guard by the garden tonight. A coyote that comes sniffing will be chased off.`);
+        this.reelEvent(actor);
+      } else if (['stump', 'weeds', 'plow', 'plant', 'pickup'].includes(c.kind)) {
+        const action = c.kind === 'stump' ? { type: 'dig_stump', id: c.treeId } : c.kind === 'weeds' ? { type: 'clear_weeds', key: c.cellKey } : c.kind === 'plow' ? { type: 'plow', key: c.cellKey } : c.kind === 'plant' ? { type: 'plant', key: c.cellKey, seed: c.seed } : { type: 'pickup', id: c.seedId };
+        const before = game.store.state;
+        game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { ...action, actionId: `helper:${home.id}:${Date.now()}` });
+        const after = game.store.state;
+        if (after === before) { if (energyFor(after, home.id) < 5) { game.toast(`${who} is too tired to keep working.`); game.notify?.(); } return; }
+        if (c.auto && home.auto) home.auto[c.auto] = (home.auto[c.auto] || 0) + 1;
+        game.music?.sfx?.play(c.kind === 'pickup' || c.kind === 'plant' ? 'harvest' : 'chop');
+        game.burst?.(c.target, c.kind === 'plant' || c.kind === 'pickup' ? 'seed' : 'dirt', .6);
+        game.toast({ stump: `${who} dug out a stump.`, weeds: `${who} pulled the weeds out of a plot.`, plow: `${who} tilled a new garden plot.`, plant: `${who} planted ${label(c.seed || 'seeds').toLowerCase()}.`, pickup: `${who} gathered some seeds.` }[c.kind]);
+        this.reelEvent(actor);
       } else if (c.kind === 'chop' || c.kind === 'mine') {
         const rock = c.kind === 'mine' ? game.world.boulders.find((r) => r.id === c.rockId) : null;
         const profile = rock ? rockProfile(rock) : null;
@@ -626,8 +733,8 @@ export class Residents {
         game.music?.sfx?.play(c.kind === 'chop' ? 'chop' : 'rock');
         game.burst?.(c.target, c.kind === 'chop' ? 'wood' : 'dirt', .9);
         const gone = c.kind === 'chop' ? after.removedTrees.includes(c.treeId) : (after.removedRocks || []).includes(c.rockId);
-        if (gone) { if (c.kind === 'mine' && profile) game.toast(rockFindLine(profile), 2000); if (home.job) this.creditJob(actor); }
-        else if (home.job) { home.chore = { ...c, path: [], dwell: c.baseDwell ?? 1 }; this.claims.set(c.key, home.id); }
+        if (gone) { this.reelEvent(actor); if (c.kind === 'mine' && profile) game.toast(rockFindLine(profile), 2000); if (home.job) this.creditJob(actor); else { if (c.auto && home.auto) home.auto[c.auto] = (home.auto[c.auto] || 0) + 1; game.toast(c.kind === 'chop' ? `${who} felled a tree.` : `${who} broke up a rock.`); } }
+        else { home.chore = { ...c, path: [], dwell: c.baseDwell ?? 1 }; this.claims.set(c.key, home.id); }
       }
     } catch (e) {
       game.toast?.(e.message);
@@ -651,11 +758,161 @@ export class Residents {
     return path.length > 0;
   }
 
-  /** Story friends sheet: become this friend and bring the camera to them. */
+  /**
+   * Tap a friend you are not playing (on the island or in the friends sheet): the camera follows them and
+   * their card opens, but you keep your own body — so you can just watch them work. "Play as" is on the card.
+   */
+  watch(actor) {
+    const game = this.game, home = actor?.userData;
+    if (!home?.residentId) return false;
+    if (actor === game.actor) { this.greet(actor); return true; }
+    this.watchId = home.residentId;
+    game.overview = false;
+    game.zoom = Math.max(game.zoom || 0, 19);
+    this.greet(actor);
+    game.status = `Watching ${home.name || 'your friend'}. Tap the grass to go back to ${game.actor?.userData?.name || 'your character'}.`;
+    game.notify?.();
+    return true;
+  }
+
+
+  // ---- Highlight reel: when you are just watching, the camera cuts between friends at work. ----
+  /** Seconds a shot lasts (busy friend / quiet friend), and how long with no input before the reel starts by itself. */
+  static REEL_SHOT = 9;
+  static REEL_SHORT_SHOT = 5;
+  static REEL_IDLE_SECONDS = 25;
+
+  noteInput() {
+    this.lastInputAt = performance.now();
+    if (this.reel?.active && performance.now() > (this.reel.graceUntil || 0)) this.stopReel();
+  }
+
+  /** What this friend is up to, scored for the camera: meals and swinging tools beat walking, walking beats standing. */
+  shot(actor) {
+    const game = this.game, home = actor.userData;
+    if (game.dining?.owns(actor)) return game.dining.grill?.actor === actor ? { score: 7, label: 'grilling the catch' } : { score: 6, label: 'at the table' };
+    if (actor === game.actor) {
+      if (game.autoWork?.active && !game.autoWork.paused) return { score: 4, label: 'working' };
+      if (game.action) return { score: 4, label: game.action.type === 'dine' ? 'at the table' : 'busy' };
+      return { score: 0, label: 'resting' };
+    }
+    if (home.chore) {
+      const c = home.chore, walking = c.path?.length > 0;
+      const base = c.resting > 0 ? 1 : Residents.HOE_KINDS.includes(c.kind) || c.kind === 'chop' || c.kind === 'mine' ? 5 : 4;
+      return { score: walking ? 2 : base, label: `${(c.label || home.job?.label || 'working').toLowerCase()}${walking ? ' · on the way' : ''}` };
+    }
+    if (home.job) return { score: 2, label: home.job.label.toLowerCase() };
+    return { score: home.strollState?.path?.length ? 1 : 0, label: 'taking a breather' };
+  }
+
+  startReel(auto = false) {
+    if (this.reel?.active || !this.models.size) return false;
+    const game = this.game;
+    this.closeMenu();
+    this.reel = { active: true, auto, id: null, until: 0, recent: [], zoomBefore: game.zoom, graceUntil: performance.now() + 500, shots: 0 };
+    game.overview = false;
+    this.cutReel();
+    game.toast(auto ? 'Just watching · the camera follows whoever is busy. Tap anywhere to take over.' : 'Watching the island. Tap anywhere to take over.');
+    game.notify?.();
+    return true;
+  }
+
+  stopReel() {
+    const reel = this.reel;
+    if (!reel?.active) return;
+    this.reel = null;
+    if (reel.zoomBefore) { this.game.zoom = reel.zoomBefore; this.game.updateProjection?.(); }
+    this.lastInputAt = performance.now();
+    this.game.notify?.();
+  }
+
+  reelActor() { return this.reel?.active ? this.models.get(this.reel.id) || null : null; }
+
+  /** Pick the next shot: the busiest friend who was not just on screen, with a little variety in the framing. */
+  cutReel() {
+    const reel = this.reel, game = this.game;
+    if (!reel) return;
+    const ranked = [...this.models.values()].map((actor) => ({ actor, ...this.shot(actor) })).sort((a, b) => b.score - a.score);
+    if (!ranked.length) return;
+    const fresh = ranked.filter((r) => !reel.recent.includes(r.actor.userData.residentId));
+    const best = ranked[0];
+    // Someone clearly more interesting than the fresh faces (a meal, a falling tree) wins even if we just saw them.
+    const pick = fresh.length && best.score - fresh[0].score < 3 ? fresh[0] : best;
+    reel.id = pick.actor.userData.residentId;
+    reel.label = pick.label;
+    reel.score = pick.score;
+    reel.recent = [reel.id, ...reel.recent].slice(0, Math.max(1, this.models.size - 1));
+    reel.until = performance.now() + (pick.score >= 4 ? Residents.REEL_SHOT : Residents.REEL_SHORT_SHOT) * 1000;
+    reel.shots++;
+    game.zoom = [20, 23, 18][reel.shots % 3];
+    game.updateProjection?.();
+    game.notify?.();
+  }
+
+  /** A moment worth seeing (a tree down, a stump out): cut to it if the current shot has had a few seconds. */
+  reelEvent(actor) {
+    const reel = this.reel;
+    if (!reel?.active || !actor || actor.userData.residentId === reel.id) return;
+    if (performance.now() < reel.until - (Residents.REEL_SHOT - 3) * 1000) { reel.pending = actor.userData.residentId; return; }
+    reel.recent = reel.recent.filter((id) => id !== actor.userData.residentId);
+    reel.id = actor.userData.residentId;
+    const s = this.shot(actor);
+    reel.label = s.label; reel.score = s.score;
+    reel.until = performance.now() + Residents.REEL_SHORT_SHOT * 1000;
+    this.game.notify?.();
+  }
+
+  updateReel() {
+    const game = this.game, s = game.store?.state, now = performance.now();
+    const quiet = !game.action && !game.autoWork?.active && !game.building?.preview && !game.fishing?.active && !game.interior && !game.nutrition?.sleep && !this.menuId && !this.placing && !game.ambient && !game.mapOnly && !game.overview;
+    if (!this.reel?.active) {
+      if (!game.playersOnly || !game.loaded || !s || s.night || !quiet || this.reelOptOut) return;
+      if (now - (this.lastInputAt || now) < Residents.REEL_IDLE_SECONDS * 1000) { this.lastInputAt ||= now; return; }
+      // Only worth it when somebody is actually doing something.
+      if ([...this.models.values()].some((a) => a !== game.actor && this.shot(a).score >= 3)) this.startReel(true);
+      else this.lastInputAt = now - (Residents.REEL_IDLE_SECONDS - 5) * 1000;
+      return;
+    }
+    const reel = this.reel;
+    if (s?.night || !quiet || !this.models.get(reel.id)) { this.stopReel(); return; }
+    const current = this.models.get(reel.id), shotNow = this.shot(current);
+    const dull = shotNow.score <= 1 && now > reel.until - (Residents.REEL_SHOT - 3) * 1000;
+    if (reel.pending && now >= reel.until - (Residents.REEL_SHOT - 3) * 1000) { const a = this.models.get(reel.pending); reel.pending = null; if (a) { this.reelEvent(a); return; } }
+    if (now >= reel.until || dull) this.cutReel();
+    else if (shotNow.label !== reel.label) { reel.label = shotNow.label; game.notify?.(); }
+  }
+
+  reelSnapshot() {
+    const reel = this.reel;
+    if (!reel?.active) return null;
+    const actor = this.models.get(reel.id);
+    return { name: actor?.userData.name || 'Friend', imageUrl: actor?.userData.imageUrl || '', label: reel.label || '', auto: reel.auto };
+  }
+
+  /** The friend the camera follows: the highlight reel's pick, or the friend whose card is open. */
+  watchActor() {
+    const reelActor = this.reelActor();
+    if (reelActor) return reelActor;
+    if (!this.watchId) return null;
+    const actor = this.menuId === this.watchId ? this.models.get(this.watchId) : null;
+    if (!actor) this.watchId = null;
+    return actor || null;
+  }
+
+  /** Friends sheet: look at this friend (or wave, if it is you). */
   select(id) {
+    const actor = this.models.get(id);
+    if (!actor || !actor.userData.bones) return false;
+    this.closeMenu();
+    return this.watch(actor);
+  }
+
+  /** Become this friend and bring the camera to them. */
+  playAs(id) {
     const game = this.game, actor = this.models.get(id);
     if (!actor || !actor.userData.bones) return false;
     this.closeMenu();
+    this.watchId = null;
     if (actor !== game.actor) {
       game.autoWork?.stop?.(true);
       if (game.action) game.unequipTool?.();
@@ -737,8 +994,8 @@ export class Residents {
     if (!home?.residentId) return;
     this.menuId = home.residentId;
     this.sayHello(actor);
-    // Working or mid-action: open the menu without interrupting the job.
-    if (game.action || game.autoWork?.active) {
+    // Working or mid-action (yours, or a friend's own chore): open the menu without interrupting the job.
+    if (game.action || game.autoWork?.active || (actor !== game.actor && (home.chore || home.job || game.dining?.owns(actor)))) {
       game.notify?.();
       return;
     }
@@ -975,7 +1232,7 @@ export class Residents {
     const home = actor.userData, game = this.game, c = home.chore;
     if (!c || !home.bones?.mixamorigRightHand) return;
     const rig = this.helperRig(home, actor);
-    const toolId = c.kind === 'mine' ? 'tool_pickaxe' : 'tool_axe';
+    const hoe = Residents.HOE_KINDS.includes(c.kind), toolId = c.kind === 'mine' ? 'tool_pickaxe' : hoe ? 'tool_hoe' : 'tool_axe';
     if (!home.workTool || home.workToolName !== toolId) {
       if (home.workTool) { home.workTool.visible = false; game.scene.remove(home.workTool); }
       home.workTool = game.asset(toolId);
@@ -992,7 +1249,7 @@ export class Residents {
     if (c.target) actor.rotation.y = Math.atan2(c.target.x - home.x, -(c.target.y - home.y));
     const rate = workRate(game.store.state, gameTime(game.store.state), home.id);
     c.swingT = (c.swingT || 0) + dt * Math.max(0.45, rate || 1);
-    const pose = gatherSample('chop', c.swingT, 1, 0.95);
+    const pose = gatherSample(hoe ? 'plow' : 'chop', c.swingT, 1, 0.95);
     const bones = home.bones;
     actor.updateMatrixWorld(true);
     if (bones.mixamorigHips) bones.mixamorigHips.position.y -= pose.dip;
@@ -1034,7 +1291,7 @@ export class Residents {
         if (c.resting <= 0) this.endRest(actor);
         return;
       }
-      if ((c.kind === 'chop' || c.kind === 'mine') && home.bones?.mixamorigRightHand) {
+      if ((c.kind === 'chop' || c.kind === 'mine' || Residents.HOE_KINDS.includes(c.kind)) && home.bones?.mixamorigRightHand) {
         if (c.path?.length) { this.hideHelperTool(home); this.walkAlong(actor, c.path, 1.7, dt); return; }
         const here = { x: home.x, y: home.y }, reach = c.reach || 1.2;
         if (dist(here, c.target) > reach + 0.45) {
@@ -1101,8 +1358,10 @@ export class Residents {
   update(dt) {
     const game = this.game;
     const night = !!game.store?.state?.night;
+    this.updateReel();
     for (const actor of this.models.values()) {
       this.followCull(actor);
+      if (game.dining?.owns(actor)) { game.dining.drive(actor, dt); continue; }
       const driving = actor === game.actor && actor.userData.id === this.activeId && !night && !game.action;
       if (driving) {
         const home = actor.userData;
@@ -1245,6 +1504,7 @@ export class Residents {
 
   dispose() {
     window.removeEventListener('message', this.onMessage);
+    for (const type of ['pointerdown', 'keydown', 'wheel']) window.removeEventListener(type, this.onInput, { capture: true });
     this.draco?.dispose();
   }
 }

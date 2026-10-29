@@ -9,11 +9,12 @@ import {TREE_MAX_HEALTH,treeRemaining,validTreeDamage} from './resource-health.m
 import {TOOL_TIERS,toolTier,rockProfile,upgradeStatus,normalizeTools,forgeJob,forgeProgress,hasForge} from './mining.mjs';
 import {MAX_ENERGY,LOW_ENERGY,FOODS,FOOD_RECIPES,RECIPES,WATER_MAX,energyFor,setEnergy,energyCost,canCook,restGain,activeCharacter,sleepHome,canSleep,SLEEP_SECONDS,SLEEP_HOURS,MAX_HUNGER,hungerFor,setHunger,foodFill,mealGain,needsFood,isStarving,prayGain} from './nutrition.mjs';
 import {SHOVEL_TIERS,shovelStatus,spendShovelRecipe,completedWells} from './digging.mjs';
+import {HALL_KIND,planMeal} from './dining.mjs';
 import {BUILD_ENERGY,buildingById,activeBuildings,completedFires,litFires,fireCanTakeLog,FIRE_LOG_MINUTES,heatSources,hotOvens,logMinutesFor,fireFuelLeft,buildingBlockers,footprint,workPoint,materialStatus,spendMaterials,siteStatus,buildingProgress,validBuildings,pointInBounds,upgradeDefinition,upgradeCost,upgradePlan,layerCount,addPaid,orientStrokeNeighbors,strokeNeed} from './building.mjs';
 import {advanceCommunity,configureCommunity,validCommunity,communityClaim,homeReserved,memberPosition} from './community.mjs';
 import {woodRoom,validWoodDrops} from './wood-storage.mjs';
 import {validAnimals,animalSiteStatus} from './animals.mjs';
-import {applyFarmSpan} from './fencing.mjs';
+import {applyFarmSpan,dayIndex as farmDay,gardenFocus} from './fencing.mjs';
 import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
 import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
@@ -305,7 +306,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
   if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','fish','cook','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['eat','serve_meal','fish','cook','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
   if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge'].includes(a.type))return state;
@@ -408,6 +409,16 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     const food=FOODS[a.item];if(!food||!(inv[a.item]>0))return state;
     const gain=mealGain(state,a.item,minutes);if(gain.total<=0)return state;
     inv[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;
+  } else if(a.type==='serve_meal') {
+    // A shared meal at the Dining Hall: every diner is fed from the bag at once (hungriest first,
+    // best-fitting helpings), and whatever is not needed stays in the bag. See dining.mjs planMeal.
+    if(!Array.isArray(a.diners)||!a.diners.length||a.diners.length>16||a.diners.some(d=>typeof d?.id!=='string'||!d.id))return state;
+    const hall=activeBuildings(state).find(b=>b.id===a.hallId&&b.kind===HALL_KIND&&b.status==='complete');if(!hall)return state;
+    for(const d of a.diners){if(!next.characters[d.id])next.characters[d.id]={name:d.name||d.id,energy:MAX_ENERGY};if(!Number.isFinite(next.characters[d.id].hunger))setHunger(next,MAX_HUNGER,minutes,d.id);}
+    const meal=planMeal(next,a.diners,minutes);if(!meal.servings.length)return state;
+    for(const s of meal.servings){inv[s.item]--;setEnergy(next,energyFor(next,s.id)+FOODS[s.item].energy,s.id);setHunger(next,hungerFor(next,minutes,s.id)+foodFill(s.item),minutes,s.id);}
+    next.stats.mealsEaten=(next.stats.mealsEaten||0)+meal.servings.length;next.stats.sharedMeals=(next.stats.sharedMeals||0)+1;
+    next.lastMeal={at:minutes,hallId:hall.id,served:meal.served,servings:meal.servings,diners:a.diners.map(d=>d.id),hungry:meal.stillHungry,cook:typeof a.cook==='string'?a.cook:null};
   } else if(a.type==='cook') {
     if(!canCook(state,a.recipe))return state;
     const recipe=RECIPES[a.recipe],stations=recipe.station==='oven'?hotOvens(state,minutes):recipe.station==='well'?completedWells(state):litFires(state,minutes),station=stations.find(b=>b.id===a.fireId);
@@ -472,6 +483,13 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   } else if(a.type==='fetch_water') {
     const well=completedWells(state).find(b=>b.id===a.wellId);if(!well||dist(state.player,workPoint(world,well))>1.45||(inv.water||0)>=WATER_MAX)return state;
     add('water',1);next.stats.waterFetched=(next.stats.waterFetched||0)+1;
+  } else if(a.type==='guard_garden') {
+    // Stand by the garden at dusk so a coyote is turned away tonight. Once per day, needs a planted garden and someone close to it.
+    const day=farmDay(minutes);if(state.farm?.guard?.day===day)return state;
+    if(!Object.values(state.cells||{}).some(c=>c.seed))return state;
+    if(dist(state.player,gardenFocus(world,state))>6)return state;
+    const who=state.characters?.[state.activeCharacter];
+    next.farm={...(state.farm||{}),guard:{day,id:state.activeCharacter,name:who?.name||'A friend'}};next.stats.nightsGuarded=(next.stats.nightsGuarded||0)+1;
   } else if(a.type==='dig_stump') {
     if(!world.trees.some(t=>t.id===a.id)||!state.removedTrees.includes(a.id)||(state.removedStumps||[]).includes(a.id))return state;
     next.removedStumps=[...(state.removedStumps||[]),a.id];next.stats.stumps=(next.stats.stumps||0)+1;

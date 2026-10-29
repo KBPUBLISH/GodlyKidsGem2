@@ -5,7 +5,7 @@ import {footprint, pointInBounds, layerCount, subtractLayer, buildingById} from 
 import {LIVESTOCK,DOG_CAPACITY} from './animals.mjs';
 
 const DAY=1440;
-const THREAT_DAY=7;
+export const THREAT_DAY=7;
 const HERD_MINUTES=90;
 const WOOD_LOSS=.4,BRICK_LOSS=.1,BREAK_AT=.25;
 const SCARECROW_HALF=5;
@@ -338,7 +338,11 @@ export function farmNightfall(state,world,day){
     let scared=false;
     next.animals=next.animals.filter(a=>!(a.wild&&a.kind==='coyote'));
     next.farm.integrity={...(next.farm.integrity||{})};
+    // Someone standing guard by the garden tonight (Abel's dusk duty) turns the coyotes away from the crops and fences. The animals still get a scare.
+    const guard=next.farm.guard?.day===day?next.farm.guard:null;
+    if(guard)lines.push(`${guard.name||'Abel'} chased ${sides.length>1?'the coyotes':'a coyote'} away from the garden`);
     for(const side of sides){
+      if(guard)continue;
       const from=edgeSpawn(world,focus,side);
       const fence=fencesAlong(world,next.buildings,from,focus)[0];
       if(fence){

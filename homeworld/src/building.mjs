@@ -6,6 +6,7 @@ export const BUILDINGS=[
   {id:'cottage',name:'Cottage',category:'Homes',size:[5,5],height:3.42,wood:30,stone:17,seconds:25,solid:true,level:2,beds:2,upgradeTo:'townhouse',description:'A timber cottage with a porch and a cozy bedroom.'},
   {id:'townhouse',name:'Townhouse',category:'Homes',size:[5,5],height:5.99,wood:65,stone:42,seconds:35,solid:true,level:3,beds:4,description:'A tall two-storey home with a furnished upstairs bedroom.'},
   {id:'church',name:'Church',category:'Community',size:[7,10],height:10.55,wood:120,stone:80,seconds:60,solid:true,description:'A community church with a bell tower, pews and a furnished sanctuary.'},
+  {id:'dining_hall',name:'Dining Hall',category:'Community',size:[7,5],height:4.45,wood:70,stone:30,seconds:40,solid:true,poster:'dining_hall',description:'An open timber hall with one long table and benches. Ring the bell and every friend comes to eat together; the meal is served from your bag and leftovers go back.'},
   {id:'tent',name:'Prayer Tent',category:'Homes',size:[3,2],height:2.3,wood:8,stone:0,seconds:10,solid:true,beds:1,description:'A peaceful green tent for your island.'},
   {id:'chest',name:'Storage Chest',category:'Decorations',size:[2,1],height:1.1,wood:4,stone:2,seconds:6,solid:true,description:'A wooden chest. Your items still live in My bag in this test.'},
   {id:'wood_store_20',name:'Wood Bin',category:'Storage',size:[2,1],height:.85,wood:6,stone:2,seconds:8,solid:true,woodCapacity:20,description:'An open wooden bin. Adds space for 20 wood.'},

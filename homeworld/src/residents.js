@@ -778,8 +778,8 @@ export class Residents {
 
   // ---- Highlight reel: when you are just watching, the camera cuts between friends at work. ----
   /** Seconds a shot lasts (busy friend / quiet friend), and how long with no input before the reel starts by itself. */
-  static REEL_SHOT = 9;
-  static REEL_SHORT_SHOT = 5;
+  static REEL_SHOT = 18;
+  static REEL_SHORT_SHOT = 11;
   static REEL_IDLE_SECONDS = 25;
 
   noteInput() {
@@ -844,7 +844,8 @@ export class Residents {
     reel.label = pick.label;
     reel.score = pick.score;
     reel.recent = [reel.id, ...reel.recent].slice(0, Math.max(1, this.models.size - 1));
-    reel.until = performance.now() + (pick.score >= 4 ? Residents.REEL_SHOT : Residents.REEL_SHORT_SHOT) * 1000;
+    reel.shownAt = performance.now();
+    reel.until = reel.shownAt + (pick.score >= 4 ? Residents.REEL_SHOT : Residents.REEL_SHORT_SHOT) * 1000;
     reel.shots++;
     // A fresh camera per cut: zoom and angle both change, so the reel reads as different shots rather than one drifting view.
     const angles = [0, .7, -.6, 1.4, -1.3, 2.2];
@@ -859,12 +860,13 @@ export class Residents {
   reelEvent(actor) {
     const reel = this.reel;
     if (!reel?.active || !actor || actor.userData.residentId === reel.id) return;
-    if (performance.now() < reel.until - (Residents.REEL_SHOT - 3) * 1000) { reel.pending = actor.userData.residentId; return; }
+    if (performance.now() < (reel.shownAt || 0) + 6000) { reel.pending = actor.userData.residentId; return; }
     reel.recent = reel.recent.filter((id) => id !== actor.userData.residentId);
     reel.id = actor.userData.residentId;
     const s = this.shot(actor);
     reel.label = s.label; reel.score = s.score;
-    reel.until = performance.now() + Residents.REEL_SHORT_SHOT * 1000;
+    reel.shownAt = performance.now();
+    reel.until = reel.shownAt + Residents.REEL_SHORT_SHOT * 1000;
     this.game.notify?.();
   }
 
@@ -882,8 +884,10 @@ export class Residents {
     const reel = this.reel;
     if (s?.night || !quiet || !this.models.get(reel.id)) { this.stopReel(); return; }
     const current = this.models.get(reel.id), shotNow = this.shot(current);
-    const dull = shotNow.score <= 1 && now > reel.until - (Residents.REEL_SHOT - 3) * 1000;
-    if (reel.pending && now >= reel.until - (Residents.REEL_SHOT - 3) * 1000) { const a = this.models.get(reel.pending); reel.pending = null; if (a) { this.reelEvent(a); return; } }
+    const settled = now >= (reel.shownAt || 0) + 6000;
+    // Leave a quiet friend alone unless somebody else is clearly busy; otherwise the reel jumps every few seconds for nothing.
+    const dull = shotNow.score <= 1 && settled && [...this.models.values()].some((a) => a !== current && this.shot(a).score >= 3);
+    if (reel.pending && settled) { const a = this.models.get(reel.pending); reel.pending = null; if (a) { this.reelEvent(a); return; } }
     if (now >= reel.until || dull) this.cutReel();
     else if (shotNow.label !== reel.label) { reel.label = shotNow.label; game.notify?.(); }
   }

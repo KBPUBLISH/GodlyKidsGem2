@@ -482,7 +482,7 @@
 
 .resident-action.play{background:#e2f1ff;border-color:#7fb3e0}
 
-.reel-caption{position:absolute;z-index:14;left:50%;top:calc(max(12px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;border-radius:999px;background:#1d3d28d9;color:#fff;box-shadow:0 6px 18px #0004;backdrop-filter:blur(4px);animation:plan-in .25s ease-out;max-width:min(92vw,420px);pointer-events:auto}
+.reel-caption{position:absolute;z-index:14;left:50%;top:calc(max(12px,env(safe-area-inset-top)) + 118px);transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;border-radius:999px;background:#1d3d28d9;color:#fff;box-shadow:0 6px 18px #0004;backdrop-filter:blur(4px);animation:plan-in .25s ease-out;max-width:min(92vw,420px);pointer-events:auto}
 .reel-caption .reel-dot{width:10px;height:10px;border-radius:50%;background:#ff5a5a;box-shadow:0 0 0 3px #ff5a5a44;animation:reel-blink 1.2s ease-in-out infinite}
 .reel-caption .friend-face{width:34px;height:34px;border-radius:50%;overflow:hidden;background:#fff3;display:grid;place-items:center;font-weight:700;flex:none}
 .reel-caption .friend-face img{width:100%;height:100%;object-fit:cover}

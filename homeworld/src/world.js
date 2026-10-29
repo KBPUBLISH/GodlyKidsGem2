@@ -1,3 +1,4 @@
+import {AdaptiveResolution} from './adaptive-resolution.js';
 import {moveCharacter,resetAnimatedPose,updateLocomotion,WALK_SPEED} from './character-motion.js';
 import {animateGathering} from './gather-animation.js';
 import {createRelaxedIdle} from './character-idle.js';
@@ -63,12 +64,13 @@ export class HomeWorld {
   constructor(container,onUpdate) {
     this.container=container;this.onUpdate=onUpdate;this.disposed=false;this.tool='walk';this.seed='carrot_seed';this.path=[];this.order=null;this.action=null;this.status='Loading your island…';this.toasts=[];this.labels=[];this.lastRefresh=0;this.lastSave=0;this.animationRate=1;this.keys=new Set();
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#99b9b0');this.scene.fog=new THREE.Fog('#99b9b0',110,420);
-    // iPad fills a much larger canvas than a phone. Cap it at 1 device pixel per CSS pixel and skip MSAA.
+    // Start iPads sharper, then adapt resolution to sustained frame time. Keep MSAA off to limit GPU cost.
     // Phones and desktop stay at min(devicePixelRatio, 1.6) with antialias on.
     this.ipadQuality=isIpadClass();
+    this.resolution=this.ipadQuality?new AdaptiveResolution(window.devicePixelRatio||1):null;
     // Shadows follow the sun every frame everywhere, so a walking body never drags a stale shadow. iPad pays for
     // that with the plain PCF filter (one tap per texel instead of soft's nine) on its 1024 map.
-    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.ipadQuality?1:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
+    this.renderer=new THREE.WebGLRenderer({antialias:!this.ipadQuality,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.resolution?this.resolution.ratio:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
     this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;
     this.hemi=new THREE.HemisphereLight('#d7e8ef','#6c6f3d',2.4);this.scene.add(this.hemi);
     this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.set(-12,24,10);this.sun.castShadow=true;this.sun.shadow.mapSize.set(this.ipadQuality?1024:2048,this.ipadQuality?1024:2048);this.sun.shadow.camera.left=-23;this.sun.shadow.camera.right=23;this.sun.shadow.camera.top=23;this.sun.shadow.camera.bottom=-23;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;this.scene.add(this.sun,this.sun.target);
@@ -265,7 +267,12 @@ export class HomeWorld {
     if(this.currentClip===name||!this.clips[name])return;const prev=this.clips[this.currentClip],next=this.clips[name];next.reset().fadeIn(.18).play();prev?.fadeOut(.18);this.currentClip=name;
   }
   resize() {
-    const w=this.container.clientWidth||800,h=this.container.clientHeight||600;this.renderer.setSize(w,h,false);this.updateProjection();
+    const w=this.container.clientWidth||800,h=this.container.clientHeight||600;this.applyResolution(w,h);this.renderer.setSize(w,h,false);this.updateProjection();
+  }
+  applyResolution(w=this.container.clientWidth||800,h=this.container.clientHeight||600){
+    if(!this.resolution)return;
+    const ratio=this.resolution.forSize(w,h);
+    if(Math.abs(this.renderer.getPixelRatio()-ratio)>.001)this.renderer.setPixelRatio(ratio);
   }
   updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=this.overview?220:40;this.scene.fog.far=this.overview?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
   rotateView(delta){if(!this.loaded||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookYaw=THREE.MathUtils.clamp((this.interior.lookYaw||0)+delta,-.8,.8);return;}this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
@@ -806,6 +813,7 @@ export class HomeWorld {
   }
   tick() {
     if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const frameDt=this.clock.getDelta(),dt=Math.min(.08,frameDt),now=performance.now();this.frameDt=frameDt;this.frameSerial=(this.frameSerial||0)+1;
+    if(this.resolution){this.resolution.sample(frameDt,this.loaded&&!document.hidden);this.applyResolution();}
     if(this.loaded){
       this.mining?.settleForge();
       if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}

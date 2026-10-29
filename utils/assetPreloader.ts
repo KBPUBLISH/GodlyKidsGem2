@@ -39,7 +39,7 @@ const CREW_IMAGE_URLS = [
   '/assets/images/crew-voyage-bow.webp?v=1',
   '/assets/images/sail-voyage-tab-crew.webp?v=1',
   '/assets/images/sail-voyage-tab-profile.webp?v=1',
-  '/assets/images/sail-voyage-tab-home.webp?v=1',
+  '/assets/images/sail-voyage-tab-home.webp?v=2',
   '/assets/images/sail-voyage-tab-library.webp?v=1',
   '/assets/images/crew-voyage-hatch.webp?v=1',
   '/assets/images/wheel-background-wood.png',

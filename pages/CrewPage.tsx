@@ -342,7 +342,7 @@ const BOW_STRIP_BOTTOM = 0.885;
 const CREW_TAB_ART: Record<string, string> = {
   crew: '/assets/images/sail-voyage-tab-crew.webp?v=1',
   profile: '/assets/images/sail-voyage-tab-profile.webp?v=1',
-  home: '/assets/images/sail-voyage-tab-home.webp?v=1',
+  home: '/assets/images/sail-voyage-tab-home.webp?v=2',
   library: '/assets/images/sail-voyage-tab-library.webp?v=1',
 };
 const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.webp?v=1';

@@ -18,7 +18,7 @@ const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURI
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
 const LOADING_WHEEL = '/assets/images/sail-voyage-wheel.webp?v=1';
-const LOADING_HOME_ICON = '/assets/images/sail-voyage-tab-home.webp?v=1';
+const LOADING_HOME_ICON = '/assets/images/sail-voyage-tab-home.webp?v=2';
 const LOADING_WOOD = '/assets/images/wheel-background-wood.png';
 const LOADING_FADE_MS = 520;
 /** Give up waiting for the island's ready message this long after the frame loads. */

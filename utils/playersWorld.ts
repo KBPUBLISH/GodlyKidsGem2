@@ -1,5 +1,12 @@
-/** Bible characters a player has dropped off on the Players World island. */
+import { scopedKey } from './profileScope';
+
+/**
+ * Bible characters a player has dropped off on the Players World island.
+ * Base key — reads/writes use `residentsKey()` so each profile has its own
+ * island population (the homeworld iframe scopes the same way via ?profile=).
+ */
 export const PLAYERS_WORLD_RESIDENTS_KEY = 'godlykids_players_world_residents_v1';
+const residentsKey = () => scopedKey(PLAYERS_WORLD_RESIDENTS_KEY);
 
 export type PlayersWorldResident = {
   id: string;
@@ -57,7 +64,7 @@ export function applyCharacterAppearanceToResidents(
   for (const resident of next) byResident.set(resident.id, resident);
   try {
     localStorage.setItem(
-      PLAYERS_WORLD_RESIDENTS_KEY,
+      residentsKey(),
       JSON.stringify(Array.from(byResident.values())),
     );
   } catch {
@@ -68,7 +75,7 @@ export function applyCharacterAppearanceToResidents(
 
 export function readPlayersWorldResidents(): PlayersWorldResident[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(PLAYERS_WORLD_RESIDENTS_KEY) || '[]');
+    const raw = JSON.parse(localStorage.getItem(residentsKey()) || '[]');
     if (!Array.isArray(raw)) return [];
     return raw.filter(
       (row): row is PlayersWorldResident =>

@@ -6,6 +6,9 @@ import * as THREE from 'three';
 import {normalizeCharacterModel} from './character-model.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import {scopeKey,migrateLegacyKeys} from './storage-scope.mjs';
+/** Build goal, per kid profile (storage-scope.mjs). */
+const GOAL_KEY_BASE='gk_island_goal_v1';migrateLegacyKeys([GOAL_KEY_BASE]);const GOAL_KEY=scopeKey(GOAL_KEY_BASE);
 import {GameStore,Navigation,SEEDS,activeTrees,plantedTrees,activeStumps,applesReady,APPLES_PER_PICK,gameTime,timeLabel,SAVE_KEY,cellAt,cellFromKey,heightAt,terrainType,growth,canPlow,dist,label,realDuration} from './core.mjs';
 import {communityClaim} from './community.mjs';
 import {TREE_MAX_HEALTH,treeRemaining,resourceHealth} from './resource-health.mjs';
@@ -56,7 +59,13 @@ export class HomeWorld {
     this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Drag or swipe sideways to turn the view, and up or down to tilt it. Tap the ground to walk; choose a tool to interact.');
     this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),tap:e=>this.click(e)});
     this.wheel=e=>{e.preventDefault();this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
-    this.keyDown=e=>{if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
+    // Native app shells (pull-to-refresh / edge bounce) only stand down when the page actively
+    // consumes the touch — CSS touch-action alone is not enough. The canvas never scrolls, so
+    // swallow every touch move that starts on it (camera drags and ground taps use pointer events).
+    this.touchGuard=e=>{if(e.cancelable)e.preventDefault();};
+    this.renderer.domElement.addEventListener('touchstart',this.touchGuard,{passive:false});
+    this.renderer.domElement.addEventListener('touchmove',this.touchGuard,{passive:false});
+    this.keyDown=e=>{if(e.key==='Escape'&&this.interior){e.preventDefault();this.building?.leaveHome();return;}if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
     this.onBlur=()=>{this.mapGesture.cancel();this.keys.clear();};window.addEventListener('blur',this.onBlur);
     this.markAway=()=>{this.persist();if(this.store&&!this.store.locked)try{this.store.noteAway();}catch(e){this.toast(e.message);}};this.onHide=()=>{if(document.hidden){this.markAway();this.music?.audio?.pause();}else if(this.loaded){this.music?.unlock();this.community?.step({offline:true});this.community?.activity();this.notify();}};this.onUnload=()=>this.markAway();document.addEventListener('visibilitychange',this.onHide);window.addEventListener('pagehide',this.onUnload);this.onStorage=e=>{if(e.key!==SAVE_KEY||!this.store)return;const latest=this.store.readLatest();if(!latest||latest.revision<=this.store.state.revision)return;const moved=dist(latest.player,this.store.state.player)>.6;const changed=JSON.stringify([latest.activeCharacter,latest.removedTrees,latest.removedRocks,latest.rockDamage,latest.treeDamage,latest.woodDrops,latest.inventory,latest.cells,latest.tools,latest.characters?.[latest.activeCharacter],latest.buildings])!==JSON.stringify([this.store.state.activeCharacter,this.store.state.removedTrees,this.store.state.removedRocks,this.store.state.rockDamage,this.store.state.treeDamage,this.store.state.woodDrops,this.store.state.inventory,this.store.state.cells,this.store.state.tools,this.store.state.characters?.[this.store.state.activeCharacter],this.store.state.buildings]);const playing=this.playersOnly&&latest.activeCharacter===this.store.state.activeCharacter&&Date.now()-(this.community?.lastInput||0)<30000;this.store.state=latest;
     // Another HomeWorld window (a second tab with the same save) writes every second while a crew is building. The window
@@ -206,8 +215,8 @@ export class HomeWorld {
     const w=this.container.clientWidth||800,h=this.container.clientHeight||600;this.renderer.setSize(w,h,false);this.updateProjection();
   }
   updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=this.overview?220:40;this.scene.fog.far=this.overview?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
-  rotateView(delta){if(!this.loaded||this.fishing?.active)return;this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
-  tiltView(delta){if(!this.loaded||this.overview||this.fishing?.active)return;this.viewPitch=Math.min(PITCH_MAX,Math.max(PITCH_MIN,(this.viewPitch||0)+delta));}
+  rotateView(delta){if(!this.loaded||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookYaw=THREE.MathUtils.clamp((this.interior.lookYaw||0)+delta,-.8,.8);return;}this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
+  tiltView(delta){if(!this.loaded||this.overview||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookPitch=THREE.MathUtils.clamp((this.interior.lookPitch||0)+delta,-.35,.45);return;}this.viewPitch=Math.min(PITCH_MAX,Math.max(PITCH_MIN,(this.viewPitch||0)+delta));}
   /** The last three tools the player reached for, newest first, so they sit one tap away at the bottom of the screen. */
   get recentTools(){if(!this._recentTools){try{const v=JSON.parse(localStorage.getItem('gk_island_recent_tools_v1')||'[]');this._recentTools=Array.isArray(v)?v.filter(id=>typeof id==='string').slice(0,5):[];}catch{this._recentTools=[];}}return this._recentTools;}
   noteTool(id){if(!id||id==='walk')return;const next=[id,...this.recentTools.filter(t=>t!==id)].slice(0,5);if(next.join()===this.recentTools.join())return;this._recentTools=next;try{localStorage.setItem('gk_island_recent_tools_v1',JSON.stringify(next));}catch{/* remembered for this visit only */}this.notify();}
@@ -259,7 +268,10 @@ export class HomeWorld {
   }
   allCharacterVitalsSnapshots(wall=Date.now()){return Object.keys(this.store?.state.characters||{}).map(id=>this.characterVitalsSnapshot(wall,id)).filter(Boolean);}
   click(e) {
-    if(!this.loaded||this.store?.state.night||this.mapOnly||this.fishing?.active||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(this.residents?.consumeTap(e))return;if(this.ambientNudge())return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);
+    if(!this.loaded||this.store?.state.night||this.mapOnly||this.fishing?.active||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(this.residents?.consumeTap(e))return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);
+    if(this.interior){if(this.interior.phase!=='exit') this.lookInside(e,r);return;}
+    if(this.building?.wellId){this.building.wellId=null;this.notify();}
+    if(this.ambient){this.prompt=null;if(this.building?.offerHome(this.ray)) return;this.ambientNudge();return;}
     if(this.playersOnly&&this.fishing?.pickPole(this.ray)&&!this.action){this.residents?.closeMenu();this.nutrition.goFish();return;}
     if(this.playersOnly){const friend=this.residents?.pick(this.ray)||(this.residents?.bodyHit(e.clientX,e.clientY)?this.actor:null);if(friend){if(friend!==this.actor)this.residents.possess(friend);this.residents.greet(this.actor);this.status=this.autoWork?.active?`${this.actor.userData.name} is ${this.autoWork.paused?'paused':'working'}. Pause, keep going, or stop.`:`${this.actor.userData.name} says hello.`;this.notify();return;}this.residents?.closeMenu();if(this.autoWork?.active&&!this.autoWork.paused)this.autoWork.pause();}
     const x=e.clientX-r.left,y=e.clientY-r.top,levels=this.allCharacterVitalsSnapshots().find(l=>x>=l.hit.x&&x<=l.hit.x+l.hit.width&&y>=l.hit.y&&y<=l.hit.y+l.hit.height);if(!this.building?.preview&&levels){if(levels.id===this.store.state.activeCharacter)this.revealCharacterVitals(Date.now(),levels.id);else this.selectCharacter(levels.id);return;}
@@ -283,7 +295,30 @@ export class HomeWorld {
     if(planted&&this.tool==='walk')return; // a tap on a plant just peeks at its progress
     this.walk(target);
   }
+  /** While inside a home, a tap swings the view a little. The character stays outside the walls. */
+  lookInside(e,r){
+    const rect=r||this.renderer.domElement.getBoundingClientRect();if(!rect.width) return;
+    const nx=(e.clientX-rect.left)/rect.width*2-1,ny=(e.clientY-rect.top)/rect.height*2-1,inn=this.interior;
+    inn.lookYaw=THREE.MathUtils.clamp((inn.lookYaw||0)-nx*.45,-.8,.8);
+    inn.lookPitch=THREE.MathUtils.clamp((inn.lookPitch||0)+ny*.25,-.35,.45);
+  }
+  /** Screen anchor for the small well card. Falls back to the lower middle when the well is off screen. */
+  wellPopup(){
+    const id=this.building?.wellId;if(!id||!this.loaded||this.interior) return null;
+    const card=this.nutrition?.wellCard(id);if(!card){this.building.wellId=null;return null;}
+    const b=this.store.state.buildings.find(x=>x.id===card.id),fp=b&&footprint(this.world,b);
+    const rect=this.renderer.domElement.getBoundingClientRect(),w=rect.width,h=rect.height;
+    let x=w/2,y=h*.72;
+    if(w&&h&&fp){
+      this.camera.updateMatrixWorld(true);
+      const pr=V(fp.center.x,(b.baseHeight||0)+1.7,-fp.center.y).project(this.camera);
+      if(pr.z>-1&&pr.z<1&&Math.abs(pr.x)<1.15&&Math.abs(pr.y)<1.15){x=(pr.x+1)*w/2;y=(1-pr.y)*h/2;}
+    }
+    const full=card.water>=card.max,far=card.away>2.6;
+    return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
+  }
   walk(target) {
+    if(this.interior) return;
     if(this.ambientNudge())return;
     this.residents?.cancelWave();
     if(this.action){this.toast('Your character is finishing this action.');return;}const path=this.nav.path(this.player,target);if(!path){this.toast('There is no clear path there. Try a closer patch of land.');return;}this.lastGroundKey=cellAt(this.world,target.x,target.y).key;this.path=path;this.order=null;this.marker.position.set(target.x,heightAt(this.world,target.x,target.y)+.035,-target.y);this.marker.visible=true;this.status='Walking…';this.notify();
@@ -328,7 +363,7 @@ export class HomeWorld {
   }
   runPrompt(actionId){
     const p=this.prompt;if(!p)return;this.prompt=null;
-    if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);
+    if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);else if(actionId==='enter')this.building.enterHome(p.id);
     this.notify();
   }
   /** Walk to an apple tree and gather its fruit. No tool or energy needed; the tree fruits again later. */
@@ -373,6 +408,8 @@ export class HomeWorld {
     if(order.type==='fetch_water'){this.order=null;this.path=[];this.marker.visible=false;this.nutrition.commitFetchWater(order.wellId);return;}
     if(order.type==='chop'&&!woodRoom(this.store.state)){this.order=null;this.path=[];this.marker.visible=false;this.toast('Wood space is full. Open My bag to build a store.');return;}
     if(this.nutrition&&!this.nutrition.check(order.type==='chop'?'chop_hit':order)){this.order=null;this.path=[];this.marker.visible=false;return;}
+    // A new action replaces whatever was in progress. Drop the old one first so a held snack, tool, or IK pose cannot stay behind.
+    if(this.action&&this.action.type!=='sleep'){const prev=this.action;if(prev.type==='mine')this.mining.end(prev);if(prev.type==='pray'){this.prayer=null;this.nutrition?.hushPrayer();}this.nutrition?.clear();this.building?.clearWork?.();if(this.workTree){this.scene.remove(this.workTree);this.workTree=null;}this.fallingId=null;resetAnimatedPose(this);Object.values(this.tools||{}).forEach(t=>t.visible=false);this.action=null;}
     this.persist();const power=toolTier(this.store.state).power;this.action={...order,t:0,hits:0,committed:false,gatherId:crypto.randomUUID(),workHits:Math.ceil((order.type==='chop'?treeRemaining(order.tree,this.store.state):2)/power)};this.order=null;this.path=[];this.marker.visible=false;if(dist(order.target,this.player)>.05)this.actor.rotation.y=Math.atan2(order.target.x-this.player.x,-(order.target.y-this.player.y));this.playClip('Idle_03');
     this.status={chop:'Taking axe…',plow:'Taking hoe…',dig_stump:'Digging out the stump…',dig_mud:'Digging up mud…',pick_apples:'Picking apples…',plant:'Planting a seed…',water:'Watering…',harvest:'Gathering your harvest…'}[order.type];
     if(order.type==='chop'){
@@ -489,9 +526,9 @@ export class HomeWorld {
   /** Say once in a while why nothing happens; returns true when play is blocked. */
   ambientNudge(){if(!this.ambient)return false;const now=Date.now();if(!(now<(this.ambientNudgedAt||0)+4000)){this.ambientNudgedAt=now;this.toast('Drop off a story friend first. Tap Friends to bring one ashore.');}return true;}
   /** What the island is working towards (a building kind), kept per device. */
-  get goal(){try{const v=JSON.parse(localStorage.getItem('gk_island_goal_v1')||'null');return v?.kind&&buildingById(v.kind)?v:null;}catch{return null;}}
-  setGoal(kind){if(!buildingById(kind))return;localStorage.setItem('gk_island_goal_v1',JSON.stringify({kind,at:Date.now()}));this.toast(`Goal set: build a ${buildingById(kind).name}!`);this.notify();}
-  clearGoal(){localStorage.removeItem('gk_island_goal_v1');this.notify();}
+  get goal(){try{const v=JSON.parse(localStorage.getItem(GOAL_KEY)||'null');return v?.kind&&buildingById(v.kind)?v:null;}catch{return null;}}
+  setGoal(kind){if(!buildingById(kind))return;localStorage.setItem(GOAL_KEY,JSON.stringify({kind,at:Date.now()}));this.toast(`Goal set: build a ${buildingById(kind).name}!`);this.notify();}
+  clearGoal(){localStorage.removeItem(GOAL_KEY);this.notify();}
   /** Everyone living on the island right now; `active` is the body currently being played. */
   crew(){return [...(this.residents?.models?.values()||[])].map(a=>({id:a.userData.residentId,name:a.userData.name||'Friend',imageUrl:a.userData.imageUrl||'',active:a===this.actor}));}
   /** Hand a job to a specific friend: switch bodies if needed, then start the task. */
@@ -581,12 +618,13 @@ export class HomeWorld {
   notify(){if(this.disposed)return;this.onUpdate(this.snapshot());}
   snapshot(){
     if(!this.store)return {loaded:false,status:this.status,error:this.error};const s=this.store.state,minutes=gameTime(s),clock=timeLabel(minutes),phase=s.clock.cycle===1?dayPhase(s.clock,Date.now()):null;const plants=Object.entries(s.cells).filter(([,c])=>c.seed).map(([key,c])=>({key,...growth(c,minutes)}));
-    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,ui:this.ui||null,goal:this.goal};
+    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal};
   }
   tick() {
     if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const dt=Math.min(.08,this.clock.getDelta()),now=performance.now();
     if(this.loaded){
       if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.syncNight();this.lighting(dt);if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
+      if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
       this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
       if(this.residents?.waveActive()&&speed>0.08)this.residents.cancelWave();
@@ -595,7 +633,8 @@ export class HomeWorld {
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
       this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();
-      const preview=this.building.preview,fp=preview?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));this.focus.lerp(target,1-Math.exp(-dt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);
+      if(this.interior) this.building.stepInterior(dt);
+      else{const preview=this.building.preview,fp=preview?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));this.focus.lerp(target,1-Math.exp(-dt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).filter(([,c])=>c.seed).map(([key,c])=>`${key}:${growth(c,min).stage}`).join('|');if(sig!==this.fieldSignature.join('|')||dist(this.player,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...this.player};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.
@@ -608,5 +647,5 @@ export class HomeWorld {
     }
     this.renderer.render(this.scene,this.fishing?.firstPerson?this.fishing.camera:this.camera);
   }
-  dispose(){this.disposed=true;this.music?.dispose();this.residents?.dispose();this.animals?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
+  dispose(){this.disposed=true;this.music?.dispose();this.residents?.dispose();this.animals?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('touchstart',this.touchGuard);this.renderer.domElement.removeEventListener('touchmove',this.touchGuard);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
 }

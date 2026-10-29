@@ -4,6 +4,8 @@ import {BUILDINGS,buildingById,activeBuildings,footprint,workPoint,materialStatu
 import {projectPlan,defaultCrew,projectTimeLeft,projectDuration,assignedProject} from './project-rules.mjs';
 import {woodStorage} from './wood-storage.mjs';
 import {emitWorkSweat} from './work-sweat.js';
+import {HOME_KINDS,rigHome as buildHomeRig} from './home-interior.js';
+import {cameraOffset} from './view-controls.mjs';
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z),Q=()=>new THREE.Quaternion();
 const ease=x=>{x=THREE.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
 const token=(type,id)=>`${type}:${id}`;
@@ -26,6 +28,7 @@ export class Construction {
     if(n)this.group.remove(n.root);
     const root=g.asset(`building_${b.kind}_${assetStage}`),fp=footprint(g.world,b);root.position.set(fp.center.x,b.baseHeight,-fp.center.y);root.rotation.y=b.rotation*Math.PI/2;
     root.userData.buildingId=b.id;root.traverse(o=>{if(o.isMesh)o.userData.buildingId=b.id;});this.group.add(root);n={root,stage,kind:b.kind,key:b.key,rotation:b.rotation};this.nodes.set(b.id,n);
+    if(b.status==='complete'&&HOME_KINDS.includes(b.kind)) this.rigHome(n,b);
     if(['campfire','oven'].includes(b.kind)&&b.status==='complete'){const light=new THREE.PointLight(b.kind==='oven'?'#ff8a3a':'#ffad50',6,b.kind==='oven'?4:6,2);light.position.set(0,b.kind==='oven'?.55:.65,b.kind==='oven'?.6:0);root.add(light);n.fireLight=light;}
    }
    if(stage==='finishing')this.finishShape(n.root,buildingProgress(b));
@@ -174,9 +177,80 @@ export class Construction {
   const before=g.store.state;g.store.commit({type:'finish_building',id:a.id,actionId:jobToken('finish',a.building)});if(g.store.state!==before){g.status=`${buildingById(a.building.kind).name} built!`;g.toast(g.status);}
  }
  clearWork(){this.hammer.visible=false;this.bench.visible=false;}
+ rigHome(n,b){if(!n.home) n.home=buildHomeRig(n.root,b.kind);return n.home;}
+ /** A completed home offers Go in, anchored on the door. In-progress homes keep their build and sleep menus. */
+ offerHome(ray){
+  const hits=ray.intersectObjects([...this.nodes.values()].map(n=>n.root),true),id=hits[0]?.object.userData.buildingId,b=this.g.store.state.buildings.find(x=>x.id===id);
+  if(!b||b.status!=='complete'||!HOME_KINDS.includes(b.kind)) return false;
+  this.showEnter(b);return true;
+ }
+ showEnter(b){
+  const n=this.nodes.get(b.id);if(!n) return;
+  const rig=this.rigHome(n,b),p=V(0,1.25,rig.doorZ);
+  n.root.updateWorldMatrix(true,true);n.root.localToWorld(p);
+  const x=p.x,y=-p.z,h=p.y-heightAt(this.g.world,x,y);
+  this.g.showPrompt('home',b.id,{x,y},h,[{id:'enter',label:'Go in',icon:'walk'}]);
+ }
+ enterHome(id){
+  const g=this.g;if(g.interior) return;
+  if(g.action||g.order){g.toast('Finish this first.');return;}
+  const b=g.store.state.buildings.find(b=>b.id===id);
+  if(!b||b.status!=='complete'||!HOME_KINDS.includes(b.kind)) return;
+  const n=this.nodes.get(b.id);if(!n) return;
+  const rig=this.rigHome(n,b),pose=this.interiorPose(n.root,b,rig);
+  g.prompt=null;g.path=[];g.keys.clear();g.marker.visible=false;g.overview=false;
+  g.interior={id,name:buildingById(b.kind).name,phase:'enter',t:0,door:0,lookYaw:0,lookPitch:0,saved:{focus:g.focus.clone(),zoom:g.zoom,yaw:g.viewYaw||0,pitch:g.viewPitch||0},camFrom:this.camPose(),camTo:{pos:pose.pos,look:pose.look,zoom:pose.zoom,near:.08,far:24}};
+  g.status=`Inside the ${g.interior.name}`;g.notify();
+ }
+ leaveHome(){
+  const g=this.g,inn=g.interior;if(!inn||inn.phase==='exit') return;
+  const s=inn.saved,look=s.focus.clone(),pos=look.clone().add(V(...cameraOffset(s.yaw,false,s.pitch)));
+  inn.phase='exit';inn.t=0;inn.doorFrom=inn.door??1;inn.lookYaw=0;inn.lookPitch=0;
+  inn.camFrom=this.camPose();inn.camTo={pos,look,zoom:s.zoom,near:-80,far:260};g.notify();
+ }
+ camPose(){const g=this.g;return {pos:g.camera.position.clone(),look:g.focus.clone(),zoom:g.zoom,near:g.camera.near,far:g.camera.far};}
+ interiorPose(root,b,rig){
+  const g=this.g,def=buildingById(b.kind),aspect=Math.max(.4,(g.container.clientWidth||800)/(g.container.clientHeight||600));
+  const spanW=def.size[0]*1.05,spanH=Math.min(def.height,def.size[1])*.9,zoom=Math.max(spanH,spanW/aspect)*1.05;
+  const eye=Math.min(1.35,Math.max(.95,def.height*.34));
+  root.updateWorldMatrix(true,true);
+  const pos=root.localToWorld(V(.22,eye,rig.doorZ-.48)),look=root.localToWorld(V(-.05,.42,rig.doorZ-Math.max(1.35,def.size[1]*.42)));
+  return {pos,look,zoom};
+ }
+ stepInterior(dt){
+  const g=this.g,inn=g.interior;if(!inn) return;
+  const n=this.nodes.get(inn.id),easeOut=t=>1-Math.pow(1-THREE.MathUtils.clamp(t,0,1),3);
+  inn.t+=dt;
+  if(inn.phase==='enter'){inn.door=easeOut(inn.t/.6);this.placeInteriorCamera(inn,easeOut(inn.t/.8));if(inn.t>=.8){inn.phase='inside';inn.door=1;}}
+  else if(inn.phase==='inside'){inn.door=1;this.placeInteriorCamera(inn,1);}
+  else{inn.door=(inn.doorFrom??1)*(1-easeOut(inn.t/.6));this.placeInteriorCamera(inn,easeOut(inn.t/.8));if(inn.t>=.8){if(n?.home) n.home.setOpen(0);this.finishInterior();return;}}
+  if(n?.home) n.home.setOpen(inn.door);else if(inn.phase!=='exit') this.finishInterior();
+ }
+ placeInteriorCamera(inn,u){
+  const g=this.g,pos=inn.camFrom.pos.clone().lerp(inn.camTo.pos,u),look=inn.camFrom.look.clone().lerp(inn.camTo.look,u);
+  if(inn.phase!=='exit'&&(inn.lookYaw||inn.lookPitch)){
+   const off=pos.clone().sub(look);
+   if(inn.lookYaw) off.applyAxisAngle(V(0,1,0),inn.lookYaw);
+   if(inn.lookPitch){const right=V().crossVectors(off,V(0,1,0));if(right.lengthSq()>1e-6) off.applyAxisAngle(right.normalize(),inn.lookPitch);}
+   pos.copy(look).add(off);
+  }
+  g.camera.position.copy(pos);g.focus.copy(look);g.camera.lookAt(look);
+  g.zoom=THREE.MathUtils.lerp(inn.camFrom.zoom,inn.camTo.zoom,u);
+  g.camera.near=THREE.MathUtils.lerp(inn.camFrom.near,inn.camTo.near,u);
+  g.camera.far=THREE.MathUtils.lerp(inn.camFrom.far,inn.camTo.far,u);
+  g.updateProjection();
+ }
+ finishInterior(){
+  const g=this.g,s=g.interior?.saved;if(!s){g.interior=null;return;}
+  g.focus.copy(s.focus);g.zoom=s.zoom;g.viewYaw=s.yaw;g.viewPitch=s.pitch;g.camera.near=-80;g.camera.far=260;g.updateProjection();
+  g.camera.position.copy(g.focus).add(V(...cameraOffset(s.yaw,false,s.pitch)));g.camera.lookAt(g.focus);
+  g.interior=null;g.status=g.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';g.notify();
+ }
  inspectRay(ray){
   const hits=ray.intersectObjects([...this.nodes.values()].map(n=>n.root),true),id=hits[0]?.object.userData.buildingId,b=this.g.store.state.buildings.find(b=>b.id===id);if(!b||b.kind==='garden'||b.kind==='path')return false;
   if(b.project&&b.status!=='complete'){this.openMenu={id:'build',nonce:Date.now()};this.g.notify();return true;}
+  if(HOME_KINDS.includes(b.kind)&&b.status==='complete'){this.showEnter(b);return true;}
+  if(b.kind==='well'&&b.status==='complete'){this.wellId=b.id;this.g.notify();return true;}
   if(buildingById(b.kind).woodCapacity||['hut','tent','cottage','townhouse','chest','campfire','oven','well'].includes(b.kind)){const home=['hut','tent','cottage','townhouse'].includes(b.kind);this.openMenu={id:home?'sleep':b.kind==='chest'||buildingById(b.kind).woodCapacity?'inventory':['campfire','oven','well'].includes(b.kind)?b.kind:'food',homeId:home?b.id:undefined,fireId:b.kind==='campfire'?b.id:undefined,ovenId:b.kind==='oven'?b.id:undefined,wellId:b.kind==='well'?b.id:undefined,nonce:Date.now()};this.g.notify();}else this.g.toast(`${buildingById(b.kind).name} · you built this!`);return true;
  }
  update(){
@@ -191,7 +265,7 @@ export class Construction {
   const current=activeBuildings(g.store.state).find(b=>b.status!=='complete'&&!b.project);
   if(current&&current.status==='building'&&buildingProgress(current,now)>=1&&g.action?.type!=='build'){
    try{g.store.commit({type:'finish_building',id:current.id,actionId:jobToken('finish',current)});if(g.order?.id===current.id){g.order=null;g.path=[];}g.refreshDynamic();g.status=`${buildingById(current.kind).name} built!`;g.toast(g.status);}catch(e){g.toast(e.message);}
-  }else if(current&&!g.action&&!g.order&&!this.preview&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
+  }else if(current&&!g.action&&!g.order&&!this.preview&&!g.interior&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
   this.refresh();
  }
  snapshot(){

@@ -7,8 +7,11 @@ import CrewChatPopup from '../components/crew/CrewChatPopup';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
+import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from '../utils/profileScope';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players99&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players110&players=1';
+/** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
+const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
@@ -220,8 +223,23 @@ const MyHomePage: React.FC = () => {
   /** Beds on the island vs friends living there (posted by the island as `gk-beds`). */
   const [beds, setBeds] = useState<{ beds: number; residents: number; canDrop: boolean; need: number } | null>(null);
   const [bedNotice, setBedNotice] = useState<string | null>(null);
+  // Each kid profile owns its own island. The legacy (unscoped) island is handed to
+  // the first profile that opens My Home after the per-profile change (copy, not move).
+  const [profileScope, setProfileScope] = useState<string>(() => ensureLegacyMigration().scope);
   const [residents, setResidents] = useState<PlayersWorldResident[]>(() => readPlayersWorldResidents());
   const [collected, setCollected] = useState<UnlockedCharacter[]>(() => rewardsService.getUnlockedCharacters());
+  // A profile switch while this page is open: re-read this profile's data and reload the island.
+  useEffect(
+    () =>
+      onProfileScopeChange((scope) => {
+        ensureLegacyMigration(scope);
+        setProfileScope(scope);
+        setCollected(rewardsService.getUnlockedCharacters());
+        setResidents(readPlayersWorldResidents());
+        setPlacing(null);
+      }),
+    [],
+  );
   // The island reads saved resident models the moment it boots. Wait until
   // the CMS model refresh has copied a newly uploaded GLB onto those saves.
   const [modelsReady, setModelsReady] = useState(false);
@@ -416,8 +434,11 @@ const MyHomePage: React.FC = () => {
 
   useEffect(() => {
     if (!ready) return;
+    // Belt and braces: the island already got the scope from its URL; if it ever
+    // disagrees (stale frame) it reloads itself under the right profile.
+    post({ type: 'gk-profile', scope: profileScope });
     post({ type: 'gk-residents-sync' });
-  }, [post, ready]);
+  }, [post, ready, profileScope]);
 
   useEffect(() => {
     if (ready) {
@@ -646,7 +667,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={HOMEWORLD_URL}
+          src={homeworldUrlFor(profileScope)}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

@@ -14,7 +14,10 @@ import {advanceCommunity,configureCommunity,validCommunity,communityClaim,homeRe
 import {woodRoom,validWoodDrops} from './wood-storage.mjs';
 import {validAnimals,animalSiteStatus} from './animals.mjs';
 import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
-export const SAVE_KEY = 'godlykids_homeworld_playtest_v1';
+import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
+/** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
+export const SAVE_KEY_BASE = 'godlykids_homeworld_playtest_v1';
+export const SAVE_KEY = scopeKey(SAVE_KEY_BASE);
 export const GAME_MINUTES_PER_MS = 1440 / 600000;
 export const SEEDS = [
   // waterDays: one watering keeps the plant growing this many island days; after that it waits, thirsty, until watered again.
@@ -169,6 +172,10 @@ export function pruneBuiltIns(state){
 export class GameStore {
   constructor(world,storage,wall=Date.now(),{playersOnly=false}={}) {
     this.world=world;this.storage=storage;this.error='';this.savedAt=null;this.playersOnly=playersOnly;
+    // First profile after the per-profile change inherits the legacy save (copy); other profiles start fresh.
+    migrateLegacyKeys([SAVE_KEY_BASE,`${SAVE_KEY_BASE}_backup`],storage);
+    // A stale (pre-profile) island bundle may still have written the legacy save after the copy: a higher revision there wins once.
+    adoptNewerLegacy(SAVE_KEY_BASE,(legacy,current)=>{try{return (JSON.parse(legacy).revision||0)>(JSON.parse(current).revision||0);}catch{return false;}},storage);
     const raw=storage.getItem(SAVE_KEY);
     if(raw){try {let s=migrateGrid(JSON.parse(raw),world);if(!validState(s,world)){const repaired=repairState(s,world);if(!validState(repaired,world))throw Error('unrecognized save');s=repaired;}this.state=seedStarterGarden(this.migrate(s),world);for(const [missing,suffix] of [[Object.values(s.characters||{}).some(c=>c.fatigue!==undefined||c.awakeSince!==undefined),'before_remove_sleep_meter'],[s.community&&!s.community.members.adam,'before_character_control'],[projectBuildings(s).some(b=>b.project.basis!==CONSTRUCTION_BASIS),'before_island_build_days'],[s.constructionVersion===undefined,'before_construction_crews'],[s.treeDamage===undefined,'before_resource_health'],[s.community===undefined,'before_community'],[s.woodDrops===undefined,'before_wood_storage'],[s.removedRocks===undefined,'before_mining'],[s.characters===undefined,'before_energy'],[s.buildings===undefined,'before_building']])if(missing&&!storage.getItem(`${SAVE_KEY}_${suffix}`)){try{storage.setItem(`${SAVE_KEY}_${suffix}`,raw);}catch{/* Main writes still report storage failures without discarding this state. */}}}catch{this.state=initialState(world,wall);this.error='The previous test save could not be read. It has been kept. Reset this test to start a new save.';this.locked=true;}}
     else this.state=seedStarterGarden(initialState(world,wall),world);

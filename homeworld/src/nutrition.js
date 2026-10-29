@@ -40,7 +40,7 @@ export class Nutrition {
     this.g.status=`${name} needs ${cost} energy. Go home to sleep, eat some food, or take a breather.`;this.g.toast(this.g.status);return false;
   }
   busy(){if(this.g.ambientNudge?.())return true;if(this.g.action||this.g.order||this.sleep){this.g.toast('Let your character finish this action first.');return true;}return false;}
-  eat(item){const g=this.g;if(this.busy())return;const food=FOODS[item];if(!food||!(g.store.state.inventory[item]>0)){g.toast('Gather or prepare that food first.');return;}if(mealGain(g.store.state,item,gameTime(g.store.state)).total<=0){g.toast(`${g.store.state.characters?.[activeCharacter(g.store.state)]?.name||'Adam'} is full. Save this food for later.`);return;}g.startAction({type:'eat',item,actionId:crypto.randomUUID(),target:{...g.player}});}
+  eat(item){const g=this.g;if(g.action?.type==='eat')return;if(this.busy())return;const food=FOODS[item];if(!food||!(g.store.state.inventory[item]>0)){g.toast('Gather or prepare that food first.');return;}if(mealGain(g.store.state,item,gameTime(g.store.state)).total<=0){g.toast(`${g.store.state.characters?.[activeCharacter(g.store.state)]?.name||'Adam'} is full. Save this food for later.`);return;}g.startAction({type:'eat',item,actionId:crypto.randomUUID(),target:{...g.player}});}
   /** Walk to a campfire and drop a log on it (one log = 2 island hours). */
   stokeFire(fireId){
     const g=this.g;if(this.busy())return;
@@ -288,7 +288,8 @@ export class Nutrition {
   /** What the well popup needs. */
   wellCard(wellId){
     const g=this.g,s=g.store.state,well=completedWells(s).find(b=>b.id===wellId)||completedWells(s)[0];if(!well)return null;
-    return {id:well.id,water:s.inventory.water||0,max:WATER_MAX,mud:s.inventory.mud||0,wheat:s.inventory.wheat||0,ovens:completedOvens(s).length,busy:!!(this.g.action||this.g.order||this.sleep)};
+    const spot=workPoint(g.world,well);
+    return {id:well.id,name:buildingById(well.kind).name,water:s.inventory.water||0,max:WATER_MAX,away:dist(g.player,spot),busy:!!(this.g.action||this.g.order||this.sleep)};
   }
   snapshot(){
     const g=this.g,s=g.store.state,id=activeCharacter(s),minutes=gameTime(s),sleep=this.sleep,homes=completedHomes(s),lowEnergy=isLowEnergy(s);

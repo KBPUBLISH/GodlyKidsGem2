@@ -14,7 +14,10 @@
   color: #314b35;
   pointer-events: auto;
   text-align: left;
+  /* A greeting lingers 4s, then fades over the last 300ms (residents.sayHello clears it on the same clock). */
+  animation: resident-line-life 4s linear forwards;
 }
+@keyframes resident-line-life { 0%, 92.5% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 .resident-line > strong { display: block; margin: 0 0 5px; color: #57723d; font-size: 12px; font-weight: 900; }
 .resident-line > p { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .resident-line > button { position: absolute; top: 3px; right: 3px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: #57723d; font-size: 27px; }

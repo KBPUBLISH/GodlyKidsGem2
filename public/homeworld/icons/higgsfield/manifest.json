@@ -845,6 +845,16 @@
       "url": "/icons/higgsfield/pray.png",
       "bytes": 58664,
       "sha256": "6a9f4bb0d90153b0ee4d148e8f25a571fa2f4624c4e4b0d897372311c8d90e11"
+    },
+    {
+      "id": "friends",
+      "size": [
+        256,
+        256
+      ],
+      "url": "/icons/higgsfield/friends.png",
+      "bytes": 79013,
+      "sha256": "82ee6ab675afdb6476ecbfe1cc80f982135b45fa50b0be6eb49cb8427d6b29b0"
     }
   ]
 }

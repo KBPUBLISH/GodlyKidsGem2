@@ -12,9 +12,12 @@ import { advancePath, turnToward, resetAnimatedPose } from './character-motion.j
 import { projectAssignments } from './construction-projects.mjs';
 import { normalizeCharacterModel } from './character-model.js';
 import { emitWorkSweat } from './work-sweat.js';
+import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.mjs';
 
-/** Collected Bible characters living on the Players World island. Same key as the app. */
-export const RESIDENTS_KEY = 'godlykids_players_world_residents_v1';
+/** Collected Bible characters living on the Players World island. Same key as the app, scoped per kid profile (storage-scope.mjs). */
+export const RESIDENTS_KEY_BASE = 'godlykids_players_world_residents_v1';
+migrateLegacyKeys([RESIDENTS_KEY_BASE]);
+export const RESIDENTS_KEY = scopeKey(RESIDENTS_KEY_BASE);
 
 function readResidents() {
   try {
@@ -68,6 +71,7 @@ export class Residents {
     this.onMessage = (event) => {
       if (event.origin !== location.origin || !event.data) return;
       const { type } = event.data;
+      if (type === 'gk-profile') { if (ensureFrameScope(event.data.scope)) return; }
       if (type === 'gk-residents-sync') this.show(readResidents());
       if (type === 'gk-resident-drop') this.beginDrop(event.data.character);
       if (type === 'gk-resident-remove') this.remove(event.data.id);
@@ -657,6 +661,10 @@ export class Residents {
     } catch (error) {
       game.toast?.(error.message);
     }
+    // The greeting is a passing remark: keep it 4s (CSS fades the last 300ms), unless a newer line or a dismiss replaced it first.
+    clearTimeout(this.lineTimer);
+    const shown = this.line ? (this.line = {...this.line, shownAt:Date.now()}) : null;
+    if (shown) this.lineTimer = setTimeout(() => { if (this.line === shown) { this.line = null; game.notify?.(); } }, 4000);
   }
 
   /** Tap: keep this friend selected, and play the wave once. */

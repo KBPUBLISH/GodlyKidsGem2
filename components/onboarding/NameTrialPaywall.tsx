@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bell, Check, ChevronLeft } from 'lucide-react';
 import ParentGateModal from '../features/ParentGateModal';
 import { useSubscription } from '../../context/SubscriptionContext';
@@ -9,12 +9,95 @@ const NAVY = '#12264A';
 const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 
-const SLIDES = [
-  { src: '/assets/images/paywall-carousel-1.png', alt: 'Daily devotional activities for kids' },
-  { src: '/assets/images/paywall-carousel-2.png', alt: 'Low stimulating video books' },
-  { src: '/assets/images/paywall-carousel-3.png', alt: 'Hours of screen-free audio fun' },
-  { src: '/assets/images/paywall-carousel-4.png', alt: 'Games that teach faith' },
+/**
+ * The pitch before the trial: real gameplay hero shots (4:5 WebP, bottom
+ * gradient baked in so the copy below stays legible) with the hook rendered
+ * in React. Leads with the strongest hook and ends on the value prop right
+ * before the trial step.
+ */
+type Slide = { src: string; eyebrow: string; title: string; body: string };
+
+const SLIDES: Slide[] = [
+  {
+    src: '/assets/images/onboarding/slide-1-adventure.webp',
+    eyebrow: 'Stories',
+    title: 'Adventure to Bible Islands',
+    body: 'Sail from island to island and live the stories of the Bible.',
+  },
+  {
+    src: '/assets/images/onboarding/slide-2-collect.webp',
+    eyebrow: 'Collect',
+    title: 'Collect Characters',
+    body: 'Finish a story to meet its hero. Adam, Eve, Noah and more join your crew.',
+  },
+  {
+    src: '/assets/images/onboarding/slide-3-community.webp',
+    eyebrow: 'Build',
+    title: 'Build a Community',
+    body: 'Bring your friends home. Build houses, plant gardens, share meals.',
+  },
+  {
+    src: '/assets/images/onboarding/slide-4-pray.webp',
+    eyebrow: 'Grow',
+    title: 'Pray & Grow',
+    body: 'Tired? Kneel and pray. Hungry? Cook together. Every day teaches something.',
+  },
+  {
+    src: '/assets/images/onboarding/slide-5-fishing.webp',
+    eyebrow: 'Play',
+    title: 'Your Island, Your Story',
+    body: 'Chop, build, fish, farm — and watch your world grow.',
+  },
+  {
+    src: '/assets/images/onboarding/slide-6-live-it.webp',
+    eyebrow: 'Learn by playing',
+    title: 'Live It, Don’t Just Read It',
+    body: 'Kids learn to live a Christian life through play: work hard, be kind, pray, care for others.',
+  },
 ];
+
+/** A horizontal drag this long (and mostly sideways) flips the slide. */
+const SWIPE_PX = 40;
+
+const HeroSlide: React.FC<{ slide: Slide; index: number; count: number }> = ({ slide, index, count }) => (
+  <figure
+    className="relative h-full w-full overflow-hidden rounded-[28px] bg-[#dfeaf5]"
+    style={{ boxShadow: '0 14px 34px rgba(18,38,74,0.22)', animation: 'gk-pitch-in 320ms ease-out both' }}
+  >
+    <img
+      src={slide.src}
+      alt=""
+      draggable={false}
+      className="absolute inset-0 h-full w-full select-none object-cover object-top"
+    />
+    <figcaption
+      className="absolute inset-x-0 bottom-0 px-5 pb-5 pt-12 text-left text-white"
+      style={{ background: 'linear-gradient(180deg, rgba(14,30,58,0) 0%, rgba(14,30,58,0.55) 45%, rgba(14,30,58,0.8) 100%)' }}
+    >
+      <span
+        className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase tracking-[0.14em]"
+        style={{ background: GOLD, color: NAVY, fontFamily: BUBBLE }}
+      >
+        {slide.eyebrow}
+      </span>
+      <h2
+        className="mt-2 font-black leading-[1.05]"
+        style={{ fontFamily: BUBBLE, fontSize: 'clamp(1.6rem, 7.4vw, 2.15rem)', textShadow: '0 2px 10px rgba(0,0,0,0.45)' }}
+      >
+        {slide.title}
+      </h2>
+      <p
+        className="mt-1.5 font-semibold leading-snug text-white/90"
+        style={{ fontSize: 'clamp(0.95rem, 4.1vw, 1.1rem)', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}
+      >
+        {slide.body}
+      </p>
+      <span className="sr-only">
+        Slide {index + 1} of {count}
+      </span>
+    </figcaption>
+  </figure>
+);
 
 const TRIAL_STEP = SLIDES.length;
 const PLAN_STEP = SLIDES.length + 1;
@@ -40,6 +123,31 @@ const NameTrialPaywall: React.FC<Props> = ({ childName, onTakeTour, onTrialStart
   const onSlides = step < TRIAL_STEP;
   const onTrial = step === TRIAL_STEP;
   const onPlans = step === PLAN_STEP;
+
+  // The next hero is fetched while this one is on screen so advancing never pops.
+  useEffect(() => {
+    const next = SLIDES[step + 1];
+    if (!next) return;
+    const img = new Image();
+    img.src = next.src;
+  }, [step]);
+
+  // Swipe left/right on the hero flips slides; vertical drags are left to the page.
+  const swipe = useRef<{ x: number; y: number; id: number } | null>(null);
+  const onPointerDown = (event: React.PointerEvent) => {
+    swipe.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  };
+  const onPointerUp = (event: React.PointerEvent) => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start || start.id !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    setPayError('');
+    if (dx < 0) setStep((current) => Math.min(current + 1, TRIAL_STEP));
+    else setStep((current) => Math.max(0, current - 1));
+  };
 
   const startPurchase = async () => {
     setPaying(true);
@@ -94,20 +202,31 @@ const NameTrialPaywall: React.FC<Props> = ({ childName, onTakeTour, onTrialStart
       <div className="flex min-h-0 flex-1 flex-col">
         {onSlides && (
           <div
-            className="flex min-h-0 flex-1 flex-col items-stretch justify-start bg-white"
+            className="flex min-h-0 flex-1 items-center justify-center bg-white px-4 pb-2 pt-1"
             role="region"
             aria-roledescription="carousel"
             aria-label="What the trial includes"
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => { swipe.current = null; }}
+            style={{ touchAction: 'pan-y' }}
           >
+            <style>{`
+              @keyframes gk-pitch-in{from{opacity:0;transform:scale(0.985)}to{opacity:1;transform:none}}
+              .gk-pitch-stage{container-type:size}
+              .gk-pitch-hero{width:100%;max-height:100%;aspect-ratio:4/5}
+              .gk-pitch-hero{width:min(100%,80cqh)}
+              @media (prefers-reduced-motion:reduce){.gk-pitch-hero figure{animation:none!important}}
+            `}</style>
             <p className="sr-only" aria-live="polite">
-              Slide {step + 1} of {SLIDES.length}: {SLIDES[step].alt}
+              Slide {step + 1} of {SLIDES.length}: {SLIDES[step].title}. {SLIDES[step].body}
             </p>
-            <img
-              key={SLIDES[step].src}
-              src={SLIDES[step].src}
-              alt={SLIDES[step].alt}
-              className="max-h-full w-full object-contain object-top"
-            />
+            {/* 4:5 hero: as large as the stage allows without leaving the screen or losing its shape. */}
+            <div className="gk-pitch-stage flex h-full w-full items-center justify-center">
+              <div className="gk-pitch-hero">
+                <HeroSlide key={SLIDES[step].src} slide={SLIDES[step]} index={step} count={SLIDES.length} />
+              </div>
+            </div>
           </div>
         )}
 

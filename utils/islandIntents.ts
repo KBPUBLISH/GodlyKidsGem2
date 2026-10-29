@@ -6,6 +6,8 @@
  * "break rocks", "plant carrots", "build a campfire", "are you tired?".
  */
 
+import { scopedKey } from './profileScope';
+
 export type IslandTaskType =
   | 'chop' | 'mine' | 'fish' | 'water' | 'plow' | 'plant' | 'harvest'
   | 'eat' | 'rest' | 'sleep' | 'cook' | 'stoke' | 'build' | 'craft' | 'stop' | 'pause' | 'resume';
@@ -270,13 +272,14 @@ export function answerWorldQuestion(topic: Exclude<IslandIntent, { kind: 'task' 
   return '';
 }
 
+/** Per kid profile (see utils/profileScope.ts). */
 const GREETING_KEY = 'gk_island_greetings_v1';
 
 type GreetingMemory = { last?: string; at?: number; count?: number };
 
 function readGreetingMemory(characterId: string): GreetingMemory {
   try {
-    const all = JSON.parse(localStorage.getItem(GREETING_KEY) || '{}');
+    const all = JSON.parse(localStorage.getItem(scopedKey(GREETING_KEY)) || '{}');
     return all[characterId] || {};
   } catch {
     return {};
@@ -285,9 +288,9 @@ function readGreetingMemory(characterId: string): GreetingMemory {
 
 function writeGreetingMemory(characterId: string, memory: GreetingMemory) {
   try {
-    const all = JSON.parse(localStorage.getItem(GREETING_KEY) || '{}');
+    const all = JSON.parse(localStorage.getItem(scopedKey(GREETING_KEY)) || '{}');
     all[characterId] = memory;
-    localStorage.setItem(GREETING_KEY, JSON.stringify(all));
+    localStorage.setItem(scopedKey(GREETING_KEY), JSON.stringify(all));
   } catch {
     /* storage can be unavailable; greetings just won't remember */
   }

@@ -28,7 +28,9 @@ function Reel({engine,hot,disabled}){
   const centre=()=>{const r=ref.current.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};};
   const angleAt=(e,c)=>{const dx=e.clientX-c.x,dy=e.clientY-c.y;return Math.hypot(dx,dy)<DEAD_ZONE?null:Math.atan2(dy,dx);};
   const down=e=>{
-    if(drag.current||(e.pointerType==='mouse'&&e.button!==0))return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    // A second finger while the first is still captured is ignored; a stale drag (pointerup never arrived) is taken over.
+    const prev=drag.current;if(prev){let held=false;try{held=ref.current.hasPointerCapture(prev.id);}catch{/* fine */}if(held&&prev.id!==e.pointerId)return;}
     e.stopPropagation();e.preventDefault();
     const c=centre();drag.current={id:e.pointerId,c,last:angleAt(e,c),x:e.clientX,y:e.clientY,moved:0,t:performance.now()};
     try{ref.current.setPointerCapture(e.pointerId);}catch{/* pointer already gone */}

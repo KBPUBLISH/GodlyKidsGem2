@@ -28,7 +28,7 @@ export function ResidentGreeting({engine,enabled}){
  useEffect(()=>{
   if(!enabled){setCard(null);setPicking(false);setJobs(null);return;}
   let frame;
-  const update=()=>{setCard(engine.current?.residentGreeting?.()||null);frame=requestAnimationFrame(update);};
+  const update=()=>{const g=engine.current;if(g?.action?.type==='eat')setPicking(false);setCard(g?.residentGreeting?.()||null);frame=requestAnimationFrame(update);};
   frame=requestAnimationFrame(update);
   return()=>cancelAnimationFrame(frame);
  },[engine,enabled]);
@@ -36,8 +36,9 @@ export function ResidentGreeting({engine,enabled}){
  const sleep=()=>{const g=engine.current;if(g?.nutrition?.goSleep())g.residents?.closeMenu();};
  const pray=()=>{const g=engine.current;setJobs(null);if(g?.nutrition?.pray())g.residents?.closeMenu();};
  const foods=card.foods||[];
- const eatItem=id=>{const g=engine.current;if(!g)return;setPicking(false);if(card.helper)g.residents?.feed(g.residents.menuActor(),id);else g.nutrition.eat(id);g.residents?.closeMenu();};
- const eat=()=>{const g=engine.current;if(!g)return;setJobs(null);if(!foods.length){g.toast(card.hasRawFish?'There is raw fish in the bag. Grill it at the campfire first.':'No snacks in the bag. Pick ripe crops, bake bread, or grill a fish.');return;}if(!foods.some(f=>f.gain>0)){g.toast(`${card.name} is full. Save the snacks for later.`);return;}setPicking(p=>!p);};
+ const eatingNow=!card.helper&&engine.current?.action?.type==='eat';
+ const eatItem=id=>{const g=engine.current;if(!g||(!card.helper&&g.action?.type==='eat'))return;setPicking(false);if(card.helper)g.residents?.feed(g.residents.menuActor(),id);else g.nutrition.eat(id);g.residents?.closeMenu();};
+ const eat=()=>{const g=engine.current;if(!g||eatingNow)return;setJobs(null);if(!foods.length){g.toast(card.hasRawFish?'There is raw fish in the bag. Grill it at the campfire first.':'No snacks in the bag. Pick ripe crops, bake bread, or grill a fish.');return;}if(!foods.some(f=>f.gain>0)){g.toast(`${card.name} is full. Save the snacks for later.`);return;}setPicking(p=>!p);};
  const openJobs=()=>{const g=engine.current;if(!g)return;setPicking(false);setJobs(j=>j?null:jobsFor(g,card.helper));};
  const give=task=>{const g=engine.current;if(!g)return;setJobs(null);const who=g.residents?.menuId;g.assign(task,who);g.residents?.closeMenu();};
  const work=card.work;
@@ -49,10 +50,10 @@ export function ResidentGreeting({engine,enabled}){
     {work&&<div className={`resident-work ${work.paused?'paused':''}`}><Icon type={work.type==='chop'?'axe':work.type==='fish'?'rawfish':work.type==='water'?'water':'rest'} size={15}/><span>{work.paused?'Paused · ':''}{work.label}{work.target!=null?` · ${work.done}/${work.target}`:work.done?` · ${work.progress}`:''}</span></div>}
    </div>
   </aside>
-  {!picking&&!jobs&&card.line&&<ResidentLine name={card.name} line={card.line} onDismiss={()=>engine.current?.residents?.dismissLine()}/>}
-  {card.actions&&picking&&!work&&<div className="resident-food-picker" role="menu" aria-label={`Food for ${card.name}`} style={{left:card.actions.x,top:card.actions.y-78}} onPointerDown={e=>e.stopPropagation()}>
+  {!picking&&!jobs&&card.line&&<ResidentLine key={card.line.shownAt||card.line.text} name={card.name} line={card.line} onDismiss={()=>engine.current?.residents?.dismissLine()}/>}
+  {card.actions&&picking&&!work&&!eatingNow&&<div className="resident-food-picker" role="menu" aria-label={`Food for ${card.name}`} style={{left:card.actions.x,top:card.actions.y-78}} onPointerDown={e=>e.stopPropagation()}>
    <strong>What should {card.name} eat?</strong>
-   <div className="resident-food-list">{foods.map(f=><button key={f.id} type="button" role="menuitem" disabled={f.gain<=0} aria-label={`${f.name}, ${f.count} in the bag${f.gain>0?`, plus ${f.gain}`:', full'}`} onClick={e=>{e.stopPropagation();eatItem(f.id);}}><ItemIcon id={f.id} size={30}/><span>{f.name}</span><small>{f.gain>0?`+${f.gain}`:'Full'} · ×{f.count}</small></button>)}</div>
+   <div className="resident-food-list">{foods.map(f=>{const gain=Math.round(f.gain);return <button key={f.id} type="button" role="menuitem" disabled={eatingNow||f.gain<=0} aria-label={`${f.name}, ${f.count} in the bag${f.gain>0?`, plus ${gain}`:', full'}`} onClick={e=>{e.stopPropagation();eatItem(f.id);}}><ItemIcon id={f.id} size={30}/><span>{f.name}</span><small>{f.gain>0?`+${gain}`:'Full'} · ×{f.count}</small></button>;})}</div>
   </div>}
   {jobs&&<div className="job-shade" onPointerDown={e=>e.stopPropagation()} onClick={()=>setJobs(null)}>
    <section className="job-sheet panel" role="dialog" aria-modal="true" aria-label={`A job for ${card.name}`} onClick={e=>e.stopPropagation()}>
@@ -72,7 +73,7 @@ export function ResidentGreeting({engine,enabled}){
    </>:<>
     <button type="button" className={`resident-action task ${jobs?'open':''}`} aria-expanded={!!jobs} aria-label={`Give ${card.name} a job`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();openJobs();}}><Icon type="actions" size={22}/><span>Task</span></button>
     <button type="button" className="resident-action" aria-label={`Chat with ${card.name}`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();engine.current?.residents?.talk();}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg><span>Chat</span></button>
-    <button type="button" className={`resident-action eat ${card.food&&card.food.gain>0?'':'empty'} ${picking?'open':''}`} aria-expanded={picking} aria-label={card.food&&card.food.gain>0?`Choose something for ${card.name} to eat`:`Nothing to eat yet`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();eat();}}><Icon type="food" size={22}/><span>Eat</span></button>
+    <button type="button" className={`resident-action eat ${eatingNow?'busy':''} ${card.food&&card.food.gain>0?'':'empty'} ${picking?'open':''}`} disabled={eatingNow} aria-expanded={picking&&!eatingNow} aria-label={eatingNow?`${card.name} is eating`:card.food&&card.food.gain>0?`Choose something for ${card.name} to eat`:`Nothing to eat yet`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();eat();}}><Icon type="food" size={22}/><span>{eatingNow?'Eating…':'Eat'}</span></button>
     {card.canPray&&<button type="button" className="resident-action pray" aria-label={`${card.name} says a prayer`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();pray();}}><Icon type="pray" size={22}/><span>Pray</span></button>}
     {card.canSleep&&<button type="button" className="resident-action sleep" aria-label={`Send ${card.name} to sleep`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();sleep();}}><Icon type="rest" size={22}/><span>Sleep</span></button>}
    </>}

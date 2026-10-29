@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { UnlockedCharacter } from '../../services/rewardsService';
 import type { PlayersWorldResident } from '../../utils/playersWorld';
 import { resolveFirstStoryPackDestination } from '../../utils/onboardingJourney';
+import { scopedKey } from '../../utils/profileScope';
 
 /**
  * First visit to My Home.
@@ -14,6 +15,8 @@ import { resolveFirstStoryPackDestination } from '../../utils/onboardingJourney'
  * flow resumes wherever it stopped and never nags a player who finished it.
  */
 export const HOME_ONBOARDING_KEY = 'gk_home_onboarding_v1';
+/** Per profile: every kid gets their own first visit (same scope as the island iframe). */
+const onboardingKey = () => scopedKey(HOME_ONBOARDING_KEY);
 
 export type HomeOnboardingRecord = {
   /** Where the flow is: the parent's gate steps, then the island tour, then done. */
@@ -30,7 +33,7 @@ export type HomeOnboardingRecord = {
 
 export function readHomeOnboarding(): HomeOnboardingRecord | null {
   try {
-    const raw = JSON.parse(localStorage.getItem(HOME_ONBOARDING_KEY) || 'null') as unknown;
+    const raw = JSON.parse(localStorage.getItem(onboardingKey()) || 'null') as unknown;
     return raw && typeof raw === 'object' ? (raw as HomeOnboardingRecord) : null;
   } catch {
     return null;
@@ -40,7 +43,7 @@ export function readHomeOnboarding(): HomeOnboardingRecord | null {
 export function writeHomeOnboarding(patch: HomeOnboardingRecord): HomeOnboardingRecord {
   const next: HomeOnboardingRecord = { ...(readHomeOnboarding() || {}), ...patch, updatedAt: Date.now() };
   try {
-    localStorage.setItem(HOME_ONBOARDING_KEY, JSON.stringify(next));
+    localStorage.setItem(onboardingKey(), JSON.stringify(next));
   } catch {
     /* private mode: remembered for this visit only */
   }

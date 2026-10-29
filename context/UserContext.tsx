@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
 import { profileService, CloudProfile } from '../services/profileService';
+import { profileScopeKeyFor, removeProfileScopedKeys } from '../utils/profileScope';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 // Removed import of KidProfile due to missing export in ../types
 
@@ -964,6 +965,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeKid = (id: string) => {
     setKids(prev => prev.filter(k => k.id !== id));
+    // The deleted kid's island (save, residents, crew, onboarding) goes with them.
+    try {
+      removeProfileScopedKeys(profileScopeKeyFor(id));
+    } catch {
+      /* storage unavailable */
+    }
     // If we're removing the currently active profile, switch back to parent
     if (currentProfileId === id) {
       setCurrentProfileId(null);
@@ -1259,6 +1266,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentProfileId,
     saveCurrentProfileEconomy,
   ]);
+
+  // profileService is what the per-profile storage scopes (island, crew, story
+  // progress) read; keep it mirroring the active profile however it changed
+  // (boot default, switch, delete of the active kid, reset).
+  useEffect(() => {
+    if (profileService.getCurrentProfileId() !== currentProfileId) {
+      profileService.setCurrentProfile(currentProfileId);
+    }
+  }, [currentProfileId]);
 
   const switchProfile = (profileId: string | null) => {
     // Save current profile's data before switching

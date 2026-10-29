@@ -84,6 +84,23 @@ const ISLAND_WIDTH_FRAC = 0.42;
 const SKY_TOP_COLOR = '#91dff9';
 /** Water line, as a fraction of the stage height (islands sit on it). */
 const HORIZON_PCT = 16.5;
+/**
+ * Shore line = water line + this share of the stage height (~14px on a
+ * phone), so the islands sit INTO the water instead of the cut-outs
+ * hovering in front of it. The island band's bottom edge sits here.
+ */
+const ISLAND_SHORE_SINK_FRAC = 0.017;
+/**
+ * Share of each island PNG's own height pushed below the shore line (and
+ * masked out). CMS map-art icons carry 0–15% transparent bottom padding plus a
+ * baked foam ring. 13% leaves the deepest-padded icons' painted base ~2% of
+ * their height above the shore line — still well below the horizon thanks to
+ * ISLAND_SHORE_SINK_FRAC — while full-bleed icons lose only their foam ring
+ * and a sliver of beach, keeping the animals and rocks above water.
+ */
+const ISLAND_SINK_PCT = 13;
+/** Hides the sunk share and feathers the shore line above it (see above). */
+const ISLAND_SHORE_MASK = `linear-gradient(to top, transparent ${ISLAND_SINK_PCT}%, rgba(0,0,0,0.5) ${ISLAND_SINK_PCT + 2}%, #000 ${ISLAND_SINK_PCT + 5.5}%)`;
 /** Sea panorama tile (crew-voyage-sea-pano.jpg) width ÷ height. */
 const SEA_PANO_ASPECT = 3840 / 1229;
 /** How far the panorama pans per island notch, as a fraction of stage width. */
@@ -1174,6 +1191,9 @@ const CrewPage: React.FC = () => {
 
   const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
   const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
+  /** Sky/sea line of the panorama, and the y where island shores rest. */
+  const waterlineY = stage.top + (stage.height * HORIZON_PCT) / 100;
+  const islandBaseY = waterlineY + stage.height * ISLAND_SHORE_SINK_FRAC;
   // While a drag owns the wheel the prop stays frozen at its start value so
   // React never overwrites the per-frame transform; on release it eases to
   // the notch (see onWheelPointerUp).
@@ -1721,14 +1741,18 @@ const CrewPage: React.FC = () => {
         </div>
       )}
       {/* Real voyage islands on the water line, sliding the way the world
-          wheel carousel does. Bases sit just below the horizon. */}
+          wheel carousel does. The band's bottom edge IS the shore line
+          (water line + ISLAND_SHORE_SINK_FRAC), so it tracks the panorama's
+          horizon on every aspect ratio; each PNG is sunk ISLAND_SINK_PCT of
+          its own height below that edge and masked there, so transparent
+          padding and baked foam go under the water and the land meets it. */}
       <div
         className="pointer-events-none absolute z-[2]"
         style={{
           left: stage.left,
           width: stage.width,
           top: stage.top,
-          height: (stage.height * (HORIZON_PCT + 5)) / 100,
+          height: islandBaseY - stage.top,
           // Sail-in: the whole band swells toward the bow (bob lives on the
           // inner wrapper so the keyframes don't fight this transform).
           transform: sailingIsland && !reduceMotion ? `scale(${SAIL_IN_ISLAND_SCALE})` : 'scale(1)',
@@ -1743,24 +1767,49 @@ const CrewPage: React.FC = () => {
           const distance = Math.abs(offset);
           if (distance > 2.4) return null;
           const scale = Math.max(0.46, 1 - distance * 0.3);
+          const slide = 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease';
+          const fade = Math.max(0.4, 1 - distance * 0.28);
           return (
-            <img
-              key={island.id}
-              src={island.src}
-              alt=""
-              draggable={false}
-              className="absolute bottom-0 h-auto max-w-none select-none"
-              style={{
-                left: `${50 - offset * 50}%`,
-                width: `${ISLAND_WIDTH_FRAC * 100}%`,
-                transform: `translateX(-50%) scale(${scale})`,
-                transformOrigin: '50% 100%',
-                opacity: Math.max(0.4, 1 - distance * 0.28),
-                filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
-                transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease',
-                zIndex: 4 - Math.round(distance),
-              }}
-            />
+            <React.Fragment key={island.id}>
+              {/* Soft contact shadow / reflection on the water under the shore */}
+              <div
+                className="absolute bottom-0"
+                style={{
+                  left: `${50 - offset * 50}%`,
+                  width: `${ISLAND_WIDTH_FRAC * 92}%`,
+                  height: Math.max(10, Math.round(stage.height * 0.024)),
+                  transform: `translateX(-50%) translateY(58%) scale(${scale})`,
+                  transformOrigin: '50% 50%',
+                  background:
+                    'radial-gradient(ellipse at 50% 50%, rgba(6,52,98,0.34) 0%, rgba(6,52,98,0.18) 42%, rgba(6,52,98,0) 70%)',
+                  opacity: fade * 0.9,
+                  transition: slide,
+                  zIndex: 0,
+                }}
+              />
+              <img
+                src={island.src}
+                alt=""
+                draggable={false}
+                className="absolute bottom-0 h-auto max-w-none select-none"
+                style={{
+                  left: `${50 - offset * 50}%`,
+                  width: `${ISLAND_WIDTH_FRAC * 100}%`,
+                  // translateY runs inside scale() so the sink is a share of
+                  // the island's rendered height; the mask hides that share
+                  // and feathers the next few % so the shore melts into the
+                  // water instead of ending on a hard cut-out edge.
+                  transform: `translateX(-50%) scale(${scale}) translateY(${ISLAND_SINK_PCT}%)`,
+                  transformOrigin: '50% 100%',
+                  WebkitMaskImage: ISLAND_SHORE_MASK,
+                  maskImage: ISLAND_SHORE_MASK,
+                  opacity: fade,
+                  filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
+                  transition: slide,
+                  zIndex: 4 - Math.round(distance),
+                }}
+              />
+            </React.Fragment>
           );
         })}
         </div>
@@ -1775,7 +1824,7 @@ const CrewPage: React.FC = () => {
         const scale = Math.max(0.46, 1 - distance * 0.3);
         const size = stage.width * ISLAND_WIDTH_FRAC * scale;
         const cx = stage.left + stage.width * (0.5 - offset * 0.5);
-        const bottom = stage.top + (stage.height * (HORIZON_PCT + 5)) / 100;
+        const bottom = islandBaseY;
         const isActive = offset === 0;
         const unlocked = voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands);
         const label = isActive && sailingIsland ? 'Sailing…' : unlocked ? island.title : `Complete ${voyageIslands[0]?.title || 'Beginnings'}`;
@@ -1805,7 +1854,9 @@ const CrewPage: React.FC = () => {
             <span
               className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1"
               style={{
-                top: `max(calc(var(--safe-area-top, 0px) + 6px - ${Math.round(bottom - size)}px), 0px)`,
+                // May float up to 26px above the tap square so the label clears
+                // a tall island's top (rainbow / cloud) on short screens.
+                top: `max(calc(var(--safe-area-top, 0px) + 6px - ${Math.round(bottom - size)}px), -26px)`,
                 opacity: !showLabel ? 0 : isActive ? 1 : 0.8,
                 transition: 'opacity 0.3s ease',
               }}

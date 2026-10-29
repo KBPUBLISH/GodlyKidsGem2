@@ -6,7 +6,9 @@
  * Memory auto-expires after 24h to keep conversations fresh.
  */
 import type { ChatTurn } from '../../services/characterChatService';
+import { scopedKey } from '../../utils/profileScope';
 
+/** Memory is per kid profile: `crewChatHistory:<characterId>:<profile scope>`. */
 const KEY_PREFIX = 'crewChatHistory:';
 /** Keep the tail of the conversation only — enough for continuity. */
 const MAX_SAVED_TURNS = 10;
@@ -16,7 +18,7 @@ type StoredChat = { turns: ChatTurn[]; savedAt: number };
 
 /** Saved turns for a character, or [] when absent/expired/corrupt. */
 export function loadChatHistory(characterId: string): ChatTurn[] {
-  const key = KEY_PREFIX + characterId;
+  const key = scopedKey(KEY_PREFIX + characterId);
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return [];
@@ -49,7 +51,7 @@ export function saveChatHistory(characterId: string, turns: ChatTurn[]): void {
       turns: turns.slice(-MAX_SAVED_TURNS),
       savedAt: Date.now(),
     };
-    localStorage.setItem(KEY_PREFIX + characterId, JSON.stringify(record));
+    localStorage.setItem(scopedKey(KEY_PREFIX + characterId), JSON.stringify(record));
   } catch {
     /* memory is a nice-to-have — chat works without it */
   }
@@ -89,7 +91,7 @@ function emptySuggestionRecord(): StoredSuggestions {
 }
 
 function loadSuggestionRecord(characterId: string): StoredSuggestions {
-  const key = ASKED_KEY_PREFIX + characterId;
+  const key = scopedKey(ASKED_KEY_PREFIX + characterId);
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return emptySuggestionRecord();
@@ -122,7 +124,7 @@ function loadSuggestionRecord(characterId: string): StoredSuggestions {
 function saveSuggestionRecord(characterId: string, rec: StoredSuggestions): void {
   try {
     rec.savedAt = Date.now();
-    localStorage.setItem(ASKED_KEY_PREFIX + characterId, JSON.stringify(rec));
+    localStorage.setItem(scopedKey(ASKED_KEY_PREFIX + characterId), JSON.stringify(rec));
   } catch {
     /* best-effort, like the chat history */
   }

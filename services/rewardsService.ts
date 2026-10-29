@@ -12,6 +12,7 @@ import {
   applyCharacterAppearanceToResidents,
   readPlayersWorldResidents,
 } from '../utils/playersWorld';
+import { scopedKey } from '../utils/profileScope';
 
 export type RewardType = 'character' | 'game' | 'coins' | 'book_template' | 'puzzle' | 'coloring';
 
@@ -112,7 +113,12 @@ type RewardsStore = {
   selectedCrewIds: string[];
 };
 
+/**
+ * Base key. Every read/write goes through `storageKey()` so each kid profile
+ * keeps its own collected characters / crew (see utils/profileScope.ts).
+ */
 const STORAGE_KEY = 'godlykids_rewards_v1';
+const storageKey = () => scopedKey(STORAGE_KEY);
 export const MAX_CREW = 12;
 /** Legacy built-in ship parrot. No longer aboard; kept only to scrub old saves. */
 export const SHIP_PARROT_ID = 'ship-parrot';
@@ -156,7 +162,7 @@ function seatOnCrew(store: RewardsStore, characterId: string): void {
 
 function readStore(): RewardsStore {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     if (!raw) return { ...EMPTY, characters: [], games: [], bookTemplates: [], claimedKeys: [], selectedCrewIds: [] };
     const parsed = JSON.parse(raw) as Partial<RewardsStore>;
     return {
@@ -175,7 +181,7 @@ function readStore(): RewardsStore {
 
 function writeStore(store: RewardsStore): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    localStorage.setItem(storageKey(), JSON.stringify(store));
   } catch (err) {
     console.error('rewardsService: failed to save', err);
   }
@@ -550,8 +556,9 @@ class RewardsService {
    * happened) or when `localStorage.debugForceRewardSync = '1'` is set.
    */
   async syncClaimedRewardsAtStartup(): Promise<void> {
-    const AT_KEY = 'godlykids_rewards_cms_sync_at';
-    const STORIES_KEY = 'godlykids_rewards_cms_sync_stories';
+    // Per profile too: each kid's claimed-story set is its own sync.
+    const AT_KEY = scopedKey('godlykids_rewards_cms_sync_at');
+    const STORIES_KEY = scopedKey('godlykids_rewards_cms_sync_stories');
     const THROTTLE_MS = 60 * 60 * 1000;
 
     const claimedSig = this.getClaimedStoryIds().sort().join(',');

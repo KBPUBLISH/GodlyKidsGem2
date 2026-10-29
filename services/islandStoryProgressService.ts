@@ -13,6 +13,7 @@
 
 import { authService } from './authService';
 import { profileService } from './profileService';
+import { ensureLegacyMigration } from '../utils/profileScope';
 
 export type IslandActivityId = 'read' | 'quiz' | 'tryIt' | 'puzzle' | 'coloring' | 'game' | 'rewards';
 
@@ -199,6 +200,21 @@ const profileScope = (): string => profileService.getCurrentProfileId() || 'pare
 const scopedStorageKey = (account = accountScope(), profile = profileScope()): string =>
   `${ISLAND_PROGRESS_STORAGE_PREFIX}:${account}:${profile}`;
 
+/**
+ * Only ONE profile inherits the legacy unscoped completions and the
+ * pre-profile ":parent" store: the first profile active after per-profile
+ * worlds shipped (utils/profileScope.ts remembers it). Merging legacy into
+ * every kid made story completions — and therefore the crew characters they
+ * grant — leak between profiles.
+ */
+const ownsLegacyProgress = (): boolean => {
+  try {
+    return ensureLegacyMigration().owner;
+  } catch {
+    return true;
+  }
+};
+
 class IslandStoryProgressService {
   private cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -218,15 +234,18 @@ class IslandStoryProgressService {
   private readAll(): ProgressMap {
     let merged: ProgressMap = {};
     try {
-      merged = mergeMaps(merged, this.readMap(LEGACY_STORAGE_KEY));
       const account = accountScope();
       const profile = profileScope();
-      merged = mergeMaps(merged, this.readMap(scopedStorageKey(account, 'parent')));
+      // Legacy + pre-profile ":parent" stores belong to the parent profile and
+      // to the one profile that inherited them; other kids are individual.
+      const inherits = profile === 'parent' || ownsLegacyProgress();
+      if (inherits) merged = mergeMaps(merged, this.readMap(LEGACY_STORAGE_KEY));
+      if (inherits) merged = mergeMaps(merged, this.readMap(scopedStorageKey(account, 'parent')));
       merged = mergeMaps(merged, this.readMap(scopedStorageKey(account, profile)));
       // Anonymous session completions (played before sign-in) stay under :local:*
       if (account !== 'local') {
         merged = mergeMaps(merged, this.readMap(scopedStorageKey('local', profile)));
-        merged = mergeMaps(merged, this.readMap(scopedStorageKey('local', 'parent')));
+        if (inherits) merged = mergeMaps(merged, this.readMap(scopedStorageKey('local', 'parent')));
       }
     } catch (error) {
       console.error('Error reading island story progress:', error);
@@ -238,8 +257,9 @@ class IslandStoryProgressService {
     try {
       const key = scopedStorageKey();
       localStorage.setItem(key, JSON.stringify(map));
-      // Keep the legacy key in sync so older readers / same-device unlock still work.
-      localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(map));
+      // Keep the legacy key in sync so older readers / same-device unlock still
+      // work — only from the profile that owns it, never from another kid.
+      if (ownsLegacyProgress()) localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(map));
     } catch (error) {
       console.error('Error saving island story progress:', error);
     }
@@ -279,7 +299,7 @@ class IslandStoryProgressService {
         out[profileId] = mergeMaps(out[profileId] || {}, this.readMap(key));
       }
       const legacy = this.readMap(LEGACY_STORAGE_KEY);
-      if (Object.keys(legacy).length > 0) {
+      if (Object.keys(legacy).length > 0 && ownsLegacyProgress()) {
         const profile = profileScope();
         out[profile] = mergeMaps(out[profile] || {}, legacy);
       }
@@ -301,7 +321,7 @@ class IslandStoryProgressService {
         localStorage.setItem(key, JSON.stringify(merged));
       }
       // Refresh the legacy key from the current profile so unlock reads stay consistent.
-      localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(this.readAll()));
+      if (ownsLegacyProgress()) localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(this.readAll()));
       console.log('🏝️ Island progress hydrated from cloud');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('islandStoryProgressUpdated'));

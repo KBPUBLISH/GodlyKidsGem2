@@ -2,8 +2,11 @@ import React,{useEffect,useRef,useState} from 'react';
 import * as THREE from 'three';
 import {heightAt,cellAt,cellFromKey,canPlow,dist,terrainType} from './core.mjs';
 import {woodTotal,bedCount} from './building.mjs';
+import {woodRoom} from './wood-storage.mjs';
+import {canAffordEnergy} from './nutrition.mjs';
 import {Icon} from './ui.jsx';
 import './onboarding.css';
+import {scopeKey,migrateLegacyKeys} from './storage-scope.mjs';
 
 /**
  * First-visit tour of the island (My Home onboarding, part B).
@@ -12,11 +15,16 @@ import './onboarding.css';
  * friends but nobody on the island → drop one off. Once a friend is placed it posts
  * `gk-onboarding {phase:'tour'}` and this module walks the kid through the island:
  * a spotlight on the real button or world spot to tap, a short caption, and the
- * step moves on when the thing actually happens (or on Next). Progress lives in
+ * step moves on only when the thing actually happens — there is no Next, so every
+ * step is learned by doing (a step whose thing is impossible right now, like chopping
+ * with no trees left, excuses itself; Skip tour stays for a stuck kid). Progress lives in
  * the same localStorage record the parent uses, so it resumes after a reload and
  * the island can keep its own pop-ups quiet until the tour is over.
  */
-export const ONBOARDING_KEY='gk_home_onboarding_v1';
+export const ONBOARDING_KEY_BASE='gk_home_onboarding_v1';
+migrateLegacyKeys([ONBOARDING_KEY_BASE]);
+/** Per kid profile (same scope as the parent's components/home/HomeOnboarding.tsx). */
+export const ONBOARDING_KEY=scopeKey(ONBOARDING_KEY_BASE);
 export function readOnboarding(){try{const v=JSON.parse(localStorage.getItem(ONBOARDING_KEY)||'null');return v&&typeof v==='object'?v:null;}catch{return null;}}
 export function writeOnboarding(patch){const next={...(readOnboarding()||{}),...patch,updatedAt:Date.now()};try{localStorage.setItem(ONBOARDING_KEY,JSON.stringify(next));}catch{/* remembered for this visit only */}return next;}
 /** True until the kid has finished (or skipped) the My Home onboarding. */
@@ -56,9 +64,9 @@ function nearestTree(g){
   return trees[0]||null;
 }
 /** A clear grass cell near the player that the hoe can dig (a step or two away so the tap is obvious). */
-function digSpot(g){
+function digSpot(g,radius=3){
   const s=g.store.state,p=g.player,c0=cellAt(g.world,p.x,p.y);let best=null,bd=1e9;
-  for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){
+  for(let dx=-radius;dx<=radius;dx++)for(let dy=-radius;dy<=radius;dy++){
     const key=`${c0.col+dx}:${c0.row+dy}`,c=cellFromKey(g.world,key),d=dist(p,c);
     if(d<.7||d>=bd||s.cells[key]?.soil||!canPlow(g.world,s,key))continue;bd=d;best=c;
   }
@@ -91,30 +99,39 @@ function toolPath(ctx,name,verb,tabs=['actions']){
   return {target:rect(`.action-options button[aria-label="${name}"]`,{rx:17}),text:`Tap ${name} ${verb}.`};
 }
 
+const seedCount=s=>Object.entries(s.inventory||{}).filter(([id])=>id.endsWith('_seed')).reduce((n,[,v])=>n+(v|0),0);
+/** The buildings list as a short signature: placing, finishing or planning anything changes it. */
+const buildSig=s=>(s.buildings||[]).map(b=>`${b.id}:${b.status}:${b.project?1:0}`).join('|');
+
 /**
  * Each step: `resolve(ctx)` says what to spotlight and what to say right now (the
  * caption follows the kid through the menus), `base(g)` remembers where things stood
- * when the step began and `done(g,base)` says when the step is really done.
+ * when the step began and `done(g,base,ctx)` says when the step is really done.
+ * `blocked(g,ctx)` returns a short excuse when the step is impossible right now (the
+ * tour then skips just that step), and `hint` is the nudge shown after a minute stuck.
  */
 export const TOUR_STEPS=[
-  {id:'move',icon:'walk',title:'Walk around',why:'Your friend goes wherever you tap.',
+  {id:'move',icon:'walk',title:'Walk around',why:'Your friend goes wherever you tap.',hint:'Hint: tap any open green grass near your friend.',
     base:g=>({player:{...g.player},spot:walkSpot(g),at:Date.now()}),
     // The drop-off tap can leave the player mid-walk; keep sliding the baseline for a moment
     // so only a walk the kid starts *after* the card appears counts.
-    done:(g,b)=>{if(Date.now()-b.at<1500){b.player={...g.player};return false;}return dist(g.player,b.player)>1.1;},
+    // Only a walk the kid started counts (a path or key-walk was seen), never a teleport from a save sync or a hand-over.
+    done:(g,b)=>{if(Date.now()-b.at<1500){b.player={...g.player};return false;}b.walked||=(g.path?.length>0)||!!g.manualMoving;return b.walked&&dist(g.player,b.player)>1.1;},
     resolve:({g},b)=>({target:b.spot?projectWorld(g,b.spot.x,b.spot.y,.1,40):null,text:'Tap the grass to walk.'})},
-  {id:'chop',icon:'axe',title:'Chop a tree',why:'Wood builds homes and feeds the campfire.',
+  {id:'chop',icon:'axe',title:'Chop a tree',why:'Wood builds homes and feeds the campfire.',hint:'Hint: the axe is under Build → Actions → Chop. Then tap a tree.',
     base:g=>({wood:woodTotal(g.store.state),trees:g.store.state.stats.trees||0}),
     done:(g,b)=>woodTotal(g.store.state)>b.wood||(g.store.state.stats.trees||0)>b.trees,
+    blocked:g=>!(g.trees||[]).length?'No trees nearby right now — we’ll skip this one.':!woodRoom(g.store.state)?'Your wood space is full right now — we’ll skip chopping.':null,
     resolve:ctx=>{
       const {g}=ctx;
       if(g.action?.type==='chop'||g.order?.type==='chop')return {target:null,busy:true,text:'Chopping… keep tapping if the tree asks for more.'};
       if(g.tool==='axe'){const t=nearestTree(g);if(!t)return {target:null,text:'Walk to a tree and tap it.'};return {target:projectWorld(g,t.position[0],t.position[1],1.5*(t.scale?.[2]||1),44),text:'Tap a tree to chop wood.'};}
       return toolPath(ctx,'Chop','to grab the axe');
     }},
-  {id:'plant',icon:'plant',title:'Dig and plant',why:'Water it and it grows into food.',
+  {id:'plant',icon:'plant',title:'Dig and plant',why:'Water it and it grows into food.',hint:'Hint: Dig first, then Plant — both are under Build → Actions.',
     base:g=>({plowed:g.store.state.stats.plowed||0,planted:g.store.state.stats.planted||0}),
     done:(g,b)=>(g.store.state.stats.planted||0)>b.planted,
+    blocked:g=>!seedCount(g.store.state)?'No seeds in your bag right now — we’ll skip planting.':!plantSpot(g)&&!digSpot(g,9)?'No open grass to dig right now — we’ll skip this one.':null,
     resolve:(ctx,b)=>{
       const {g}=ctx,s=g.store.state;
       if(['plow','plant'].includes(g.action?.type)||['plow','plant'].includes(g.order?.type))return {target:null,busy:true,text:g.action?.type==='plant'||g.order?.type==='plant'?'Planting…':'Digging…'};
@@ -126,10 +143,11 @@ export const TOUR_STEPS=[
       if(g.tool==='plant'){const c=plantSpot(g);return {target:c?projectWorld(g,c.x,c.y,.1,40):null,text:'Tap your patch to plant a seed.'};}
       return toolPath(ctx,'Plant','to grab your seeds',['actions','farm']);
     }},
-  {id:'goal',icon:'build',title:'Set a goal',why:'Pick a goal so your friends know what to work on.',
-    base:g=>({goalAt:g.goal?.at||0,buildings:(g.store.state.buildings||[]).length}),
-    // A goal picked (or re-picked) after the step began counts, even if an older goal already existed.
-    done:(g,b)=>(!!g.goal&&(g.goal.at||0)!==b.goalAt)||(g.store.state.buildings||[]).length>b.buildings,
+  {id:'goal',icon:'build',title:'Set a goal',why:'Pick a goal so your friends know what to work on.',hint:'Hint: Build → Build tab → pick a home → “Make it our goal”.',
+    base:g=>({goalAt:g.goal?.at||0,goalKind:g.goal?.kind||'',builds:buildSig(g.store.state)}),
+    // A goal picked (or re-picked) after the step began counts, even if an older goal already existed;
+    // so does placing a building or starting a project (the buildings list changes).
+    done:(g,b)=>{const goal=g.goal;return (!!goal&&((goal.at||0)!==b.goalAt||goal.kind!==b.goalKind))||buildSig(g.store.state)!==b.builds;},
     resolve:ctx=>{
       const {g,ui,view}=ctx,preview=view.building?.preview;
       if(preview){
@@ -142,9 +160,11 @@ export const TOUR_STEPS=[
       const beds=bedCount(g.store.state);
       return {target:rect('.build-card[aria-label="Choose Prayer Tent"]',{rx:16})||rect('.build-card',{rx:16}),text:beds?'Pick something to build.':'Pick the Prayer Tent. It has a bed.'};
     }},
-  {id:'task',icon:'actions',title:'Give a job',why:'Friends work while you play.',
+  {id:'task',icon:'actions',title:'Give a job',why:'Friends work while you play.',hint:'Hint: the Task button is above your friend — tap them first.',
     base:g=>({jobs:jobSignature(g)}),
     done:(g,b)=>jobSignature(g)!==b.jobs&&hasJob(g),
+    // No friend to send, or the job sheet is open and offers nothing: there is no job to give right now.
+    blocked:g=>!g.residents?.models?.size?'No friend to send right now — we’ll skip this one.':document.querySelector('.job-sheet')&&!document.querySelector('.job-sheet .resident-job-list button')?'Nothing to do right now — we’ll skip giving a job.':null,
     resolve:({g})=>{
       const name=myName(g);
       if(document.querySelector('.job-sheet'))return {target:rect('.job-sheet .resident-job-list button',{rx:14}),text:`Pick a job for ${name}.`};
@@ -154,18 +174,20 @@ export const TOUR_STEPS=[
       g.actor.updateWorldMatrix(true,false);
       return {target:projectPoint(g,g.actor.getWorldPosition(V()).add(V(0,1,0)),54),text:`Tap ${name}.`};
     }},
-  {id:'homes',icon:'rest',title:'Homes for friends',why:'Every friend needs a bed. More homes, more friends!',
-    base:g=>({buildings:(g.store.state.buildings||[]).length}),
-    done:(g,b)=>(g.store.state.buildings||[]).length>b.buildings,
+  {id:'homes',icon:'rest',title:'Homes for friends',why:'Every friend needs a bed. More homes, more friends!',hint:'Hint: the To-do button is on the right side of the screen.',
+    base:g=>({builds:buildSig(g.store.state),planAt:0}),
+    // A "learn where this lives" step: opening the To-do sheet and looking for a moment counts, as does placing a home.
+    done:(g,b,ctx)=>{if(ctx?.ui?.plan){b.planAt||=Date.now();if(Date.now()-b.planAt>1500)return true;}return buildSig(g.store.state)!==b.builds;},
     resolve:({g,ui})=>{
       const s=g.store.state,beds=bedCount(s),friends=g.residents?.models?.size||0;
       const note=`${beds} bed${beds===1?'':'s'} for ${friends} friend${friends===1?'':'s'}.`;
       if(ui.plan){const goal=rect('.plan-goal',{rx:16});return goal?{target:goal,text:`Your goal shows what is still needed. ${note}`}:{target:rect('.plan-list li',{rx:14}),text:`These jobs get a home built. ${note}`};}
       return {target:rect('.side-buttons button[aria-label="Open the island to-do list"]',{rx:20}),text:`Open To-do to see what a home needs. ${note}`};
     }},
-  {id:'fish',icon:'fish',title:'Go fishing',why:'Fish makes a fine dinner at the campfire.',
+  {id:'fish',icon:'fish',title:'Go fishing',why:'Fish makes a fine dinner at the campfire.',hint:'Hint: the fishing pole stands on the beach by the dock. Walk there and tap it.',
     base:g=>({fish:g.store.state.stats.fishCaught||0}),
-    done:(g,b)=>!!g.fishing?.active||(g.store.state.stats.fishCaught||0)>b.fish,
+    done:(g,b)=>!!g.fishing?.active||g.action?.type==='fish'||g.order?.type==='fish'||(g.store.state.stats.fishCaught||0)>b.fish,
+    blocked:g=>!g.fishing?.pole?'The fishing pole is away right now — we’ll skip fishing.':!canAffordEnergy(g.store.state,'fish')?'Too tired to fish right now — we’ll skip this one. Rest at home first.':null,
     resolve:({g,view})=>{
       if(view.fishPrompt)return {target:rect('.fish-prompt',{rx:24}),text:'Tap Fish?'};
       const pole=g.fishing?.pole;if(!pole)return {target:null,text:'Find the dock on the beach.'};
@@ -177,7 +199,7 @@ export const TOUR_STEPS=[
     base:()=>({}),done:()=>false,resolve:()=>({target:null,center:true,text:'Your island is yours to grow.'})},
 ];
 
-const STEP_CELEBRATE_MS=950;
+const STEP_CELEBRATE_MS=950,SKIP_NOTE_MS=2600,HINT_AFTER_MS=60000;
 
 /**
  * The coach-mark layer. Mount once in the island shell; it stays empty until the
@@ -187,11 +209,14 @@ const STEP_CELEBRATE_MS=950;
 export function IslandTour({engine,view,ui,onActive}){
   const [active,setActive]=useState(false),[step,setStep]=useState(0),[shot,setShot]=useState(null),[cheer,setCheer]=useState(0);
   const baseRef=useRef(null),stepRef=useRef(0),cardRef=useRef(null),[cardH,setCardH]=useState(150);
+  // `progress` = the last caption and when it changed (a minute without change earns a hint); `skipping` = a step excusing itself.
+  const progressRef=useRef({text:'',at:Date.now()}),skipRef=useRef(null);
   const uiRef=useRef(ui),viewRef=useRef(view);uiRef.current=ui;viewRef.current=view;
 
   const begin=(index)=>{
     const g=engine.current;const i=Math.max(0,Math.min(TOUR_STEPS.length-1,index|0));
     stepRef.current=i;setStep(i);baseRef.current=g?.loaded?TOUR_STEPS[i].base(g):null;
+    progressRef.current={text:'',at:Date.now()};skipRef.current=null;
     writeOnboarding({step:'tour',tourStep:i,done:false});
   };
   const end=(how)=>{
@@ -216,6 +241,15 @@ export function IslandTour({engine,view,ui,onActive}){
     window.addEventListener('message',onMessage);return()=>window.removeEventListener('message',onMessage);
   },[]);
 
+  // A tour that was underway (saved mid-way) resumes on its own once the island and a friend are in,
+  // so a reload never strands the kid without the card while the parent thinks the tour is running.
+  useEffect(()=>{
+    if(!view.loaded||!view.playersOnly||active)return;
+    const saved=readOnboarding();if(!saved||saved.done||saved.step!=='tour')return;
+    const id=setTimeout(()=>{if(!engine.current?.loaded||!engine.current.residents?.models?.size)return;setActive(true);onActive?.(true);begin(saved.tourStep|0);},1200);
+    return()=>clearTimeout(id);
+  },[view.loaded,view.playersOnly,active]);
+
   // The step's base is taken from the live game; if the island was still loading when the tour began, take it now.
   useEffect(()=>{if(active&&view.loaded&&!baseRef.current&&engine.current?.loaded)baseRef.current=TOUR_STEPS[stepRef.current].base(engine.current);},[active,view.loaded]);
   useEffect(()=>{if(!cheer)return;const id=setTimeout(()=>setCheer(0),STEP_CELEBRATE_MS+150);return()=>clearTimeout(id);},[cheer]);
@@ -229,18 +263,29 @@ export function IslandTour({engine,view,ui,onActive}){
       if(now-last<120)return;last=now;
       const g=engine.current,v=viewRef.current,u=uiRef.current;
       if(!g?.loaded||!v?.loaded){if(lastKey!=='-'){lastKey='-';setShot(null);}return;}
-      const i=stepRef.current,def=TOUR_STEPS[i],b=baseRef.current;
+      const i=stepRef.current,def=TOUR_STEPS[i],b=baseRef.current,ctx={g,view:v,ui:u},wall=Date.now();
       const paused=u.panel||u.showTime||u.mapOnly||v.overview||v.night?.sleeping||!!v.fishing||u.friendsOpen||(u.plan&&def.id!=='homes')||(!!v.building?.preview&&def.id!=='goal')||(!!document.querySelector('.job-sheet')&&def.id!=='task');
       // Bedtime (and other pauses) can move the player without a tap; re-baseline the walk step so only a real walk counts.
       if(paused&&def.id==='move')baseRef.current=def.base(g);
-      else if(b&&def.done(g,b)){lastKey='';advance();return;}
+      else if(b&&def.done(g,b,ctx)){lastKey='';advance();return;}
       if(paused){if(lastKey!=='p'){lastKey='p';setShot(null);}return;}
-      let r;try{r=def.resolve({g,view:v,ui:u},b||def.base(g));}catch{r={target:null,text:def.title};}
+      // Impossible right now (no trees, no seeds, nobody to send…)? Say so briefly and excuse just this step.
+      if(!skipRef.current&&def.blocked&&!g.action&&!g.order){let why=null;try{why=def.blocked(g,ctx);}catch{why=null;}
+        if(why){skipRef.current={at:wall,text:why};writeOnboarding({autoSkipped:[...new Set([...(readOnboarding()?.autoSkipped||[]),def.id])]});}}
+      if(skipRef.current){
+        if(wall-skipRef.current.at>SKIP_NOTE_MS){lastKey='';advance();return;}
+        if(lastKey!==`s${i}`){lastKey=`s${i}`;setShot({step:i,text:skipRef.current.text,target:null,edge:null,center:true,skipping:true});}
+        return;
+      }
+      let r;try{r=def.resolve(ctx,b||def.base(g));}catch{r={target:null,text:def.title};}
+      // A minute on the same caption with nothing changing earns a gentle hint (no Next: the step is learned by doing).
+      if(r.text!==progressRef.current.text)progressRef.current={text:r.text,at:wall};
+      const hint=def.hint&&wall-progressRef.current.at>HINT_AFTER_MS?def.hint:null;
       const t=r.target?{x:Math.round(r.target.x),y:Math.round(r.target.y),w:Math.round(r.target.w),h:Math.round(r.target.h),rx:Math.round(r.target.rx||18),cx:r.target.cx,cy:r.target.cy}:null;
       const edge=r.edge?{cx:r.edge.cx,cy:r.edge.cy}:null;
-      const key=JSON.stringify([i,r.text,t,edge,!!r.center,!!r.busy]);
+      const key=JSON.stringify([i,r.text,t,edge,!!r.center,!!r.busy,hint]);
       if(key===lastKey)return;lastKey=key;
-      setShot({step:i,text:r.text,target:t,edge,center:!!r.center,busy:!!r.busy});
+      setShot({step:i,text:r.text,target:t,edge,center:!!r.center,busy:!!r.busy,hint});
     };
     frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);
   },[active]);
@@ -270,14 +315,16 @@ export function IslandTour({engine,view,ui,onActive}){
     {shot&&<svg className="tour-shade" aria-hidden="true"><defs><mask id="tour-mask"><rect width="100%" height="100%" fill="#fff"/>{t&&<rect x={t.x} y={t.y} width={t.w} height={t.h} rx={t.rx} fill="#000"/>}</mask></defs><rect width="100%" height="100%" fill={t?'rgba(18,38,30,.36)':'rgba(18,38,30,.14)'} mask="url(#tour-mask)"/></svg>}
     {t&&<div className="tour-ring" style={{left:t.x,top:t.y,width:t.w,height:t.h,'--r':`${t.rx}px`}}/>}
     {edge&&<div className="tour-edge" style={{left:edge.left,top:edge.top}} aria-hidden="true">{edge.arrow}</div>}
-    {shot&&<section ref={cardRef} className={`tour-card ${placement}`} style={{...cardStyle,'--ax':`${ax}px`}} role="dialog" aria-label={`Island tour step ${step+1} of ${TOUR_STEPS.length}: ${def.title}`}>
+    {shot&&<section ref={cardRef} className={`tour-card ${placement} ${shot.skipping?'skipping':''}`} style={{...cardStyle,'--ax':`${ax}px`}} role="dialog" aria-label={`Island tour step ${step+1} of ${TOUR_STEPS.length}: ${def.title}`}>
       <div className="tour-head"><Icon type={def.icon} size={36}/><div><span className="tour-step">Step {step+1} of {TOUR_STEPS.length}</span><strong>{def.title}</strong></div></div>
       <p>{shot.text}</p>
-      <small>{def.why}</small>
-      <div className="tour-actions">
-        {!last&&<button type="button" className="tour-skip" onClick={()=>end('skipped')}>Skip tour</button>}
-        <button type="button" className="tour-next" onClick={advance}>{last?'Finish':'Next'}</button>
-      </div>
+      {!shot.skipping&&<small>{def.why}</small>}
+      {shot.hint&&<em className="tour-hint">{shot.hint}</em>}
+      {/* Steps are learned by doing: no Next. Only Skip tour (for a stuck kid) and Finish at the very end. */}
+      {!shot.skipping&&<div className={`tour-actions ${last?'':'quiet'}`}>
+        {last?<button type="button" className="tour-next" onClick={()=>end('finished')}>Finish</button>
+          :<button type="button" className="tour-skip" onClick={()=>end('skipped')}>Skip tour</button>}
+      </div>}
     </section>}
     {cheer>0&&<div key={cheer} className="tour-ok" aria-hidden="true">✓ Nice!</div>}
   </div>;

@@ -1,7 +1,7 @@
 import {TREE_MAX_HEALTH} from './resource-health.mjs';
 import {toolTier,MINING_ENERGY_PER_HIT} from './mining.mjs';
 import {buildingById} from './building.mjs';
-import {hasWell} from './digging.mjs';
+import {hasWell,digPower} from './digging.mjs';
 export const MAX_ENERGY=100;
 export const LOW_ENERGY=20,SLEEP_SECONDS=12,SLEEP_HOURS=8;
 export const FOODS={
@@ -20,9 +20,10 @@ export const FOOD_RECIPES={
 /** Things made by the fire that are not food. Clay bricks line the oven. */
 export const CRAFT_RECIPES={
   dry_clay:{name:'Dry clay bricks',ingredients:{mud:2,water:1},item:'clay',quantity:1,station:'campfire',seconds:4},
+  concrete_brick:{name:'Concrete brick',ingredients:{stone:2,clay:1},item:'concrete_brick',quantity:1,station:'well',seconds:4},
 };
 export const RECIPES={...FOOD_RECIPES,...CRAFT_RECIPES};
-export const MATERIALS={mud:{name:'Mud',source:'Dig at the beach with the Dig tool.'},water:{name:'Water',source:'Fill a bucket at the well.'},clay:{name:'Clay brick',source:'Dry 2 mud + 1 water by the campfire.'}};
+export const MATERIALS={mud:{name:'Mud',source:'Dig at the beach with the Dig tool.'},water:{name:'Water',source:'Fill a bucket at the well.'},clay:{name:'Clay brick',source:'Dry 2 mud + 1 water by the campfire.'},concrete_brick:{name:'Concrete brick',source:'Craft at the well: 2 stone + 1 clay. Used for brick fences.'}};
 export const WATER_MAX=6;
 export const activeCharacter=state=>state.activeCharacter||'adam';
 export const energyFor=(state,id=activeCharacter(state))=>state.characters?.[id]?.energy??MAX_ENERGY;
@@ -32,7 +33,7 @@ export function setEnergy(state,value,id=activeCharacter(state)){
 export function energyCost(state,action){
   const type=typeof action==='string'?action:action.type,power=toolTier(state).power;
   const treeHealth=typeof action==='object'&&action.id?Math.max(0,TREE_MAX_HEALTH-(state.treeDamage?.[action.id]||0)):TREE_MAX_HEALTH;
-  return {chop:2*Math.ceil(treeHealth/power),chop_hit:2,plow:3*Math.ceil(2/power),dig_stump:3,dig_mud:2,fetch_water:1,plant:2,water:hasWell(state)?0:1,mine:MINING_ENERGY_PER_HIT,mine_hit:MINING_ENERGY_PER_HIT,fish:4,place_building:5,upgrade_building:5}[type]||0;
+  return {chop:2*Math.ceil(treeHealth/power),chop_hit:2,plow:3*Math.ceil(2/digPower(state)),clear_weeds:3*Math.ceil(2/digPower(state)),dig_stump:3,dig_mud:2,fetch_water:1,plant:2,water:hasWell(state)?0:1,mine:MINING_ENERGY_PER_HIT,mine_hit:MINING_ENERGY_PER_HIT,fish:4,place_building:5,stack_piece:5,upgrade_building:5}[type]||0;
 }
 export const canAffordEnergy=(state,action)=>energyFor(state)>=energyCost(state,action);
 
@@ -62,7 +63,7 @@ export const HUNGRY_WORK_RATE=.6,STARVING_WORK_RATE=.35;
 export function workRate(state,minutes,id=activeCharacter(state)){const h=hungerFor(state,minutes,id);return h<=0?STARVING_WORK_RATE:h<=LOW_HUNGER?HUNGRY_WORK_RATE:1;}
 export const workRateNote=rate=>rate>=1?'':rate>=HUNGRY_WORK_RATE?'hungry · slower':'starving · very slow';
 /** Work a hungry character does more slowly. Fishing, picking crops and eating are unaffected. */
-export const needsFood=action=>['chop','chop_hit','mine','mine_hit','plow','dig_stump','plant','water','place_building','upgrade_building'].includes(typeof action==='string'?action:action?.type);
+export const needsFood=action=>['chop','chop_hit','mine','mine_hit','plow','clear_weeds','dig_stump','plant','water','place_building','upgrade_building'].includes(typeof action==='string'?action:action?.type);
 /** What a meal would do right now: energy and tummy filled, capped at full. */
 export function mealGain(state,item,minutes,id=activeCharacter(state)){
   const food=FOODS[item];if(!food)return {energy:0,hunger:0,total:0};

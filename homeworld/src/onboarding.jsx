@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import * as THREE from 'three';
-import {heightAt,cellAt,cellFromKey,canPlow,dist,terrainType} from './core.mjs';
+import {heightAt,cellAt,cellFromKey,canPlow,dist,terrainType,plotWeedy,gameTime} from './core.mjs';
 import {woodTotal,bedCount} from './building.mjs';
 import {woodRoom} from './wood-storage.mjs';
 import {canAffordEnergy} from './nutrition.mjs';
@@ -74,8 +74,8 @@ function digSpot(g,radius=3){
 }
 /** The dug, empty garden spot closest to the player. */
 function plantSpot(g){
-  const s=g.store.state,p=g.player;let best=null,bd=1e9;
-  for(const [key,c] of Object.entries(s.cells||{})){if(!c?.soil||c.seed)continue;const cell=cellFromKey(g.world,key),d=dist(p,cell);if(d<bd){bd=d;best=cell;}}
+  const s=g.store.state,p=g.player,minutes=gameTime(s);let best=null,bd=1e9;
+  for(const [key,c] of Object.entries(s.cells||{})){if(!c?.soil||c.seed||plotWeedy(c,minutes))continue;const cell=cellFromKey(g.world,key),d=dist(p,cell);if(d<bd){bd=d;best=cell;}}
   return best;
 }
 /** Who is working right now: the played body's auto-work plus any friend with a job of their own. */
@@ -134,7 +134,7 @@ export const TOUR_STEPS=[
     blocked:g=>!seedCount(g.store.state)?'No seeds in your bag right now — we’ll skip planting.':!plantSpot(g)&&!digSpot(g,9)?'No open grass to dig right now — we’ll skip this one.':null,
     resolve:(ctx,b)=>{
       const {g}=ctx,s=g.store.state;
-      if(['plow','plant'].includes(g.action?.type)||['plow','plant'].includes(g.order?.type))return {target:null,busy:true,text:g.action?.type==='plant'||g.order?.type==='plant'?'Planting…':'Digging…'};
+      if(['plow','plant','clear_weeds'].includes(g.action?.type)||['plow','plant','clear_weeds'].includes(g.order?.type))return {target:null,busy:true,text:g.action?.type==='plant'||g.order?.type==='plant'?'Planting…':'Digging…'};
       const dug=(s.stats.plowed||0)>b.plowed||!!plantSpot(g);
       if(!dug){
         if(g.tool==='hoe'){const c=digSpot(g);return c?{target:projectWorld(g,c.x,c.y,.1,40),text:'Tap the grass to dig a patch.'}:{target:null,text:'Walk to open grass, then tap it to dig.'};}

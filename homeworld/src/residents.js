@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { heightAt, dist, gameTime, growth, cellFromKey, activeTrees, activeRocks, pruneBuiltIns } from './core.mjs';
 import { woodRoom } from './wood-storage.mjs';
-import { toolTier, rockProfile } from './mining.mjs';
+import { toolTier, rockProfile, toolNeedMessage, rockFindLine } from './mining.mjs';
 import { woodTotal, buildingById } from './building.mjs';
 import { energyFor, FOODS, hungerFor, isStarving, mealGain, workRate } from './nutrition.mjs';
 import { workPoint, completedFires, firesNeedingLog, fireCanTakeLog, bedCount } from './building.mjs';
@@ -12,6 +12,7 @@ import { advancePath, turnToward, resetAnimatedPose } from './character-motion.j
 import { projectAssignments } from './construction-projects.mjs';
 import { normalizeCharacterModel } from './character-model.js';
 import { emitWorkSweat } from './work-sweat.js';
+import { gatherSample } from './gather-animation.js';
 import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.mjs';
 
 /** Collected Bible characters living on the Players World island. Same key as the app, scoped per kid profile (storage-scope.mjs). */
@@ -319,6 +320,7 @@ export class Residents {
   assignJob(actor, task) {
     const game = this.game, home = actor?.userData;
     if (!home || !this.canHelp(task)) return false;
+    if (task.background && home.job?.explicit) return false;
     const type = task.type, count = task.count > 0 ? Math.min(20, Math.round(task.count)) : null;
     let target = 1;
     if (type === 'water') target = task.goal === 'one' ? 1 : 60;
@@ -329,7 +331,7 @@ export class Residents {
     if (type === 'mine' && !until && count > 1 && (!task.goal || task.goal === 'any' || task.goal === 'stone')) until = { stone: (game.store.state.inventory.stone || 0) + count };
     if (until) target = 99;
     if (home.chore) { this.claims.delete(home.chore.key); home.chore = null; }
-    home.job = { type, goal: task.goal || null, until, target, done: 0, fails: 0, label: Residents.HELPER_JOBS[type] };
+    home.job = { type, goal: task.goal || null, until, target, done: 0, fails: 0, label: Residents.HELPER_JOBS[type], explicit: !task.background };
     home.strollState = { wait: 0 };
     this.lastChoreScan = 0;
     const s = game.store?.state;
@@ -373,6 +375,7 @@ export class Residents {
     const job = home.job;
     home.job = null;
     if (home.chore) { this.claims.delete(home.chore.key); home.chore = null; }
+    if (home.workTool) home.workTool.visible = false;
     if (note) this.game.toast(job.done ? `${home.name} stopped after ${this.jobProgress(job)}.` : `${home.name} stopped working.`);
     this.game.notify?.();
   }
@@ -442,7 +445,7 @@ export class Residents {
       if (!hasWood) {
         // No log in the bag: chop one tree first, then come back to the fire.
         if (!woodRoom(s) || j.then) return null;
-        home.job = { type: 'chop', goal: 'few', until: null, target: 1, done: 0, fails: 0, label: Residents.HELPER_JOBS.chop, then: { type: 'stoke' } };
+        home.job = { type: 'chop', goal: 'few', until: null, target: 1, done: 0, fails: 0, label: Residents.HELPER_JOBS.chop, explicit: !!j.explicit, then: { type: 'stoke' } };
         game.toast(`${home.name} needs a log first. Off to chop a tree.`);
         return this.pickJobChore(home);
       }
@@ -484,7 +487,12 @@ export class Residents {
       if (!chore && actor) {
         const s = this.game.store?.state, j = home.job;
         if (j.done > 0) { home.job = null; this.game.toast(`${home.name} finished: ${this.jobProgress(j)}. Nothing more to do there.`); this.game.notify?.(); return null; }
-        const why = j.type === 'chop' && s && !woodRoom(s) ? 'the wood store is full.' : j.type === 'stoke' ? 'there is no wood for the fire.' : 'nothing left to do here.';
+        let why = j.type === 'chop' && s && !woodRoom(s) ? 'the wood store is full.' : j.type === 'stoke' ? 'there is no wood for the fire.' : 'nothing left to do here.';
+        if (j.type === 'mine' && s) {
+          const tier = toolTier(s), deposit = j.goal && j.goal !== 'any' ? j.goal : null;
+          const blocked = activeRocks(this.game.world, s).map(rockProfile).find((p) => p.minTier > tier.tier && (!deposit || p.deposit === deposit));
+          if (blocked) why = toolNeedMessage(blocked);
+        }
         this.failJob(actor, why);
       }
       return chore;
@@ -549,6 +557,16 @@ export class Residents {
         if (game.store.state !== before) { game.burst?.(c.target, 'water', .4); if (home.job) this.creditJob(actor); }
         else this.failJob(actor, 'could not fish from there.');
       } else if (c.kind === 'chop' || c.kind === 'mine') {
+        const rock = c.kind === 'mine' ? game.world.boulders.find((r) => r.id === c.rockId) : null;
+        const profile = rock ? rockProfile(rock) : null;
+        if (c.kind === 'mine' && profile && toolTier(s).tier < profile.minTier) {
+          this.claims.delete(c.key);
+          game.toast(toolNeedMessage(profile), 2000);
+          this.failJob(actor, toolNeedMessage(profile));
+          game.refreshDynamic?.();
+          game.notify?.();
+          return;
+        }
         const before = game.store.state;
         const hit = c.kind === 'chop' ? { type: 'chop_hit', id: c.treeId } : { type: 'mine_hit', id: c.rockId };
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { ...hit, actionId: `helper:${home.id}:${Date.now()}` });
@@ -558,12 +576,16 @@ export class Residents {
           if (tired) {
             if (home.job && this.snack(actor)) { home.chore = { ...c, path: [], dwell: 1.2 }; this.claims.set(c.key, home.id); return; }
             home.job = null; game.toast(`${who} is too tired to keep working.`); game.notify?.();
+          } else if (c.kind === 'mine' && profile && toolTier(after).tier < profile.minTier) {
+            this.claims.delete(c.key);
+            game.toast(toolNeedMessage(profile), 2000);
+            this.failJob(actor, toolNeedMessage(profile));
           } else this.failJob(actor, c.kind === 'chop' ? 'the wood store is full.' : 'that rock needs stronger tools.');
           return;
         }
         game.burst?.(c.target, c.kind === 'chop' ? 'wood' : 'dirt', .9);
         const gone = c.kind === 'chop' ? after.removedTrees.includes(c.treeId) : (after.removedRocks || []).includes(c.rockId);
-        if (gone) { if (home.job) this.creditJob(actor); }
+        if (gone) { if (c.kind === 'mine' && profile) game.toast(rockFindLine(profile), 2000); if (home.job) this.creditJob(actor); }
         else if (home.job) { home.chore = { ...c, path: [], dwell: c.baseDwell ?? 1 }; this.claims.set(c.key, home.id); }
       }
     } catch (e) {
@@ -893,6 +915,68 @@ export class Residents {
     }
   }
 
+  hideHelperTool(home) { if (home?.workTool) home.workTool.visible = false; }
+
+  helperRig(home, actor) {
+    const game = this.game;
+    if (!home.rig) {
+      const rig = { actor, bones: home.bones, scene: game.scene, world: game.world, particleGeometry: game.particleGeometry, particleMaterials: game.particleMaterials, particles: game.particles };
+      for (const name of ['ik', 'solveChain', 'localPoint']) rig[name] = game[name].bind(rig);
+      home.rig = rig;
+    }
+    home.rig.actor = actor;
+    home.rig.bones = home.bones;
+    return home.rig;
+  }
+
+  /** Axe or pickaxe swing for a friend who is not the body being played. One impact, then keep swinging until the tree or rock is gone. */
+  swingHelper(actor, dt) {
+    const home = actor.userData, game = this.game, c = home.chore;
+    if (!c || !home.bones?.mixamorigRightHand) return;
+    const rig = this.helperRig(home, actor);
+    const toolId = c.kind === 'mine' ? 'tool_pickaxe' : 'tool_axe';
+    if (!home.workTool || home.workToolName !== toolId) {
+      if (home.workTool) { home.workTool.visible = false; game.scene.remove(home.workTool); }
+      home.workTool = game.asset(toolId);
+      home.workToolName = toolId;
+      home.workTool.visible = false;
+      game.scene.add(home.workTool);
+    }
+    const tool = home.workTool;
+    if (home.hammer) home.hammer.visible = false;
+    if (home.bench) home.bench.visible = false;
+    resetAnimatedPose(home);
+    home.idling = false;
+    home.flourish = null;
+    if (c.target) actor.rotation.y = Math.atan2(c.target.x - home.x, -(c.target.y - home.y));
+    const rate = workRate(game.store.state, gameTime(game.store.state), home.id);
+    c.swingT = (c.swingT || 0) + dt * Math.max(0.45, rate || 1);
+    const pose = gatherSample('chop', c.swingT, 1, 0.95);
+    const bones = home.bones;
+    actor.updateMatrixWorld(true);
+    if (bones.mixamorigHips) bones.mixamorigHips.position.y -= pose.dip;
+    bones.mixamorigSpine?.rotateX(pose.bend);
+    bones.mixamorigSpine?.rotateY(pose.twist);
+    actor.updateMatrixWorld(true);
+    rig.ik('Right', rig.localPoint(pose.h));
+    actor.updateMatrixWorld(true);
+    const grip = bones.mixamorigRightHand.localToWorld(new THREE.Vector3(0, 0.065, 0));
+    const contact = tool.userData.contact_local || [0.3, 0.72, 0];
+    const local = new THREE.Vector3(contact[0], contact[2], -contact[1]);
+    const head = rig.localPoint(pose.h);
+    tool.visible = true;
+    tool.position.copy(grip);
+    tool.quaternion.setFromUnitVectors(local.normalize(), head.clone().sub(grip).normalize());
+    rig.ik('Left', rig.localPoint(pose.w));
+    if ((c.swung || 0) < pose.due && dist({ x: home.x, y: home.y }, c.target) <= (c.reach || 1.2) + 0.55) {
+      c.swung = pose.due;
+      this.finishChore(actor);
+    }
+    const live = home.chore;
+    if (!live) { if (home.workTool) home.workTool.visible = false; return; }
+    if (live !== c || (live.swingT || 0) >= pose.duration) { live.swingT = 0; live.swung = 0; }
+  }
+
   /** Friends who aren't being played wander a little between idles, so the island feels lived in. */
   stroll(actor, dt) {
     const home = actor.userData, game = this.game;
@@ -900,6 +984,16 @@ export class Residents {
     if (game.store?.state?.night) { home.strollState = null; this.idleActor(actor, dt); return; }
     if (home.chore) {
       const c = home.chore;
+      if ((c.kind === 'chop' || c.kind === 'mine') && home.bones?.mixamorigRightHand) {
+        if (c.path?.length) { this.hideHelperTool(home); this.walkAlong(actor, c.path, 1.7, dt); return; }
+        const here = { x: home.x, y: home.y }, reach = c.reach || 1.2;
+        if (dist(here, c.target) > reach + 0.45) {
+          const path = game.nav?.approach(here, c.target, reach);
+          if (path?.length) { c.path = path; c.swingT = 0; this.hideHelperTool(home); this.walkAlong(actor, c.path, 1.7, dt); return; }
+        }
+        this.swingHelper(actor, dt);
+        return;
+      }
       if (c.path.length) { this.walkAlong(actor, c.path, 1.7, dt); return; }
       if (c.dwell == null) { c.dwell = c.kind === 'fish' ? 6 : c.kind === 'chop' || c.kind === 'mine' ? 1 : 1.1; c.baseDwell = c.dwell; }
       c.dwell -= dt * (['fish', 'harvest'].includes(c.kind) ? 1 : workRate(game.store.state, gameTime(game.store.state), home.id));
@@ -967,15 +1061,15 @@ export class Residents {
         }
         home.stillFor = 0;
         home.nextStroll = null;
-        // Moving: nothing but the walk cycle may run on this mixer, or stray idle
-        // clips (stretches, waves) blend into the walk.
-        const stray = home.mixer._actions.some((a) => a.isRunning() && a.getClip().name !== 'Walking');
-        if (home.idling || stray || home.flourish) {
-          home.mixer.stopAllAction();
+        // Moving: stop leftover idle/stretch clips, but leave the walk cycle alone.
+        // clips.Walking is an alias — its clip name is the GLB name, not 'Walking' —
+        // so matching the name killed the walk every frame and the body slid frozen.
+        const walk = home.clips?.Walking;
+        const running = home.mixer?._actions || [];
+        if (home.idling || home.flourish || running.some((a) => a.isRunning() && a !== walk)) {
+          for (const a of running) if (a.isRunning() && a !== walk) a.stop();
           home.idling = false;
           home.flourish = null;
-          game.currentClip = null;
-          game.locomotion = null;
         }
         continue;
       }
@@ -985,7 +1079,11 @@ export class Residents {
         if (action && action.time >= action.getClip().duration - 0.04) this.cancelWave(actor);
         continue;
       }
-      if (actor === game.actor && game.action) continue;
+      if (actor === game.actor && game.action) {
+        const home = actor.userData;
+        if (home.idling || home.flourish) { home.idling = false; home.flourish = null; }
+        continue;
+      }
       if (actor === game.actor) { this.idleActor(actor, dt); continue; }
       this.stroll(actor, dt);
     }

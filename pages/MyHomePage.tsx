@@ -8,8 +8,10 @@ import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/p
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
 import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from '../utils/profileScope';
+import { useUser } from '../context/UserContext';
+import { ISLAND_ANIMAL_PRICES } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players110&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players132&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
@@ -192,6 +194,14 @@ type DropCharacter = {
  */
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
+  const { coins, spendCoins, addCoins } = useUser();
+  const coinsRef = useRef(coins);
+  const spendRef = useRef(spendCoins);
+  const addRef = useRef(addCoins);
+  const pendingBuyRef = useRef<{ id: string; cost: number; at: number } | null>(null);
+  coinsRef.current = coins;
+  spendRef.current = spendCoins;
+  addRef.current = addCoins;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   /** The prayer currently being spoken in the character's ElevenLabs voice (one at a time). */
@@ -426,6 +436,40 @@ const MyHomePage: React.FC = () => {
         setReady(true);
         setResidents(Array.isArray(data.residents) ? data.residents : readPlayersWorldResidents());
         if (data.type === 'gk-resident-placed') setPlacing(null);
+        post({ type: 'gk-coins', balance: coinsRef.current });
+      }
+      if (data.type === 'gk-coins-please') post({ type: 'gk-coins', balance: coinsRef.current });
+      if (data.type === 'gk-buy') {
+        const buy = data as { id?: unknown; cost?: unknown; item?: unknown };
+        const id = typeof buy.id === 'string' ? buy.id : '';
+        const price = ISLAND_ANIMAL_PRICES[id];
+        const cost = Number(buy.cost);
+        if (!id || price == null || cost !== price) {
+          post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: 'That animal is not for sale.' });
+          return;
+        }
+        if (!spendRef.current(price, `Island ${typeof buy.item === 'string' ? buy.item : id}`)) {
+          post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: `Need ${price - coinsRef.current} coins.` });
+          return;
+        }
+        pendingBuyRef.current = { id, cost: price, at: Date.now() };
+        post({ type: 'gk-buy-result', ok: true, id, balance: coinsRef.current - price });
+      }
+      if (data.type === 'gk-refund') {
+        const refund = data as { id?: unknown; cost?: unknown };
+        const pending = pendingBuyRef.current;
+        if (pending && pending.id === refund.id && pending.cost === Number(refund.cost) && Date.now() - pending.at < 120000) {
+          pendingBuyRef.current = null;
+          addRef.current(pending.cost, 'Island purchase cancelled', 'other');
+          post({ type: 'gk-coins', balance: coinsRef.current + pending.cost });
+        }
+      }
+      if (data.type === 'gk-buy-commit') pendingBuyRef.current = null;
+      if (data.type === 'gk-dev-grant') {
+        const host = window.location.hostname;
+        if (host !== 'localhost' && host !== '127.0.0.1') return;
+        const amount = Math.max(0, Math.min(100000, Math.floor(Number((data as { amount?: unknown }).amount) || 0)));
+        if (amount > 0) addRef.current(amount, 'Island test grant', 'other');
       }
     };
     window.addEventListener('message', onMessage);
@@ -439,6 +483,11 @@ const MyHomePage: React.FC = () => {
     post({ type: 'gk-profile', scope: profileScope });
     post({ type: 'gk-residents-sync' });
   }, [post, ready, profileScope]);
+
+  useEffect(() => {
+    if (!ready) return;
+    post({ type: 'gk-coins', balance: coins });
+  }, [post, ready, coins]);
 
   useEffect(() => {
     if (ready) {

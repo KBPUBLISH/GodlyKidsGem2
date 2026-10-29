@@ -58,8 +58,9 @@ const ShopModal = React.lazy(() => import('../components/features/ShopModal'));
  * Hotspot percentages below assume a phone-portrait object-cover crop.
  */
 /**
- * Wide sea panorama (repeat-x, mirror-tiled, horizon at HORIZON_PCT). It
- * pans with the wheel so the islands feel like the ship is turning.
+ * Wide sea panorama (repeat-x, mirror-tiled, painted horizon at
+ * PANO_HORIZON_PCT, slid so it sits at HORIZON_PCT). It pans with the wheel
+ * so the islands feel like the ship is turning.
  */
 const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
 const CREW_VOYAGE_HULL = '/assets/images/sail-voyage-hull.png?v=7';
@@ -82,8 +83,16 @@ const STAGE_WIDE_TOP_PCT = 0.07;
 const ISLAND_WIDTH_FRAC = 0.42;
 /** Plain sky color for the strip above the panorama on tablets. */
 const SKY_TOP_COLOR = '#91dff9';
-/** Water line, as a fraction of the stage height (islands sit on it). */
-const HORIZON_PCT = 16.5;
+/**
+ * Water line, as a fraction of the stage height (islands sit on it). The sea
+ * panorama is slid up so its painted sky/sea line lands here — lower numbers
+ * mean more water and less sky. The ceiling is the tallest island: at 12 the
+ * Beginnings rainbow still clears the top of the screen (±2px bob) on
+ * 375×667 / 390×844 / 430×932; its name pill clamps and sits over the arc.
+ */
+const HORIZON_PCT = 12;
+/** Where the sky/sea line is painted in crew-voyage-sea-pano.jpg (row 201 of 1229). */
+const PANO_HORIZON_PCT = 16.35;
 /**
  * Shore line = water line + this share of the stage height (~14px on a
  * phone), so the islands sit INTO the water instead of the cut-outs
@@ -91,16 +100,90 @@ const HORIZON_PCT = 16.5;
  */
 const ISLAND_SHORE_SINK_FRAC = 0.017;
 /**
- * Share of each island PNG's own height pushed below the shore line (and
- * masked out). CMS map-art icons carry 0–15% transparent bottom padding plus a
- * baked foam ring. 13% leaves the deepest-padded icons' painted base ~2% of
- * their height above the shore line — still well below the horizon thanks to
- * ISLAND_SHORE_SINK_FRAC — while full-bleed icons lose only their foam ring
- * and a sliver of beach, keeping the animals and rocks above water.
+ * Fallback share of an island PNG's own height pushed below the shore line
+ * (and masked out) until its pixels have been measured. CMS map-art icons
+ * carry 0–15% transparent bottom padding plus a baked foam ring, so one
+ * number can't seat them all — see `measureIslandArt`.
  */
 const ISLAND_SINK_PCT = 13;
-/** Hides the sunk share and feathers the shore line above it (see above). */
-const ISLAND_SHORE_MASK = `linear-gradient(to top, transparent ${ISLAND_SINK_PCT}%, rgba(0,0,0,0.5) ${ISLAND_SINK_PCT + 2}%, #000 ${ISLAND_SINK_PCT + 5.5}%)`;
+/**
+ * CSS px of PAINTED island (foam ring + a sliver of beach) pushed under the
+ * shore line once the art is measured, so every icon's land meets the water
+ * at the same depth regardless of its transparent padding.
+ */
+const ISLAND_SUBMERGE_PX = 8;
+/** Hides the sunk share and feathers the shore line just above it. */
+const islandShoreMask = (sinkPct: number) =>
+  `linear-gradient(to top, transparent ${sinkPct}%, rgba(0,0,0,0.5) ${sinkPct + 2}%, #000 ${sinkPct + 5.5}%)`;
+/** Gap between an island's painted top and the name pill above it (the sea
+ * bob moves the island ±2px, so the visual gap stays ≥ 6px). */
+const ISLAND_PILL_GAP_PX = 8;
+
+/** Where an island PNG's paint actually is, as fractions of its height. */
+type IslandArtFit = { paintedTop: number; paintedBottom: number; aspect: number };
+const islandArtFitCache = new Map<string, Promise<IslandArtFit | null>>();
+/**
+ * Readable copy of an island PNG. The bucket sends
+ * `Access-Control-Allow-Origin: *`, so a CORS fetch of the bare URL works
+ * (and hits the image service worker's cache when the preloader filled it).
+ * But if that cache holds the `<img>`'s no-cors (opaque) response, the worker
+ * hands it back to the CORS request, which the browser rejects — so retry
+ * under a distinct cache key, which makes the worker fetch fresh in CORS mode.
+ */
+const fetchIslandArtBlob = async (src: string): Promise<Blob | null> => {
+  try {
+    const res = await fetch(src, { mode: 'cors' });
+    if (res.ok) return await res.blob();
+  } catch {
+    /* opaque cache hit — fall through */
+  }
+  const url = new URL(src, window.location.href);
+  url.searchParams.set('alpha', '1');
+  const res = await fetch(url.toString(), { mode: 'cors' });
+  return res.ok ? res.blob() : null;
+};
+/** Scans an island PNG's alpha (downsampled) for its first/last painted rows. */
+const measureIslandArt = (src: string): Promise<IslandArtFit | null> => {
+  let pending = islandArtFitCache.get(src);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const blob = await fetchIslandArtBlob(src);
+        if (!blob) return null;
+        const bitmap = await createImageBitmap(blob);
+        const aspect = bitmap.height / bitmap.width;
+        const w = 192;
+        const h = Math.max(1, Math.round(w * aspect));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        const alpha = ctx.getImageData(0, 0, w, h).data;
+        bitmap.close();
+        const rowPainted = (y: number) => {
+          for (let x = 0; x < w; x++) if (alpha[(y * w + x) * 4 + 3] > 40) return true;
+          return false;
+        };
+        let bottom = h - 1;
+        while (bottom >= 0 && !rowPainted(bottom)) bottom--;
+        if (bottom < 0) return null;
+        let top = 0;
+        while (top < bottom && !rowPainted(top)) top++;
+        return { paintedTop: top / h, paintedBottom: (bottom + 1) / h, aspect };
+      } catch {
+        return null;
+      }
+    })().then((fit) => {
+      // Don't pin a transient failure (offline, 5xx) for the whole session.
+      if (!fit) islandArtFitCache.delete(src);
+      return fit;
+    });
+    islandArtFitCache.set(src, pending);
+  }
+  return pending;
+};
 /** Sea panorama tile (crew-voyage-sea-pano.jpg) width ÷ height. */
 const SEA_PANO_ASPECT = 3840 / 1229;
 /** How far the panorama pans per island notch, as a fraction of stage width. */
@@ -1194,6 +1277,36 @@ const CrewPage: React.FC = () => {
   /** Sky/sea line of the panorama, and the y where island shores rest. */
   const waterlineY = stage.top + (stage.height * HORIZON_PCT) / 100;
   const islandBaseY = waterlineY + stage.height * ISLAND_SHORE_SINK_FRAC;
+  /** Top edge of the sea panorama tile: its painted horizon meets waterlineY. */
+  const panoTop = stage.top + (stage.height * (HORIZON_PCT - PANO_HORIZON_PCT)) / 100;
+  /** Measured paint bounds per island art src (see measureIslandArt). */
+  const [islandFits, setIslandFits] = useState<Record<string, IslandArtFit>>({});
+  useEffect(() => {
+    let alive = true;
+    voyageIslands.forEach((island) => {
+      measureIslandArt(island.src).then((fit) => {
+        if (!alive || !fit) return;
+        setIslandFits((prev) => (prev[island.src] ? prev : { ...prev, [island.src]: fit }));
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [voyageIslands]);
+  /**
+   * How an island seats on the shore line: the share of its own height sunk
+   * below it (so ISLAND_SUBMERGE_PX of paint go under, whatever the PNG's
+   * padding) and how far its painted top rises above the shore at scale 1.
+   */
+  const islandSeat = (island: VoyageIsland) => {
+    const fit = islandFits[island.src];
+    const renderedH = stage.width * ISLAND_WIDTH_FRAC * (fit?.aspect ?? 1);
+    const sinkPct = fit
+      ? Math.min(60, (1 - fit.paintedBottom) * 100 + (ISLAND_SUBMERGE_PX / Math.max(1, renderedH)) * 100)
+      : ISLAND_SINK_PCT;
+    const topAboveShore = (1 - sinkPct / 100 - (fit?.paintedTop ?? 0)) * renderedH;
+    return { sinkPct, topAboveShore };
+  };
   // While a drag owns the wheel the prop stays frozen at its start value so
   // React never overwrites the per-frame transform; on release it eases to
   // the notch (see onWheelPointerUp).
@@ -1672,9 +1785,9 @@ const CrewPage: React.FC = () => {
           backgroundImage: `url(${CREW_VOYAGE_SKY})`,
           backgroundRepeat: 'repeat-x',
           backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
-          backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${Math.round(stage.top)}px`,
+          backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${Math.round(panoTop)}px`,
           transform: sailingIsland && !reduceMotion ? `scale(${SAIL_IN_SEA_SCALE})` : 'none',
-          transformOrigin: `50% ${Math.round(stage.top + (stage.height * HORIZON_PCT) / 100)}px`,
+          transformOrigin: `50% ${Math.round(waterlineY)}px`,
           transition: reduceMotion
             ? 'none'
             : sailingIsland
@@ -1684,12 +1797,12 @@ const CrewPage: React.FC = () => {
       />
       {/* Tablets: the ship sits lower, so mirror the panorama's top sky into
           the strip above it instead of showing a flat color seam. */}
-      {stage.top > 0 && (
+      {panoTop > 0 && (
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 z-0"
           style={{
-            height: Math.ceil(stage.top) + 1,
+            height: Math.ceil(panoTop) + 1,
             transform: 'scaleY(-1)',
             backgroundImage: `url(${CREW_VOYAGE_SKY})`,
             backgroundRepeat: 'repeat-x',
@@ -1707,8 +1820,8 @@ const CrewPage: React.FC = () => {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 z-[1] overflow-hidden"
           style={{
-            top: stage.top + (stage.height * HORIZON_PCT) / 100,
-            height: stage.height * (1 - HORIZON_PCT / 100),
+            top: waterlineY,
+            height: stage.height * (1 - PANO_HORIZON_PCT / 100),
             // Ripple copy can't follow the sail-in zoom; let it go.
             opacity: sailingIsland ? 0 : 1,
             transition: 'opacity 0.4s ease',
@@ -1721,7 +1834,7 @@ const CrewPage: React.FC = () => {
               backgroundImage: `url(${CREW_VOYAGE_SKY})`,
               backgroundRepeat: 'repeat-x',
               backgroundSize: `${Math.round(stage.height * SEA_PANO_ASPECT)}px ${Math.round(stage.height)}px`,
-              backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${-Math.round((stage.height * HORIZON_PCT) / 100) - 6}px`,
+              backgroundPosition: `calc(50% - ${Math.round(lookIndex * stage.width * SEA_PAN_PER_NOTCH)}px) ${-Math.round((stage.height * PANO_HORIZON_PCT) / 100) - 6}px`,
               transition: 'background-position 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
               mixBlendMode: 'soft-light',
               opacity: 0.85,
@@ -1769,6 +1882,8 @@ const CrewPage: React.FC = () => {
           const scale = Math.max(0.46, 1 - distance * 0.3);
           const slide = 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease';
           const fade = Math.max(0.4, 1 - distance * 0.28);
+          const { sinkPct } = islandSeat(island);
+          const shoreMask = islandShoreMask(sinkPct);
           return (
             <React.Fragment key={island.id}>
               {/* Soft contact shadow / reflection on the water under the shore */}
@@ -1796,13 +1911,14 @@ const CrewPage: React.FC = () => {
                   left: `${50 - offset * 50}%`,
                   width: `${ISLAND_WIDTH_FRAC * 100}%`,
                   // translateY runs inside scale() so the sink is a share of
-                  // the island's rendered height; the mask hides that share
-                  // and feathers the next few % so the shore melts into the
+                  // the island's rendered height (per island, from its
+                  // measured paint bounds); the mask hides that share and
+                  // feathers the next few % so the shore melts into the
                   // water instead of ending on a hard cut-out edge.
-                  transform: `translateX(-50%) scale(${scale}) translateY(${ISLAND_SINK_PCT}%)`,
+                  transform: `translateX(-50%) scale(${scale}) translateY(${sinkPct}%)`,
                   transformOrigin: '50% 100%',
-                  WebkitMaskImage: ISLAND_SHORE_MASK,
-                  maskImage: ISLAND_SHORE_MASK,
+                  WebkitMaskImage: shoreMask,
+                  maskImage: shoreMask,
                   opacity: fade,
                   filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
                   transition: slide,
@@ -1834,6 +1950,9 @@ const CrewPage: React.FC = () => {
         // Neighbors whose center is off the phone screen keep the tap target
         // (a sliver of island peeks in) but not a half-visible label.
         const showLabel = cx > 24 && cx < stage.pageW - 24;
+        // Page y of the island's painted top (its box top is often padding),
+        // so the label hugs the art instead of a fixed offset above the square.
+        const islandTopY = bottom - scale * islandSeat(island).topAboveShore;
         return (
           <button
             key={`tap-${island.id}`}
@@ -1852,13 +1971,15 @@ const CrewPage: React.FC = () => {
             }}
           >
             <span
-              className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1"
+              className="pointer-events-none absolute left-1/2 flex flex-col items-center gap-1"
               style={{
-                // May float up to 26px above the tap square so the label clears
-                // a tall island's top (rainbow / cloud) on short screens.
-                top: `max(calc(var(--safe-area-top, 0px) + 6px - ${Math.round(bottom - size)}px), -26px)`,
+                // Bottom edge ISLAND_PILL_GAP_PX above the painted top
+                // (translateY(-100%) lifts the stack by its own height), unless
+                // that would push the top edge within 4px of the safe area.
+                top: Math.round(islandTopY - ISLAND_PILL_GAP_PX - (bottom - size)),
+                transform: `translate(-50%, max(-100%, calc(var(--safe-area-top, 0px) + 4px - ${Math.round(islandTopY - ISLAND_PILL_GAP_PX)}px)))`,
                 opacity: !showLabel ? 0 : isActive ? 1 : 0.8,
-                transition: 'opacity 0.3s ease',
+                transition: 'opacity 0.3s ease, top 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
               <span

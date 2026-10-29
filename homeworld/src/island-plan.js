@@ -74,7 +74,8 @@ export function planFor(game){
   const next=TOOL_TIERS[toolTier(s).tier+1];
   if(next){
     const st=upgradeStatus(s,next.tier);
-    if(st.canCraft)add('craft','mine',`Make ${next.name} tools`,'Everything needed is in the bag. Stronger tools mean fewer swings.',{type:'craft'});
+    if(st.needsForge&&!st.forgeBuilding){const forge=buildingById('forge');if(forge)add('build_forge','build','Build a forge',`${next.name} tools are made at a forge and take a little while.`,{type:'build',item:'forge'});}
+    else if(st.canCraft)add('craft','mine',`Make ${next.name} tools`,'Everything needed is in the bag. The forge takes a little while.',{type:'craft'});
     else if(st.missing.length===1&&MINERALS[st.missing[0].id]&&st.missing[0].id!=='stone'){const m=st.missing[0];add('mine_'+m.id,'mine',`Dig up ${m.quantity} ${mineralName(m.id)}`,`That is all ${next.name} tools still need.`,{type:'mine',goal:goalFor(m.id),count:m.quantity});}
   }
   // 8. Empty garden spots with seeds in the bag.
@@ -84,4 +85,24 @@ export function planFor(game){
   // 10. Nothing urgent.
   if(!items.length)add('explore','walk','All caught up!','Go for a walk, say hi to the animals, or start a new build.',null);
   return items.slice(0,MAX_ITEMS);
+}
+
+/**
+ * Hand one to-do to every chosen friend. Each id is used once.
+ * Friends who can work in the background get a resident job; the friend you
+ * are playing keeps auto-work (only one body can do that). The same task
+ * object is passed through, so a shared `until` (120 wood, 53 stone) stays
+ * one bag target instead of being multiplied by headcount.
+ */
+export function assignCrew(game,task,who){
+  const ids=[...new Set((Array.isArray(who)?who:[who]).filter(Boolean))];
+  if(!game?.assign||!task?.type||!ids.length)return false;
+  const active=game.actor?.userData?.residentId;
+  const helper=id=>{const actor=game.residents?.models?.get(id);return !!(actor&&actor!==game.actor&&game.residents.canHelp(task));};
+  const helpers=ids.filter(helper),bodies=ids.filter(id=>!helper(id));
+  let ok=false;
+  for(const id of helpers)ok=game.assign(task,id)||ok;
+  const body=bodies.includes(active)?active:bodies[0];
+  if(body)ok=game.assign(task,body)||ok;
+  return ok;
 }

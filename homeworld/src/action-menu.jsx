@@ -1,7 +1,7 @@
 import React from 'react';
 import {Icon,ItemIcon,ActionButton,TOOLS} from './ui.jsx';
 import {BuildMenu} from './building-ui.jsx';
-import {ANIMALS} from './animals.mjs';
+import {AnimalFarm} from './animals-ui.jsx';
 
 const TABS=[{id:'actions',name:'Actions',icon:'actions'},{id:'build',name:'Build',icon:'build'},{id:'farm',name:'Farm',icon:'plant'},{id:'decorate',name:'Decorate',icon:'rest'}];
 const HARVEST={id:'harvest',name:'Harvest',color:'#527c38',soft:'#edf6d9'};
@@ -38,7 +38,7 @@ export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,
         {tool==='mine'&&!farm&&<button className="action-extra" onClick={()=>onPanel('tools')}>Better tools →</button>}
         {primary&&<div className="menu-primary"><ActionButton icon={primary.icon} disabled={view.busy||(ready==='fish'&&view.nutrition.energy<4)} onClick={()=>onRun(primary.run)}>{primary.name}</ActionButton><span>{HINTS[ready]}</span></div>}
         {farm&&<p className="action-menu-tip">Choose Dig, then tap clear grass to walk there and dig. Plant and water your new spot.</p>}
-        {farm&&<div className="animal-farm"><h3 className="animal-farm-title">Farm animals <small>{view.state.animals?.length||0} on the island</small></h3><div className="animal-grid" role="group" aria-label="Place a farm animal">{ANIMALS.map(a=>{const here=view.state.animals?.filter(x=>x.kind===a.id).length||0;return <button key={a.id} className={`animal-card ${view.animals?.placing?.kind===a.id?'placing':''}`} aria-label={`Place a ${a.name.toLowerCase()}${here?`. ${here} on the island`:''}`} onClick={()=>onRun(g=>g.animals?.beginPlace(a.id))}><span className="animal-emoji" aria-hidden="true">{a.emoji}</span><span className="animal-name">{a.name}</span>{here>0&&<i className="animal-count" aria-hidden="true">{here}</i>}</button>;})}</div><p className="action-menu-tip">Tap an animal, then tap grass to place it. Animals wander near their spot.</p></div>}
+        {farm&&<AnimalFarm view={view} onRun={onRun}/>}
       </>}
     </div>
   </section>;

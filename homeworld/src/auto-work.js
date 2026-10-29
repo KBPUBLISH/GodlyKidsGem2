@@ -33,9 +33,13 @@ export class AutoWork {
     if(spec.type==='pause'){this.pause();return true;}
     if(spec.type==='resume'){this.resume();return true;}
     if(!LABELS[spec.type])return false;
+    // A church wood goal must not yank someone off an explicit job (apple picking). Go on the to-do sheet does not set background, so the player can still replace it.
+    if(spec.background&&(this.task?.explicit||g.pinJob))return false;
     if(g.store.state.characters?.[g.store.state.activeCharacter]?.sleep){if(spec.type==='sleep')return true;g.nutrition?.wakeUp();}
     if(this.task)this.stop(true);
     if(g.action||g.order)g.unequipTool();
+    g.releasePose?.();
+    if(!spec.background)g.pinJob=null;
     const type=spec.type;
     let goal=spec.goal||(type==='chop'?'few':type==='water'?'all':type==='mine'?'any':'one');
     const count=spec.count>0?Math.max(1,Math.min(20,Math.round(spec.count))):null;
@@ -50,7 +54,7 @@ export class AutoWork {
     // "Get 16 rocks" means 16 stone in the bag, not 16 boulders smashed.
     if(type==='mine'&&!until&&count>1&&(goal==='any'||goal==='stone')){until={stone:(g.store.state.inventory.stone||0)+count};goal='stone';}
     if(until)target=99;
-    this.task={type,goal,item:spec.item||null,target,until,then:spec.then||null,done:0,paused:false,fails:0,startedAt:Date.now()};
+    this.task={type,goal,item:spec.item||null,target,until,then:spec.then||null,done:0,paused:false,fails:0,startedAt:Date.now(),explicit:!spec.background};
     this.waitUntil=0;g.residents?.closeMenu();
     const note=REPEATING.has(type)?GOAL_NOTES[goal]||'':'';
     g.status=`${this.name()} ${TOOL_LINES[type]}${note?' '+note:''}. Tap them to pause or stop.`;g.toast(g.status);g.notify();
@@ -116,6 +120,7 @@ export class AutoWork {
   /** Runs every frame: when the character is free, pick up loose wood or begin the next job. */
   update(now=performance.now()){
     const t=this.task;if(!t||t.paused)return;const g=this.g;
+    if(g.pinJob&&g.pinJob!==t.type)return;
     if(g.action||g.order||g.path.length||now<this.waitUntil)return;
     if(t.type==='build'&&g.building?.preview)return; // the kid is choosing the spot
     if(g.store.state.night||g.store.state.characters?.[g.store.state.activeCharacter]?.sleep){if(t.type!=='sleep')this.finish(`${this.name()} stopped for the night.`);return;}
@@ -204,7 +209,9 @@ export class AutoWork {
         g.seed=seed.id;
         const res=g.gardenAction('plant',null);if(res===false)return false;
         if(!g.order&&!g.path.length){
-          // No prepared tile: dig one first, then plant.
+          // Weedy soil is skipped above. Clear it before digging a brand-new spot.
+          const cleared=g.gardenAction('clear_weeds',null);if(cleared===false)return false;
+          if(g.order||g.path.length)return true;
           const dug=g.gardenAction('plow',null);if(dug===false||(!g.order&&!g.path.length)){this.finish(t.done?`${this.name()} planted ${this.progress()}.`:`${this.name()} has nowhere to plant. Dig a garden spot first.`);return true;}
         }
         return true;
@@ -244,6 +251,9 @@ export class AutoWork {
         const tier=toolTier(s);const next=TOOL_TIERS[tier.tier+1];
         if(!next){this.finish(`${this.name()} already has the best tools!`);return true;}
         const st=upgradeStatus(s,next.tier);
+        if(st.needsForge){this.finish(st.forgeBuilding?`${next.name} tools wait for the forge to finish building.`:`${next.name} tools need a forge. Open Better tools to build one.`);return true;}
+        if(st.forging){this.finish(`${next.name} tools are in the forge.`);return true;}
+        if(st.busy){this.finish('The forge is busy. It can make one set of tools at a time.');return true;}
         if(!st.canCraft){
           const onlyStone=st.missing.length&&st.missing.every(m=>m.id==='stone');
           if(onlyStone){const gather=this.gatherFor({stone:next.recipe.stone},{type:'craft'},`${next.name} tools`);if(gather)return true;}

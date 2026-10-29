@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import {cellAt,cellFromKey,heightAt,gameTime,buildSiteStatus,buildPlacementStatus,dist,Navigation,activeTrees,activeRocks,activeStumps,stumpRadius,buildMoveStatus,stateWithoutBuilding,buildUpgradeStatus} from './core.mjs';
-import {BUILDINGS,buildingById,activeBuildings,footprint,workPoint,materialStatus,buildingProgress,buildingStage,woodTotal,upgradeDefinition,upgradeCost,upgradePlan,pointInBounds,fireFuelLeft,FIRE_LOW_MINUTES} from './building.mjs';
+import {cellAt,cellFromKey,heightAt,gameTime,buildSiteStatus,buildPlacementStatus,strokePlacementStatus,dist,Navigation,activeTrees,activeRocks,activeStumps,stumpRadius,buildMoveStatus,stateWithoutBuilding,buildUpgradeStatus} from './core.mjs';
+import {BUILDINGS,BUILD_ENERGY,buildingById,activeBuildings,footprint,workPoint,materialStatus,buildingProgress,buildingStage,woodTotal,upgradeDefinition,upgradeCost,upgradePlan,pointInBounds,fireFuelLeft,FIRE_LOW_MINUTES,layerCount,strokeRotation,strokeNeed} from './building.mjs';
+import {energyFor} from './nutrition.mjs';
 import {projectPlan,defaultCrew,projectTimeLeft,projectDuration,assignedProject} from './project-rules.mjs';
 import {woodStorage} from './wood-storage.mjs';
 import {emitWorkSweat} from './work-sweat.js';
@@ -24,12 +25,18 @@ export class Construction {
   for(const b of live){
    const stage=buildingStage(b),assetStage=stage==='finishing'?'complete':stage;
    let n=this.nodes.get(b.id);
-   if(!n||n.stage!==stage||n.kind!==b.kind||n.key!==b.key||n.rotation!==b.rotation){
+   const layers=layerCount(b);
+   if(!n||n.stage!==stage||n.kind!==b.kind||n.key!==b.key||n.rotation!==b.rotation||n.layers!==layers){
     if(n)this.group.remove(n.root);
-    const root=g.asset(`building_${b.kind}_${assetStage}`),fp=footprint(g.world,b);root.position.set(fp.center.x,b.baseHeight,-fp.center.y);root.rotation.y=b.rotation*Math.PI/2;
-    root.userData.buildingId=b.id;root.traverse(o=>{if(o.isMesh)o.userData.buildingId=b.id;});this.group.add(root);n={root,stage,kind:b.kind,key:b.key,rotation:b.rotation};this.nodes.set(b.id,n);
+    const fp=footprint(g.world,b);
+    let root;
+    if(layers<=1)root=g.asset(`building_${b.kind}_${assetStage}`);
+    else{root=new THREE.Group();const step=this.layerStep(b.kind);for(let i=0;i<layers;i++){const piece=g.asset(`building_${b.kind}_${assetStage}`);piece.position.y=i*step;root.add(piece);}}
+    root.position.set(fp.center.x,b.baseHeight,-fp.center.y);root.rotation.y=b.rotation*Math.PI/2;
+    root.userData.buildingId=b.id;root.traverse(o=>{if(o.isMesh)o.userData.buildingId=b.id;});this.group.add(root);n={root,stage,kind:b.kind,key:b.key,rotation:b.rotation,layers};this.nodes.set(b.id,n);
     if(b.status==='complete'&&HOME_KINDS.includes(b.kind)) this.rigHome(n,b);
     if(['campfire','oven'].includes(b.kind)&&b.status==='complete'){const light=new THREE.PointLight(b.kind==='oven'?'#ff8a3a':'#ffad50',6,b.kind==='oven'?4:6,2);light.position.set(0,b.kind==='oven'?.55:.65,b.kind==='oven'?.6:0);root.add(light);n.fireLight=light;}
+    if(b.kind==='forge'&&b.status==='complete'){const light=new THREE.PointLight('#ff8a3a',4.2,5,2);light.position.set(.1,.62,.15);root.add(light);}
    }
    if(stage==='finishing')this.finishShape(n.root,buildingProgress(b));
    if(buildingById(b.kind).woodCapacity){const box=wood.containers.find(c=>c.id===b.id),fraction=box?box.used/box.capacity:0,slots=n.root.userData.storage_log_slots||1;n.root.traverse(o=>{if(o.userData.storage_log_index)o.visible=o.userData.storage_log_index<=Math.ceil(fraction*slots);});}
@@ -90,7 +97,7 @@ export class Construction {
   g.notify();
  }
  startPreview(kind){
-  const g=this.g;this.sitePlan=null;if(g.action||g.order||activeBuildings(g.store.state).some(b=>b.status!=='complete'&&!b.project)){g.toast('Let your character finish this building first.');return false;}
+  const g=this.g;this.sitePlan=null;if(buildingById(kind)?.stroke)return this.startStroke(kind);if(g.action||g.order||activeBuildings(g.store.state).some(b=>b.status!=='complete'&&!b.project)){g.toast('Let your character finish this building first.');return false;}
   if(!buildingById(kind))return false;g.persist();this.preview=this.findSpot(kind);if(projectPlan(kind))this.preview.crew=defaultCrew(g.store.state,kind);g.path=[];g.keys.clear();g.tool='build';g.overview=false;g.zoom=Math.max(g.zoom,19);g.resize();this.rebuildGhost();this.updatePreview();g.status='Tap the grass to move your building. Green means the spot is clear!';g.notify();return true;
  }
  moveExisting(id){
@@ -115,7 +122,7 @@ export class Construction {
   this.ghostGroup.clear();const model=this.g.asset(`building_${this.preview.kind}_complete`);model.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;o.material=this.ghostMaterials.ok;const edges=new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry,55),this.edgeMaterials.ok);edges.userData.previewEdge=true;o.add(edges);}});this.ghostGroup.add(model);this.ghost=model;
  }
  updatePreview(){
-  if(!this.preview)return;const g=this.g,omit=this.preview.movingId||this.preview.upgradingId,checkState=omit?stateWithoutBuilding(g.world,g.store.state,omit):g.store.state,site=buildSiteStatus(g.world,checkState,this.preview),status=site.ok?(this.preview.upgradingId?buildUpgradeStatus(g.world,g.store.state,this.preview.upgradingId,gameTime(g.store.state),this.preview.crew):this.preview.movingId?buildMoveStatus(g.world,g.store.state,{...this.preview,id:this.preview.movingId}):buildPlacementStatus(g.world,g.store.state,this.preview)):site,fp=site.footprint||footprint(g.world,this.preview);
+  if(!this.preview)return;if(this.preview.stroke)return this.updateStroke();const g=this.g,omit=this.preview.movingId||this.preview.upgradingId,checkState=omit?stateWithoutBuilding(g.world,g.store.state,omit):g.store.state,site=buildSiteStatus(g.world,checkState,this.preview),status=site.ok?(this.preview.upgradingId?buildUpgradeStatus(g.world,g.store.state,this.preview.upgradingId,gameTime(g.store.state),this.preview.crew):this.preview.movingId?buildMoveStatus(g.world,g.store.state,{...this.preview,id:this.preview.movingId}):buildPlacementStatus(g.world,g.store.state,this.preview)):site,fp=site.footprint||footprint(g.world,this.preview);
   if(!fp){this.previewStatus={ok:false,reason:'This home is too close to the island edge. Move it farther inland first.'};this.siteValid=false;this.previewRevision=g.store.state.revision;this.ghostGroup.visible=false;this.gridGroup.clear();return;}this.ghostGroup.visible=true;
   this.previewStatus=status;this.previewRevision=g.store.state.revision;this.siteValid=site.ok;this.ghostGroup.position.set(fp.center.x,site.baseHeight??heightAt(g.world,fp.center.x,fp.center.y)+.02,-fp.center.y);this.ghostGroup.rotation.y=this.preview.rotation*Math.PI/2;
   this.ghost.traverse(o=>{if(o.isMesh)o.material=this.ghostMaterials[site.ok?'ok':'bad'];if(o.userData.previewEdge)o.material=this.edgeMaterials[site.ok?'ok':'bad'];});
@@ -130,15 +137,125 @@ export class Construction {
   const geo=new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3));this.gridGroup.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:'#fff4c9',transparent:true,opacity:.30,depthWrite:false})));
   const p=fp.bounds,h=this.ghostGroup.position.y+.035,outline=new THREE.BufferGeometry().setFromPoints([V(p[0],h,-p[1]),V(p[2],h,-p[1]),V(p[2],h,-p[3]),V(p[0],h,-p[3]),V(p[0],h,-p[1])]);this.gridGroup.add(new THREE.Line(outline,this.edgeMaterials[this.siteValid?'ok':'bad']));
  }
- moveTo(target){if(!this.preview||this.preview.upgradingId)return;const c=cellAt(this.g.world,target.x,target.y),fp=footprint(this.g.world,this.preview);this.preview.key=`${Math.max(0,c.col-Math.floor(fp.w/2))}:${Math.max(0,c.row-Math.floor(fp.h/2))}`;this.updatePreview();this.g.notify();}
+ moveTo(target){if(!this.preview||this.preview.stroke||this.preview.upgradingId)return;const c=cellAt(this.g.world,target.x,target.y),fp=footprint(this.g.world,this.preview);this.preview.key=`${Math.max(0,c.col-Math.floor(fp.w/2))}:${Math.max(0,c.row-Math.floor(fp.h/2))}`;this.updatePreview();this.g.notify();}
  nudge(dx,dy){if(!this.preview||this.preview.upgradingId)return;const [x,y]=this.preview.key.split(':').map(Number);this.preview.key=`${Math.max(0,x+dx)}:${Math.max(0,y+dy)}`;this.updatePreview();this.g.notify();}
  rotate(){if(!this.preview||this.preview.upgradingId)return;this.preview.rotation=(this.preview.rotation+1)%4;this.updatePreview();this.g.notify();}
  findAnother(){if(!this.preview||this.preview.upgradingId)return;const movingId=this.preview.movingId;this.preview={...this.findSpot(this.preview.kind,this.preview.rotation),...(movingId?{movingId}:{})};this.updatePreview();this.g.notify();}
  cancelPreview(){this.pendingUpgradeId=null;this.clearPlan=null;this.preview=null;this.previewStatus=null;this.ghostGroup.clear();this.gridGroup.clear();if(this.g.tool==='build')this.g.setTool('walk');this.g.notify();}
+ layerStep(kind){
+  this.layerSteps??={};if(this.layerSteps[kind])return this.layerSteps[kind];
+  const piece=this.g.asset(`building_${kind}_complete`);piece.updateMatrixWorld(true);
+  const box=new THREE.Box3().setFromObject(piece),h=box.max.y-box.min.y;
+  this.layerSteps[kind]=h>.05?h:(buildingById(kind)?.height||.7);return this.layerSteps[kind];
+ }
+ standers(){
+  const g=this.g,list=[];
+  const members=g.store.state.community?.members;
+  if(members)for(const [id,m] of Object.entries(members)){if(id===g.store.state.activeCharacter)continue;if(Number.isFinite(m?.position?.x)&&Number.isFinite(m?.position?.y))list.push(m.position);}
+  for(const actor of g.residents?.models?.values()||[]){if(actor===g.actor)continue;const x=actor.userData?.x,y=actor.userData?.y;if(Number.isFinite(x)&&Number.isFinite(y))list.push({x,y});}
+  return list;
+ }
+ startStroke(kind){
+  const g=this.g;this.sitePlan=null;
+  if(g.action||g.order||activeBuildings(g.store.state).some(b=>b.status!=='complete'&&!b.project)){g.toast('Let your character finish this building first.');return false;}
+  const def=buildingById(kind);if(!def?.stroke)return false;
+  g.persist();
+  const at=cellAt(g.world,g.player.x,g.player.y);let key=`${Math.max(0,at.col+2)}:${Math.max(0,at.row)}`;
+  outer:for(let d=1;d<=10;d++)for(const [dx,dy] of [[d,0],[-d,0],[0,d],[0,-d],[d,d],[-d,d],[d,-d],[-d,-d]]){
+    const k=`${Math.max(0,at.col+dx)}:${Math.max(0,at.row+dy)}`;
+    if(strokePlacementStatus(g.world,g.store.state,{kind,key:k,rotation:0},gameTime(g.store.state),this.standers()).ok){key=k;break outer;}
+  }
+  this.lastStrokeKey=null;
+  this.preview={kind,key,rotation:strokeRotation(activeBuildings(g.store.state),key,kind,null),stroke:true,stackId:null};
+  g.path=[];g.keys.clear();g.tool='build';g.overview=false;g.zoom=Math.max(g.zoom,20);g.resize();
+  this.rebuildGhost();this.updateStroke();
+  g.status='Tap the grass to place one. Tap Done when you finish.';g.notify();return true;
+ }
+ aimFromEvent(e){
+  if(!this.preview?.stroke)return;
+  const g=this.g,r=g.renderer.domElement.getBoundingClientRect();if(!r.width)return;
+  g.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  g.ray.setFromCamera(g.mouse,g.camera);
+  const target=this.strokeTarget();if(!target)return;
+  if(this.preview.key===target.key&&this.preview.stackId===target.stackId&&this.preview.rotation===target.rotation)return;
+  this.preview.key=target.key;this.preview.stackId=target.stackId;this.preview.rotation=target.rotation;
+  this.updateStroke();g.notify();
+ }
+ strokeTarget(){
+  const g=this.g,kind=this.preview.kind;
+  const roots=[...this.nodes.values()].filter(n=>buildingById(n.kind)?.stroke).map(n=>n.root);
+  const hits=roots.length?g.ray.intersectObjects(roots,true):[];
+  let key=null;
+  if(hits.length){
+    const hit=hits[0];let node=hit.object;while(node&&!node.userData.buildingId)node=node.parent;
+    const b=g.store.state.buildings.find(x=>x.id===node?.userData.buildingId);
+    if(b?.key){
+      const wn=hit.face?.normal?.clone()?.transformDirection(hit.object.matrixWorld);
+      let dx=0,dy=0,up=false;
+      if(wn){if(wn.y>.55)up=true;else if(Math.abs(wn.x)>Math.abs(wn.z))dx=Math.sign(wn.x);else dy=-Math.sign(wn.z);}
+      const [c,r]=b.key.split(':').map(Number);
+      key=up&&b.kind===kind?b.key:`${c+(dx||0)}:${r+(dy||0)}`;
+    }
+  }
+  if(!key){const p=V();if(!g.ray.ray.intersectPlane(g.groundPlane,p))return null;key=cellAt(g.world,p.x,-p.z).key;}
+  const here=(g.store.state.buildings||[]).find(b=>b.status==='complete'&&b.kind===kind&&b.key===key);
+  return {key,stackId:here?.id||null,rotation:strokeRotation(activeBuildings(g.store.state),key,kind,this.lastStrokeKey)};
+ }
+ updateStroke(){
+  const g=this.g,p=this.preview;if(!p?.stroke)return;
+  const def=buildingById(p.kind);
+  let existing=p.stackId&&(g.store.state.buildings||[]).find(b=>b.id===p.stackId&&b.status==='complete'&&b.kind===p.kind&&b.key===p.key);
+  if(!existing){const occupied=(g.store.state.buildings||[]).find(b=>b.status==='complete'&&b.kind===p.kind&&b.key===p.key);if(occupied){p.stackId=occupied.id;existing=occupied;}}
+  const layers=existing?layerCount(existing):0,cap=def.stack||1;
+  let status;
+  if(existing&&!def.stack)status={ok:false,reason:'Wood fences stay one high.',footprint:footprint(g.world,existing),baseHeight:existing.baseHeight};
+  else if(existing&&layers>=cap)status={ok:false,reason:'Only 3 high.',footprint:footprint(g.world,existing),baseHeight:existing.baseHeight};
+  else if(existing){
+    const fp=footprint(g.world,existing);
+    const blocked=fp&&(pointInBounds(g.store.state.player,fp.bounds,.4)||this.standers().some(q=>pointInBounds(q,fp.bounds,.4)));
+    const need=strokeNeed(g.store.state,p.kind);
+    status=blocked?{ok:false,reason:'Someone is standing there.'}:need?{ok:false,reason:need}:energyFor(g.store.state)<BUILD_ENERGY?{ok:false,reason:'Need 5 energy.'}:{ok:true,reason:'Tap to add a layer.',footprint:fp,baseHeight:existing.baseHeight};
+  }else{
+    status=strokePlacementStatus(g.world,g.store.state,{kind:p.kind,key:p.key,rotation:p.rotation||0},gameTime(g.store.state),this.standers());
+    if(status.ok)status={...status,reason:'Tap to place one.'};
+  }
+  this.previewStatus=status;this.previewRevision=g.store.state.revision;this.siteValid=!!status.ok;
+  const fp=status.footprint||footprint(g.world,{kind:p.kind,key:p.key,rotation:p.rotation||0});
+  if(!fp){this.ghostGroup.visible=false;this.gridGroup.clear();return;}
+  this.ghostGroup.visible=true;
+  const lift=existing&&def.stack?layers*this.layerStep(p.kind):0;
+  const y=(existing?existing.baseHeight:(status.baseHeight??heightAt(g.world,fp.center.x,fp.center.y)+.02))+lift;
+  this.ghostGroup.position.set(fp.center.x,y,-fp.center.y);this.ghostGroup.rotation.y=(p.rotation||0)*Math.PI/2;
+  this.ghost?.traverse(o=>{if(o.isMesh)o.material=this.ghostMaterials[status.ok?'ok':'bad'];if(o.userData.previewEdge)o.material=this.edgeMaterials[status.ok?'ok':'bad'];});
+  this.drawPlacementGrid(fp);
+ }
+ stamp(){
+  const g=this.g,p=this.preview;if(!p?.stroke||g.action||g.order)return false;
+  this.updateStroke();
+  const status=this.previewStatus;
+  if(!status?.ok){g.toast(status?.reason||'Choose another spot.',1500);g.notify();return false;}
+  const existing=p.stackId&&g.store.state.buildings.find(b=>b.id===p.stackId&&b.status==='complete'&&b.kind===p.kind);
+  try{
+    const before=g.store.state,people=this.standers();
+    if(existing&&buildingById(p.kind)?.stack){
+      g.store.commit({type:'stack_piece',id:existing.id,people,actionId:crypto.randomUUID()});
+      const saved=g.store.state.buildings.find(b=>b.id===existing.id);
+      if(g.store.state===before||layerCount(saved)<=layerCount(existing)){g.toast('That spot changed. Try again.',1500);this.updateStroke();g.notify();return false;}
+    }else{
+      const plan={kind:p.kind,key:p.key,rotation:p.rotation||0,id:crypto.randomUUID(),stroke:true,people};
+      g.store.commit({type:'place_building',...plan,actionId:crypto.randomUUID()});
+      const placed=g.store.state.buildings.find(b=>b.id===plan.id);
+      if(!placed){g.toast(status.reason||'That spot changed. Try again.',1500);this.updateStroke();g.notify();return false;}
+      this.lastStrokeKey=p.key;p.rotation=placed.rotation;
+      if(buildingById(p.kind)?.stack)p.stackId=placed.id;
+    }
+    g.refreshDynamic();this.updateStroke();g.notify();return true;
+  }catch(e){g.toast(e.message,1500);return false;}
+ }
  place(){
-  const g=this.g;if(!this.preview||g.action||g.order)return false;if(this.preview.movingId)return this.moveFinished();if(this.preview.upgradingId)return this.placeUpgrade();
+  const g=this.g;if(!this.preview||g.action||g.order)return false;if(this.preview.stroke)return this.stamp();if(this.preview.movingId)return this.moveFinished();if(this.preview.upgradingId)return this.placeUpgrade();
   const plan={...this.preview,id:crypto.randomUUID()},status=buildPlacementStatus(g.world,g.store.state,plan);if(!status.ok){g.toast(status.reason);this.updatePreview();return false;}
-  try{const before=g.store.state;g.store.commit({type:'place_building',...plan,actionId:token('place',plan.id)});if(!g.store.state.buildings.some(b=>b.id===plan.id)){g.toast('That spot changed. Choose a new spot.');this.updatePreview();return false;}this.preview=null;this.ghostGroup.clear();this.gridGroup.clear();g.refreshDynamic();g.status=`${buildingById(plan.kind).name} materials ready. Let’s build!`;this.go(plan.id);g.notify();return true;}catch(e){g.toast(e.message);return false;}
+  try{const before=g.store.state;g.store.commit({type:'place_building',...plan,actionId:token('place',plan.id)});const placed=g.store.state.buildings.find(b=>b.id===plan.id);if(!placed){g.toast('That spot changed. Choose a new spot.');this.updatePreview();return false;}this.preview=null;this.ghostGroup.clear();this.gridGroup.clear();g.refreshDynamic();const name=buildingById(plan.kind).name;if(placed.status==='complete'){g.status=`${name} placed!`;g.toast(g.status);g.notify();return true;}g.status=`${name} materials ready. Let’s build!`;this.go(plan.id);g.notify();return true;}catch(e){g.toast(e.message);return false;}
  }
  go(id){
   const g=this.g,b=g.store.state.buildings.find(b=>b.id===id);if(!b||!['queued','building'].includes(b.status))return false;
@@ -211,11 +328,43 @@ export class Construction {
  camPose(){const g=this.g;return {pos:g.camera.position.clone(),look:g.focus.clone(),zoom:g.zoom,near:g.camera.near,far:g.camera.far};}
  interiorPose(root,b,rig){
   const g=this.g,def=buildingById(b.kind),aspect=Math.max(.4,(g.container.clientWidth||800)/(g.container.clientHeight||600));
-  const spanW=def.size[0]*1.05,spanH=Math.min(def.height,def.size[1])*.9,zoom=Math.max(spanH,spanW/aspect)*1.05;
+  // g.zoom is the ortho vertical span (camera.top = zoom/2). Half the footprint framing is about twice as close.
+  const spanW=def.size[0]*1.05,spanH=Math.min(def.height,def.size[1])*.9,framed=Math.max(spanH,spanW/aspect)*1.05;
   const eye=Math.min(1.35,Math.max(.95,def.height*.34));
   root.updateWorldMatrix(true,true);
-  const pos=root.localToWorld(V(.22,eye,rig.doorZ-.48)),look=root.localToWorld(V(-.05,.42,rig.doorZ-Math.max(1.35,def.size[1]*.42)));
+  const pos=root.localToWorld(V(.22,eye,rig.doorZ-.48));
+  const look=this.furnitureCenter(root)||root.localToWorld(V(-.05,.42,rig.doorZ-Math.max(1.35,def.size[1]*.42)));
+  const zoom=Math.min(framed,Math.max(framed*.5,this.roomSpan(root,pos,look,aspect)));
   return {pos,look,zoom};
+ }
+ /** World-space midpoint of the beds and table, so the close frustum is centered on them. */
+ furnitureCenter(root){
+  const pieces=[];
+  root.traverse(o=>{if(o.name==='home-bed'||o.name==='home-table') pieces.push(o);});
+  if(!pieces.length) return null;
+  const sum=V();
+  for(const piece of pieces) sum.add(piece.getWorldPosition(V()));
+  return sum.multiplyScalar(1/pieces.length);
+ }
+ /** Smallest vertical span that still keeps the bed and table inside the ortho frame. */
+ roomSpan(root,pos,look,aspect){
+  const forward=look.clone().sub(pos);if(forward.lengthSq()<1e-6) return 0;forward.normalize();
+  const zaxis=forward.clone().negate(),xaxis=V().crossVectors(V(0,1,0),zaxis);if(xaxis.lengthSq()<1e-8) return 0;xaxis.normalize();
+  const yaxis=V().crossVectors(zaxis,xaxis).normalize(),corner=V();let maxX=0,maxY=0,n=0;
+  root.traverse(o=>{
+   if(!o.isMesh) return;
+   let named=false,p=o;while(p){if(p.name==='home-bed'||p.name==='home-table') named=true;p=p.parent;}
+   if(!named) return;
+   const attr=o.geometry?.attributes?.position;if(!attr) return;
+   o.updateWorldMatrix(true,false);
+   for(let i=0;i<attr.count;i++){
+    corner.fromBufferAttribute(attr,i).applyMatrix4(o.matrixWorld);
+    if(corner.clone().sub(pos).dot(forward)<.35) continue;
+    corner.sub(look);maxX=Math.max(maxX,Math.abs(corner.dot(xaxis)));maxY=Math.max(maxY,Math.abs(corner.dot(yaxis)));n++;
+   }
+  });
+  if(!n) return 0;
+  return Math.max(maxY*2,maxX*2/aspect)*1.08;
  }
  stepInterior(dt){
   const g=this.g,inn=g.interior;if(!inn) return;
@@ -251,6 +400,7 @@ export class Construction {
   if(b.project&&b.status!=='complete'){this.openMenu={id:'build',nonce:Date.now()};this.g.notify();return true;}
   if(HOME_KINDS.includes(b.kind)&&b.status==='complete'){this.showEnter(b);return true;}
   if(b.kind==='well'&&b.status==='complete'){this.wellId=b.id;this.g.notify();return true;}
+  if(b.kind==='forge'&&b.status==='complete'){this.openMenu={id:'tools',nonce:Date.now()};this.g.notify();return true;}
   if(buildingById(b.kind).woodCapacity||['hut','tent','cottage','townhouse','chest','campfire','oven','well'].includes(b.kind)){const home=['hut','tent','cottage','townhouse'].includes(b.kind);this.openMenu={id:home?'sleep':b.kind==='chest'||buildingById(b.kind).woodCapacity?'inventory':['campfire','oven','well'].includes(b.kind)?b.kind:'food',homeId:home?b.id:undefined,fireId:b.kind==='campfire'?b.id:undefined,ovenId:b.kind==='oven'?b.id:undefined,wellId:b.kind==='well'?b.id:undefined,nonce:Date.now()};this.g.notify();}else this.g.toast(`${buildingById(b.kind).name} · you built this!`);return true;
  }
  update(){
@@ -271,6 +421,6 @@ export class Construction {
  snapshot(){
   const g=this.g,state=g.store.state,live=activeBuildings(state),ob=this.preview?this.obstacles(this.preview):null,clearAction=/^(Chop the tree|Smash the rock|Pick up the seeds|Dig out the stump)/.test(this.previewStatus?.reason||'')?(ob?.trees.length?'Chop a tree here':ob?.rocks.length?'Smash a rock here':ob?.stumps.length?'Dig out a stump here':ob?.seeds.length?'Pick up these seeds':null):null;
   const old=this.preview?.upgradingId&&state.buildings.find(b=>b.id===this.preview.upgradingId),definition=this.preview?{...buildingById(this.preview.kind),...(old?upgradeCost(old):{})}:null;
-  return {preview:this.preview?{...this.preview,definition,crew:this.preview.crew,crewRequired:projectPlan(this.preview.kind)?.crew,crewCandidates:Object.entries(state.characters).map(([id,c])=>({id,name:c.name,energy:Math.floor(c.energy),asleep:!!c.sleep,assigned:!!assignedProject(state,id)})),duration:projectDuration(this.preview.kind),siteValid:this.siteValid,canPlace:!!this.previewStatus?.ok,reason:this.previewStatus?.reason,clearAction,have:{wood:woodTotal(state),stone:state.inventory.stone||0},needsClear:!!clearAction,needsMaterials:!this.preview.movingId&&(woodTotal(state)<(definition?.wood||0)||(state.inventory.stone||0)<(definition?.stone||0)),workers:g.playersOnly&&g.crew?g.crew():null,obstacleCount:ob?ob.trees.length+ob.rocks.length+ob.seeds.length+ob.stumps.length:0}:null,items:live.map(b=>({...b,name:buildingById(b.kind).name,projectLabel:b.project?projectTimeLeft(b):null,crewNames:b.project?.crew.map(id=>state.characters[id]?.name||id),woodCapacity:buildingById(b.kind).woodCapacity,progress:buildingProgress(b),remaining:Math.max(0,Math.ceil((1-buildingProgress(b))*buildingById(b.kind).seconds))})),wood:woodTotal(state),openMenu:this.openMenu};
+  return {preview:this.preview?{...this.preview,definition,crew:this.preview.crew,crewRequired:projectPlan(this.preview.kind)?.crew,crewCandidates:Object.entries(state.characters).map(([id,c])=>({id,name:c.name,energy:Math.floor(c.energy),asleep:!!c.sleep,assigned:!!assignedProject(state,id)})),duration:projectDuration(this.preview.kind),siteValid:this.siteValid,canPlace:!!this.previewStatus?.ok,reason:this.previewStatus?.reason,clearAction,have:{wood:woodTotal(state),stone:state.inventory.stone||0,brick:state.inventory.concrete_brick||0},needsClear:!!clearAction,needsMaterials:!this.preview.movingId&&(woodTotal(state)<(definition?.wood||0)||(state.inventory.stone||0)<(definition?.stone||0)||Object.entries(definition?.bundle||{}).some(([id,n])=>(state.inventory[id]||0)<n)),workers:g.playersOnly&&g.crew?g.crew():null,obstacleCount:ob?ob.trees.length+ob.rocks.length+ob.seeds.length+ob.stumps.length:0}:null,items:live.map(b=>({...b,name:buildingById(b.kind).name,projectLabel:b.project?projectTimeLeft(b):null,crewNames:b.project?.crew.map(id=>state.characters[id]?.name||id),woodCapacity:buildingById(b.kind).woodCapacity,progress:buildingProgress(b),remaining:Math.max(0,Math.ceil((1-buildingProgress(b))*buildingById(b.kind).seconds))})),wood:woodTotal(state),openMenu:this.openMenu};
  }
 }

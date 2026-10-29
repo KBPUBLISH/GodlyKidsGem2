@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import {activeRocks,heightAt,dist,label} from './core.mjs';
-import {MINERALS,DEPOSITS,TOOL_TIERS,MINING_SWING_SECONDS,toolTier,rockProfile,rockRemaining,upgradeStatus} from './mining.mjs';
-import {SHOVEL_TIERS,shovelStatus} from './digging.mjs';
+import {activeRocks,heightAt,dist,label,gameTime} from './core.mjs';
+import {MINERALS,DEPOSITS,TOOL_TIERS,MINING_SWING_SECONDS,ROCK_REVEAL_MS,toolTier,rockProfile,rockRemaining,rockFindLine,toolNeedMessage,upgradeStatus,forgeEstimate,forgeJob,forgeProgress} from './mining.mjs';
+import {SHOVEL_TIERS,shovelStatus,shovelTier} from './digging.mjs';
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const ease=t=>{t=THREE.MathUtils.clamp(t,0,1);return t*t*(3-2*t);};
 
@@ -35,23 +35,29 @@ export class Mining {
     this.group.add(marker);node.marker=marker;
   }
   prepareTools(){
-    this.heads=[];
-    for(const id of ['axe','hoe','pickaxe'])this.g.tools[id].traverse(o=>{if(o.isMesh&&/Head|Blade|Shank/.test(o.name)){o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();this.heads.push(...(Array.isArray(o.material)?o.material:[o.material]));}});
+    this.heads=[];this.hoeHeads=[];
+    const paint=(id,bucket)=>this.g.tools[id].traverse(o=>{if(o.isMesh&&/Head|Blade|Shank/.test(o.name)){o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();bucket.push(...(Array.isArray(o.material)?o.material:[o.material]));}});
+    paint('axe',this.heads);paint('pickaxe',this.heads);paint('hoe',this.hoeHeads);
     this.applyTier();
   }
-  applyTier(){const tier=toolTier(this.g.store.state);for(const m of this.heads||[]){m.color.set(tier.color);m.roughness=tier.tier===3?.3:.7;m.metalness=tier.tier?.2:0;}this.tier=tier;}
+  applyTier(){
+    const tier=toolTier(this.g.store.state),shovel=shovelTier(this.g.store.state),hoe=shovel.tier>0?shovel:tier;
+    for(const m of this.heads||[]){m.color.set(tier.color);m.roughness=tier.tier===3?.3:.7;m.metalness=tier.tier?.2:0;}
+    for(const m of this.hoeHeads||[]){m.color.set(hoe.color);m.roughness=shovel.tier>=3?.4:.7;m.metalness=shovel.tier>=2?.25:0;}
+    this.tier=tier;this.shovelSeen=shovel.tier;
+  }
   refresh(){
     const g=this.g,state=g.store.state;this.rocks=activeRocks(g.world,state);
     for(const node of this.nodes.values()){
       const gone=state.removedRocks.includes(node.id),inRange=g.overview||dist(g.player,{x:node.rock.position[0],y:node.rock.position[1]})<36;
       node.group.visible=inRange&&(!gone||this.work===node);if(node.marker)node.marker.visible=inRange&&!gone;
     }
-    if(this.tier?.tier!==toolTier(state).tier)this.applyTier();
+    if(this.tier?.tier!==toolTier(state).tier||this.shovelSeen!==(state.tools?.shovel||0))this.applyTier();
   }
   mine(id){
     const g=this.g,node=this.nodes.get(id);if(!node||g.store.state.removedRocks.includes(id))return false;
     const profile=node.profile,tier=toolTier(g.store.state);g.tool='mine';
-    if(tier.tier<profile.minTier){g.toast(`${profile.name} needs ${TOOL_TIERS[profile.minTier].name} tools. Open Better tools to make them.`);return false;}
+    if(tier.tier<profile.minTier){g.toast(toolNeedMessage(profile),ROCK_REVEAL_MS);return false;}
     const floor=heightAt(g.world,node.rock.position[0],node.rock.position[1]);if(node.bounds.min.y>floor+.75){g.toast('That rock is on the high terrace. Choose a rock on the grass.');return false;}
     return g.request({type:'mine',id,rock:node.rock},{x:node.rock.position[0],y:node.rock.position[1]},node.rock.radius+.85);
   }
@@ -65,12 +71,43 @@ export class Mining {
   craftShovel(tier){
     const g=this.g;if(g.action||g.order){g.toast('Let your character finish this action before crafting.');return;}
     const status=shovelStatus(g.store.state,tier);if(!status.canCraft){g.toast(status.reason);return;}
-    try{g.store.commit({type:'upgrade_shovel',tier});const made=SHOVEL_TIERS[tier];g.status=`${made.name} made! ${tier===1?'You can dig a Water Well now. Find it under Build › Gardens.':made.blurb}`;g.toast(g.status);}catch(e){g.toast(e.message);}
+    try{
+      g.store.commit({type:'upgrade_shovel',tier});const made=SHOVEL_TIERS[tier];
+      if((tier||0)<=1){this.applyTier();g.status=`${made.name} made! You can dig a Water Well now. Find it under Build › Gardens.`;}
+      else{const days=made.forgeDays,estimate=days===.5?'half an island day (~5 min)':days===1?'1 island day (~10 min)':'a little while';g.status=`${made.name} is in the forge · ${estimate}`;}
+      g.toast(g.status);
+    }catch(e){g.toast(e.message);}
   }
   upgrade(tier){
     const g=this.g;if(g.action||g.order){g.toast('Let your character finish this action before crafting.');return;}
     const status=upgradeStatus(g.store.state,tier);if(!status.canCraft){g.toast(status.reason);return;}
-    try{g.store.commit({type:'upgrade_tools',tier});this.applyTier();g.status=`${TOOL_TIERS[tier].name} tools crafted · ${TOOL_TIERS[tier].power}× strength`;g.toast(g.status);}catch(e){g.toast(e.message);}
+    try{
+      g.store.commit({type:'upgrade_tools',tier});
+      if((tier||0)<=0){this.applyTier();g.status=`${TOOL_TIERS[tier].name} tools crafted · ${TOOL_TIERS[tier].power}× strength`;}
+      else g.status=`${TOOL_TIERS[tier].name} tools are in the forge · ${forgeEstimate(tier)}`;
+      g.toast(g.status);
+    }catch(e){g.toast(e.message);}
+  }
+  /** Finish a forge job once island time has run out. A tool still forging does not change the owned tier. */
+  settleForge(){
+    const g=this.g,state=g.store?.state;if(!state||!forgeJob(state))return;
+    if(!forgeProgress(state,gameTime(state))?.done)return;
+    try{
+      const beforeTier=state.tools?.tier||0,beforeShovel=state.tools?.shovel||0;
+      g.store.commit({type:'finish_forge'});
+      const tools=g.store.state.tools||{};
+      if((tools.shovel||0)!==beforeShovel){
+        this.applyTier();
+        const name=SHOVEL_TIERS[tools.shovel]?.name||'Shovel';
+        g.status=`${name} is ready! Your characters use their strongest shovel.`;
+        g.toast(g.status);g.notify();
+      }else if((tools.tier||0)!==beforeTier){
+        this.applyTier();
+        const name=TOOL_TIERS[tools.tier].name;
+        g.status=`${name} tools are ready! Your characters use their strongest tools.`;
+        g.toast(g.status);g.notify();
+      }
+    }catch{/* The next tick tries again. */}
   }
   begin(a){
     const g=this.g;this.work=this.nodes.get(a.id);const node=this.work,box=node.bounds;
@@ -105,10 +142,11 @@ export class Mining {
   strike(a){
     const g=this.g;try{
       if(g.nutrition&&!g.nutrition.check('mine_hit')){a.failed=true;return;}
-      const before=g.store.state;g.store.commit({type:'mine_hit',id:a.id,...(a.gatherId?{actionId:`${a.gatherId}:${a.hits}`}:{})});if(g.store.state===before){a.failed=true;g.toast('The rock needs a stronger tool.');return;}
+      const before=g.store.state;g.store.commit({type:'mine_hit',id:a.id,...(a.gatherId?{actionId:`${a.gatherId}:${a.hits}`}:{})});if(g.store.state===before){a.failed=true;const profile=this.work?.profile;g.toast(profile&&toolTier(g.store.state).tier<profile.minTier?toolNeedMessage(profile):'The rock needs a stronger tool.',ROCK_REVEAL_MS);return;}
       g.touchResourceHealth?.('rock',a.id);this.emit(a.contact,'stone',13);a.broken=g.store.state.removedRocks.includes(a.id);
-      const left=rockRemaining(a.rock,g.store.state);g.status=a.broken?'Rock broken!':`Mining ${this.work.profile.short.toLowerCase()} · ${a.hits} / ${a.workHits} hits · ${left} strength left`;
-      if(a.broken){a.breakTime=a.t;for(const id of Object.keys(this.work.profile.drops))if(id!=='stone')this.emit(a.contact,id,8);a.reward=Object.entries(this.work.profile.drops).map(([id,n])=>`+${n} ${MINERALS[id].name}`).join(' · ');g.toast(a.reward);}
+      const left=rockRemaining(a.rock,g.store.state);
+      if(a.broken){a.breakTime=a.t;for(const id of Object.keys(this.work.profile.drops))if(id!=='stone')this.emit(a.contact,id,8);a.reward=rockFindLine(this.work.profile);g.status=a.reward;g.toast(a.reward,ROCK_REVEAL_MS);}
+      else g.status=`Mining · ${a.hits} / ${a.workHits} hits · ${left} strength left`;
       g.notify();
     }catch(e){a.failed=true;g.toast(e.message);}
   }
@@ -127,12 +165,6 @@ export class Mining {
   }
   end(a){const node=this.work;if(node){node.group.quaternion.copy(node.baseQuaternion);node.group.scale.copy(node.baseScale);}this.work=null;this.refresh();if(!a.failed&&a.broken)this.g.status=a.reward;}
   emit(point,id,count){const g=this.g;for(let i=0;i<count;i++){const mesh=new THREE.Mesh(id==='diamond'?this.gemGeometry:this.chipGeometry,this.materials[id]);mesh.position.copy(point);mesh.scale.setScalar(.65+Math.random()*.5);g.scene.add(mesh);g.particles.push({mesh,life:1,v:V((Math.random()-.5)*2,1+Math.random()*2,(Math.random()-.5)*2)});}}
-  updateLabels(rect){
-    const g=this.g;this.labels=(this.rocks||[]).filter(r=>dist(g.player,{x:r.position[0],y:r.position[1]})<13)
-      .sort((a,b)=>dist(g.player,{x:a.position[0],y:a.position[1]})-dist(g.player,{x:b.position[0],y:b.position[1]})).slice(0,4).map(r=>{
-        const node=this.nodes.get(r.id),p=node.bounds.getCenter(V());p.y=node.bounds.max.y+.45;p.project(g.camera);const profile=node.profile;
-        return {id:r.id,name:profile.name,deposit:profile.deposit,color:profile.color,locked:toolTier(g.store.state).tier<profile.minTier,x:(p.x+1)/2*rect.width,y:(1-p.y)/2*rect.height,visible:Math.abs(p.x)<.85&&Math.abs(p.y)<.72};
-      });
-  }
+  updateLabels(){this.labels=[];}
   snapshot(){const s=this.g.store.state;return {tier:toolTier(s),labels:this.labels,rocksRemaining:activeRocks(this.g.world,s).length};}
 }

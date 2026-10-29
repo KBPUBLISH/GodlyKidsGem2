@@ -3,6 +3,7 @@ import {completedHomes} from './nutrition.mjs';
 import {workPoint} from './building.mjs';
 import {memberPosition} from './community.mjs';
 import {projectBuildings,projectWorkerPosition} from './project-rules.mjs';
+import {farmNightfall,farmDawn} from './fencing.mjs';
 const copy=p=>({x:p.x,y:p.y});
 export function validNight(n){return n===undefined||n?.version===1&&Number.isInteger(n.day)&&Number.isFinite(n.startedAt)&&n.homes&&typeof n.homes==='object'&&!Array.isArray(n.homes)&&Object.values(n.homes).every(v=>v===null||typeof v==='string');}
 function beginNight(state,world,phase,wall){
@@ -14,13 +15,13 @@ function beginNight(state,world,phase,wall){
   if(id===next.activeCharacter)next.player=copy(door);if(m){m.position=copy(door);m.job=null;m.readyAt=phase.morningMinutes;m.status=home?'Sleeping at home':'Resting for the night';}
   if(w){w.position=copy(door);w.phase='waiting';w.start=wall;w.end=wall;w.credited=0;w.path=null;delete w.homeId;w.status='Sleeping for the night';}
  }
- next.night={version:1,day:phase.day,startedAt:wall,homes:assigned};return next;
+ next.night={version:1,day:phase.day,startedAt:wall,homes:assigned};return farmNightfall(next,world,phase.day);
 }
-function wake(state,wall){
+function wake(state,world,phase,wall){
  const next=structuredClone(state),minutes=minutesAt(next.clock,wall);let rested=0;
  for(const [id,c]of Object.entries(next.characters)){if(next.night.homes[id]&&completedHomes(next).some(h=>h.id===next.night.homes[id])){c.energy=100;rested++;}delete c.fatigue;delete c.awakeSince;delete c.sleep;const m=next.community?.members[id];if(m){m.job=null;m.readyAt=minutes;m.status=id===next.activeCharacter?'Playing with you':'Ready for a new day';}}
  for(const b of projectBuildings(next)){for(const w of Object.values(b.project.workers)){w.phase='waiting';w.start=wall;w.end=wall;w.credited=0;w.path=null;delete w.homeId;w.status='Ready to build';}b.project.cursor=wall;}
- next.stats.sleeps=(next.stats.sleeps||0)+rested;if(next.community)next.community.totals.rests+=rested;next.lastNight={day:next.night.day,rested,wokeAt:wall};delete next.night;return next;
+ next.stats.sleeps=(next.stats.sleeps||0)+rested;if(next.community)next.community.totals.rests+=rested;next.lastNight={day:next.night.day,rested,wokeAt:wall};delete next.night;return farmDawn(next,world,phase.day);
 }
 function freezeNight(state,wall,from){
  const next=structuredClone(state),delta=wall-from;
@@ -36,9 +37,9 @@ export function advanceNightCycle(state,world,wall,advanceWork,options={}){
  const maxWindow=30*86400000;if(wall-cursor>maxWindow){cursor=wall-maxWindow;next=freezeNight(next,cursor,state.nightCursorWall??state.clock.wall);}
  let steps=0;
  while(cursor<wall-.00001&&steps++<10000){
-  const phase=dayPhase(next.clock,cursor);if(phase.night&&!next.night)next=beginNight(next,world,phase,cursor);else if(!phase.night&&next.night)next=wake(next,cursor);
+  const phase=dayPhase(next.clock,cursor);if(phase.night&&!next.night)next=beginNight(next,world,phase,cursor);else if(!phase.night&&next.night)next=wake(next,world,phase,cursor);
   const end=Math.min(wall,cursor+Math.max(.001,phase.remainingMs));next=phase.night?freezeNight(next,end,cursor):advanceWork(next,end,options);cursor=end;
  }
- const phase=dayPhase(next.clock,wall);if(phase.night&&!next.night)next=beginNight(next,world,phase,wall);else if(!phase.night&&next.night)next=wake(next,wall);
+ const phase=dayPhase(next.clock,wall);if(phase.night&&!next.night)next=beginNight(next,world,phase,wall);else if(!phase.night&&next.night)next=wake(next,world,phase,wall);
  return {...next,nightCursorWall:wall};
 }

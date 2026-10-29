@@ -71,13 +71,14 @@ export class Nutrition {
       g.store.persistPlayer(g.player);
       const before=g.store.state;
       g.store.commit({type:'cook',recipe,fireId,actionId:crypto.randomUUID()});
-      const r=RECIPES[recipe];if(g.store.state===before){g.toast(r?.station==='oven'?'Stand beside a hot oven to bake.':'Stand beside a lit campfire.');return false;}
-      g.status=FOODS[r.item]?`${FOODS[r.item].name} ${r.station==='oven'?'baked':'prepared'} · ready to eat`:`+${r.quantity} clay brick · ${g.store.state.inventory.clay||0} in the bag`;g.toast(g.status);g.notify();return true;
+      const r=RECIPES[recipe];if(g.store.state===before){g.toast(r?.station==='well'?'Stand beside the well.':r?.station==='oven'?'Stand beside a hot oven to bake.':'Stand beside a lit campfire.');return false;}
+      g.status=FOODS[r.item]?`${FOODS[r.item].name} ${r.station==='oven'?'baked':'prepared'} · ready to eat`:r.item==='concrete_brick'?`+${r.quantity} concrete brick · ${g.store.state.inventory.concrete_brick||0} in the bag`:`+${r.quantity} clay brick · ${g.store.state.inventory.clay||0} in the bag`;g.toast(g.status);g.notify();return true;
     }catch(e){g.toast(e.message);return false;}
   }
   cook(recipe){
     const g=this.g;if(this.busy())return;
     const r=RECIPES[recipe];if(!r)return;
+    if(r.station==='well'){this.craftAtWell(recipe);return;}
     if(!canCook(g.store.state,recipe)){g.toast(recipe==='bake_manna'?'Manna needs 1 wheat and 1 water. Harvest wheat and fill a bucket at the well.':recipe==='dry_clay'?'Clay needs 2 mud and 1 water. Dig mud at the beach and fetch water from the well.':'Gather the ingredients first.');return;}
     const min=gameTime(g.store.state),oven=r.station==='oven',fires=oven?hotOvens(g.store.state,min):litFires(g.store.state,min);
     if(!fires.length){
@@ -93,6 +94,18 @@ export class Nutrition {
       g.marker.position.set(spot.x,heightAt(g.world,spot.x,spot.y)+.04,-spot.y);g.marker.visible=true;g.status=oven?'Walking to the oven to bake…':'Walking to the campfire…';g.notify();return;
     }
     g.toast(`The way to the ${oven?'oven':'campfire'} is blocked. Clear a path first.`);
+  }
+  /** Walk to the well and press 2 stone + 1 clay into a concrete brick. */
+  craftAtWell(recipe){
+    const g=this.g;if(this.busy())return;
+    const r=RECIPES[recipe];if(!r||r.station!=='well')return;
+    if(!canCook(g.store.state,recipe)){g.toast('A concrete brick needs 2 stone and 1 clay. Smash rocks for stone, and dry clay by the campfire.');return;}
+    const well=completedWells(g.store.state)[0];if(!well){g.toast('Build a water well, then craft bricks beside it.');return;}
+    const spot=workPoint(g.world,well),center=footprint(g.world,well).center;
+    if(dist(g.player,spot)<=1.35){this.commitCook(recipe,well.id);return;}
+    const path=g.nav.path(g.player,spot);if(!path||dist(path.at(-1)||g.player,spot)>1.05){g.toast('The way to the well is blocked. Clear a path first.');return;}
+    g.keys.clear();g.lastGroundKey=null;g.path=path;g.order={type:'craft_brick',recipe,wellId:well.id,target:center};
+    g.marker.position.set(spot.x,heightAt(g.world,spot.x,spot.y)+.04,-spot.y);g.marker.visible=true;g.status='Walking to the well to make a brick…';g.notify();
   }
   /** Walk to the well and fill a bucket (water is used for clay and manna). */
   fetchWater(wellId){
@@ -289,7 +302,7 @@ export class Nutrition {
   wellCard(wellId){
     const g=this.g,s=g.store.state,well=completedWells(s).find(b=>b.id===wellId)||completedWells(s)[0];if(!well)return null;
     const spot=workPoint(g.world,well);
-    return {id:well.id,name:buildingById(well.kind).name,water:s.inventory.water||0,max:WATER_MAX,away:dist(g.player,spot),busy:!!(this.g.action||this.g.order||this.sleep)};
+    return {id:well.id,name:buildingById(well.kind).name,water:s.inventory.water||0,max:WATER_MAX,stone:s.inventory.stone||0,clay:s.inventory.clay||0,bricks:s.inventory.concrete_brick||0,canBrick:canCook(s,'concrete_brick'),away:dist(g.player,spot),busy:!!(this.g.action||this.g.order||this.sleep)};
   }
   snapshot(){
     const g=this.g,s=g.store.state,id=activeCharacter(s),minutes=gameTime(s),sleep=this.sleep,homes=completedHomes(s),lowEnergy=isLowEnergy(s);

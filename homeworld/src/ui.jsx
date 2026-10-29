@@ -11,7 +11,7 @@ export const TOOLS=[
 ];
 
 const ICONS=new Set(['walk','axe','mine','hoe','plant','water','fish','food','build','book','bag','map','zoom','sun','energy','wood','stone','copper','iron','diamond','carrot','pumpkin','bread','rawfish','cookedfish','wheat','sunflower','pine_seed','oak_acorn','maple_seed','apple_seed','coconut','moon','harvest','rest','water_drop','actions','shovel','mud','clay','manna','oven','pray']);
-const ITEM_ICONS={fish:'rawfish',cooked_fish:'cookedfish',water:'water_drop',copper_ore:'copper',iron_ore:'iron',carrot_seed:'carrot',wheat_seed:'wheat',sunflower_seed:'sunflower',pumpkin_seed:'pumpkin',maple_samara:'maple_seed',pine:'pine_seed',oak:'oak_acorn',maple:'maple_seed',apple:'apple_seed',coconut_palm:'coconut'};
+const ITEM_ICONS={fish:'rawfish',cooked_fish:'cookedfish',water:'water_drop',copper_ore:'copper',iron_ore:'iron',carrot_seed:'carrot',wheat_seed:'wheat',sunflower_seed:'sunflower',pumpkin_seed:'pumpkin',maple_samara:'maple_seed',pine:'pine_seed',oak:'oak_acorn',maple:'maple_seed',apple:'apple_seed',coconut_palm:'coconut',concrete_brick:'stone',wheat:'wheat',clay:'clay'};
 
 // Generated once through Higgsfield, packaged locally so play never needs an art service.
 export function Icon({type,size=44,className=''}){

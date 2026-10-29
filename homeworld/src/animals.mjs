@@ -21,6 +21,16 @@ export const ANIMALS=[
 ];
 export const MAX_ANIMALS=40;
 export const animalById=id=>ANIMALS.find(a=>a.id===id);
+/** Gold-coin prices. Keep in sync with utils/islandShop.ts (the parent app deducts these). */
+export const ANIMAL_PRICE={chicken:300,sheep:1500,cow:3000,horse:5000,dog_hound:800,dog_shepherd:2000,dog_terrier:500,donkey:600,goat:700};
+export const DOG_CAPACITY={dog_terrier:1,dog_hound:2,dog_shepherd:6};
+export const WILD_ANIMALS=new Set(['coyote','crow','snake','rabbit','squirrel']);
+export const LIVESTOCK=new Set(['chicken','sheep','cow','horse','donkey','goat']);
+export function animalShop(id){
+  const def=animalById(id);if(!def)return null;
+  const wild=WILD_ANIMALS.has(id);
+  return {...def,wild,price:wild?null:(ANIMAL_PRICE[id]??null),herds:DOG_CAPACITY[id]||0};
+}
 /** Saved animals: `state.animals = [{id, kind, x, y, placedAt}]`. Undefined (old saves) is fine. */
 export function validAnimals(value){
   if(value===undefined)return true;if(!Array.isArray(value)||value.length>500)return false;
@@ -34,6 +44,7 @@ export function validAnimals(value){
 /** Placement rules shared by the save logic and the island UI. `terrain(x,y)` is core's terrainType; `footprints` are building bounds. */
 export function animalSiteStatus(state,plan,{terrain,footprints,pointInBounds}){
   const def=animalById(plan?.kind);if(!def)return {ok:false,reason:'Choose an animal first.'};
+  if(WILD_ANIMALS.has(def.id))return {ok:false,reason:`${def.name}s are wild. They find the island on their own.`};
   if(!Number.isFinite(plan.x)||!Number.isFinite(plan.y))return {ok:false,reason:'Tap the ground to choose a spot.'};
   if((state.animals||[]).length>=MAX_ANIMALS)return {ok:false,reason:'The island is full of animals! Send one home first.'};
   if(terrain(plan.x,plan.y)===0)return {ok:false,reason:`${def.name}s cannot stand in the water. Tap grass instead.`};

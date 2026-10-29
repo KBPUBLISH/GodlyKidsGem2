@@ -14,8 +14,13 @@ export const BUILDINGS=[
   {id:'wood_store_200',name:'Timber Barn',category:'Storage',size:[4,3],height:3.27,wood:40,stone:14,seconds:25,solid:true,woodCapacity:200,description:'Two big storage bays. Adds space for 200 wood.'},
   {id:'garden',name:'Garden Bed',category:'Gardens',size:[2,2],height:.22,wood:3,stone:0,seconds:5,solid:false,description:'Four garden spots, ready to plant when built!'},
   {id:'path',name:'Stone Path',category:'Paths',size:[1,1],height:.12,wood:0,stone:1,seconds:3,solid:false,description:'Little stepping stones you can walk over.'},
-  {id:'fence',name:'Wooden Fence',category:'Fences',size:[1,1],height:.7,wood:2,stone:0,seconds:4,solid:true,description:'A fence for the edge of your garden. Leave a way in!'},
+  {id:'fence',name:'Wooden Fence',category:'Fences',size:[1,1],height:.7,wood:2,stone:0,seconds:4,solid:true,instant:true,stroke:true,description:'A wooden fence. Tap the grass to place one piece at a time. Animals stay inside a closed pen. Coyotes chew through wood.'},
+  {id:'brick_fence',name:'Brick Fence',category:'Fences',size:[1,1],height:.8,wood:0,stone:0,bundle:{concrete_brick:1},seconds:4,solid:true,instant:true,stroke:true,stack:3,description:'A concrete-brick fence. One brick each. Tap the grass to lay a row, and tap the top to stack up to 3. Coyotes barely scratch it.'},
+  {id:'brick',name:'Brick Block',category:'Fences',size:[1,1],height:.48,wood:0,stone:0,bundle:{concrete_brick:1},seconds:1,solid:true,instant:true,stroke:true,stack:3,description:'One brick. Tap the grass to lay a row, and tap the top to stack up to 3 high.'},
+  {id:'scarecrow',name:'Scarecrow',category:'Fences',size:[1,1],height:1.8,wood:4,stone:0,bundle:{wheat:2},seconds:4,solid:false,instant:true,description:'Wheat-straw scarecrow. Crows keep away from a 10×10 metre patch around it.'},
+  {id:'stable',name:'Stable',category:'Fences',size:[3,2],height:2.4,wood:20,stone:8,seconds:8,solid:true,instant:true,poster:'hut',description:'A night stable for sheep, cows and horses. Sheep left outside after day 7 can go missing.'},
   {id:'campfire',name:'Campfire',category:'Decorations',size:[2,2],height:1.3,wood:5,stone:3,seconds:7,solid:true,description:'A warm, flickering fire that glows at night.'},
+  {id:'forge',name:'Forge',category:'Decorations',size:[2,2],height:1.8,wood:12,stone:16,seconds:18,solid:true,description:'A stone forge with a hot hearth. Copper, iron, and diamond tools, and metal shovels, are made here.'},
   {id:'oven',name:'Clay Oven',category:'Decorations',size:[2,2],height:1.7,wood:0,stone:20,clay:6,seconds:600,solid:true,description:'A stone oven lined with clay bricks. Light it with a log, let it heat up, then bake wheat and water into manna.'},
   {id:'well',name:'Water Well',category:'Gardens',size:[2,2],height:2.3,wood:8,stone:14,seconds:14,solid:true,requiresShovel:1,description:'Dig down to fresh water. With a well on the island, watering the garden costs no energy.'},
 ];
@@ -66,6 +71,7 @@ export function materialStatus(state,kind,cost=null){
  if(wood<def.wood)return {ok:false,reason:`Collect ${def.wood-wood} more wood. Chop a tree!`};
  if(stone<def.stone)return {ok:false,reason:`Collect ${def.stone-stone} more stone. Smash a rock!`};
  const clay=state.inventory.clay||0;if((def.clay||0)>clay)return {ok:false,reason:`Make ${def.clay-clay} more clay brick${def.clay-clay===1?'':'s'}. Dig mud at the beach, add water, and dry it by the campfire.`};
+ for(const [id,n] of Object.entries(def.bundle||{})){const have=state.inventory[id]||0;if(have<n)return {ok:false,reason:id==='concrete_brick'?`Make ${n-have} more concrete brick${n-have===1?'':'s'} at the well (2 stone + 1 clay).`:`Need ${n-have} more wheat for the scarecrow. Harvest wheat.`};}
  return {ok:true,reason:'Materials ready!'};
 }
 export function spendMaterials(state,kind,cost=null){
@@ -75,7 +81,42 @@ export function spendMaterials(state,kind,cost=null){
  }
  if(def.stone){state.inventory.stone-=def.stone;paid.stone=def.stone;}
  if(def.clay){state.inventory.clay-=def.clay;paid.clay=def.clay;}
+ for(const [id,n] of Object.entries(def.bundle||{})){state.inventory[id]=(state.inventory[id]||0)-n;paid[id]=n;}
  return paid;
+}
+export function layerCount(b){const n=b?.layers;return Number.isInteger(n)&&n>0?n:1;}
+export function addPaid(paid,extra){for(const [id,n] of Object.entries(extra||{}))if(n)paid[id]=(paid[id]||0)+n;}
+/** Drop one paid layer when the top of a stack falls. The building must still have a layer left. */
+export function subtractLayer(paid,def){
+ if(!paid||!def)return;let left=def.wood||0;
+ for(const id of Object.keys(paid).filter(id=>id.endsWith('_wood')).sort()){const n=Math.min(left,paid[id]||0);paid[id]-=n;if(paid[id]<=0)delete paid[id];left-=n;if(!left)break;}
+ if(def.stone){paid.stone=(paid.stone||0)-def.stone;if(paid.stone<=0)delete paid.stone;}
+ if(def.clay){paid.clay=(paid.clay||0)-def.clay;if(paid.clay<=0)delete paid.clay;}
+ for(const [id,n] of Object.entries(def.bundle||{})){paid[id]=(paid[id]||0)-n;if(paid[id]<=0)delete paid[id];}
+}
+/** Short line for a stroke the kid cannot afford. Null when the materials are ready. */
+export function strokeNeed(state,kind){
+ const def=buildingById(kind);if(!def)return 'Choose something to build.';
+ if((def.wood||0)>woodTotal(state))return `Need ${def.wood} wood.`;
+ if((def.stone||0)>(state.inventory.stone||0))return `Need ${def.stone} stone.`;
+ if((def.clay||0)>(state.inventory.clay||0))return `Need ${def.clay} clay.`;
+ for(const [id,n] of Object.entries(def.bundle||{}))if((state.inventory[id]||0)<n)return id==='concrete_brick'?`Need ${n} brick${n===1?'':'s'}.`:`Need ${n} wheat.`;
+ return null;
+}
+/** Long axis along X at rotation 0. A corner keeps one straight piece, turned toward the newer neighbor. */
+export function strokeRotation(buildings,key,kind,preferKey){
+ const [c,r]=String(key||'').split(':').map(Number);
+ if(!Number.isInteger(c)||!Number.isInteger(r))return 0;
+ const live=b=>b&&b.status!=='cancelled'&&b.kind===kind;
+ const has=(dc,dr)=>(buildings||[]).some(b=>live(b)&&b.key===`${c+dc}:${r+dr}`);
+ const ew=has(1,0)||has(-1,0),ns=has(0,1)||has(0,-1);
+ if(ew&&ns&&preferKey){const [pc,pr]=String(preferKey).split(':').map(Number);if(pc===c&&pr!==r)return 1;if(pr===r&&pc!==c)return 0;}
+ return ns&&!ew?1:0;
+}
+export function orientStrokeNeighbors(buildings,key,kind){
+ const [c,r]=String(key||'').split(':').map(Number);if(!Number.isInteger(c))return;
+ const around=new Set([key,`${c+1}:${r}`,`${c-1}:${r}`,`${c}:${r+1}`,`${c}:${r-1}`]);
+ for(const b of buildings||[]){if(!b||b.status==='cancelled'||b.kind!==kind||!around.has(b.key))continue;b.rotation=strokeRotation(buildings,b.key,kind,b.key===key?null:key);}
 }
 export function siteStatus(world,state,plan,{trees,rocks,terrain,height,inBlocker}){
  const fp=footprint(world,plan),def=buildingById(plan.kind),fail=reason=>({ok:false,reason,footprint:fp});
@@ -120,7 +161,9 @@ export function validBuildings(value,world){
    if(!old||old.upgradeFrom||old.id!==b.id||old.status!=='complete'||!['queued','building'].includes(b.status)||!validBuildings([old],world)||!plan||plan.kind!==b.kind||plan.key!==b.key||plan.rotation!==b.rotation||!b.jobId)return false;
    if(Object.entries(old.paidMaterials).some(([id,n])=>(b.paidMaterials?.[id]||0)<n))return false;
   }
-  const paid=b.paidMaterials;if(!paid||Object.entries(paid).some(([id,n])=>!(id==='stone'||id==='clay'||id.endsWith('_wood'))||!Number.isInteger(n)||n<=0))return false;
-  return Object.entries(paid).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0)===def.wood&&(paid.stone||0)===def.stone&&(paid.clay||0)===(def.clay||0);
+  const layers=b.layers===undefined?1:b.layers;if(!Number.isInteger(layers)||layers<1||layers>(def.stack||1))return false;
+  const paid=b.paidMaterials,bundle=def.bundle||{};if(!paid||Object.entries(paid).some(([id,n])=>!(id==='stone'||id==='clay'||id.endsWith('_wood')||bundle[id])||!Number.isInteger(n)||n<=0))return false;
+  if(Object.entries(bundle).some(([id,n])=>(paid[id]||0)!==n*layers))return false;
+  return Object.entries(paid).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0)===def.wood*layers&&(paid.stone||0)===def.stone*layers&&(paid.clay||0)===(def.clay||0)*layers;
  });
 }

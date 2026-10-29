@@ -62,10 +62,12 @@ function furnish(kind){
   const cols=beds>=2?2:1;
   for(let i=0;i<beds;i++){
     const bed=makeBed();
+    bed.name='home-bed';
     bed.position.set((i%cols-(cols-1)/2)*.88,0,-.2-Math.floor(i/cols)*1.15);
     g.add(bed);
   }
   const table=makeTable();
+  table.name='home-table';
   table.position.set(Math.min(.65,(def?.size[0]||2)*.18),0,.32);
   g.add(table);
   g.visible=false;

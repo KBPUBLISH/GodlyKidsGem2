@@ -6,13 +6,14 @@ import {prepareProject,advanceProjects} from './construction-projects.mjs';
 import {CONSTRUCTION_BASIS,convertProjectTiming,projectPlan,crewStatus,defaultCrew,projectBuildings,projectWorkerPosition} from './project-rules.mjs';
 import {reportBaseline,returnedReport} from './return-report.mjs';
 import {TREE_MAX_HEALTH,treeRemaining,validTreeDamage} from './resource-health.mjs';
-import {TOOL_TIERS,toolTier,rockProfile,upgradeStatus} from './mining.mjs';
+import {TOOL_TIERS,toolTier,rockProfile,upgradeStatus,normalizeTools,forgeJob,forgeProgress,hasForge} from './mining.mjs';
 import {MAX_ENERGY,LOW_ENERGY,FOODS,FOOD_RECIPES,RECIPES,WATER_MAX,energyFor,setEnergy,energyCost,canCook,restGain,activeCharacter,sleepHome,canSleep,SLEEP_SECONDS,SLEEP_HOURS,MAX_HUNGER,hungerFor,setHunger,foodFill,mealGain,needsFood,isStarving,prayGain} from './nutrition.mjs';
 import {SHOVEL_TIERS,shovelStatus,spendShovelRecipe,completedWells} from './digging.mjs';
-import {BUILD_ENERGY,buildingById,activeBuildings,completedFires,litFires,fireCanTakeLog,FIRE_LOG_MINUTES,heatSources,hotOvens,logMinutesFor,fireFuelLeft,buildingBlockers,footprint,workPoint,materialStatus,spendMaterials,siteStatus,buildingProgress,validBuildings,pointInBounds,upgradeDefinition,upgradeCost,upgradePlan} from './building.mjs';
+import {BUILD_ENERGY,buildingById,activeBuildings,completedFires,litFires,fireCanTakeLog,FIRE_LOG_MINUTES,heatSources,hotOvens,logMinutesFor,fireFuelLeft,buildingBlockers,footprint,workPoint,materialStatus,spendMaterials,siteStatus,buildingProgress,validBuildings,pointInBounds,upgradeDefinition,upgradeCost,upgradePlan,layerCount,addPaid,orientStrokeNeighbors,strokeNeed} from './building.mjs';
 import {advanceCommunity,configureCommunity,validCommunity,communityClaim,homeReserved,memberPosition} from './community.mjs';
 import {woodRoom,validWoodDrops} from './wood-storage.mjs';
 import {validAnimals,animalSiteStatus} from './animals.mjs';
+import {applyFarmSpan} from './fencing.mjs';
 import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
 import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
@@ -57,7 +58,7 @@ export function growth(cell,minutes) {
   const seed=seedById(cell?.seed);
   if(!seed) return null;
   const at=wateredAt(cell),window=waterWindow(seed),banked=cell.grown||0;
-  const active=at==null?0:Math.max(0,Math.min(window,minutes-at));
+  const active=cell?.hold?0:(at==null?0:Math.max(0,Math.min(window,minutes-at)));
   const age=banked+active,thirsty=age<seed.hours*60&&(at==null||minutes-at>=window);
   const progress=Math.min(1,age/(seed.hours*60));
   return {seed,progress,age,thirsty,hydrated:!thirsty&&progress<1,wateredAt:at,remaining:Math.max(0,seed.hours*60-age),stage:progress>=1?'ready':progress>=.35?'growing':progress>=.12?'seedling':'seeded'};
@@ -129,7 +130,7 @@ export function migrateState(state){
  // Built-in villagers are restored here for the standalone island; Players World prunes them again after load.
  const builtIns=state.community?{adam:{name:'Adam',energy:MAX_ENERGY},eve:{name:'Eve',energy:MAX_ENERGY},noah:{name:'Noah',energy:MAX_ENERGY}}:{adam:{name:'Adam',energy:MAX_ENERGY}};
  const characters=Object.fromEntries(Object.entries({...builtIns,...state.characters}).map(([id,c])=>{const {fatigue,awakeSince,...character}=c;return [id,Number.isFinite(character.hunger)?character:{...character,hunger:MAX_HUNGER,hungerAt:state.clock?.minutes??0}];}));
- const next={constructionVersion:1,...state,buildings:state.buildings||[],animals:state.animals||[],woodDrops:state.woodDrops||[],removedStumps:state.removedStumps||[],applePicks:state.applePicks||{},treeDamage:state.treeDamage||{},removedRocks:state.removedRocks||[],rockDamage:state.rockDamage||{},tools:state.tools||{tier:0},activeCharacter:state.activeCharacter||'adam',characters,recentActions:state.recentActions||[],stats:{rocks:0,toolUpgrades:0,gems:0,fishCaught:0,mealsEaten:0,foodPrepared:0,rests:0,sleeps:0,built:0,...state.stats}};
+ const next={constructionVersion:1,...state,buildings:state.buildings||[],animals:state.animals||[],woodDrops:state.woodDrops||[],removedStumps:state.removedStumps||[],applePicks:state.applePicks||{},treeDamage:state.treeDamage||{},removedRocks:state.removedRocks||[],rockDamage:state.rockDamage||{},tools:normalizeTools(state.tools),activeCharacter:state.activeCharacter||'adam',characters,recentActions:state.recentActions||[],stats:{rocks:0,toolUpgrades:0,gems:0,fishCaught:0,mealsEaten:0,foodPrepared:0,rests:0,sleeps:0,built:0,...state.stats}};
  // Release an old fatigue-only helper nap without granting a refill or reward.
  if(hadSleepMeter&&next.community){next.community=structuredClone(next.community);for(const [id,m]of Object.entries(next.community.members)){if(m.job?.kind==='rest'&&(characters[id]?.energy??0)>LOW_ENERGY){m.position=memberPosition(m,state.clock.minutes);m.job=null;m.readyAt=state.clock.minutes;m.status='Ready to help';}}}
  return next;
@@ -158,6 +159,25 @@ export function seedStarterGarden(state,world){
   }
   return {...state,cells,starterGarden:1};
 }
+/** An empty garden plot grows weeds after one island day (1 day = 10 real minutes) with nothing planted. */
+export const WEED_MINUTES=1440;
+export function plotWeedy(cell,minutes){
+  if(!cell?.soil||cell.seed||!Number.isFinite(cell.emptySince)||!Number.isFinite(minutes))return false;
+  return minutes-cell.emptySince>=WEED_MINUTES;
+}
+/**
+ * Empty plots that already exist when weeds arrive start their clock now.
+ * That keeps a brand-new garden, and starter crops, from filling with weeds on the first load.
+ */
+export function noteEmptyPlots(state){
+  if(state?.weedClock)return state;
+  const minutes=gameTime(state),cells={...state.cells};
+  for(const [key,c] of Object.entries(cells)){
+    if(!c?.soil||c.seed||Number.isFinite(c.emptySince))continue;
+    cells[key]={...c,emptySince:minutes};
+  }
+  return {...state,cells,weedClock:1};
+}
 /** The standalone island's built-in villagers. Players World has none: story friends do everything. */
 export const BUILT_IN_IDS=['adam','eve','noah'];
 /** Drop the hidden built-in villagers from a Players World save (keeping whoever is still being played, or on a build crew). */
@@ -177,8 +197,8 @@ export class GameStore {
     // A stale (pre-profile) island bundle may still have written the legacy save after the copy: a higher revision there wins once.
     adoptNewerLegacy(SAVE_KEY_BASE,(legacy,current)=>{try{return (JSON.parse(legacy).revision||0)>(JSON.parse(current).revision||0);}catch{return false;}},storage);
     const raw=storage.getItem(SAVE_KEY);
-    if(raw){try {let s=migrateGrid(JSON.parse(raw),world);if(!validState(s,world)){const repaired=repairState(s,world);if(!validState(repaired,world))throw Error('unrecognized save');s=repaired;}this.state=seedStarterGarden(this.migrate(s),world);for(const [missing,suffix] of [[Object.values(s.characters||{}).some(c=>c.fatigue!==undefined||c.awakeSince!==undefined),'before_remove_sleep_meter'],[s.community&&!s.community.members.adam,'before_character_control'],[projectBuildings(s).some(b=>b.project.basis!==CONSTRUCTION_BASIS),'before_island_build_days'],[s.constructionVersion===undefined,'before_construction_crews'],[s.treeDamage===undefined,'before_resource_health'],[s.community===undefined,'before_community'],[s.woodDrops===undefined,'before_wood_storage'],[s.removedRocks===undefined,'before_mining'],[s.characters===undefined,'before_energy'],[s.buildings===undefined,'before_building']])if(missing&&!storage.getItem(`${SAVE_KEY}_${suffix}`)){try{storage.setItem(`${SAVE_KEY}_${suffix}`,raw);}catch{/* Main writes still report storage failures without discarding this state. */}}}catch{this.state=initialState(world,wall);this.error='The previous test save could not be read. It has been kept. Reset this test to start a new save.';this.locked=true;}}
-    else this.state=seedStarterGarden(initialState(world,wall),world);
+    if(raw){try {let s=migrateGrid(JSON.parse(raw),world);if(!validState(s,world)){const repaired=repairState(s,world);if(!validState(repaired,world))throw Error('unrecognized save');s=repaired;}this.state=noteEmptyPlots(seedStarterGarden(this.migrate(s),world));for(const [missing,suffix] of [[Object.values(s.characters||{}).some(c=>c.fatigue!==undefined||c.awakeSince!==undefined),'before_remove_sleep_meter'],[s.community&&!s.community.members.adam,'before_character_control'],[projectBuildings(s).some(b=>b.project.basis!==CONSTRUCTION_BASIS),'before_island_build_days'],[s.constructionVersion===undefined,'before_construction_crews'],[s.treeDamage===undefined,'before_resource_health'],[s.community===undefined,'before_community'],[s.woodDrops===undefined,'before_wood_storage'],[s.removedRocks===undefined,'before_mining'],[s.characters===undefined,'before_energy'],[s.buildings===undefined,'before_building']])if(missing&&!storage.getItem(`${SAVE_KEY}_${suffix}`)){try{storage.setItem(`${SAVE_KEY}_${suffix}`,raw);}catch{/* Main writes still report storage failures without discarding this state. */}}}catch{this.state=initialState(world,wall);this.error='The previous test save could not be read. It has been kept. Reset this test to start a new save.';this.locked=true;}}
+    else this.state=noteEmptyPlots(seedStarterGarden(initialState(world,wall),world));
   }
   /** migrateState restores the built-in villagers on every read; Players World drops them again right here, so they never live in its save. */
   migrate(s){const next=migrateState(s);return this.playersOnly?pruneBuiltIns(next):next;}
@@ -242,7 +262,10 @@ export class GameStore {
     return this.save({...next,player:base.player,activeCharacter:base.activeCharacter},wall);
   }
   clockChange(delta=0,paused=this.state.clock.paused,wall=Date.now()) {
-    const next={...this.state,clock:{...this.state.clock,minutes:gameTime(this.state,wall)+delta,wall,paused}};if(next.clock.cycle===1){next.nightCursorWall=wall;if(delta)delete next.night;}return this.save(next,wall);
+    const from=gameTime(this.state,wall),to=from+delta;
+    let next={...this.state,clock:{...this.state.clock,minutes:to,wall,paused}};
+    if(next.clock.cycle===1){next.nightCursorWall=wall;if(delta)delete next.night;next=applyFarmSpan(next,this.world,from,to);}
+    return this.save(next,wall);
   }
   reset(wall=Date.now()) {
     const raw=this.storage.getItem(SAVE_KEY);if(raw)this.storage.setItem(`${SAVE_KEY}_backup`,raw);
@@ -280,12 +303,12 @@ export function canPlow(world,state,key) {
 }
 export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
-  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep'].includes(a.type))return state;
+  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','fish','cook','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['eat','fish','cook','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
-  if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project'].includes(a.type))return state;
+  if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge'].includes(a.type))return state;
   const cost=energyCost(state,a);if(energyFor(state)<cost)return state;
   const next=structuredClone(state);const inv=next.inventory;const add=(id,n)=>inv[id]=(inv[id]||0)+n;
   delete next.characters[character].fatigue;delete next.characters[character].awakeSince;
@@ -318,10 +341,23 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     b.key=a.key;b.rotation=a.rotation;b.baseHeight=status.baseHeight;
   } else if(a.type==='place_building') {
     if(activeBuildings(state).some(b=>b.status!=='complete'&&!b.project)||(state.buildings||[]).some(b=>b.id===a.id)||typeof a.id!=='string'||!a.id||a.id.length>128)return state;
-    const status=buildPlacementStatus(world,state,a,minutes);if(!status.ok)return state;
-    const paidMaterials=spendMaterials(next,a.kind);
-    next.buildings??=[];next.buildings.push({id:a.id,kind:a.kind,key:a.key,rotation:a.rotation,status:'queued',baseHeight:status.baseHeight,paidMaterials,startedAt:null});
-    if(state.constructionVersion===1&&projectPlan(a.kind)){const b=next.buildings.at(-1),prepared=prepareProject(next,world,b,wall,projectAPI,a.crew||defaultCrew(state,a.kind));if(prepared.error)return state;b.project=prepared.project;b.project.target=footprint(world,b).center;}
+    const def=buildingById(a.kind),stroke=!!(def?.stroke&&a.stroke);
+    const status=stroke?strokePlacementStatus(world,state,a,minutes,a.people||[]):buildPlacementStatus(world,state,a,minutes);if(!status.ok)return state;
+    const paidMaterials=spendMaterials(next,a.kind),instant=!!def?.instant;
+    next.buildings??=[];
+    const placed={id:a.id,kind:a.kind,key:a.key,rotation:a.rotation,status:instant?'complete':'queued',baseHeight:status.baseHeight,paidMaterials,startedAt:instant?wall:null};
+    if(stroke&&def.stack)placed.layers=1;
+    next.buildings.push(placed);
+    if(stroke&&instant)orientStrokeNeighbors(next.buildings,placed.key,placed.kind);
+    if(!instant&&state.constructionVersion===1&&projectPlan(a.kind)){const b=next.buildings.at(-1),prepared=prepareProject(next,world,b,wall,projectAPI,a.crew||defaultCrew(state,a.kind));if(prepared.error)return state;b.project=prepared.project;b.project.target=footprint(world,b).center;}
+  } else if(a.type==='stack_piece') {
+    const b=next.buildings?.find(b=>b.id===a.id),def=b&&buildingById(b.kind);
+    if(!b||b.status!=='complete'||!def?.stack||layerCount(b)>=def.stack)return state;
+    if(activeBuildings(state).some(x=>x.status!=='complete'&&!x.project))return state;
+    if(strokeNeed(state,b.kind)||energyFor(state)<BUILD_ENERGY)return state;
+    const fp=footprint(world,b),people=strokeStanders(state,a.people);
+    if(!fp||pointInBounds(state.player,fp.bounds,.4)||people.some(p=>pointInBounds(p,fp.bounds,.4)))return state;
+    addPaid(b.paidMaterials,spendMaterials(next,b.kind));b.layers=layerCount(b)+1;
   } else if(a.type==='upgrade_building') {
     const status=buildUpgradeStatus(world,state,a.id,minutes,a.crew);if(!status.ok||status.plan.kind!==a.kind)return state;
     const old=state.buildings.find(b=>b.id===a.id),b=next.buildings.find(b=>b.id===a.id),paid=spendMaterials(next,a.kind,upgradeCost(old));
@@ -336,7 +372,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   } else if(a.type==='finish_building') {
     const b=next.buildings?.find(b=>b.id===a.id);if(!b||b.project||b.status!=='building'||buildingProgress(b,wall)<1)return state;
     b.status='complete';if(b.kind==='campfire')b.fuelUntil=minutes+FIRE_LOG_MINUTES;if(b.upgradeFrom){next.stats.houseUpgrades=(next.stats.houseUpgrades||0)+1;delete b.upgradeFrom;}else next.stats.built=(next.stats.built||0)+1;
-    if(b.kind==='garden')for(const key of footprint(world,b).keys){if(next.cells[key])return state;next.cells[key]={soil:'tilled',buildingId:b.id};}
+    if(b.kind==='garden')for(const key of footprint(world,b).keys){if(next.cells[key])return state;next.cells[key]={soil:'tilled',emptySince:minutes,buildingId:b.id};}
   } else if(a.type==='cancel_building') {
     const b=next.buildings?.find(b=>b.id===a.id);if(!b||b.status!=='queued')return state;
     if(b.upgradeFrom){const old=b.upgradeFrom;for(const [id,n]of Object.entries(b.paidMaterials)){const refund=n-(old.paidMaterials[id]||0);if(refund)add(id,refund);}delete b.upgradeFrom;delete b.jobId;delete b.project;Object.assign(b,old);}
@@ -356,7 +392,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     else{
       delete next.treeDamage[tree.id];const quantity=Math.min(3,room);next.removedTrees.push(tree.id);const sp=world.species[tree.species];add(sp.wood_item,quantity);add(sp.seed_item,1);next.stats.trees++;
       if(quantity<3){next.woodDrops??=[];next.woodDrops.push({id:`wood:${tree.id}`,treeId:tree.id,item:sp.wood_item,quantity:3-quantity,x:tree.position[0],y:tree.position[1]});}
-      if(tree.cell)next.cells[tree.cell]={soil:'tilled',generation:(next.cells[tree.cell]?.generation||0)+1,...(next.cells[tree.cell]?.buildingId?{buildingId:next.cells[tree.cell].buildingId}:{})};
+      if(tree.cell)next.cells[tree.cell]={soil:'tilled',emptySince:minutes,generation:(next.cells[tree.cell]?.generation||0)+1,...(next.cells[tree.cell]?.buildingId?{buildingId:next.cells[tree.cell].buildingId}:{})};
     }
   } else if(a.type==='pickup_wood') {
     const drop=next.woodDrops?.find(d=>d.id===a.id),room=woodRoom(state);if(!drop||!room||dist(state.player,drop)>.95)return state;
@@ -374,7 +410,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     inv[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;
   } else if(a.type==='cook') {
     if(!canCook(state,a.recipe))return state;
-    const recipe=RECIPES[a.recipe],stations=recipe.station==='oven'?hotOvens(state,minutes):litFires(state,minutes),station=stations.find(b=>b.id===a.fireId);
+    const recipe=RECIPES[a.recipe],stations=recipe.station==='oven'?hotOvens(state,minutes):recipe.station==='well'?completedWells(state):litFires(state,minutes),station=stations.find(b=>b.id===a.fireId);
     if(!station||dist(state.player,workPoint(world,station))>1.45)return state;
     for(const [id,n]of Object.entries(recipe.ingredients))inv[id]-=n;add(recipe.item,recipe.quantity);
     if(FOODS[recipe.item])next.stats.foodPrepared=(next.stats.foodPrepared||0)+recipe.quantity;else next.stats.crafted=(next.stats.crafted||0)+recipe.quantity;
@@ -392,25 +428,41 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     const gain=prayGain(state,minutes);if(!gain)return state;setEnergy(next,energyFor(state)+gain);next.lastPrayer=minutes;next.stats.prayers=(next.stats.prayers||0)+1;
   } else if(a.type==='upgrade_tools') {
     const status=upgradeStatus(state,a.tier);if(!status.canCraft)return state;
-    for(const [id,n]of Object.entries(TOOL_TIERS[a.tier].recipe))inv[id]-=n;
-    next.tools={...next.tools,tier:a.tier};next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;
+    const recipe=TOOL_TIERS[a.tier]?.recipe||{};
+    for(const [id,n]of Object.entries(recipe)){if((inv[id]||0)<n)return state;inv[id]-=n;}
+    // Stone is the instant starter. Metal tiers spend materials now and finish when the forge timer ends.
+    if((a.tier||0)<=0){next.tools={...next.tools,tier:a.tier};next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;}
+    else{if(!hasForge(state)||forgeJob(state))return state;next.tools={...next.tools,forge:{tier:a.tier,startedAt:minutes}};}
+  } else if(a.type==='finish_forge') {
+    const job=forgeJob(state);if(!job||!forgeProgress(state,minutes)?.done)return state;
+    if(job.kind==='shovel'){
+      const owned=state.tools?.shovel||0;if(job.tier!==owned+1)return state;
+      next.tools={...next.tools,shovel:job.tier};delete next.tools.forge;next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;
+    }else{
+      if(job.tier!==toolTier(state).tier+1)return state;
+      next.tools={...next.tools,tier:job.tier};delete next.tools.forge;next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;
+    }
   } else if(a.type==='upgrade_shovel') {
     const status=shovelStatus(state,a.tier);if(!status.canCraft)return state;
-    spendShovelRecipe(next,a.tier);next.tools={...next.tools,shovel:a.tier};next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;
+    if((a.tier||0)<=1){spendShovelRecipe(next,a.tier);next.tools={...next.tools,shovel:a.tier};next.stats.toolUpgrades=(next.stats.toolUpgrades||0)+1;}
+    else{if(!hasForge(state)||forgeJob(state))return state;spendShovelRecipe(next,a.tier);next.tools={...next.tools,forge:{kind:'shovel',tier:a.tier,startedAt:minutes}};}
   } else if(a.type==='pickup') {
     const seed=world.seeds.find(s=>s.id===a.id);if(!seed||state.pickedSeeds.includes(seed.id))return state;
     next.pickedSeeds.push(seed.id);add(seed.itemId,seed.quantity);next.stats.collected+=seed.quantity;
   } else if(a.type==='plow') {
     if(!canPlow(world,state,a.key)||state.cells[a.key]?.soil==='tilled')return state;
-    next.cells[a.key]={soil:'tilled',...(state.cells[a.key]?.buildingId?{buildingId:state.cells[a.key].buildingId}:{})};next.stats.plowed++;
+    next.cells[a.key]={soil:'tilled',emptySince:minutes,...(state.cells[a.key]?.buildingId?{buildingId:state.cells[a.key].buildingId}:{})};next.stats.plowed++;
+  } else if(a.type==='clear_weeds') {
+    const c=state.cells[a.key];if(!c?.soil||c.seed||!plotWeedy(c,minutes))return state;
+    next.cells[a.key]={soil:'tilled',emptySince:minutes,...(c.buildingId?{buildingId:c.buildingId}:{}),...(c.generation?{generation:c.generation}:{})};next.stats.weedsCleared=(next.stats.weedsCleared||0)+1;
   } else if(a.type==='plant') {
-    const c=next.cells[a.key];if(!c||c.seed||!['tilled','harvested'].includes(c.soil)||!seedById(a.seed)||!(inv[a.seed]>0))return state;
-    c.seed=a.seed;c.plantedAt=minutes;c.watered=false;delete c.wateredAt;c.grown=0;inv[a.seed]--;next.stats.planted++;
+    const c=next.cells[a.key];if(!c||c.seed||!['tilled','harvested'].includes(c.soil)||plotWeedy(c,minutes)||!seedById(a.seed)||!(inv[a.seed]>0))return state;
+    c.seed=a.seed;c.plantedAt=minutes;c.watered=false;delete c.wateredAt;delete c.emptySince;c.grown=0;inv[a.seed]--;next.stats.planted++;
   } else if(a.type==='water') {
     const c=next.cells[a.key],g=growth(c,minutes);if(!g||!g.thirsty)return state;c.grown=g.age;c.wateredAt=minutes;c.watered=true;next.stats.watered=(next.stats.watered||0)+1;
   } else if(a.type==='harvest') {
     const c=next.cells[a.key],g=growth(c,minutes);if(!g||g.stage!=='ready'||g.seed.kind!=='crop')return state;
-    add(g.seed.plant,3);add(g.seed.id,1);next.cells[a.key]={soil:'harvested',...(c.buildingId?{buildingId:c.buildingId}:{})};next.stats.harvested++;
+    add(g.seed.plant,3);add(g.seed.id,1);next.cells[a.key]={soil:'harvested',emptySince:minutes,...(c.buildingId?{buildingId:c.buildingId}:{})};next.stats.harvested++;
   } else if(a.type==='pick_apples') {
     const tree=world.trees.find(t=>t.id===a.id);if(!tree||tree.species!=='apple'||state.removedTrees.includes(a.id)||!applesReady(state,a.id,minutes)||dist(state.player,{x:tree.position[0],y:tree.position[1]})>2.2)return state;
     add('apple',APPLES_PER_PICK);next.applePicks={...(state.applePicks||{}),[a.id]:minutes};next.stats.applesPicked=(next.stats.applesPicked||0)+APPLES_PER_PICK;
@@ -452,6 +504,22 @@ export function buildSiteStatus(world,state,plan,minutes=gameTime(state)) {
   if(!status.ok)return status;
   const fp=status.footprint,hit=(p,r)=>Math.hypot(p[0]-Math.max(fp.x,Math.min(fp.x+fp.w,p[0])),p[1]-Math.max(fp.y,Math.min(fp.y+fp.h,p[1])))<r;
   if(activeStumps(world,state).some(t=>hit(t.position,stumpRadius(t))))return {ok:false,reason:'Dig out the stump here first. Use the Dig tool on it.',footprint:fp};
+  return status;
+}
+function strokeStanders(state,people){
+  const list=[...(people||[])];
+  const members=state.community?.members;
+  if(members)for(const [id,m] of Object.entries(members)){if(id===state.activeCharacter)continue;if(Number.isFinite(m?.position?.x)&&Number.isFinite(m?.position?.y))list.push(m.position);}
+  return list;
+}
+/** Instant fence and brick strokes. Same ground rules as other buildings, without a walk to each piece. */
+export function strokePlacementStatus(world,state,plan,minutes=gameTime(state),people=[]){
+  const status=buildSiteStatus(world,state,plan,minutes);if(!status.ok)return status;
+  if(activeBuildings(state).some(b=>b.status!=='complete'&&!b.project))return {...status,ok:false,reason:'Finish your building first.'};
+  const need=strokeNeed(state,plan.kind);if(need)return {...status,ok:false,reason:need};
+  if(energyFor(state)<BUILD_ENERGY)return {...status,ok:false,reason:'Need 5 energy.'};
+  const fp=status.footprint;
+  if(strokeStanders(state,people).some(p=>p&&pointInBounds(p,fp.bounds,.4)))return {...status,ok:false,reason:'Someone is standing there.'};
   return status;
 }
 export function buildUpgradeStatus(world,state,id,minutes=gameTime(state),selectedCrew){

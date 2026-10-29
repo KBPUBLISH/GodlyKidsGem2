@@ -113,6 +113,7 @@ export function PlantPeek({engine,enabled}){
   frame=requestAnimationFrame(update);return()=>cancelAnimationFrame(frame);
  },[engine,enabled]);
  if(!enabled||!peek)return null;
+ if(peek.empty)return <div className={`plant-peek empty${peek.weeds?' weeds':''}`} style={{left:peek.x,top:peek.y,opacity:peek.opacity}} role="status" aria-live="polite"><strong>{peek.name}</strong>{peek.note&&<small className="plant-peek-note">{peek.note}</small>}</div>;
  return <div className={`plant-peek ${peek.cook?'cook':''} ${peek.ready?'ready':peek.thirsty?'thirsty':''}`} style={{left:peek.x,top:peek.y,opacity:peek.opacity}} role="status" aria-live="polite">
   <div className="plant-peek-head"><ItemIcon id={peek.plant} size={26}/><div><strong>{peek.name}</strong><small>{peek.stage}{peek.thirsty&&!peek.ready?' · needs water':''}</small></div><b>{peek.percent}%</b></div>
   <div className="plant-peek-track"><i style={{width:`${peek.percent}%`}}/></div>

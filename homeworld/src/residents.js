@@ -809,7 +809,7 @@ export class Residents {
     if (this.reel?.active || !this.models.size) return false;
     const game = this.game;
     this.closeMenu();
-    this.reel = { active: true, auto, id: null, until: 0, recent: [], zoomBefore: game.zoom, graceUntil: performance.now() + 500, shots: 0 };
+    this.reel = { active: true, auto, id: null, until: 0, recent: [], zoomBefore: game.zoom, yawBefore: game.viewYaw || 0, pitchBefore: game.viewPitch || 0, graceUntil: performance.now() + 500, shots: 0 };
     game.overview = false;
     this.cutReel();
     game.toast(auto ? 'Just watching · the camera follows whoever is busy. Tap anywhere to take over.' : 'Watching the island. Tap anywhere to take over.');
@@ -822,6 +822,8 @@ export class Residents {
     if (!reel?.active) return;
     this.reel = null;
     if (reel.zoomBefore) { this.game.zoom = reel.zoomBefore; this.game.updateProjection?.(); }
+    this.game.viewYaw = reel.yawBefore || 0;
+    this.game.viewPitch = reel.pitchBefore || 0;
     this.lastInputAt = performance.now();
     this.game.notify?.();
   }
@@ -844,7 +846,11 @@ export class Residents {
     reel.recent = [reel.id, ...reel.recent].slice(0, Math.max(1, this.models.size - 1));
     reel.until = performance.now() + (pick.score >= 4 ? Residents.REEL_SHOT : Residents.REEL_SHORT_SHOT) * 1000;
     reel.shots++;
-    game.zoom = [20, 23, 18][reel.shots % 3];
+    // A fresh camera per cut: zoom and angle both change, so the reel reads as different shots rather than one drifting view.
+    const angles = [0, .7, -.6, 1.4, -1.3, 2.2];
+    game.zoom = [20, 23, 18, 21][reel.shots % 4];
+    game.viewYaw = (reel.yawBefore || 0) + angles[reel.shots % angles.length];
+    game.viewPitch = [0, .18, -.12][reel.shots % 3] + (reel.pitchBefore || 0) * .5;
     game.updateProjection?.();
     game.notify?.();
   }

@@ -194,7 +194,7 @@ const DECK_ZONE: ZoneConfig = {
   img: { width: 1520, height: 2688 },
   wideTopPct: 0.07,
   topPct: 0.11,
-  bg: '/assets/images/sail-voyage-hull.png?v=7',
+  bg: '/assets/images/sail-voyage-hull.webp?v=1',
   // Open planks from the stair landings down to the top of the wheel/bow.
   walkable: [
     P(0.10, 0.395),

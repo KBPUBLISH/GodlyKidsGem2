@@ -33,17 +33,17 @@ const HEAVY_BYTES = 10 * 1024 * 1024;
 
 /** Static crew-page images (keep the `?v=` busters in sync with CrewPage). */
 const CREW_IMAGE_URLS = [
-  '/assets/images/crew-voyage-sea-pano.jpg?v=2',
-  '/assets/images/sail-voyage-hull.png?v=7',
-  '/assets/images/sail-voyage-wheel.png?v=2',
-  '/assets/images/crew-voyage-bow.png?v=3',
-  '/assets/images/sail-voyage-btn-crew.png?v=4',
-  '/assets/images/sail-voyage-btn-profile.png?v=1',
-  '/assets/images/sail-voyage-btn-home.png?v=5',
-  '/assets/images/sail-voyage-btn-library.png?v=4',
-  '/assets/images/crew-voyage-hatch.png?v=1',
+  '/assets/images/crew-voyage-sea-pano.webp?v=1',
+  '/assets/images/sail-voyage-hull.webp?v=1',
+  '/assets/images/sail-voyage-wheel.webp?v=1',
+  '/assets/images/crew-voyage-bow.webp?v=1',
+  '/assets/images/sail-voyage-btn-crew.webp?v=1',
+  '/assets/images/sail-voyage-btn-profile.webp?v=1',
+  '/assets/images/sail-voyage-btn-home.webp?v=1',
+  '/assets/images/sail-voyage-btn-library.webp?v=1',
+  '/assets/images/crew-voyage-hatch.webp?v=1',
   '/assets/images/wheel-background-wood.png',
-  '/assets/images/sail-tab-wood.png',
+  '/assets/images/sail-tab-wood.webp?v=1',
   // Crew picker (bottom "Crew" tile) and the guide cards.
   '/assets/images/crew-ship-deck-bg.png',
 ];

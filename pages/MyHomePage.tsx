@@ -11,14 +11,14 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players147&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players149&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
-const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
-const LOADING_WHEEL = '/assets/images/sail-voyage-wheel.png?v=2';
-const LOADING_HOME_ICON = '/assets/images/sail-voyage-btn-home.png?v=5';
+const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
+const LOADING_WHEEL = '/assets/images/sail-voyage-wheel.webp?v=1';
+const LOADING_HOME_ICON = '/assets/images/sail-voyage-btn-home.webp?v=1';
 const LOADING_WOOD = '/assets/images/wheel-background-wood.png';
 const LOADING_FADE_MS = 520;
 /** Give up waiting for the island's ready message this long after the frame loads. */
@@ -695,8 +695,9 @@ const MyHomePage: React.FC = () => {
 
       {overlayMounted && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
-      {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx). */}
-      {modelsReady && (
+      {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
+          Nothing pops up until the island has reported ready — loading screens stay clear. */}
+      {modelsReady && ready && (
         <HomeOnboarding
           ready={ready}
           collected={collected}

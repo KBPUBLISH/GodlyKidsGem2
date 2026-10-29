@@ -32,18 +32,19 @@ const SAIL_ASSET_URLS = [
  * tags in step with pages/CrewPage.tsx — the cache key is the full URL.
  */
 const CREW_SHIP_ASSET_URLS = [
-  '/assets/images/sail-voyage-hull.png?v=7',
-  '/assets/images/crew-voyage-sea-pano.jpg?v=2',
-  '/assets/images/crew-voyage-bow.png?v=3',
-  '/assets/images/crew-button-plank.png?v=1',
-  '/assets/images/sail-voyage-wheel.png?v=2',
-  '/assets/images/crew-voyage-hatch.png?v=1',
-  '/assets/images/sail-voyage-btn-home.png?v=5',
-  '/assets/images/sail-voyage-btn-crew.png?v=4',
-  '/assets/images/sail-voyage-btn-profile.png?v=1',
-  '/assets/images/sail-voyage-btn-library.png?v=4',
-  '/assets/images/crew-horizon-island-a.png',
-  '/assets/images/crew-horizon-island-b.png',
+  '/assets/images/sail-voyage-hull.webp?v=1',
+  '/assets/images/crew-voyage-sea-pano.webp?v=1',
+  '/assets/images/crew-voyage-bow.webp?v=1',
+  '/assets/images/crew-button-plank.webp?v=1',
+  '/assets/images/sail-voyage-wheel.webp?v=1',
+  '/assets/images/crew-voyage-hatch.webp?v=1',
+  '/assets/images/sail-voyage-btn-home.webp?v=1',
+  '/assets/images/sail-voyage-btn-crew.webp?v=1',
+  '/assets/images/sail-voyage-btn-profile.webp?v=1',
+  '/assets/images/sail-voyage-btn-library.webp?v=1',
+  '/assets/images/sail-tab-wood.webp?v=1',
+  '/assets/images/crew-horizon-island-a.webp?v=1',
+  '/assets/images/crew-horizon-island-b.webp?v=1',
 ];
 
 const ONBOARDING_MEDIA_URLS = [

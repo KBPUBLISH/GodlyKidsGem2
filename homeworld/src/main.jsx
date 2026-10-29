@@ -25,6 +25,7 @@ import {FishingGame} from './fishing-ui.jsx';
 import {assignCrew} from './island-plan.js';
 import {IslandPlan} from './island-plan.jsx';
 import {IslandTour,onboardingPending} from './onboarding.jsx';
+import LoadingTips from './loading-tips.jsx';
 import './style.css';
 
 function FoodPanel({view,onEat,onCook,onFish,onRest,onHarvest,onSleep}){
@@ -289,7 +290,7 @@ function App(){
     <MorningNote report={view.loaded&&!view.night?.sleeping?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>
     <NightRest night={view.night}/>
     {mapOnly&&!view.night?.sleeping&&<button ref={backToPlay} className="map-only-return" onClick={returnToPlay} aria-label="Back to play. Show game buttons"><span aria-hidden="true">←</span> Back to play</button>}
-    {!view.loaded&&<div className="loading"><div className="loading-mark">✦</div><h1>{view.error?'The island needs another try':'A little world, ready to grow.'}</h1><p>{view.status}</p>{view.error?<><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<div className="loading-track"><i/></div>}</div>}
+    {!view.loaded&&<div className={`loading ${view.error?'':'with-tips'}`}>{view.error?<><div className="loading-mark">✦</div><h1>The island needs another try</h1><p>{view.status}</p><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<><LoadingTips/><div className="loading-foot"><div className="loading-track"><i/></div><p>{view.status}</p></div></>}</div>}
   </main>;
 }
 // Native shells (Despia / WKWebView) only drop their pull-to-refresh when the page itself consumes the

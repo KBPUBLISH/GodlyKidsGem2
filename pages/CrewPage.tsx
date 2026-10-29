@@ -62,8 +62,8 @@ const ShopModal = React.lazy(() => import('../components/features/ShopModal'));
  * PANO_HORIZON_PCT, slid so it sits on the shore line). It pans with the wheel
  * so the islands feel like the ship is turning.
  */
-const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.jpg?v=2';
-const CREW_VOYAGE_HULL = '/assets/images/sail-voyage-hull.png?v=7';
+const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.webp?v=1';
+const CREW_VOYAGE_HULL = '/assets/images/sail-voyage-hull.webp?v=1';
 /**
  * Scene stage: the hull art frame. It is fitted by HEIGHT and centered, so
  * the same fractions hold on phones (edges crop a little) and tablets
@@ -278,8 +278,8 @@ const CREW_SKY_GRADIENT =
   `linear-gradient(180deg, #6fbdf0 0%, #9fdcf8 ${CREW_SEA_HORIZON_PCT - 12}%, #c9ecfa ${CREW_SEA_HORIZON_PCT - 5}%, #eef9fd ${CREW_SEA_HORIZON_PCT}%, #2eb8e6 ${CREW_SEA_HORIZON_PCT}%, #0d9bd8 34%, #0674b6 55%, #0a568e 78%, #0d4674 100%)`;
 
 /** Distant palm islands on the horizon — cropped from the sail-page bg art. */
-const CREW_HORIZON_ISLAND_A = '/assets/images/crew-horizon-island-a.png';
-const CREW_HORIZON_ISLAND_B = '/assets/images/crew-horizon-island-b.png';
+const CREW_HORIZON_ISLAND_A = '/assets/images/crew-horizon-island-a.webp?v=1';
+const CREW_HORIZON_ISLAND_B = '/assets/images/crew-horizon-island-b.webp?v=1';
 
 type CrewSkyCloudSpec = {
   id: string;
@@ -326,8 +326,8 @@ const CREW_SEA_WAVES = [
   { id: 'wave-deep', fill: '#0A70AF', topPct: 46, tilePct: 10, driftSec: 19, bobSec: 10, reverse: true, opacity: 1 },
   { id: 'wave-hull', fill: '#0A5A96', topPct: 84, tilePct: 12.5, driftSec: 18, bobSec: 8, reverse: false, opacity: 1 },
 ] as const;
-const SAIL_STEERING_WHEEL = '/assets/images/sail-voyage-wheel.png?v=2';
-const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.png?v=3';
+const SAIL_STEERING_WHEEL = '/assets/images/sail-voyage-wheel.webp?v=1';
+const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.webp?v=1';
 /**
  * Bow art (2048×1360): curved rails, lanterns, and ropes. The full-width
  * plank behind the wheel (61.3%–88.5% of the art) is transparent. Those
@@ -338,16 +338,16 @@ const BOW_BOTTOM_PAD = 0.093;
 const BOW_STRIP_TOP = 0.613;
 const BOW_STRIP_BOTTOM = 0.885;
 const CREW_TAB_ART: Record<string, string> = {
-  crew: '/assets/images/sail-voyage-btn-crew.png?v=4',
-  profile: '/assets/images/sail-voyage-btn-profile.png?v=1',
-  home: '/assets/images/sail-voyage-btn-home.png?v=5',
-  library: '/assets/images/sail-voyage-btn-library.png?v=4',
+  crew: '/assets/images/sail-voyage-btn-crew.webp?v=1',
+  profile: '/assets/images/sail-voyage-btn-profile.webp?v=1',
+  home: '/assets/images/sail-voyage-btn-home.webp?v=1',
+  library: '/assets/images/sail-voyage-btn-library.webp?v=1',
 };
-const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.png';
+const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.webp?v=1';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
 const WOOD_TEX = '/assets/images/wheel-background-wood.png';
 /** Dark rounded plank behind the four bow buttons. Matches the headboard. */
-const CREW_BUTTON_PLANK = '/assets/images/crew-button-plank.png?v=1';
+const CREW_BUTTON_PLANK = '/assets/images/crew-button-plank.webp?v=1';
 
 const DECK_NAV_BOTTOM = 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))';
 /** Adam's tour card sits just above the wheel, clear of the button bow. */
@@ -368,7 +368,7 @@ const JUKEBOX_BOX: React.CSSProperties = {
   height: '19%',
 };
 /** Hatch sprite (drawn by us, not the hull art) — just below the cabin stairs. */
-const CREW_HATCH_SPRITE = '/assets/images/crew-voyage-hatch.png?v=1';
+const CREW_HATCH_SPRITE = '/assets/images/crew-voyage-hatch.webp?v=1';
 /** Left-rail barrels stand in for the cannon tap on this deck. */
 const CANNON_BOX: React.CSSProperties = {
   left: '3%',
@@ -1092,6 +1092,19 @@ const CrewPage: React.FC = () => {
     setLookIndex(index);
   }, []);
 
+  const drawVoyage = (position: number, dragging: boolean) => {
+    pageRef.current?.querySelectorAll<HTMLElement>('[data-voyage-index]').forEach((el) => {
+      const offset = Number(el.dataset.voyageIndex) - position;
+      const distance = Math.abs(offset);
+      const scale = Math.max(0.46, 1 - distance * 0.3);
+      const shadow = el.dataset.voyageSink === undefined;
+      el.style.transition = dragging ? 'none' : 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease';
+      el.style.left = `${50 - offset * 50}%`;
+      el.style.transform = shadow ? `translateX(-50%) translateY(58%) scale(${scale})` : `translateX(-50%) scale(${scale}) translateY(${el.dataset.voyageSink}%)`;
+      el.style.opacity = String(distance > 2.4 ? 0 : Math.max(0.4, 1 - distance * 0.28) * (shadow ? 0.9 : 1));
+    });
+  };
+
   const wheelImg = () => wheelRef.current?.querySelector('img') ?? null;
 
   /** Draw once per frame, directly following the hand without a second easing lag. */
@@ -1105,7 +1118,9 @@ const CrewPage: React.FC = () => {
         return;
       }
       const target = lookRef.current * ISLAND_STEP_DEG + g.creep;
-      g.shown = target;
+      drawVoyage(target / ISLAND_STEP_DEG, true);
+      // Later islands sit to the left: positive progress turns the wheel left.
+      g.shown = g.pickupOffset - g.creep;
       img.style.transform = `rotate(${g.shown}deg)`;
       g.frame = requestAnimationFrame(tick);
     };
@@ -1118,12 +1133,12 @@ const CrewPage: React.FC = () => {
       if (!g.active || e.pointerId !== g.pointerId || sailingRef.current) return;
       if (g.swipe) {
         // A left swipe always means next island, wherever the thumb starts.
-        // Commit one island on release; a long swipe cannot skip islands.
+        // The islands follow continuously and settle on release.
         const travel = -(e.clientX - g.startX) * WHEEL_SWIPE_DEG_PER_PX;
-        const atEnd = (travel > 0 && lookRef.current >= voyageRef.current.length - 1) ||
-          (travel < 0 && lookRef.current <= 0);
-        g.creep = g.pickupOffset + Math.max(-ISLAND_STEP_DEG, Math.min(ISLAND_STEP_DEG, travel)) *
-          (atEnd ? WHEEL_END_FOLLOW : 1);
+        const base = lookRef.current * ISLAND_STEP_DEG;
+        const position = Math.max(0, Math.min(Math.max(0, voyageRef.current.length - 1) * ISLAND_STEP_DEG,
+          base + travel));
+        g.creep = position - base;
         return;
       }
       const dx = e.clientX - g.cx;
@@ -1145,31 +1160,12 @@ const CrewPage: React.FC = () => {
       g.lastX = e.clientX;
       g.lastY = e.clientY;
       if (crossesHub || Math.abs(delta) < WHEEL_DEAD_DEG) return;
-      const pushingPastEnd = (delta > 0 && lookRef.current >= voyageRef.current.length - 1) ||
-        (delta < 0 && lookRef.current <= 0);
-      if (pushingPastEnd) {
-        // Do not bank blocked travel; reversing away from an end responds at once.
-        g.accum = 0;
-        g.creep = Math.max(-12, Math.min(12, g.creep + delta * WHEEL_END_FOLLOW));
-        return;
-      }
-      let accum = g.accum + delta;
-      if (Math.abs(accum) >= ISLAND_DETENT) {
-        const dir: 1 | -1 = accum > 0 ? 1 : -1;
-        if (shiftIsland(dir)) {
-          // Carry the hand past the click so continuous turning keeps
-          // clicking every quarter turn instead of restarting each notch.
-          accum -= dir * ISLAND_STEP_DEG;
-          g.shifted = true;
-          try { navigator.vibrate?.(6); } catch { /* haptics are optional */ }
-        } else {
-          accum = dir * ISLAND_DETENT;
-        }
-      }
-      g.accum = accum;
-      const count = voyageRef.current.length;
-      const atEnd = (accum > 0 && lookRef.current >= count - 1) || (accum < 0 && lookRef.current <= 0);
-      g.creep = g.pickupOffset + accum * (atEnd ? WHEEL_END_FOLLOW : WHEEL_FOLLOW);
+      const base = lookRef.current * ISLAND_STEP_DEG;
+      const position = Math.max(0, Math.min(Math.max(0, voyageRef.current.length - 1) * ISLAND_STEP_DEG,
+        base + g.creep - delta));
+      g.creep = position - base;
+      g.accum = g.creep;
+
     },
     [shiftIsland],
   );
@@ -1177,16 +1173,14 @@ const CrewPage: React.FC = () => {
   const onWheelPointerUp = useCallback((e: PointerEvent) => {
     const g = wheelGestureRef.current;
     if (!g.active || e.pointerId !== g.pointerId) return;
-    if (!g.shifted && e.type === 'pointerup' && !sailingRef.current) {
-      // Include the final sample: a fast flick may end between pointermoves.
-      const dx = e.clientX - g.startX;
-      const dy = e.clientY - g.startY;
-      if (Math.abs(dx) >= WHEEL_SWIPE_MIN_PX && Math.abs(dx) >= Math.abs(dy) * 0.75) {
-        if (shiftIsland(dx < 0 ? 1 : -1)) {
-          try { navigator.vibrate?.(6); } catch { /* haptics are optional */ }
-        }
-      }
+    if (e.type === 'pointerup' && !sailingRef.current) {
+      onWheelPointerMove(e);
+      const next = Math.max(0, Math.min(voyageRef.current.length - 1,
+        Math.round(lookRef.current + g.creep / ISLAND_STEP_DEG)));
+      lookRef.current = next;
+      setLookIndex(next);
     }
+    drawVoyage(lookRef.current, false);
     g.active = false;
     g.accum = 0;
     g.creep = 0;
@@ -1201,12 +1195,12 @@ const CrewPage: React.FC = () => {
     } catch {
       /* capture already gone */
     }
-    // Hand the transform back to React: ease onto the notch from wherever
-    // the drag left it (React only rewrites the style when its value changes).
+    // Center the wheel independently of the selected island. Explicitly write
+    // the transform because React's resting value may already be zero.
     const img = wheelImg();
     if (img) {
       img.style.transition = WHEEL_IDLE_TRANSITION;
-      img.style.transform = `rotate(${lookRef.current * ISLAND_STEP_DEG}deg)`;
+      img.style.transform = 'rotate(0deg)';
     }
     setWheelDrag(false);
   }, [onWheelPointerMove, shiftIsland]);
@@ -1239,8 +1233,8 @@ const CrewPage: React.FC = () => {
       g.creep = 0;
       g.pointerId = e.pointerId;
       g.active = true;
-      // Pick up from the wheel's current drawn angle (it may be mid-ease).
-      const base = lookRef.current * ISLAND_STEP_DEG;
+      // Keep visual pickup independent of island selection during a return to center.
+      const base = 0;
       g.shown = base;
       const img = wheelImg();
       if (img) {
@@ -1255,7 +1249,7 @@ const CrewPage: React.FC = () => {
       }
       // Re-grabbing during the snap animation starts at the visible angle.
       g.pickupOffset = g.shown - base;
-      g.creep = g.pickupOffset;
+      g.creep = 0;
       try {
         btn.setPointerCapture(e.pointerId);
       } catch {
@@ -1264,7 +1258,7 @@ const CrewPage: React.FC = () => {
       window.addEventListener('pointermove', onWheelPointerMove);
       window.addEventListener('pointerup', onWheelPointerUp);
       window.addEventListener('pointercancel', onWheelPointerUp);
-      setWheelHold(base);
+      setWheelHold(g.shown);
       setWheelDrag(true);
       startWheelLoop();
     },
@@ -1377,9 +1371,9 @@ const CrewPage: React.FC = () => {
   };
   // While a drag owns the wheel the prop stays frozen at its start value so
   // React never overwrites the per-frame transform; on release it eases to
-  // the notch (see onWheelPointerUp).
+  // upright position (see onWheelPointerUp).
   const wheelRotation =
-    (wheelDrag ? wheelHold : lookIndex * ISLAND_STEP_DEG) + (wheelSpinOut ? WHEEL_SPIN_OUT_DEG : 0);
+    (wheelDrag ? wheelHold : 0) + (wheelSpinOut ? WHEEL_SPIN_OUT_DEG : 0);
   const wheelTransition = wheelSpinOut
     ? `transform ${WHEEL_SPIN_OUT_MS}ms cubic-bezier(0.3, 0.1, 0.35, 1)`
     : wheelDrag
@@ -1947,7 +1941,7 @@ const CrewPage: React.FC = () => {
         {voyageIslands.map((island, i) => {
           const offset = i - lookIndex;
           const distance = Math.abs(offset);
-          if (distance > 2.4) return null;
+
           const scale = Math.max(0.46, 1 - distance * 0.3);
           const slide = 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease';
           const fade = Math.max(0.4, 1 - distance * 0.28);
@@ -1957,6 +1951,7 @@ const CrewPage: React.FC = () => {
             <React.Fragment key={island.id}>
               {/* Soft contact shadow / reflection on the water under the shore */}
               <div
+                data-voyage-index={i}
                 className="absolute bottom-0"
                 style={{
                   left: `${50 - offset * 50}%`,
@@ -1966,12 +1961,14 @@ const CrewPage: React.FC = () => {
                   transformOrigin: '50% 50%',
                   background:
                     'radial-gradient(ellipse at 50% 50%, rgba(6,52,98,0.34) 0%, rgba(6,52,98,0.18) 42%, rgba(6,52,98,0) 70%)',
-                  opacity: fade * 0.9,
+                  opacity: distance > 2.4 ? 0 : fade * 0.9,
                   transition: slide,
                   zIndex: 0,
                 }}
               />
               <img
+                data-voyage-index={i}
+                data-voyage-sink={sinkPct}
                 src={island.src}
                 alt=""
                 draggable={false}
@@ -1988,7 +1985,7 @@ const CrewPage: React.FC = () => {
                   transformOrigin: '50% 100%',
                   WebkitMaskImage: shoreMask,
                   maskImage: shoreMask,
-                  opacity: fade,
+                  opacity: distance > 2.4 ? 0 : fade,
                   filter: voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands) ? undefined : 'grayscale(1) brightness(0.9)',
                   transition: slide,
                   zIndex: 4 - Math.round(distance),
@@ -2034,14 +2031,14 @@ const CrewPage: React.FC = () => {
             type="button"
             aria-label={isActive ? `Sail to ${island.title}` : `Look at ${island.title}`}
             onClick={() => (isActive ? openVoyageIsland(island) : lookAtIsland(i))}
-            disabled={sailingIsland}
+            disabled={sailingIsland || wheelDrag}
             className="absolute z-[6] m-0 border-0 bg-transparent p-0"
             style={{
               left: cx - size / 2,
               top: bottom - size,
               width: size,
               height: size,
-              opacity: sailingIsland && !isActive ? 0 : 1,
+              opacity: wheelDrag || (sailingIsland && !isActive) ? 0 : 1,
               transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1), height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease',
             }}
           >

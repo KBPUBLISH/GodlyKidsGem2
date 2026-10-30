@@ -26,6 +26,7 @@ import {skillFor} from './character-skills.mjs';
 import {assignCrew} from './island-plan.js';
 import {IslandPlan} from './island-plan.jsx';
 import {IslandTour,onboardingPending} from './onboarding.jsx';
+import {ArrivalProfile} from './arrival-profile.jsx';
 import LoadingTips from './loading-tips.jsx';
 import './style.css';
 
@@ -319,6 +320,8 @@ function App(){
     </div>
     {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan plan={plan.items} crew={plan.crew} goal={plan.goal} village={plan.village} working={view.work?.label||null} onClose={()=>setPlan(null)} onDropGoal={()=>{invoke(g=>g.clearGoal());setPlan(null);}} onGo={(task,who)=>{setPlan(null);invoke(g=>assignCrew(g,task,who));}}/>}
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
+    {/* Welcome-ashore profile card: waits for the first-visit tour, fishing, the map and night to clear. */}
+    {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive&&!plan}/>}
     <EnergyFx engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!view.night?.sleeping}/>
     {view.playersOnly&&<IslandTour engine={engine} view={view} ui={{panel,showTime,mapOnly,actionsOpen,actionsTab,friendsOpen,plan:!!plan}} onActive={setTourActive}/>}
     <MorningNote report={view.loaded&&!view.night?.sleeping?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>

@@ -155,6 +155,7 @@ export class Residents {
     this.placing = null;
     this.show(next);
     this.game.toast(`${resident.name} is home on your island.`);
+    this.game.arrivals?.arrive(resident); // welcome-ashore profile card, once per friend (arrival-profile.js)
     tellParent('gk-resident-placed', next);
     this.shareBeds();
     return true;

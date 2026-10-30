@@ -494,3 +494,23 @@
 .reel-caption button{flex:none;border:0;border-radius:999px;padding:7px 12px;background:#ffd36b;color:#3b2a10;font-weight:700;font-size:13px}
 @keyframes reel-blink{0%,100%{opacity:1}50%{opacity:.35}}
 .friend-row.watch .friend-face.plus{background:#1d3d28;color:#ffd36b}
+
+/* Welcome-ashore profile card (arrival-profile.jsx): slides up when a friend is dropped off; About reopens it. */
+.arrival-shade{position:absolute;inset:0;z-index:44;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:#1d3d2833;backdrop-filter:blur(2px);animation:plan-in .25s ease-out;pointer-events:auto}
+.arrival-card{position:relative;width:min(100%,420px);max-height:min(80dvh,600px);overflow:auto;scrollbar-width:none;padding:14px 14px 12px;margin-bottom:max(8px,env(safe-area-inset-bottom,0px));display:grid;gap:10px;animation:arrival-in .38s cubic-bezier(.2,.9,.3,1.2);border-color:#e7c25a;background:#fff8e9fa}
+@keyframes arrival-in{from{opacity:0;transform:translateY(40px) scale(.96)}to{opacity:1;transform:none}}
+.arrival-head{display:flex;align-items:center;gap:12px}.arrival-head>div{flex:1;min-width:0}.arrival-head h2{margin:2px 0 4px;font-size:24px;line-height:1.05;letter-spacing:-.3px}
+.arrival-face{display:grid;place-items:center;flex:none;width:62px;height:62px;border-radius:50%;background:#fff1c7;border:3px solid #e7c25a;font-size:28px;font-weight:900;color:#6b4e0e;overflow:hidden;box-shadow:0 3px 0 #c99a2c66}.arrival-face img{width:100%;height:100%;object-fit:cover;object-position:center top}
+.arrival-role{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 6px;border-radius:999px;background:#e9f3dd;border:1.5px solid #8fbf6a;font-size:12.5px;font-weight:900;color:#2f5a32}
+.arrival-traits{margin:0;display:grid;gap:8px}.arrival-trait{display:grid;grid-template-columns:92px 1fr;align-items:start;gap:8px;padding:8px 10px;border-radius:14px;background:#fff;border:2px solid #ece4cc}.arrival-trait dt{font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#8a7a4a;padding-top:5px}.arrival-trait dd{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.arrival-trait.great{background:#f1f9e6;border-color:#bfdc9f}.arrival-trait.great dt{color:#3d7a45}.arrival-trait.great .arrival-chip{background:#d9efc0;border-color:#8fbf6a;color:#2f5a32}
+.arrival-trait.learning{background:#fff5df;border-color:#f0d79a}.arrival-trait.learning dt{color:#9a6a12}.arrival-trait.learning .arrival-chip{background:#ffe6a8;border-color:#e7c25a;color:#6b4e0e}
+.arrival-chip{display:inline-block;padding:5px 10px;border-radius:999px;border:1.5px solid;font-size:14px;font-weight:900;line-height:1.1}
+.arrival-trait.tasks dt{color:#5a6a8a}.arrival-task{display:inline-flex;align-items:center;gap:4px;font-size:14.5px;font-weight:800;color:#354b38;line-height:1.2}.arrival-task .picture-icon{width:22px;height:22px}.arrival-task i{font-style:normal;margin-left:-3px}.arrival-task.silly{color:#7a4a9a}
+.arrival-note{margin:0;padding:8px 10px;border-radius:12px;background:#fff1c7;font-size:13px;line-height:1.35;color:#5c4a1c;font-weight:700}
+.arrival-ok{position:relative;overflow:hidden;min-height:52px;border:2px solid #367d55;background:#4a8c59;color:#fffef3;font-size:17px;font-weight:900;border-radius:16px;box-shadow:0 4px 0 #2a6242}
+.arrival-timer{position:absolute;left:0;bottom:0;height:4px;width:100%;background:#ffd36b;transform-origin:left;animation:arrival-timer var(--arrival-life,9s) linear forwards}
+@keyframes arrival-timer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media(max-width:400px){.arrival-trait{grid-template-columns:1fr;gap:4px}.arrival-trait dt{padding-top:0}.arrival-head h2{font-size:21px}.arrival-face{width:54px;height:54px}}
+@media(max-height:560px){.arrival-card{max-height:calc(100dvh - 24px)}}
+.resident-action.about{background:#fff8e9;border-color:#e7c25a;color:#6b4e0e}.resident-action.about svg{fill:#a0781a}

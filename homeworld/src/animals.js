@@ -577,6 +577,15 @@ export class Animals {
           this.play(inst, 'move');
         }
         this.stepMove(inst, stepDt);
+      } else if (rec?.wild && rec.kind === 'coyote' && rec.flee) {
+        // Abel shooed this one (garden-keeper.js). Run to the edge he pointed at; do not turn back toward the crops.
+        inst.chasing = false;
+        inst.rush = 8;
+        const goal = { x: rec.x, y: rec.y };
+        if (dist({ x: inst.x, y: inst.y }, goal) > 0.6) {
+          if (inst.mode !== 'move' || !inst.path?.length) { inst.path = this.routeTo(inst, goal) || [goal]; inst.mode = 'move'; this.play(inst, 'move'); }
+          this.stepMove(inst, stepDt);
+        } else inst.mode = 'idle';
       } else if (rec?.wild && rec.kind === 'coyote' && inst.mode !== 'move') {
         inst.rush = 7;
         inst.chasing = true;

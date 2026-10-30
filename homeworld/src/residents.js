@@ -569,7 +569,7 @@ export class Residents {
     }
     options.push(...this.pickSkillChores(home, s, min, here, busyKey));
     options.push(...this.pickVillageChores(home, s, min, here));
-    // Abel's garden fences and scarecrows (garden-keeper.js): high-priority idle jobs for the builders, nothing for Abel or Eve.
+    // Abel's garden fences and scarecrows. builderChores returns nothing for Noah, Adam, and everyone else.
     if (game.gardenKeeper && game.playersOnly) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
     if (!options.length) return null;
     options.sort((a, b) => a.rank - b.rank || dist(a.target, here) - dist(b.target, here));

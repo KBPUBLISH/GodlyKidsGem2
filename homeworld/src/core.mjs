@@ -19,6 +19,7 @@ import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from
 import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
 import {creditSkill} from './settlement.mjs';
 import {combine as combineRecipe,recipeById,sameStocks,recipeDay} from './recipes.mjs';
+import {takeForSale} from './sell-prices.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
 export const SAVE_KEY_BASE = 'godlykids_homeworld_playtest_v1';
 export const SAVE_KEY = scopeKey(SAVE_KEY_BASE);
@@ -306,12 +307,12 @@ export function canPlow(world,state,key) {
 }
 export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
-  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge','remove_building'].includes(a.type))return state;
+  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge','remove_building','sell'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building','sell'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
-  if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge'].includes(a.type))return state;
+  if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge','sell'].includes(a.type))return state;
   const cost=energyCost(state,a);if(energyFor(state)<cost)return state;
   const next=structuredClone(state);const inv=next.inventory;const add=(id,n)=>inv[id]=(inv[id]||0)+n;
   delete next.characters[character].fatigue;delete next.characters[character].awakeSince;
@@ -469,6 +470,15 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     const spot=world.fishingSpots?.find(s=>s.id===a.spotId);
     if(!spot||dist(state.player,{x:spot.position[0],y:spot.position[1]})>1.25||!terrainType(world,spot.position[0],spot.position[1])||terrainType(world,spot.water[0],spot.water[1])!==0)return state;
     add('fish',1);next.stats.fishCaught=(next.stats.fishCaught||0)+1;
+  } else if(a.type==='sell') {
+    // The built market buys surplus from the bag. Coins are credited by the parent app, not stored here.
+    const stall=activeBuildings(state).find(b=>b.id===a.stallId&&b.kind==='market'&&b.status==='complete');
+    if(!stall)return state;
+    const sold=takeForSale(inv,a.item,a.qty);if(!sold)return state;
+    for(const id of Object.keys(inv))delete inv[id];
+    Object.assign(inv,sold.inventory);
+    next.stats.sold=(next.stats.sold||0)+sold.qty;
+    next.lastSale={item:sold.id,qty:sold.qty,coins:sold.coins,at:minutes};
   } else if(a.type==='rest') {
     const gain=restGain(state);if(!gain)return state;setEnergy(next,energyFor(state)+gain);next.stats.rests=(next.stats.rests||0)+1;
   } else if(a.type==='pray') {

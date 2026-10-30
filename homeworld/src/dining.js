@@ -6,7 +6,7 @@ import {dist,gameTime,timeLabel,heightAt,growth} from './core.mjs';
 import {FOODS,hungerFor,activeCharacter} from './nutrition.mjs';
 import {footprint,workPoint,completedFires,litFires,fireCanTakeLog} from './building.mjs';
 import {HALL_SEATS,TABLE_TOP_Y,completedHalls,hallById,hallPoint,hallApproach,seatYaw,planMeal,servedLabel} from './dining.mjs';
-import {skillFor,MEAL_FISH,MEAL_TIMES,mealAt,hourLabel} from './character-skills.mjs';
+import {skillFor,MEAL_FISH,RAW_FISH_BUFFER,fishStillNeeded,MEAL_TIMES,mealAt,hourLabel} from './character-skills.mjs';
 import {servesMeal} from './today-goals.mjs';
 import {turnToward,resetAnimatedPose} from './character-motion.js';
 import {fishModel} from './nutrition.js';
@@ -261,11 +261,16 @@ export class Dining {
     if(r.stage==='idle'){
       if(home.job?.explicit){r.stage='ready';return;}
       if(home.job)g.residents.stopJob(eve,false);
-      if(!g.world.fishingSpots?.length){r.stage='gather';return;}
-      if(g.residents.assignJob(eve,{type:'fish',count:MEAL_FISH,background:true,quick:true,note:`${home.name} is fishing for ${what}.`}))r.stage='fishing';else r.stage='gather';
+      // A small pile covers the next meal. She still picks, cooks, and rings — she just does not fish.
+      const need=fishStillNeeded(s.inventory?.fish);
+      if(!need||!g.world.fishingSpots?.length){r.stage='gather';return;}
+      if(g.residents.assignJob(eve,{type:'fish',count:Math.min(MEAL_FISH,need),background:true,quick:true,note:`${home.name} is fishing for ${what}.`}))r.stage='fishing';else r.stage='gather';
       return;
     }
-    if(r.stage==='fishing'){if(!home.job||home.job.type!=='fish')r.stage='gather';return;}
+    if(r.stage==='fishing'){
+      if((s.inventory?.fish||0)>=RAW_FISH_BUFFER){if(home.job?.type==='fish'&&!home.job.explicit)g.residents.stopJob(eve,false);r.stage='gather';return;}
+      if(!home.job||home.job.type!=='fish')r.stage='gather';return;
+    }
     if(r.stage==='gather'){
       // If Eve is the one grilling (Noah away), the garden waits until the fish are done.
       if(this.grilling(eve))return;

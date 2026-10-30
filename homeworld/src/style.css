@@ -601,3 +601,12 @@
   .plan-friend-goal{font-size:16px}
   .plan-meter-end{font-size:12px}
 }
+.sell-card{display:grid;gap:10px}
+.sell-purse{margin:0;padding:10px 12px;border-radius:14px;background:#fff6d4;border:2px solid #e7c25a;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sell-purse b{font-size:22px}
+.sell-group{display:grid;gap:8px}
+.sell-group h2{margin:4px 0 0;font-size:16px;display:flex;align-items:center;gap:8px}
+.sell-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px;border-radius:14px;background:#fff;border:2px solid #e7e1c8}
+.sell-row small{display:block;color:#5c6b55;font-size:12.5px}
+.sell-row button{min-height:44px;padding:8px 12px}
+.sell-icon{display:grid;place-items:center;width:44px;height:44px}

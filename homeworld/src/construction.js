@@ -432,6 +432,7 @@ export class Construction {
   if(b.kind==='well'&&b.status==='complete'){this.wellId=b.id;this.g.notify();return true;}
   if(b.kind==='forge'&&b.status==='complete'){this.openMenu={id:'tools',nonce:Date.now()};this.g.notify();return true;}
   if(b.kind==='dining_hall'&&b.status==='complete'){this.openMenu={id:'dining',hallId:b.id,nonce:Date.now()};this.g.notify();return true;}
+  if(b.kind==='market'&&b.status==='complete'){this.openMenu={id:'market',stallId:b.id,nonce:Date.now()};this.g.notify();return true;}
   if(buildingById(b.kind).woodCapacity||['hut','tent','cottage','townhouse','chest','campfire','oven','well'].includes(b.kind)){const home=['hut','tent','cottage','townhouse'].includes(b.kind);this.openMenu={id:home?'sleep':b.kind==='chest'||buildingById(b.kind).woodCapacity?'inventory':['campfire','oven','well'].includes(b.kind)?b.kind:'food',homeId:home?b.id:undefined,fireId:b.kind==='campfire'?b.id:undefined,ovenId:b.kind==='oven'?b.id:undefined,wellId:b.kind==='well'?b.id:undefined,nonce:Date.now()};this.g.notify();}else this.g.toast(`${buildingById(b.kind).name} · you built this!`);return true;
  }
  update(){

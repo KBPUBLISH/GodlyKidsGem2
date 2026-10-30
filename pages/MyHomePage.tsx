@@ -11,9 +11,9 @@ import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnbo
 import { noteFriendsAction, noteFriendsVisit } from '../utils/journeyStudy';
 import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from '../utils/profileScope';
 import { useUser } from '../context/UserContext';
-import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY } from '../utils/islandShop';
+import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRICES, ISLAND_SELL_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players178&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players182&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
@@ -527,6 +527,23 @@ const MyHomePage: React.FC = () => {
         if (pending && pending.requestId === (data as { requestId?: unknown }).requestId) pendingFarmRef.current = null;
       }
       if (data.type === 'gk-earn-coins') navigate('/games');
+      // Market stall: the island already removed the goods. Credit the same useUser().coins purse
+      // Adam's animals spend. Not a second wallet, and not RevenueCat.
+      if (data.type === 'gk-sell') {
+        const sale = data as { item?: unknown; qty?: unknown; coins?: unknown; name?: unknown };
+        const item = typeof sale.item === 'string' ? sale.item : '';
+        const qty = Math.floor(Number(sale.qty) || 0);
+        const unit = ISLAND_SELL_PRICES[item];
+        const coins = unit == null ? NaN : unit * qty;
+        if (!item || unit == null || qty < 1 || qty > ISLAND_SELL_MAX_QTY || Number(sale.coins) !== coins) {
+          post({ type: 'gk-sell-result', ok: false, item, balance: coinsRef.current, reason: 'The stall does not buy that.' });
+          return;
+        }
+        const label = typeof sale.name === 'string' && sale.name ? sale.name : item;
+        addRef.current(coins, `Market stall: ${qty} ${label}`, 'other');
+        post({ type: 'gk-coins', balance: coinsRef.current + coins });
+        post({ type: 'gk-sell-result', ok: true, item, qty, coins, balance: coinsRef.current + coins });
+      }
       if (data.type === 'gk-dev-grant') {
         const host = window.location.hostname;
         if (host !== 'localhost' && host !== '127.0.0.1') return;

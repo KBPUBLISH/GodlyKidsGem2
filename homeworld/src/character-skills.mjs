@@ -10,6 +10,10 @@ export const MEALS=[
   {id:'dinner',name:'Dinner',hour:18,prep:17},
 ];
 export const MEAL_FISH=5;
+/** Raw fish Eve keeps for the next meal. At or above this she does not start a fishing trip. */
+export const RAW_FISH_BUFFER=8;
+/** How many more raw fish the next meal still needs. Zero means the bag already covers it. */
+export const fishStillNeeded=have=>Math.max(0,RAW_FISH_BUFFER-Math.max(0,Math.floor(Number(have)||0)));
 /** The meal whose preparation window covers this island hour (prep → the next meal's prep), or null. */
 export function mealAt(hour){
   for(let i=0;i<MEALS.length;i++){const m=MEALS[i],end=MEALS[i+1]?.prep??22;if(hour>=m.prep&&hour<end)return m;}
@@ -23,7 +27,7 @@ export const BREAKFAST_PREP_HOUR=MEALS[0].prep,BREAKFAST_HOUR=MEALS[0].hour,BREA
 
 export const CHARACTER_SKILLS={
   eve:{id:'cook',name:'Cook',icon:'cookedfish',short:`meals at ${MEAL_TIMES} · plants & seeds`,
-    blurb:`Before every meal she fishes and picks what is ripe in the garden while Noah grills the catch, then rings the Dining Hall bell at ${MEAL_TIMES} so everyone eats together. Between meals she plants seeds and gathers the ones lying around.`},
+    blurb:`Before every meal she fishes only when the bag is short of raw fish, and picks what is ripe in the garden while Noah grills the catch, then rings the Dining Hall bell at ${MEAL_TIMES} so everyone eats together. Between meals she plants seeds and gathers the ones lying around.`},
   abel:{id:'gardener',name:'Garden keeper',icon:'water',short:'weeds · tilling · guards at dusk',
     blurb:'The garden is his daily mission: he pulls weeds, waters and picks, tills new rows so it keeps growing, and at dusk he stands guard so a coyote is chased off. Wants fences and a scarecrow so crows and coyotes leave our food alone.'},
   // `grills`: the friend who lights the campfire and grills Eve's catch before each meal (Eve covers it if he is away).

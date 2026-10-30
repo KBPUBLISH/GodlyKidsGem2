@@ -326,3 +326,32 @@ export function displayCoins(live){
   if(Number.isFinite(live))return live;
   return readShipCoins();
 }
+/**
+ * Add coins to the same purse `useUser().addCoins` writes (`godly_kids_data_v6`).
+ * Root and the active kid both rise, matching the min() the island displays.
+ * Returns the new displayed balance, or null when there is no save to credit.
+ * The embedded island does not call this — the parent app's addCoins does.
+ */
+export function creditShipCoins(amount){
+  const n=Math.floor(Number(amount)||0);
+  if(n<1||typeof localStorage==='undefined')return null;
+  try{
+    const raw=localStorage.getItem('godly_kids_data_v6');
+    const parsed=JSON.parse(raw||'null');
+    if(!parsed||typeof parsed!=='object')return null;
+    const shown=readShipCoins();
+    const base=Number.isFinite(shown)?shown:0;
+    const root=Number.isFinite(parsed.coins)?parsed.coins:base;
+    parsed.coins=root+n;
+    const id=parsed.currentProfileId;
+    if(id&&Array.isArray(parsed.kids)){
+      const kid=parsed.kids.find(k=>k&&k.id===id);
+      if(kid){
+        const kidCoins=Number.isFinite(kid.coins)?kid.coins:base;
+        kid.coins=kidCoins+n;
+      }
+    }
+    localStorage.setItem('godly_kids_data_v6', JSON.stringify(parsed));
+    return readShipCoins();
+  }catch{return null;}
+}

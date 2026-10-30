@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { heightAt, dist, gameTime, timeLabel, growth, cellFromKey, activeTrees, activeRocks, activeStumps, stumpRadius, plotWeedy, canPlow, seedById, label, pruneBuiltIns } from './core.mjs';
-import { skillFor, SKILL_LIMITS } from './character-skills.mjs';
+import { skillFor, SKILL_LIMITS, RAW_FISH_BUFFER } from './character-skills.mjs';
 import { RemoteProfiles } from './character-profile-remote.js';
 import { THREAT_DAY, dayIndex as farmDay, gardenFocus } from './fencing.mjs';
 import { woodRoom } from './wood-storage.mjs';
@@ -691,6 +691,12 @@ export class Residents {
         options.push({ kind: 'pickup', key: `seed:${seed.id}`, seedId: seed.id, target: { x: seed.position[0], y: seed.position[1] }, reach: Math.max(seed.radius || 0, 1), label: 'Gathering seeds', rank: 3 });
       }
     }
+    // Eve's own fishing. Chopping is her weakness, so between meals she fishes for the next one instead of touching an axe.
+    // She stops once the bag already holds a meal's worth of raw fish.
+    if (skill?.id === 'cook' && !game.dining?.cooking() && (s.inventory?.fish || 0) < RAW_FISH_BUFFER && (auto.fish || 0) < SKILL_LIMITS.fish) {
+      const spot = game.world.fishingSpots?.[0];
+      if (spot && free(`spot:${spot.id}`)) options.push({ kind: 'fish', key: `spot:${spot.id}`, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, reach: 1.05, dwell: 6, label: 'Fishing for the next meal', rank: 2.5, auto: 'fish' });
+    }
     // Fishers (Peter, John, Jonah…) fish for the table on their own, a few a day, when nobody is cooking from the spot.
     if (does('fish') && (auto.fish || 0) < SKILL_LIMITS.fish && !game.dining?.cooking()) {
       const spot = game.world.fishingSpots?.[0];
@@ -745,7 +751,7 @@ export class Residents {
         options.push({ kind: 'mine', key: `rock:${r.id}`, rockId: r.id, target: { x: r.position[0], y: r.position[1] }, reach: (r.radius || .6) + .85, dwell: 1, label: 'Breaking stone for the village', rank: 5, auto: 'village' });
       }
     }
-    if (needs.fish > 0 && !game.dining?.cooking()) {
+    if (needs.fish > 0 && !(trade === 'cook' && (s.inventory?.fish || 0) >= RAW_FISH_BUFFER) && !game.dining?.cooking()) {
       const spot = game.world.fishingSpots?.[0];
       if (spot && free(`spot:${spot.id}`)) options.push({ kind: 'fish', key: `spot:${spot.id}`, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, reach: 1.05, dwell: 6, label: 'Fishing for the table', rank: 6, auto: 'village' });
     }
@@ -1443,6 +1449,10 @@ export class Residents {
     const home = actor.userData, game = this.game;
     if (this.buildDuty(actor, dt)) return;
     if (game.store?.state?.night) { home.strollState = null; if (!game.gardenKeeper?.nightWatch(actor, dt, this)) this.idleActor(actor, dt); return; }
+    if (skillFor(home.name)?.id === 'cook' && (game.store?.state?.inventory?.fish || 0) >= RAW_FISH_BUFFER) {
+      if (home.job?.type === 'fish' && !home.job.explicit) this.stopJob(actor, false);
+      if (home.chore?.kind === 'fish') { this.claims.delete(home.chore.key); home.chore = null; home.strollState = { wait: 0 }; this.lastChoreScan = 0; }
+    }
     if (home.chore) {
       const c = home.chore;
       if (c.resting > 0) {

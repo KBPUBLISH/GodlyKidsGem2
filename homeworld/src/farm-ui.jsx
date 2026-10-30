@@ -16,7 +16,7 @@ export function FarmCard({farm,onRun}){
       <strong>{adam?.name||'Adam'} asks</strong>
       <p>{req.text}</p>
       <div className="farm-card-price"><span className="farm-card-emoji" aria-hidden="true">{req.emoji}</span><b>{req.price}</b> gold coins{req.coins!==null&&<small>· you have {req.coins}</small>}</div>
-      {short&&<div className="farm-card-short">Need <b>{req.short}</b> more coins. Games and quizzes on the ship earn coins!</div>}
+      {short&&<div className="farm-card-short">Need <b>{req.short}</b> more coins. Sell fish at the stall.</div>}
       <div className="farm-card-actions">
         {short&&req.inApp
           ? <button type="button" className="earn" onClick={()=>onRun(g=>g.farmer?.earn())}>Earn coins</button>

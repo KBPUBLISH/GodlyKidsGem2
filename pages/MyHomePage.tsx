@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import { rewardsService, type UnlockedCharacter } from '../services/rewardsService';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
+import { fetchIslandCharacterProfile } from '../services/islandCharacterService';
 import CrewChatPopup from '../components/crew/CrewChatPopup';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
@@ -11,7 +12,7 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players156&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players157&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
@@ -186,6 +187,8 @@ type DropCharacter = {
   modelUrl?: string;
   imageUrl?: string;
   sourceStoryId?: string;
+  /** Came from the collected rewards (a Bible / story friend), so the island may look up a canon profile. */
+  story?: boolean;
 };
 
 /**
@@ -532,6 +535,7 @@ const MyHomePage: React.FC = () => {
       modelUrl: character.modelUrl,
       imageUrl: character.imageUrl,
       sourceStoryId: character.sourceStoryId,
+      story: true,
     };
     setFriendsOpen(false);
     setPlacing(payload);

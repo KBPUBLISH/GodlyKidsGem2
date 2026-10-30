@@ -2,6 +2,7 @@
  * Memories live inside the island save, so reset/restore follows the same world.
  * Only successful gameplay creates events; visiting never invents offline chores.
  */
+import {characterFor} from './characters.mjs';
 export const CONVERSATION_VERSION = 1;
 const EVENT_LIMIT = 40, RESIDENT_LIMIT = 64, HOLD_MS = 8000;
 const hash = value => [...String(value)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0);
@@ -91,9 +92,9 @@ const COMMUNITY = [
 ];
 
 export function residentPersonality(resident) {
-  const name = String(resident.name || '').trim().toLowerCase();
-  if (name === 'noah') return 'builder';
-  if (name === 'adam' || name === 'eve') return 'gardener';
+  // The character canon names the line bank for every known friend (Noah builder, Adam/Eve/Abel gardener, Peter playful…).
+  const bank = characterFor(resident.name).dialogue;
+  if (bank && PERSONALITIES[bank]) return bank;
   return Object.keys(PERSONALITIES)[hash(resident.id) % 4];
 }
 
@@ -166,6 +167,9 @@ export function nextResidentLine(state, resident, context={}, wall=Date.now()) {
   }
   if (previous.shared?.kind === 'plant') push('remember-plant',`I still remember you planting those ${crop(previous.shared.seed)} seeds for our island.`,30);
   if (previous.shared?.kind === 'fish') push('remember-fish','I still remember that fish you caught for our shared bag.',30);
+  // A Bible friend's own voice (characters.mjs `lines`) comes just ahead of the shared personality bank.
+  const own = characterFor(resident.name).lines || [];
+  for (let i=0;i<own.length;i++) push(`own:${(i + hash(id)) % own.length}`,own[(i + hash(id)) % own.length],22);
   const personality = residentPersonality(resident), offset = hash(id) % PERSONALITIES[personality].length;
   for (let i=0;i<PERSONALITIES[personality].length;i++) {
     const n = (i + offset) % PERSONALITIES[personality].length;

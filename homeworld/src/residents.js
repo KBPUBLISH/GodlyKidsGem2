@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { heightAt, dist, gameTime, timeLabel, growth, cellFromKey, activeTrees, activeRocks, activeStumps, stumpRadius, plotWeedy, canPlow, seedById, label, pruneBuiltIns } from './core.mjs';
 import { skillFor, SKILL_LIMITS } from './character-skills.mjs';
+import { RemoteProfiles } from './character-profile-remote.js';
 import { THREAT_DAY, dayIndex as farmDay, gardenFocus } from './fencing.mjs';
 import { woodRoom } from './wood-storage.mjs';
 import { toolTier, rockProfile, toolNeedMessage, rockFindLine } from './mining.mjs';
@@ -67,6 +68,7 @@ export class Residents {
     this.loader.setDRACOLoader(this.draco);
     this.models = new Map();
     this.claims = new Map(); // chore key -> resident id, so two helpers never chase the same job
+    this.profiles = new RemoteProfiles(game); // Gemini-written canon for story friends not in characters.mjs
     this.lastChoreScan = 0;
     this.placing = null;
     this.token = 0;
@@ -82,6 +84,7 @@ export class Residents {
       if (type === 'gk-profile') { if (ensureFrameScope(event.data.scope)) return; }
       if (type === 'gk-residents-sync') this.show(readResidents());
       if (type === 'gk-resident-drop') this.beginDrop(event.data.character);
+      if (type === 'gk-character-profile') this.profiles.receive(event.data);
       if (type === 'gk-resident-remove') this.remove(event.data.id);
       if (type === 'gk-resident-select') this.select(event.data.id);
       if (type === 'gk-task') {
@@ -127,6 +130,7 @@ export class Residents {
       return;
     }
     this.placing = character;
+    this.profiles.prefetch(character); // so a Bible friend's card is ready by the time the kid taps the ground
     this.game.toast(`Tap the grass to drop off ${character.name}.`);
     this.game.notify?.();
   }
@@ -592,20 +596,21 @@ export class Residents {
     const auto = home.auto && home.auto.day === day ? home.auto : (home.auto = { day, trees: 0, rocks: 0, plots: 0 });
     const busyId = game.order?.id || game.action?.id || null, free = (key) => !this.claims.has(key), options = [];
     const near = (o) => dist(o.target, here) <= 60;
-    if (skill.id === 'woodcutter') {
+    const does = (kind) => skill.chores?.has(kind);
+    if (does('stump')) {
       for (const t of activeStumps(game.world, s)) {
         const key = `stump:${t.id}`;
         if (!free(key) || t.id === busyId) continue;
         options.push({ kind: 'stump', key, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.1 + stumpRadius(t) * .3, label: 'Digging out a stump', rank: 2 });
       }
     }
-    if ((skill.id === 'woodcutter' || skill.id === 'farmer') && auto.trees < SKILL_LIMITS.trees && woodRoom(s)) {
+    if (does('chop') && auto.trees < SKILL_LIMITS.trees && woodRoom(s)) {
       for (const t of activeTrees(game.world, s, min)) {
         if (t.cell || t.id === busyId || !free(`tree:${t.id}`)) continue;
         options.push({ kind: 'chop', key: `tree:${t.id}`, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.18 + (t.radius || 0) * .2, dwell: 1, label: 'Chopping wood', rank: 3, auto: 'trees' });
       }
     }
-    if (skill.id === 'farmer' && auto.rocks < SKILL_LIMITS.rocks) {
+    if (does('mine') && auto.rocks < SKILL_LIMITS.rocks) {
       const tier = toolTier(s);
       for (const r of activeRocks(game.world, s)) {
         if (r.id === busyId || !free(`rock:${r.id}`) || rockProfile(r).minTier > tier.tier) continue;
@@ -614,23 +619,23 @@ export class Residents {
         options.push({ kind: 'mine', key: `rock:${r.id}`, rockId: r.id, target: { x: r.position[0], y: r.position[1] }, reach: (r.radius || .6) + .85, dwell: 1, label: 'Breaking rocks', rank: 3, auto: 'rocks' });
       }
     }
-    if (skill.id === 'gardener') {
+    if (does('guard') || does('weeds') || does('harvest') || does('plow')) {
       const cells = s.cells || {};
       // Dusk: coyotes come at nightfall, so Abel walks to the garden and stands guard (turns one away tonight).
       const { hour } = timeLabel(min), fday = farmDay(min);
-      if (hour >= 20.4 && fday >= THREAT_DAY && s.farm?.guard?.day !== fday && Object.values(cells).some((c) => c.seed) && !this.claims.has('garden:guard')) {
+      if (does('guard') && hour >= 20.4 && fday >= THREAT_DAY && s.farm?.guard?.day !== fday && Object.values(cells).some((c) => c.seed) && !this.claims.has('garden:guard')) {
         options.push({ kind: 'guard', key: 'garden:guard', target: gardenFocus(game.world, s), reach: 1.6, dwell: 1.5, label: 'Guarding the garden', rank: 0 });
       }
       for (const [cellKey, cell] of Object.entries(cells)) {
         const key = `cell:${cellKey}`;
         if (!free(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
-        if (plotWeedy(cell, min)) { options.push({ kind: 'weeds', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Pulling weeds', rank: 2 }); continue; }
+        if (plotWeedy(cell, min)) { if (does('weeds')) options.push({ kind: 'weeds', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Pulling weeds', rank: 2 }); continue; }
         const g = growth(cell, min);
-        if (g && g.seed.kind === 'crop' && g.stage === 'ready') options.push({ kind: 'harvest', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Picking ripe crops', rank: 3 });
+        if (does('harvest') && g && g.seed.kind === 'crop' && g.stage === 'ready') options.push({ kind: 'harvest', key, cellKey, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Picking ripe crops', rank: 3 });
       }
       // The garden grows a row at a time: till beside it once the empty plots are nearly all planted.
       const empty = Object.values(cells).filter((c) => c.soil && !c.seed).length;
-      if (auto.plots < SKILL_LIMITS.plots && empty < 4) {
+      if (does('plow') && auto.plots < SKILL_LIMITS.plots && empty < 4) {
         const seen = new Set();
         for (const cellKey of Object.keys(cells)) {
           const [cx, cy] = cellKey.split(':').map(Number);
@@ -644,18 +649,23 @@ export class Residents {
         }
       }
     }
-    if (skill.id === 'cook' && !game.dining?.cooking()) {
+    if ((does('plant') || does('pickup')) && !game.dining?.cooking()) {
       const inv = s.inventory || {}, seeds = Object.entries(inv).filter(([id, n]) => n > 0 && seedById(id)?.kind === 'crop').sort((a, b) => b[1] - a[1]);
-      if (seeds.length) for (const [cellKey, cell] of Object.entries(s.cells || {})) {
+      if (does('plant') && seeds.length) for (const [cellKey, cell] of Object.entries(s.cells || {})) {
         if (cell.seed || !['tilled', 'harvested'].includes(cell.soil) || plotWeedy(cell, min)) continue;
         const key = `cell:${cellKey}`;
         if (!free(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
         options.push({ kind: 'plant', key, cellKey, seed: seeds[0][0], target: cellFromKey(game.world, cellKey), reach: .9, label: 'Planting seeds', rank: 2 });
       }
-      for (const seed of game.world.seeds || []) {
+      if (does('pickup')) for (const seed of game.world.seeds || []) {
         if ((s.pickedSeeds || []).includes(seed.id) || !free(`seed:${seed.id}`)) continue;
         options.push({ kind: 'pickup', key: `seed:${seed.id}`, seedId: seed.id, target: { x: seed.position[0], y: seed.position[1] }, reach: Math.max(seed.radius || 0, 1), label: 'Gathering seeds', rank: 3 });
       }
+    }
+    // Fishers (Peter, John, Jonah…) fish for the table on their own, a few a day, when nobody is cooking from the spot.
+    if (does('fish') && (auto.fish || 0) < SKILL_LIMITS.fish && !game.dining?.cooking()) {
+      const spot = game.world.fishingSpots?.[0];
+      if (spot && free(`spot:${spot.id}`)) options.push({ kind: 'fish', key: `spot:${spot.id}`, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, reach: 1.05, dwell: 6, label: 'Fishing for the table', rank: 3, auto: 'fish' });
     }
     return options.filter(near);
   }
@@ -765,7 +775,7 @@ export class Residents {
       } else if (c.kind === 'fish') {
         const before = game.store.state;
         game.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'fish', spotId: c.spotId, actionId: `helper:${home.id}:${Date.now()}` });
-        if (game.store.state !== before) { game.burst?.(c.target, 'water', .4); this.feed(home, 'fish', `${who} caught a fish.`); if (home.job) this.creditJob(actor); }
+        if (game.store.state !== before) { game.burst?.(c.target, 'water', .4); this.feed(home, 'fish', `${who} caught a fish.`); if (c.auto && home.auto) home.auto[c.auto] = (home.auto[c.auto] || 0) + 1; if (home.job) this.creditJob(actor); }
         else this.failJob(actor, 'could not fish from there.');
       } else if (c.kind === 'guard') {
         const before = game.store.state;

@@ -42,9 +42,10 @@ export function ArrivalProfile({engine,card,enabled}){
       </div>
       <dl className="arrival-traits">
         <div className="arrival-trait great"><dt>{plural(p.strengths)?'Strengths':'Strength'}</dt><dd>{p.strengths.map(s=><span key={s} className="arrival-chip">{s}</span>)}</dd></div>
-        <div className="arrival-trait learning"><dt>{plural(p.weaknesses)?'Weaknesses':'Weakness'}</dt><dd>{p.weaknesses.map(s=><span key={s} className="arrival-chip">{s}</span>)}</dd></div>
+        {p.weaknesses?.length>0&&<div className="arrival-trait learning"><dt>{plural(p.weaknesses)?'Weaknesses':'Weakness'}</dt><dd>{p.weaknesses.map(s=><span key={s} className="arrival-chip">{s}</span>)}</dd></div>}
         <div className="arrival-trait tasks"><dt>Tasks</dt><dd>{p.tasks.map((t,i)=><span key={t.text} className={`arrival-task ${t.silly?'silly':''}`}><Icon type={t.icon} size={22}/>{t.text}{i<p.tasks.length-1?<i aria-hidden="true">,</i>:null}</span>)}</dd></div>
       </dl>
+      {p.story&&<p className="arrival-note arrival-story">{p.story}{p.bibleRef?<small> · {p.bibleRef}</small>:null}</p>}
       <p className="arrival-note">{p.foreman}</p>
       <button ref={button} type="button" className="arrival-ok" onClick={close}>{arrival?'Welcome ashore!':'Got it'}{arrival?<i className="arrival-timer" aria-hidden="true"/>:null}</button>
     </section>

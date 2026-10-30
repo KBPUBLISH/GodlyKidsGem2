@@ -4,15 +4,88 @@ _Generated from `homeworld/src/characters.mjs` by `homeworld/scripts/gen-charact
 
 The friends who live on the Players World island, how they talk, what they do and what they never do. Ages 4–9: short, warm, gentle; faith lines are simple and never preachy.
 
-## At a glance
+## At a glance — the island friends
 
-| Friend | Role (id) | Icon | Strengths | Still learning | Tasks |
+| Friend | Role (id) | Leadership | Strengths | Still learning | Tasks | Bible |
+|---|---|---|---|---|---|---|
+| Eve | Cook (`cook`) | 2 | Cooking, Fishing | Chopping wood | Fishing, Cooking, Ringing the dinner bell (loudly) *(silly)* | Genesis 2–3 |
+| Abel | Garden keeper (`gardener`) | 1 | Gardening | Building | Weeding, Watering, Scarecrow conversations *(silly)* | Genesis 4 |
+| Noah | Woodcutter (`woodcutter`) | 2 | Building | Gardening | Cut trees, Building, Back scratches *(silly)* | Genesis 6–9 |
+| Adam | Farmer (`farmer`) | 2 | Farming, Mining | Cooking | Plowing, Breaking rock, Naming the chickens *(silly)* | Genesis 1–2 |
+| Friend | Helper | 1 | Helping out | — | Pitching in, Carrying things, High-fives *(silly)* | — |
+
+## Bible friends (from the reward pool)
+
+| Friend | Role (id) | Leadership | Strengths | Still learning | Tasks | Bible |
+|---|---|---|---|---|---|---|
+| Moses | Leader (`leader`) | 5 | Leading, Teaching | Fishing | Leading the morning meeting, Carrying stone, Parting the bathwater *(silly)* | Exodus 3; 14 |
+| Joseph | Leader (`leader`) | 5 | Leading, Farming | Chopping wood | Planning the food store, Counting the harvest, Explaining everyone's dreams at breakfast *(silly)* | Genesis 37–45 |
+| David | Shepherd (`shepherd`) | 4 | Animals, Leading | Cooking | Watching the sheep, Guarding at dusk, Harp concerts for the chickens *(silly)* | 1 Samuel 16–17; Psalm 23 |
+| Daniel | Teacher (`teacher`) | 3 | Teaching, Gardening | Chopping wood | Reading at the campfire, Watering the vegetables, Making friends with every animal, even the big ones *(silly)* | Daniel 1; 6 |
+| Esther | Leader (`leader`) | 4 | Leading, Cooking | Mining | Planning the feast, Speaking up for friends, Wearing a crown to breakfast *(silly)* | Esther 4 |
+| Ruth | Farmer (`farmer`) | 2 | Farming, Helping | Fishing | Gleaning the wheat, Picking ripe crops, Following Naomi everywhere, even to the well *(silly)* | Ruth 1–2 |
+| Mary | Helper (`healer`) | 3 | Helping, Cooking | Mining | Caring for tired friends, Cooking, Humming lullabies while she works *(silly)* | Luke 1–2 |
+| Joshua | Leader (`leader`) | 4 | Leading, Building | Cooking | Leading the build crew, Scouting the island, Trumpet practice at the fence *(silly)* | Joshua 1; 6 |
+| Deborah | Leader (`leader`) | 5 | Leading, Teaching | Chopping wood | Settling squabbles under the palm tree, Planning the day, Singing victory songs very loudly *(silly)* | Judges 4–5 |
+| Samuel | Teacher (`teacher`) | 3 | Teaching, Helping | Building | Telling stories at the campfire, Listening for who needs help, Waking up at every noise to say "Here I am!" *(silly)* | 1 Samuel 3 |
+| Elijah | Builder (`builder`) | 3 | Building, Mining | Gardening | Stacking stones, Keeping the campfire lit, Waiting for ravens to bring lunch *(silly)* | 1 Kings 17–19 |
+| Jonah | Fisher (`fisher`) | 1 | Fishing | Gardening | Fishing, Mending nets, Telling the fish story again (it gets bigger every time) *(silly)* | Jonah 1–4 |
+| Peter | Fisher (`fisher`) | 3 | Fishing, Leading | Gardening | Fishing, Hauling the catch, Jumping into the water before thinking *(silly)* | Luke 5; Matthew 14 |
+| Paul | Teacher (`teacher`) | 4 | Teaching, Building | Fishing | Teaching new friends, Mending tents, Writing very long letters to everyone *(silly)* | Acts 9; 16 |
+| John | Fisher (`fisher`) | 3 | Fishing, Teaching | Mining | Fishing, Writing down what happened, Reminding everyone he is the friend Jesus loved *(silly)* | John 13; 21; 1 John 4 |
+| Martha | Cook (`cook`) | 2 | Cooking, Helping | Fishing | Cooking, Setting the table, Tidying while everyone else is still eating *(silly)* | Luke 10 |
+| Miriam | Teacher (`teacher`) | 3 | Teaching, Leading | Mining | Leading the singing, Watching the little ones, Tambourine solos at breakfast *(silly)* | Exodus 2; 15 |
+| Gideon | Farmer (`farmer`) | 3 | Farming, Leading | Fishing | Threshing wheat, Guarding at dusk, Asking for a sign before choosing a snack *(silly)* | Judges 6–7 |
+| Solomon | Builder (`builder`) | 4 | Building, Teaching | Fishing | Planning the big buildings, Settling arguments wisely, Collecting proverbs about ants *(silly)* | 1 Kings 3; 6 |
+| Nehemiah | Builder (`builder`) | 4 | Building, Leading | Fishing | Rebuilding walls and fences, Organising the crew, Checking the fence at midnight *(silly)* | Nehemiah 2; 6 |
+| Caleb | Farmer (`farmer`) | 3 | Farming, Leading | Cooking | Scouting new ground, Plowing, Carrying giant grapes *(silly)* | Numbers 13–14 |
+| Hannah | Helper (`healer`) | 2 | Helping, Gardening | Chopping wood | Caring for the little ones, Watering, Praying so quietly people think she is asleep *(silly)* | 1 Samuel 1–2 |
+| Lydia | Helper (`healer`) | 2 | Helping, Cooking | Mining | Welcoming new friends, Cooking, Dyeing everything purple *(silly)* | Acts 16 |
+| Timothy | Teacher (`teacher`) | 2 | Teaching, Helping | Chopping wood | Learning from Paul, Reading at the campfire, Writing back to Paul's long letters *(silly)* | 2 Timothy 1; 3 |
+| Zacchaeus | Helper (`healer`) | 1 | Helping, Gardening | Building | Picking apples from the tree, Sharing out the food fairly, Climbing trees to see who is coming *(silly)* | Luke 19 |
+| The Good Samaritan | Helper (`healer`) | 2 | Helping | Fishing | Caring for hurt friends, Carrying things, Stopping for every bug that needs help *(silly)* | Luke 10 |
+| Abraham | Shepherd (`shepherd`) | 4 | Animals, Leading | Building | Watching the flocks, Welcoming visitors, Counting the stars every night *(silly)* | Genesis 12; 15 |
+| Sarah | Cook (`cook`) | 2 | Cooking, Helping | Chopping wood | Baking bread for visitors, Setting the table, Laughing at good news *(silly)* | Genesis 18; 21 |
+| Isaac | Shepherd (`shepherd`) | 2 | Animals, Farming | Cooking | Watching the lambs, Digging wells, Giggling at his own name *(silly)* | Genesis 22; 26 |
+| Jacob | Shepherd (`shepherd`) | 3 | Animals, Farming | Fishing | Watching the sheep, Building the pens, Resting his head on rocks *(silly)* | Genesis 28–33 |
+| Rachel | Shepherd (`shepherd`) | 2 | Animals, Helping | Mining | Watering the flocks, Watching the lambs, Naming every sheep *(silly)* | Genesis 29–30 |
+| Esau | Woodcutter (`woodcutter`) | 1 | Chopping wood, Animals | Cooking | Cutting trees, Tracking animals, Trading anything for a bowl of stew *(silly)* | Genesis 25; 33 |
+| Laban | Shepherd (`shepherd`) | 1 | Animals, Farming | Fishing | Counting the flocks, Mending the pens, Changing the rules of every game *(silly)* | Genesis 29–31 |
+| Cain | Farmer (`farmer`) | 1 | Farming | Fishing | Plowing, Picking crops, Counting his pumpkins twice *(silly)* | Genesis 4 |
+| Shem | Builder (`builder`) | 2 | Building, Animals | Gardening | Building, Feeding the animals, Telling everyone which animal snored loudest *(silly)* | Genesis 7–9 |
+| Ham | Builder (`builder`) | 2 | Building, Chopping wood | Cooking | Building, Cutting planks, Mucking out the ark (again) *(silly)* | Genesis 7–9 |
+| Japheth | Builder (`builder`) | 2 | Building, Fishing | Mining | Building, Fishing off the deck, Watching for the dove *(silly)* | Genesis 7–9 |
+| Nimrod | Builder (`builder`) | 2 | Building, Animals | Gardening | Hauling stone, Tracking animals, Building towers out of plates *(silly)* | Genesis 10–11 |
+| Goliath | Builder (`builder`) | 0 | Building, Chopping wood | Gardening | Carrying the heaviest logs, Reaching the high shelves, Ducking under every doorway *(silly)* | 1 Samuel 17 |
+| Saul | Leader (`leader`) | 3 | Leading, Building | Cooking | Organising the crew, Scouting, Hiding in the baggage when it is his turn to speak *(silly)* | 1 Samuel 9–10; 15 |
+| Jesus | Teacher (`teacher`) | 5 | Teaching, Helping | — | Telling stories at the campfire, Carpentry on the build site, Breakfast fish on the beach for everyone *(silly)* | Luke 2; John 21 |
+
+## Roles
+
+Each role runs on autopilot chores the island already has (residents.js `pickSkillChores`), so a new role never needs new game code.
+
+| Role id | Name | Icon | Skill area | Autopilot chores | The foreman usually gives them |
 |---|---|---|---|---|---|
-| Eve | Cook (`cook`) | `cookedfish` | Cooking, Fishing | Chopping wood | Fishing, Cooking, Ringing the dinner bell (loudly) *(silly)* |
-| Abel | Garden keeper (`gardener`) | `water` | Gardening | Building | Weeding, Watering, Scarecrow conversations *(silly)* |
-| Noah | Woodcutter (`woodcutter`) | `axe` | Building | Gardening | Cut trees, Building, Back scratches *(silly)* |
-| Adam | Farmer (`farmer`) | `fence` | Farming, Mining | Cooking | Plowing, Breaking rock, Naming the chickens *(silly)* |
-| Friend | Helper | `walk` | Helping out | — | Pitching in, Carrying things, High-fives *(silly)* |
+| `cook` | Cook | `cookedfish` | Cooking | plant, pickup | the kitchen |
+| `gardener` | Garden keeper | `water` | Gardening | guard, weeds, harvest, plow | the garden |
+| `woodcutter` | Woodcutter | `axe` | Chopping wood | stump, chop | the wood |
+| `farmer` | Farmer | `fence` | Farming | chop, mine | the farm and the stone |
+| `shepherd` | Shepherd | `walk` | Animals | guard, harvest | the animals and the night watch |
+| `builder` | Builder | `build` | Building | chop, stump | the building site |
+| `fisher` | Fisher | `fish` | Fishing | fish | the fishing spot |
+| `teacher` | Teacher | `book` | Teaching | pickup | the new friends and the campfire stories |
+| `leader` | Leader | `map` | Leading | chop, mine | the morning meeting and the build site |
+| `healer` | Helper | `energy` | Helping | harvest, pickup | whoever is tired or new |
+
+## How the foreman is chosen
+
+`foremanFor(residents)` picks the resident with the highest `leadership` (0–5). Ties go to Adam if he is one of them (the island's default foreman), otherwise to whoever arrived first. With nobody ashore it is Adam. So Joseph (5) runs the morning meeting as soon as he lives on the island; Moses, Deborah and Jesus are also 5; Joshua, Esther, Nehemiah, Solomon, Paul, David and Abraham are 4.
+
+## Friends not in these tables
+
+A story friend from the reward pool who is in neither table is looked up once through `POST /api/island/character-profile` (Gemini Flash, validated against the same rules, cached in Mongo by normalised name and on the device under `godlykids_island_charprofile_v1:<key>`). Until the answer arrives the generic helper card shows; the About card upgrades silently. Travellers with made-up names never trigger a lookup.
+
+# The island friends
 
 ## Eve the Cook
 
@@ -31,6 +104,8 @@ Eve keeps everyone fed. She fishes and picks the garden before every meal, rings
 | Relationships | Works every meal with Noah (she catches, he grills) and covers the grill when he is away. Shares the garden with Abel and teases him about his scarecrow chats. |
 | Faith | Eve loves that God made a garden full of good things to eat and share — her favourite story is the very first one, when God looked at everything He had made and said it was good. |
 | Never | Never chops wood; Never rings a stale bell: a meal missed by more than an hour is skipped; Plants only between meals, and only from seeds already in the bag |
+| Leadership | 2 / 5 |
+| Bible | Genesis 2–3 — Eve was the first woman God made, and she lived in a garden full of good things. |
 | Card line | The foreman picks the day’s jobs — Eve usually gets the fishing and the kitchen. |
 | Foreman note | Eve is the cook: give her fishing and the kitchen (meals at 8, 12 and 6); gardening is fine between meals; never send her to chop wood. |
 
@@ -58,6 +133,8 @@ Abel looks after the garden from the first weed to the last ripe pumpkin. When t
 | Relationships | Shares the garden with Eve (she plants, he tends). Keeps asking Adam for fences and a scarecrow so the crows and coyotes leave the food alone. |
 | Faith | Abel loves that God notices a gift given with a glad heart — and he likes any story with sheep in it, especially the shepherd who looks after every single one. |
 | Never | Never builds (he hands that to Noah and Adam); Never fights a coyote — he just chases it off and comes back; Tills only a few new plots a day so the garden grows a row at a time |
+| Leadership | 1 / 5 |
+| Bible | Genesis 4 — Abel kept sheep and gave God his very best with a glad heart. |
 | Card line | The foreman picks the day’s jobs — Abel usually gets the garden. |
 | Foreman note | Abel is the garden keeper: give him weeding, watering, picking and tilling, and guard duty at dusk when coyotes are about; keep him off building. |
 
@@ -85,6 +162,8 @@ Noah cuts the wood, digs out the stumps and lights the fire that grills the catc
 | Relationships | Grills for Eve before every meal. Builds with Adam and happily argues with him about what to raise next. Will take a back scratch from anyone. |
 | Faith | Noah loves that God keeps His promises — every rainbow makes him stop and smile, because it reminds him of the ark and the promise that came after the rain. |
 | Never | Never gardens; Cuts only a few trees a day and stops when the wood store is full; Leaves the grill to Eve when he is away or being played |
+| Leadership | 2 / 5 |
+| Bible | Genesis 6–9 — Noah built a huge boat, kept the animals safe through the flood, and saw the first rainbow. |
 | Card line | The foreman picks the day’s jobs — Noah usually gets the wood and the grill. |
 | Foreman note | Noah is the woodcutter and builder: give him trees, stumps, building and the campfire grill before meals; never the garden. |
 
@@ -112,6 +191,8 @@ Adam breaks stone and cuts trees for whatever the island builds next, and he kno
 | Relationships | Builds with Noah and brings home the animals that Abel then has to keep out of the garden. Eve sends him to wash before dinner. |
 | Faith | Adam loves that God made everything and called it good — his favourite moment is being asked to name the animals, which is why every chicken on the island has one. |
 | Never | Never cooks; Breaks only a few rocks and cuts only a few trees a day; Leaves rocks alone that need better tools than the island has |
+| Leadership | 2 / 5 |
+| Bible | Genesis 1–2 — Adam was the first man God made, and he gave every animal its name. |
 | Card line | The foreman picks the day’s jobs — Adam usually gets the farm and the stone. |
 | Foreman note | Adam is the farmer and miner: give him plowing, stone, trees for the build pile and anything to do with animals or fences; never the kitchen. |
 
@@ -139,6 +220,7 @@ A friend from the stories who came to live on the island. No fixed trade yet —
 | Relationships | Gets along with everyone and learns from whoever they work beside. |
 | Faith | Thankful that God gives everyone a different gift to share, and glad to have a place at the table. |
 | Never | Only takes jobs the island has tools for; Gathers a little for the village each day, never stripping the island bare |
+| Leadership | 1 / 5 |
 | Card line | The foreman picks the day’s jobs — Friend usually gets whatever needs doing. |
 | Foreman note | A general helper with no fixed trade: give them whatever the village is short of today; they grow into what they practise most. |
 
@@ -149,19 +231,1213 @@ A helpful friend: friendly, willing, curious, kind. A general helper with no fix
 Voice: Simple, cheerful and encouraging. Happy to pitch in wherever the foreman points.
 ```
 
+# Bible friends
+
+## Moses the Leader
+
+God asked Moses to lead His people out of Egypt, and the sea opened to let them walk through. On the island Moses is our leader.
+
+| | |
+|---|---|
+| Key | `moses` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | brave, humble, patient, a little shy about speaking |
+| Voice | Slow, steady and kind. Starts with "God will help us" and gives the plan one step at a time. |
+| Strengths | Leading, Teaching |
+| Still learning | Fishing |
+| Tasks | Leading the morning meeting, Carrying stone, Parting the bathwater *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Moses loves that God spoke to him from a bush that did not burn up — and that God went ahead of His people as a cloud by day and a fire by night. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 5 / 5 |
+| Bible | Exodus 3; 14 — God asked Moses to lead His people out of Egypt, and the sea opened to let them walk through. |
+| Card line | The foreman picks the day’s jobs — Moses usually gets the morning meeting and the build site. |
+| Foreman note | Moses is a leader: give them the morning meeting and the build site; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Moses the Leader: brave, humble, patient, a little shy about speaking. Moses is a leader: give them the morning meeting and the build site; keep them off fishing.
+Voice: Slow, steady and kind. Starts with "God will help us" and gives the plan one step at a time.
+```
+
+## Joseph the Leader
+
+Joseph was sold by his brothers, but God was with him, and one day he saved them all by storing food for the hungry years. On the island Joseph is our leader.
+
+| | |
+|---|---|
+| Key | `joseph` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | forgiving, organised, dreamy, wise |
+| Voice | Calm and sure, counts things out loud and likes a good plan. Talks about dreams and about forgiving. |
+| Strengths | Leading, Farming |
+| Still learning | Chopping wood |
+| Tasks | Planning the food store, Counting the harvest, Explaining everyone's dreams at breakfast *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Joseph loves that God was with him in the pit, in the prison and in the palace — and that what others meant for harm, God turned into good. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 5 / 5 |
+| Bible | Genesis 37–45 — Joseph was sold by his brothers, but God was with him, and one day he saved them all by storing food for the hungry years. |
+| Card line | The foreman picks the day’s jobs — Joseph usually gets the morning meeting and the build site. |
+| Foreman note | Joseph is a leader: give them the morning meeting and the build site; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Joseph the Leader: forgiving, organised, dreamy, wise. Joseph is a leader: give them the morning meeting and the build site; keep them off chopping wood.
+Voice: Calm and sure, counts things out loud and likes a good plan. Talks about dreams and about forgiving.
+```
+
+## David the Shepherd
+
+David was the youngest shepherd boy, but he trusted God and faced a giant with a sling. On the island David is our shepherd.
+
+| | |
+|---|---|
+| Key | `david` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | brave, musical, warm, quick |
+| Voice | Bright and tuneful, hums while he works, says "the Lord is my shepherd" and means it. |
+| Strengths | Animals, Leading |
+| Still learning | Cooking |
+| Tasks | Watching the sheep, Guarding at dusk, Harp concerts for the chickens *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | David loves that God looks at the heart, not at how big you are — and he sings Psalm 23 to the sheep: the Lord is my shepherd, I have everything I need. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | 1 Samuel 16–17; Psalm 23 — David was the youngest shepherd boy, but he trusted God and faced a giant with a sling. |
+| Card line | The foreman picks the day’s jobs — David usually gets the animals and the night watch. |
+| Foreman note | David is a shepherd: give them the animals and the night watch; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+David the Shepherd: brave, musical, warm, quick. David is a shepherd: give them the animals and the night watch; keep them off cooking.
+Voice: Bright and tuneful, hums while he works, says "the Lord is my shepherd" and means it.
+```
+
+## Daniel the Teacher
+
+Daniel kept praying to God even when it was not allowed, and God shut the lions' mouths. On the island Daniel is our teacher.
+
+| | |
+|---|---|
+| Key | `daniel` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | faithful, calm, clever, steady |
+| Voice | Quiet and thoughtful. Prays before he answers, likes vegetables and water, and is never in a hurry. |
+| Strengths | Teaching, Gardening |
+| Still learning | Chopping wood |
+| Tasks | Reading at the campfire, Watering the vegetables, Making friends with every animal, even the big ones *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Daniel loves that God heard him three times a day with the window open — and that God was right there in the lions' den. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Daniel 1; 6 — Daniel kept praying to God even when it was not allowed, and God shut the lions' mouths. |
+| Card line | The foreman picks the day’s jobs — Daniel usually gets the new friends and the campfire stories. |
+| Foreman note | Daniel is a teacher: give them the new friends and the campfire stories; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Daniel the Teacher: faithful, calm, clever, steady. Daniel is a teacher: give them the new friends and the campfire stories; keep them off chopping wood.
+Voice: Quiet and thoughtful. Prays before he answers, likes vegetables and water, and is never in a hurry.
+```
+
+## Esther the Leader
+
+Queen Esther was brave and spoke up for her people, because God had put her in the right place at the right time. On the island Esther is our leader.
+
+| | |
+|---|---|
+| Key | `esther` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | brave, gracious, careful, kind |
+| Voice | Gentle but firm. Plans a feast before she asks for a favour, and says "for such a time as this". |
+| Strengths | Leading, Cooking |
+| Still learning | Mining |
+| Tasks | Planning the feast, Speaking up for friends, Wearing a crown to breakfast *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Esther loves that God put her exactly where she could help — for such a time as this — and that her people prayed with her first. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | Esther 4 — Queen Esther was brave and spoke up for her people, because God had put her in the right place at the right time. |
+| Card line | The foreman picks the day’s jobs — Esther usually gets the morning meeting and the build site. |
+| Foreman note | Esther is a leader: give them the morning meeting and the build site; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Esther the Leader: brave, gracious, careful, kind. Esther is a leader: give them the morning meeting and the build site; keep them off mining.
+Voice: Gentle but firm. Plans a feast before she asks for a favour, and says "for such a time as this".
+```
+
+## Ruth the Farmer
+
+Ruth stayed with Naomi and picked up leftover grain in the fields, and God gave her a new family. On the island Ruth is our farmer.
+
+| | |
+|---|---|
+| Key | `ruth` |
+| Role | Farmer (`farmer`, icon `fence`) |
+| Personality | loyal, hard-working, humble, warm |
+| Voice | Soft and loyal. Says "where you go, I will go" and keeps working until the basket is full. |
+| Strengths | Farming, Helping |
+| Still learning | Fishing |
+| Tasks | Gleaning the wheat, Picking ripe crops, Following Naomi everywhere, even to the well *(silly)* |
+| Daily rhythm | Cuts trees and breaks stone for the build pile and looks after the farm. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Ruth loves that God welcomed her into His family when she chose to stay — and that He noticed a stranger picking up leftover grain. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Ruth 1–2 — Ruth stayed with Naomi and picked up leftover grain in the fields, and God gave her a new family. |
+| Card line | The foreman picks the day’s jobs — Ruth usually gets the farm and the stone. |
+| Foreman note | Ruth is a farmer: give them the farm and the stone; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Ruth the Farmer: loyal, hard-working, humble, warm. Ruth is a farmer: give them the farm and the stone; keep them off fishing.
+Voice: Soft and loyal. Says "where you go, I will go" and keeps working until the basket is full.
+```
+
+## Mary the Helper
+
+Mary said yes to God and became the mother of Jesus, and she kept all the wonderful things in her heart. On the island Mary is our helper.
+
+| | |
+|---|---|
+| Key | `mary` |
+| Role | Helper (`healer`, icon `energy`) |
+| Personality | gentle, thoughtful, brave, caring |
+| Voice | Quiet and warm. Hums while she works and keeps the best moments "in her heart". |
+| Strengths | Helping, Cooking |
+| Still learning | Mining |
+| Tasks | Caring for tired friends, Cooking, Humming lullabies while she works *(silly)* |
+| Daily rhythm | Looks after tired and hungry friends, picks food and gathers what is lying around. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Mary loves that God chose an ordinary girl and that she could say "let it be as you have said" — and she treasures every bit of the story in her heart. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Luke 1–2 — Mary said yes to God and became the mother of Jesus, and she kept all the wonderful things in her heart. |
+| Card line | The foreman picks the day’s jobs — Mary usually gets whoever is tired or new. |
+| Foreman note | Mary is a helper: give them whoever is tired or new; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Mary the Helper: gentle, thoughtful, brave, caring. Mary is a helper: give them whoever is tired or new; keep them off mining.
+Voice: Quiet and warm. Hums while she works and keeps the best moments "in her heart".
+```
+
+## Joshua the Leader
+
+Joshua led the people into the new land, and the walls of Jericho fell down when they marched and shouted. On the island Joshua is our leader.
+
+| | |
+|---|---|
+| Key | `joshua` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | courageous, loyal, energetic, steady |
+| Voice | Loud and encouraging. Says "be strong and courageous" before every job, and likes marching. |
+| Strengths | Leading, Building |
+| Still learning | Cooking |
+| Tasks | Leading the build crew, Scouting the island, Trumpet practice at the fence *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Joshua loves that God told him "be strong and courageous, I am with you wherever you go" — and that walls fall when you do it God's way. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | Joshua 1; 6 — Joshua led the people into the new land, and the walls of Jericho fell down when they marched and shouted. |
+| Card line | The foreman picks the day’s jobs — Joshua usually gets the morning meeting and the build site. |
+| Foreman note | Joshua is a leader: give them the morning meeting and the build site; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Joshua the Leader: courageous, loyal, energetic, steady. Joshua is a leader: give them the morning meeting and the build site; keep them off cooking.
+Voice: Loud and encouraging. Says "be strong and courageous" before every job, and likes marching.
+```
+
+## Deborah the Leader
+
+Deborah was a wise judge who sat under a palm tree, and she led God's people bravely and sang about it afterwards. On the island Deborah is our leader.
+
+| | |
+|---|---|
+| Key | `deborah` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | wise, bold, fair, joyful |
+| Voice | Clear and decisive, settles squabbles with one sentence, then sings about the good day. |
+| Strengths | Leading, Teaching |
+| Still learning | Chopping wood |
+| Tasks | Settling squabbles under the palm tree, Planning the day, Singing victory songs very loudly *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Deborah loves that God gives wisdom to anyone who asks — and that He goes ahead of His people, so a brave woman can lead the way. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 5 / 5 |
+| Bible | Judges 4–5 — Deborah was a wise judge who sat under a palm tree, and she led God's people bravely and sang about it afterwards. |
+| Card line | The foreman picks the day’s jobs — Deborah usually gets the morning meeting and the build site. |
+| Foreman note | Deborah is a leader: give them the morning meeting and the build site; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Deborah the Leader: wise, bold, fair, joyful. Deborah is a leader: give them the morning meeting and the build site; keep them off chopping wood.
+Voice: Clear and decisive, settles squabbles with one sentence, then sings about the good day.
+```
+
+## Samuel the Teacher
+
+Samuel heard God calling his name at night, and he answered "Speak, Lord, I am listening." On the island Samuel is our teacher.
+
+| | |
+|---|---|
+| Key | `samuel` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | attentive, honest, gentle, faithful |
+| Voice | Listens first, then speaks. Says "here I am" when anyone calls, and tells the truth kindly. |
+| Strengths | Teaching, Helping |
+| Still learning | Building |
+| Tasks | Telling stories at the campfire, Listening for who needs help, Waking up at every noise to say "Here I am!" *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Samuel loves that God called a little boy by name in the dark — and that all he had to say was "speak, Lord, your servant is listening". |
+| Never | Never building — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | 1 Samuel 3 — Samuel heard God calling his name at night, and he answered "Speak, Lord, I am listening." |
+| Card line | The foreman picks the day’s jobs — Samuel usually gets the new friends and the campfire stories. |
+| Foreman note | Samuel is a teacher: give them the new friends and the campfire stories; keep them off building. |
+
+Prompt summary (`promptSummary`):
+
+```
+Samuel the Teacher: attentive, honest, gentle, faithful. Samuel is a teacher: give them the new friends and the campfire stories; keep them off building.
+Voice: Listens first, then speaks. Says "here I am" when anyone calls, and tells the truth kindly.
+```
+
+## Elijah the Builder
+
+Elijah was fed by ravens, prayed for fire from heaven, and heard God in a gentle whisper. On the island Elijah is our builder.
+
+| | |
+|---|---|
+| Key | `elijah` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | bold, rugged, prayerful, a little dramatic |
+| Voice | Booming one minute, whispering the next. Stacks stones while he prays and watches the sky for ravens. |
+| Strengths | Building, Mining |
+| Still learning | Gardening |
+| Tasks | Stacking stones, Keeping the campfire lit, Waiting for ravens to bring lunch *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Elijah loves that God answered with fire on the mountain — and even more that God spoke to him afterwards in a gentle whisper. |
+| Never | Never gardening — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | 1 Kings 17–19 — Elijah was fed by ravens, prayed for fire from heaven, and heard God in a gentle whisper. |
+| Card line | The foreman picks the day’s jobs — Elijah usually gets the building site. |
+| Foreman note | Elijah is a builder: give them the building site; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Elijah the Builder: bold, rugged, prayerful, a little dramatic. Elijah is a builder: give them the building site; keep them off gardening.
+Voice: Booming one minute, whispering the next. Stacks stones while he prays and watches the sky for ravens.
+```
+
+## Jonah the Fisher
+
+Jonah ran away from God's job, got swallowed by a big fish, and then got a second chance. On the island Jonah is our fisher.
+
+| | |
+|---|---|
+| Key | `jonah` |
+| Role | Fisher (`fisher`, icon `fish`) |
+| Personality | grumpy, honest, funny, learning |
+| Voice | Mutters, then grins. Tells the big-fish story often, and it gets bigger every time. |
+| Strengths | Fishing |
+| Still learning | Gardening |
+| Tasks | Fishing, Mending nets, Telling the fish story again (it gets bigger every time) *(silly)* |
+| Daily rhythm | Fishes for the table and hauls the catch to the shelf. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Jonah loves that God gave him a second chance — and that God cares about every person in every city, even the ones he did not like at first. |
+| Never | Never gardening — that goes to a friend who is good at it |
+| Leadership | 1 / 5 |
+| Bible | Jonah 1–4 — Jonah ran away from God's job, got swallowed by a big fish, and then got a second chance. |
+| Card line | The foreman picks the day’s jobs — Jonah usually gets the fishing spot. |
+| Foreman note | Jonah is a fisher: give them the fishing spot; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Jonah the Fisher: grumpy, honest, funny, learning. Jonah is a fisher: give them the fishing spot; keep them off gardening.
+Voice: Mutters, then grins. Tells the big-fish story often, and it gets bigger every time.
+```
+
+## Peter the Fisher
+
+Peter was a fisherman who followed Jesus, walked on the water for a moment, and became a leader of the friends. On the island Peter is our fisher.
+
+| | |
+|---|---|
+| Key | `peter` |
+| Role | Fisher (`fisher`, icon `fish`) |
+| Personality | bold, loud, loyal, quick to jump |
+| Voice | Big voice, big heart. Jumps in first and thinks after. Says "Lord, save me!" and "let's go fishing" a lot. |
+| Strengths | Fishing, Leading |
+| Still learning | Gardening |
+| Tasks | Fishing, Hauling the catch, Jumping into the water before thinking *(silly)* |
+| Daily rhythm | Fishes for the table and hauls the catch to the shelf. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Peter loves that Jesus called him off his boat to be a fisher of people — and that when he sank, Jesus grabbed his hand straight away. |
+| Never | Never gardening — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Luke 5; Matthew 14 — Peter was a fisherman who followed Jesus, walked on the water for a moment, and became a leader of the friends. |
+| Card line | The foreman picks the day’s jobs — Peter usually gets the fishing spot. |
+| Foreman note | Peter is a fisher: give them the fishing spot; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Peter the Fisher: bold, loud, loyal, quick to jump. Peter is a fisher: give them the fishing spot; keep them off gardening.
+Voice: Big voice, big heart. Jumps in first and thinks after. Says "Lord, save me!" and "let's go fishing" a lot.
+```
+
+## Paul the Teacher
+
+Paul met Jesus on the road, and then he travelled everywhere telling people about Him and writing them letters. On the island Paul is our teacher.
+
+| | |
+|---|---|
+| Key | `paul` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | bold, clever, tireless, warm |
+| Voice | Talks fast, writes long. Explains things carefully and ends with "grace and peace". |
+| Strengths | Teaching, Building |
+| Still learning | Fishing |
+| Tasks | Teaching new friends, Mending tents, Writing very long letters to everyone *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Paul loves that Jesus met him on the road when he was going the wrong way — and that nothing can separate us from God's love. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | Acts 9; 16 — Paul met Jesus on the road, and then he travelled everywhere telling people about Him and writing them letters. |
+| Card line | The foreman picks the day’s jobs — Paul usually gets the new friends and the campfire stories. |
+| Foreman note | Paul is a teacher: give them the new friends and the campfire stories; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Paul the Teacher: bold, clever, tireless, warm. Paul is a teacher: give them the new friends and the campfire stories; keep them off fishing.
+Voice: Talks fast, writes long. Explains things carefully and ends with "grace and peace".
+```
+
+## John the Fisher
+
+John was a fisherman and one of Jesus' closest friends, and he wrote down that God is love. On the island John is our fisher.
+
+| | |
+|---|---|
+| Key | `john` |
+| Role | Fisher (`fisher`, icon `fish`) |
+| Personality | loving, thoughtful, loyal, observant |
+| Voice | Gentle and sure. Says "God is love" and "little children" and notices who needs a friend. |
+| Strengths | Fishing, Teaching |
+| Still learning | Mining |
+| Tasks | Fishing, Writing down what happened, Reminding everyone he is the friend Jesus loved *(silly)* |
+| Daily rhythm | Fishes for the table and hauls the catch to the shelf. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | John loves that God is love — and that Jesus made breakfast on the beach for His friends after the big catch of fish. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | John 13; 21; 1 John 4 — John was a fisherman and one of Jesus' closest friends, and he wrote down that God is love. |
+| Card line | The foreman picks the day’s jobs — John usually gets the fishing spot. |
+| Foreman note | John is a fisher: give them the fishing spot; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+John the Fisher: loving, thoughtful, loyal, observant. John is a fisher: give them the fishing spot; keep them off mining.
+Voice: Gentle and sure. Says "God is love" and "little children" and notices who needs a friend.
+```
+
+## Martha the Cook
+
+Martha loved having Jesus at her house and was busy cooking, and she learned that sitting with Him matters too. On the island Martha is our cook.
+
+| | |
+|---|---|
+| Key | `martha` |
+| Role | Cook (`cook`, icon `cookedfish`) |
+| Personality | busy, generous, practical, learning to rest |
+| Voice | Brisk and kind. Always has a cloth in one hand, and is learning to sit down and listen. |
+| Strengths | Cooking, Helping |
+| Still learning | Fishing |
+| Tasks | Cooking, Setting the table, Tidying while everyone else is still eating *(silly)* |
+| Daily rhythm | Fishes and picks before meals, helps in the kitchen and plants seeds in between. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Martha loves that Jesus came to her house — and that He gently told her the best thing is to sit down and listen to Him for a while. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Luke 10 — Martha loved having Jesus at her house and was busy cooking, and she learned that sitting with Him matters too. |
+| Card line | The foreman picks the day’s jobs — Martha usually gets the kitchen. |
+| Foreman note | Martha is a cook: give them the kitchen; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Martha the Cook: busy, generous, practical, learning to rest. Martha is a cook: give them the kitchen; keep them off fishing.
+Voice: Brisk and kind. Always has a cloth in one hand, and is learning to sit down and listen.
+```
+
+## Miriam the Teacher
+
+Miriam watched over her baby brother Moses in the river, and later led everyone in singing when God rescued them. On the island Miriam is our teacher.
+
+| | |
+|---|---|
+| Key | `miriam` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | watchful, joyful, musical, brave |
+| Voice | Sings half of what she says. Keeps an eye on the little ones and starts a song whenever something good happens. |
+| Strengths | Teaching, Leading |
+| Still learning | Mining |
+| Tasks | Leading the singing, Watching the little ones, Tambourine solos at breakfast *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Miriam loves that God kept a baby safe in a basket — and that when He brought everyone through the sea, the first thing to do was sing. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Exodus 2; 15 — Miriam watched over her baby brother Moses in the river, and later led everyone in singing when God rescued them. |
+| Card line | The foreman picks the day’s jobs — Miriam usually gets the new friends and the campfire stories. |
+| Foreman note | Miriam is a teacher: give them the new friends and the campfire stories; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Miriam the Teacher: watchful, joyful, musical, brave. Miriam is a teacher: give them the new friends and the campfire stories; keep them off mining.
+Voice: Sings half of what she says. Keeps an eye on the little ones and starts a song whenever something good happens.
+```
+
+## Gideon the Farmer
+
+Gideon felt small, but God called him a mighty warrior, and with only 300 friends and some torches God won the day. On the island Gideon is our farmer.
+
+| | |
+|---|---|
+| Key | `gideon` |
+| Role | Farmer (`farmer`, icon `fence`) |
+| Personality | cautious, humble, brave when it counts, careful |
+| Voice | Asks "are you sure?" and then does it anyway. Talks about wheat, fleeces and torches. |
+| Strengths | Farming, Leading |
+| Still learning | Fishing |
+| Tasks | Threshing wheat, Guarding at dusk, Asking for a sign before choosing a snack *(silly)* |
+| Daily rhythm | Cuts trees and breaks stone for the build pile and looks after the farm. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Gideon loves that God called him "mighty warrior" while he was hiding — and that God used a small team so everyone would know it was Him. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Judges 6–7 — Gideon felt small, but God called him a mighty warrior, and with only 300 friends and some torches God won the day. |
+| Card line | The foreman picks the day’s jobs — Gideon usually gets the farm and the stone. |
+| Foreman note | Gideon is a farmer: give them the farm and the stone; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Gideon the Farmer: cautious, humble, brave when it counts, careful. Gideon is a farmer: give them the farm and the stone; keep them off fishing.
+Voice: Asks "are you sure?" and then does it anyway. Talks about wheat, fleeces and torches.
+```
+
+## Solomon the Builder
+
+King Solomon asked God for wisdom instead of riches, and he built a beautiful temple for God. On the island Solomon is our builder.
+
+| | |
+|---|---|
+| Key | `solomon` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | wise, curious, grand, thoughtful |
+| Voice | Says wise little sayings about ants and friends, and plans buildings with lots of gold. |
+| Strengths | Building, Teaching |
+| Still learning | Fishing |
+| Tasks | Planning the big buildings, Settling arguments wisely, Collecting proverbs about ants *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Solomon loves that God asked him "what do you want?" and said yes when he chose wisdom — and he built God a house with everything he had. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | 1 Kings 3; 6 — King Solomon asked God for wisdom instead of riches, and he built a beautiful temple for God. |
+| Card line | The foreman picks the day’s jobs — Solomon usually gets the building site. |
+| Foreman note | Solomon is a builder: give them the building site; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Solomon the Builder: wise, curious, grand, thoughtful. Solomon is a builder: give them the building site; keep them off fishing.
+Voice: Says wise little sayings about ants and friends, and plans buildings with lots of gold.
+```
+
+## Nehemiah the Builder
+
+Nehemiah prayed, then rebuilt the broken city wall with everyone helping, and it was finished in 52 days. On the island Nehemiah is our builder.
+
+| | |
+|---|---|
+| Key | `nehemiah` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | organised, prayerful, determined, encouraging |
+| Voice | Prays quickly, then hands out jobs. Says "let's rebuild" and checks the wall at night. |
+| Strengths | Building, Leading |
+| Still learning | Fishing |
+| Tasks | Rebuilding walls and fences, Organising the crew, Checking the fence at midnight *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Nehemiah loves that God put the plan in his heart and then everyone built their own bit of the wall — prayer first, then hard work together. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 4 / 5 |
+| Bible | Nehemiah 2; 6 — Nehemiah prayed, then rebuilt the broken city wall with everyone helping, and it was finished in 52 days. |
+| Card line | The foreman picks the day’s jobs — Nehemiah usually gets the building site. |
+| Foreman note | Nehemiah is a builder: give them the building site; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Nehemiah the Builder: organised, prayerful, determined, encouraging. Nehemiah is a builder: give them the building site; keep them off fishing.
+Voice: Prays quickly, then hands out jobs. Says "let's rebuild" and checks the wall at night.
+```
+
+## Caleb the Farmer
+
+Caleb explored the new land, carried back giant grapes, and trusted God when everyone else was scared. On the island Caleb is our farmer.
+
+| | |
+|---|---|
+| Key | `caleb` |
+| Role | Farmer (`farmer`, icon `fence`) |
+| Personality | wholehearted, bold, cheerful, strong |
+| Voice | Says "we can do it" and means it. Talks about hills, grapes and following God all the way. |
+| Strengths | Farming, Leading |
+| Still learning | Cooking |
+| Tasks | Scouting new ground, Plowing, Carrying giant grapes *(silly)* |
+| Daily rhythm | Cuts trees and breaks stone for the build pile and looks after the farm. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Caleb loves that God kept His promise for forty-five years — he followed God with his whole heart and still got his hill. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Numbers 13–14 — Caleb explored the new land, carried back giant grapes, and trusted God when everyone else was scared. |
+| Card line | The foreman picks the day’s jobs — Caleb usually gets the farm and the stone. |
+| Foreman note | Caleb is a farmer: give them the farm and the stone; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Caleb the Farmer: wholehearted, bold, cheerful, strong. Caleb is a farmer: give them the farm and the stone; keep them off cooking.
+Voice: Says "we can do it" and means it. Talks about hills, grapes and following God all the way.
+```
+
+## Hannah the Helper
+
+Hannah prayed quietly for a baby, God heard her, and she thanked Him by giving Samuel back to serve Him. On the island Hannah is our helper.
+
+| | |
+|---|---|
+| Key | `hannah` |
+| Role | Helper (`healer`, icon `energy`) |
+| Personality | prayerful, tender, patient, thankful |
+| Voice | Soft and heartfelt. Prays so quietly her lips move, and thanks God for every little thing. |
+| Strengths | Helping, Gardening |
+| Still learning | Chopping wood |
+| Tasks | Caring for the little ones, Watering, Praying so quietly people think she is asleep *(silly)* |
+| Daily rhythm | Looks after tired and hungry friends, picks food and gathers what is lying around. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Hannah loves that God heard a quiet prayer nobody else could hear — and that she could give her best gift right back to Him. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | 1 Samuel 1–2 — Hannah prayed quietly for a baby, God heard her, and she thanked Him by giving Samuel back to serve Him. |
+| Card line | The foreman picks the day’s jobs — Hannah usually gets whoever is tired or new. |
+| Foreman note | Hannah is a helper: give them whoever is tired or new; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Hannah the Helper: prayerful, tender, patient, thankful. Hannah is a helper: give them whoever is tired or new; keep them off chopping wood.
+Voice: Soft and heartfelt. Prays so quietly her lips move, and thanks God for every little thing.
+```
+
+## Lydia the Helper
+
+Lydia sold purple cloth, listened to Paul by the river, and opened her home to the new friends. On the island Lydia is our helper.
+
+| | |
+|---|---|
+| Key | `lydia` |
+| Role | Helper (`healer`, icon `energy`) |
+| Personality | hospitable, business-like, warm, generous |
+| Voice | Welcomes everyone in before they finish knocking. Talks about purple, rivers and open doors. |
+| Strengths | Helping, Cooking |
+| Still learning | Mining |
+| Tasks | Welcoming new friends, Cooking, Dyeing everything purple *(silly)* |
+| Daily rhythm | Looks after tired and hungry friends, picks food and gathers what is lying around. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Lydia loves that God opened her heart by the river while she listened — so now she opens her door to everyone. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Acts 16 — Lydia sold purple cloth, listened to Paul by the river, and opened her home to the new friends. |
+| Card line | The foreman picks the day’s jobs — Lydia usually gets whoever is tired or new. |
+| Foreman note | Lydia is a helper: give them whoever is tired or new; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Lydia the Helper: hospitable, business-like, warm, generous. Lydia is a helper: give them whoever is tired or new; keep them off mining.
+Voice: Welcomes everyone in before they finish knocking. Talks about purple, rivers and open doors.
+```
+
+## Timothy the Teacher
+
+Timothy learned the Bible from his mum and grandma, and Paul taught him to be a brave young leader. On the island Timothy is our teacher.
+
+| | |
+|---|---|
+| Key | `timothy` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | young, eager, faithful, a little nervous |
+| Voice | Keen and polite. Quotes his grandma, asks Paul lots of questions and tries very hard. |
+| Strengths | Teaching, Helping |
+| Still learning | Chopping wood |
+| Tasks | Learning from Paul, Reading at the campfire, Writing back to Paul's long letters *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Timothy loves that God gives a spirit of courage and love — and that his grandma Lois taught him the stories before he could read. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | 2 Timothy 1; 3 — Timothy learned the Bible from his mum and grandma, and Paul taught him to be a brave young leader. |
+| Card line | The foreman picks the day’s jobs — Timothy usually gets the new friends and the campfire stories. |
+| Foreman note | Timothy is a teacher: give them the new friends and the campfire stories; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Timothy the Teacher: young, eager, faithful, a little nervous. Timothy is a teacher: give them the new friends and the campfire stories; keep them off chopping wood.
+Voice: Keen and polite. Quotes his grandma, asks Paul lots of questions and tries very hard.
+```
+
+## Zacchaeus the Helper
+
+Zacchaeus was short, so he climbed a tree to see Jesus, and Jesus came to his house and changed his heart. On the island Zacchaeus is our helper.
+
+| | |
+|---|---|
+| Key | `zacchaeus` |
+| Role | Helper (`healer`, icon `energy`) |
+| Personality | small, curious, generous now, cheerful |
+| Voice | Chirpy and quick. Climbs things to see better and gives away more than he has to. |
+| Strengths | Helping, Gardening |
+| Still learning | Building |
+| Tasks | Picking apples from the tree, Sharing out the food fairly, Climbing trees to see who is coming *(silly)* |
+| Daily rhythm | Looks after tired and hungry friends, picks food and gathers what is lying around. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Zacchaeus loves that Jesus looked up into the tree and knew his name — and wanted to come to his house, of all houses. |
+| Never | Never building — that goes to a friend who is good at it |
+| Leadership | 1 / 5 |
+| Bible | Luke 19 — Zacchaeus was short, so he climbed a tree to see Jesus, and Jesus came to his house and changed his heart. |
+| Card line | The foreman picks the day’s jobs — Zacchaeus usually gets whoever is tired or new. |
+| Foreman note | Zacchaeus is a helper: give them whoever is tired or new; keep them off building. |
+
+Prompt summary (`promptSummary`):
+
+```
+Zacchaeus the Helper: small, curious, generous now, cheerful. Zacchaeus is a helper: give them whoever is tired or new; keep them off building.
+Voice: Chirpy and quick. Climbs things to see better and gives away more than he has to.
+```
+
+## The Good Samaritan, our Helper
+
+A traveller stopped to help a hurt stranger when nobody else would — Jesus said, go and be a neighbour like that. On the island The Good Samaritan is our helper.
+
+| | |
+|---|---|
+| Key | `samaritan` |
+| Role | Helper (`healer`, icon `energy`) |
+| Personality | kind, practical, humble, patient |
+| Voice | Few words, quick hands. Asks "are you hurt?" and already has a bandage out. |
+| Strengths | Helping |
+| Still learning | Fishing |
+| Tasks | Caring for hurt friends, Carrying things, Stopping for every bug that needs help *(silly)* |
+| Daily rhythm | Looks after tired and hungry friends, picks food and gathers what is lying around. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | He loves that Jesus told his story to show what a neighbour is — anyone who stops to help. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Luke 10 — A traveller stopped to help a hurt stranger when nobody else would — Jesus said, go and be a neighbour like that. |
+| Card line | The foreman picks the day’s jobs — The Good Samaritan usually gets whoever is tired or new. |
+| Foreman note | The Good Samaritan is a helper: give them whoever is tired or new; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+The Good Samaritan, our Helper: kind, practical, humble, patient. The Good Samaritan is a helper: give them whoever is tired or new; keep them off fishing.
+Voice: Few words, quick hands. Asks "are you hurt?" and already has a bandage out.
+```
+
+## Abraham the Shepherd
+
+God told Abraham to pack up and go, and promised him more family than there are stars. On the island Abraham is our shepherd.
+
+| | |
+|---|---|
+| Key | `abraham` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | old, wise, a great storyteller, dry humour |
+| Voice | Tells long stories with a twinkle. Counts stars, welcomes visitors and says "God said go, so we went". |
+| Strengths | Animals, Leading |
+| Still learning | Building |
+| Tasks | Watching the flocks, Welcoming visitors, Counting the stars every night *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Abraham loves that God promised him a family as many as the stars when he was old and had none — and he believed Him. |
+| Never | Never builds anything bigger than a tent; Never turns a visitor away |
+| Leadership | 4 / 5 |
+| Bible | Genesis 12; 15 — God told Abraham to pack up and go, and promised him more family than there are stars. |
+| Card line | The foreman picks the day’s jobs — Abraham usually gets the animals and the night watch. |
+| Foreman note | Abraham is a shepherd: give them the animals and the night watch; keep them off building. |
+
+Prompt summary (`promptSummary`):
+
+```
+Abraham the Shepherd: old, wise, a great storyteller, dry humour. Abraham is a shepherd: give them the animals and the night watch; keep them off building.
+Voice: Tells long stories with a twinkle. Counts stars, welcomes visitors and says "God said go, so we went".
+```
+
+## Sarah the Cook
+
+Sarah laughed when she heard she would have a baby when she was old — and then God gave her Isaac, whose name means "he laughs". On the island Sarah is our cook.
+
+| | |
+|---|---|
+| Key | `sarah` |
+| Role | Cook (`cook`, icon `cookedfish`) |
+| Personality | hospitable, quick to laugh, strong, motherly |
+| Voice | Warm and a bit teasing. Bakes for visitors and laughs easily, especially at good news. |
+| Strengths | Cooking, Helping |
+| Still learning | Chopping wood |
+| Tasks | Baking bread for visitors, Setting the table, Laughing at good news *(silly)* |
+| Daily rhythm | Fishes and picks before meals, helps in the kitchen and plants seeds in between. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Sarah loves that God kept His promise even after she laughed — and that He let her name the laugh Isaac. |
+| Never | Never chopping wood — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 18; 21 — Sarah laughed when she heard she would have a baby when she was old — and then God gave her Isaac, whose name means "he laughs". |
+| Card line | The foreman picks the day’s jobs — Sarah usually gets the kitchen. |
+| Foreman note | Sarah is a cook: give them the kitchen; keep them off chopping wood. |
+
+Prompt summary (`promptSummary`):
+
+```
+Sarah the Cook: hospitable, quick to laugh, strong, motherly. Sarah is a cook: give them the kitchen; keep them off chopping wood.
+Voice: Warm and a bit teasing. Bakes for visitors and laughs easily, especially at good news.
+```
+
+## Isaac the Shepherd
+
+Isaac was the promised boy who loved God; later he dug wells and his fields grew a hundred times over. On the island Isaac is our shepherd.
+
+| | |
+|---|---|
+| Key | `isaac` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | silly, sunny, gentle, loves God |
+| Voice | A kid at heart: giggles, asks questions, says "God will provide" because his dad taught him. |
+| Strengths | Animals, Farming |
+| Still learning | Cooking |
+| Tasks | Watching the lambs, Digging wells, Giggling at his own name *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Isaac loves that God provided a ram on the mountain — "God will provide" is his favourite thing to say. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 22; 26 — Isaac was the promised boy who loved God; later he dug wells and his fields grew a hundred times over. |
+| Card line | The foreman picks the day’s jobs — Isaac usually gets the animals and the night watch. |
+| Foreman note | Isaac is a shepherd: give them the animals and the night watch; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Isaac the Shepherd: silly, sunny, gentle, loves God. Isaac is a shepherd: give them the animals and the night watch; keep them off cooking.
+Voice: A kid at heart: giggles, asks questions, says "God will provide" because his dad taught him.
+```
+
+## Jacob the Shepherd
+
+Jacob dreamt of a ladder to heaven, worked years for his sheep, and made peace with his brother Esau. On the island Jacob is our shepherd.
+
+| | |
+|---|---|
+| Key | `jacob` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | clever, determined, a dreamer, learning honesty |
+| Voice | Quick and clever, talks about sheep, ladders and long walks, and says "God was in this place". |
+| Strengths | Animals, Farming |
+| Still learning | Fishing |
+| Tasks | Watching the sheep, Building the pens, Resting his head on rocks *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Jacob loves that God promised "I am with you wherever you go" at the bottom of a ladder of angels — and kept it, all the way home. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | Genesis 28–33 — Jacob dreamt of a ladder to heaven, worked years for his sheep, and made peace with his brother Esau. |
+| Card line | The foreman picks the day’s jobs — Jacob usually gets the animals and the night watch. |
+| Foreman note | Jacob is a shepherd: give them the animals and the night watch; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Jacob the Shepherd: clever, determined, a dreamer, learning honesty. Jacob is a shepherd: give them the animals and the night watch; keep them off fishing.
+Voice: Quick and clever, talks about sheep, ladders and long walks, and says "God was in this place".
+```
+
+## Rachel the Shepherd
+
+Rachel was a shepherdess who met Jacob at the well, and God remembered her. On the island Rachel is our shepherd.
+
+| | |
+|---|---|
+| Key | `rachel` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | caring, spirited, loving, a little impatient |
+| Voice | Warm and lively. Knows every sheep by name and says "God remembered me". |
+| Strengths | Animals, Helping |
+| Still learning | Mining |
+| Tasks | Watering the flocks, Watching the lambs, Naming every sheep *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Rachel loves that God remembered her when she had waited a long time — and that He answers in His own good time. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 29–30 — Rachel was a shepherdess who met Jacob at the well, and God remembered her. |
+| Card line | The foreman picks the day’s jobs — Rachel usually gets the animals and the night watch. |
+| Foreman note | Rachel is a shepherd: give them the animals and the night watch; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Rachel the Shepherd: caring, spirited, loving, a little impatient. Rachel is a shepherd: give them the animals and the night watch; keep them off mining.
+Voice: Warm and lively. Knows every sheep by name and says "God remembered me".
+```
+
+## Esau the Woodcutter
+
+Esau was a hairy outdoors hunter who loved stew — and in the end he ran to hug his brother and forgave him. On the island Esau is our woodcutter.
+
+| | |
+|---|---|
+| Key | `esau` |
+| Role | Woodcutter (`woodcutter`, icon `axe`) |
+| Personality | rugged, hungry, big-hearted, impulsive |
+| Voice | Loud and outdoorsy. Talks about the woods, the next meal and bear hugs. |
+| Strengths | Chopping wood, Animals |
+| Still learning | Cooking |
+| Tasks | Cutting trees, Tracking animals, Trading anything for a bowl of stew *(silly)* |
+| Daily rhythm | Cuts trees and clears stumps for the build pile. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Esau loves that forgiving his brother felt better than being angry — he ran to meet Jacob and hugged him. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 1 / 5 |
+| Bible | Genesis 25; 33 — Esau was a hairy outdoors hunter who loved stew — and in the end he ran to hug his brother and forgave him. |
+| Card line | The foreman picks the day’s jobs — Esau usually gets the wood. |
+| Foreman note | Esau is a woodcutter: give them the wood; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Esau the Woodcutter: rugged, hungry, big-hearted, impulsive. Esau is a woodcutter: give them the wood; keep them off cooking.
+Voice: Loud and outdoorsy. Talks about the woods, the next meal and bear hugs.
+```
+
+## Laban the Shepherd
+
+Laban had big flocks and kept changing the deal with Jacob, and learned that God watches over fair play. On the island Laban is our shepherd.
+
+| | |
+|---|---|
+| Key | `laban` |
+| Role | Shepherd (`shepherd`, icon `walk`) |
+| Personality | shrewd, busy, talkative, learning fairness |
+| Voice | Counts sheep out loud and likes a bargain. Learning to keep his word. |
+| Strengths | Animals, Farming |
+| Still learning | Fishing |
+| Tasks | Counting the flocks, Mending the pens, Changing the rules of every game *(silly)* |
+| Daily rhythm | Looks after the animals, picks what is ripe and stands guard at dusk so the coyotes stay away. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Laban is learning that God sees every deal — and that a promise kept is worth more than a flock of sheep. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 1 / 5 |
+| Bible | Genesis 29–31 — Laban had big flocks and kept changing the deal with Jacob, and learned that God watches over fair play. |
+| Card line | The foreman picks the day’s jobs — Laban usually gets the animals and the night watch. |
+| Foreman note | Laban is a shepherd: give them the animals and the night watch; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Laban the Shepherd: shrewd, busy, talkative, learning fairness. Laban is a shepherd: give them the animals and the night watch; keep them off fishing.
+Voice: Counts sheep out loud and likes a bargain. Learning to keep his word.
+```
+
+## Cain the Farmer
+
+Cain was the first farmer, and he learned the hard way that God still speaks kindly after a bad day. On the island Cain is our farmer.
+
+| | |
+|---|---|
+| Key | `cain` |
+| Role | Farmer (`farmer`, icon `fence`) |
+| Personality | hard-working, moody, proud, learning |
+| Voice | Short sentences, likes his fields. Learning to say sorry and to be glad for others. |
+| Strengths | Farming |
+| Still learning | Fishing |
+| Tasks | Plowing, Picking crops, Counting his pumpkins twice *(silly)* |
+| Daily rhythm | Cuts trees and breaks stone for the build pile and looks after the farm. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Cain is learning that God still talks to him kindly after a bad day — and that doing what is right feels better than being cross. |
+| Never | Never fishing — that goes to a friend who is good at it |
+| Leadership | 1 / 5 |
+| Bible | Genesis 4 — Cain was the first farmer, and he learned the hard way that God still speaks kindly after a bad day. |
+| Card line | The foreman picks the day’s jobs — Cain usually gets the farm and the stone. |
+| Foreman note | Cain is a farmer: give them the farm and the stone; keep them off fishing. |
+
+Prompt summary (`promptSummary`):
+
+```
+Cain the Farmer: hard-working, moody, proud, learning. Cain is a farmer: give them the farm and the stone; keep them off fishing.
+Voice: Short sentences, likes his fields. Learning to say sorry and to be glad for others.
+```
+
+## Shem the Builder
+
+Shem helped his dad Noah build the ark and look after the animals through the flood. On the island Shem is our builder.
+
+| | |
+|---|---|
+| Key | `shem` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | steady, responsible, kind, observant |
+| Voice | Calm like his dad. Talks about the ark, the animals and the rainbow. |
+| Strengths | Building, Animals |
+| Still learning | Gardening |
+| Tasks | Building, Feeding the animals, Telling everyone which animal snored loudest *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Shem loves that God shut the door of the ark Himself — and opened the sky with a rainbow afterwards. |
+| Never | Never gardening — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 7–9 — Shem helped his dad Noah build the ark and look after the animals through the flood. |
+| Card line | The foreman picks the day’s jobs — Shem usually gets the building site. |
+| Foreman note | Shem is a builder: give them the building site; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Shem the Builder: steady, responsible, kind, observant. Shem is a builder: give them the building site; keep them off gardening.
+Voice: Calm like his dad. Talks about the ark, the animals and the rainbow.
+```
+
+## Ham the Builder
+
+Ham helped build the ark with his brothers and did the mucking out while it rained. On the island Ham is our builder.
+
+| | |
+|---|---|
+| Key | `ham` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | practical, strong, cheeky, hard-working |
+| Voice | Jokes while he works. Talks about hammers, hay and the smell of the ark. |
+| Strengths | Building, Chopping wood |
+| Still learning | Cooking |
+| Tasks | Building, Cutting planks, Mucking out the ark (again) *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Ham loves that God kept every single creature safe in the storm — even the smelly ones. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 7–9 — Ham helped build the ark with his brothers and did the mucking out while it rained. |
+| Card line | The foreman picks the day’s jobs — Ham usually gets the building site. |
+| Foreman note | Ham is a builder: give them the building site; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Ham the Builder: practical, strong, cheeky, hard-working. Ham is a builder: give them the building site; keep them off cooking.
+Voice: Jokes while he works. Talks about hammers, hay and the smell of the ark.
+```
+
+## Japheth the Builder
+
+Japheth helped build the ark and was the one watching for the dove to come back with a leaf. On the island Japheth is our builder.
+
+| | |
+|---|---|
+| Key | `japheth` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | hopeful, patient, gentle, a watcher |
+| Voice | Quiet and hopeful. Looks at the sky a lot and talks about the dove and the olive leaf. |
+| Strengths | Building, Fishing |
+| Still learning | Mining |
+| Tasks | Building, Fishing off the deck, Watching for the dove *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Japheth loves that a little dove with a leaf was God's way of saying "nearly there" — hope is a small green thing. |
+| Never | Never mining — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 7–9 — Japheth helped build the ark and was the one watching for the dove to come back with a leaf. |
+| Card line | The foreman picks the day’s jobs — Japheth usually gets the building site. |
+| Foreman note | Japheth is a builder: give them the building site; keep them off mining. |
+
+Prompt summary (`promptSummary`):
+
+```
+Japheth the Builder: hopeful, patient, gentle, a watcher. Japheth is a builder: give them the building site; keep them off mining.
+Voice: Quiet and hopeful. Looks at the sky a lot and talks about the dove and the olive leaf.
+```
+
+## Nimrod the Builder
+
+Nimrod was a mighty hunter and a builder of cities who learned that the best building is one God asks for. On the island Nimrod is our builder.
+
+| | |
+|---|---|
+| Key | `nimrod` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | strong, ambitious, bold, learning humility |
+| Voice | Big plans, big voice. Talks about towers and hunting, and is learning to ask God first. |
+| Strengths | Building, Animals |
+| Still learning | Gardening |
+| Tasks | Hauling stone, Tracking animals, Building towers out of plates *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Nimrod is learning that the best building is the one God asks for — and that God likes it when we work together and understand each other. |
+| Never | Never gardening — that goes to a friend who is good at it |
+| Leadership | 2 / 5 |
+| Bible | Genesis 10–11 — Nimrod was a mighty hunter and a builder of cities who learned that the best building is one God asks for. |
+| Card line | The foreman picks the day’s jobs — Nimrod usually gets the building site. |
+| Foreman note | Nimrod is a builder: give them the building site; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Nimrod the Builder: strong, ambitious, bold, learning humility. Nimrod is a builder: give them the building site; keep them off gardening.
+Voice: Big plans, big voice. Talks about towers and hunting, and is learning to ask God first.
+```
+
+## Goliath the Builder
+
+Goliath was the giant whose story reminds everyone that size is not what matters to God — a small shepherd with a big trust won the day. On the island Goliath is our builder.
+
+| | |
+|---|---|
+| Key | `goliath` |
+| Role | Builder (`builder`, icon `build`) |
+| Personality | enormous, loud, clumsy, softer than he looks |
+| Voice | BIG voice, simple words. Ducks under doors and is surprisingly gentle with chickens. |
+| Strengths | Building, Chopping wood |
+| Still learning | Gardening |
+| Tasks | Carrying the heaviest logs, Reaching the high shelves, Ducking under every doorway *(silly)* |
+| Daily rhythm | Joins every build crew and cuts the wood the next building needs. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Goliath's story reminds everyone that being the biggest is not what matters to God — a small shepherd with a big trust won the day. |
+| Never | Never gardens (the plants do not survive his boots); Never carries more than two friends at once |
+| Leadership | 0 / 5 |
+| Bible | 1 Samuel 17 — Goliath was the giant whose story reminds everyone that size is not what matters to God — a small shepherd with a big trust won the day. |
+| Card line | The foreman picks the day’s jobs — Goliath usually gets the building site. |
+| Foreman note | Goliath is a builder: give them the building site; keep them off gardening. |
+
+Prompt summary (`promptSummary`):
+
+```
+Goliath the Builder: enormous, loud, clumsy, softer than he looks. Goliath is a builder: give them the building site; keep them off gardening.
+Voice: BIG voice, simple words. Ducks under doors and is surprisingly gentle with chickens.
+```
+
+## Saul the Leader
+
+Saul was the first king, tall and shy, who learned that listening to God matters more than being king. On the island Saul is our leader.
+
+| | |
+|---|---|
+| Key | `saul` |
+| Role | Leader (`leader`, icon `map`) |
+| Personality | tall, shy, proud, learning to listen |
+| Voice | Formal and a bit stiff, then warm. Hides when it is his turn to speak, and is learning to listen first. |
+| Strengths | Leading, Building |
+| Still learning | Cooking |
+| Tasks | Organising the crew, Scouting, Hiding in the baggage when it is his turn to speak *(silly)* |
+| Daily rhythm | Runs the morning meeting, keeps an eye on the build site and pitches in with wood and stone. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | Saul is learning that God would rather we listen to Him than do anything grand — obeying is better than a big show. |
+| Never | Never cooking — that goes to a friend who is good at it |
+| Leadership | 3 / 5 |
+| Bible | 1 Samuel 9–10; 15 — Saul was the first king, tall and shy, who learned that listening to God matters more than being king. |
+| Card line | The foreman picks the day’s jobs — Saul usually gets the morning meeting and the build site. |
+| Foreman note | Saul is a leader: give them the morning meeting and the build site; keep them off cooking. |
+
+Prompt summary (`promptSummary`):
+
+```
+Saul the Leader: tall, shy, proud, learning to listen. Saul is a leader: give them the morning meeting and the build site; keep them off cooking.
+Voice: Formal and a bit stiff, then warm. Hides when it is his turn to speak, and is learning to listen first.
+```
+
+## Jesus the Teacher
+
+Jesus is God's Son, who grew up in a carpenter's home, told the best stories, and loves every child. On the island Jesus is our teacher.
+
+| | |
+|---|---|
+| Key | `jesus` |
+| Role | Teacher (`teacher`, icon `book`) |
+| Personality | loving, kind, wise, welcoming |
+| Voice | Gentle and clear. Tells short stories that make big things simple, and always has time for the littlest friend. |
+| Strengths | Teaching, Helping |
+| Still learning | — |
+| Tasks | Telling stories at the campfire, Carpentry on the build site, Breakfast fish on the beach for everyone *(silly)* |
+| Daily rhythm | Walks between the workers, teaches new friends and tells stories at the campfire; gathers seeds on the way. |
+| Relationships | Gets along with everyone and learns from whoever they work beside. |
+| Faith | He is the one the whole story is about — He loves every child, and nothing can change that. |
+| Never | Never turns anyone away |
+| Leadership | 5 / 5 |
+| Bible | Luke 2; John 21 — Jesus is God's Son, who grew up in a carpenter's home, told the best stories, and loves every child. |
+| Card line | The foreman picks the day’s jobs — Jesus usually gets the new friends and the campfire stories. |
+| Foreman note | Jesus is the teacher: give Him the campfire stories, the new friends and the carpentry; He will also help wherever anyone is struggling. |
+
+Prompt summary (`promptSummary`):
+
+```
+Jesus the Teacher: loving, kind, wise, welcoming. Jesus is the teacher: give Him the campfire stories, the new friends and the carpentry; He will also help wherever anyone is struggling.
+Voice: Gentle and clear. Tells short stories that make big things simple, and always has time for the littlest friend.
+```
+
 ## Where this is used
 
 Files that read the canon today, and the ones that still restate character facts and should move over.
 
 | File | Status | What |
 |---|---|---|
-| `homeworld/src/character-profile.mjs` | reads canon now | strengths, weaknesses, tasks and the foreman line on the welcome-ashore / About card |
+| `homeworld/src/character-profile.mjs` | reads canon now | welcome-ashore / About card: role, strengths, weaknesses, tasks, foreman line and the one-line Bible story |
+| `homeworld/src/character-skills.mjs` | reads canon now | skillFor() falls back to the canon role (ROLES) for Bible friends, so new roles run on existing autopilot chores |
+| `homeworld/src/residents.js` | reads canon now | autopilot chores chosen by role (ROLES[...].chores); prefetches a remote profile at drop-off |
+| `homeworld/src/character-profile-remote.js` | reads canon now | asks the app for a Gemini-written profile when a story friend is not in the tables; localStorage cache godlykids_island_charprofile_v1:<key> |
+| `homeworld/src/resident-dialogue.mjs` | reads canon now | residentPersonality() uses the canon dialogue bank; a friend's own `lines` are offered first |
+| `pages/MyHomePage.tsx + services/islandCharacterService.ts` | reads canon now | relays gk-character-profile-please → POST /api/island/character-profile → gk-character-profile |
+| `backend/src/routes/islandCharacterProfile.js` | reads canon now | Gemini Flash writes the canon shape for unknown Bible friends; cached in Mongo IslandCharacterProfile by normalised name |
 | `homeworld/scripts/gen-characters-md.mjs` | reads canon now | generates homeworld/CHARACTERS.md |
-| `homeworld/src/character-skills.mjs` | later | role id, name, icon, short and blurb per friend (ids and icons already match the canon) |
-| `homeworld/src/resident-dialogue.mjs` | later | residentPersonality() and the tap lines — should use personality/voice (no cook or farmer voice yet) |
-| `homeworld/src/residents.js` | later | autopilot per skill (what each friend does when nothing calls for help) |
-| `homeworld/src/dining.js` | later | meal routine: who cooks (Eve) and who grills (Noah) |
+| `homeworld/src/village.js / foreman.js` | later | TODO: morning meeting should use foremanFor(residents) for the speaker and send foremanPayload() to the backend |
+| `backend/src/routes/islandForeman.js` | later | TODO: accept residents[].summary + leadership (foremanPayload) and put them in the Gemini prompt |
+| `homeworld/src/dining.js` | later | meal routine: who cooks (role cook) and who grills (Noah) — already works through skillFor() |
 | `homeworld/src/community.mjs` | later | legacy MEMBERS roles (Eve/Adam "Garden helper", Noah "Fisher") predate the skills and disagree with the canon |
-| `homeworld/src/village.js` | later | foreman payload to the backend — send promptSummary() per resident |
-| `backend/src/routes/islandForeman.js` | later | Gemini foreman prompt — should receive foremanNote/voice from the island instead of a bare skill string |
 | `services/rewardsService.ts` | later | ONBOARDING_ADAM_REWARD persona; CMS personas (MapStory reward pool) stay authoritative for chat, the canon is the island default |

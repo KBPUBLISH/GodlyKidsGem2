@@ -1,6 +1,7 @@
 // Unique skills for story friends who live on the island. Friends arrive from the CMS with their own ids,
 // so skills are keyed by the friend's name (lower-cased). A skill only applies while a friend with that
 // name is actually ashore. Design memory: "godlykids-island-character-skills.md".
+import {characterFor,ROLES} from './characters.mjs';
 
 /** Shared meals in the Dining Hall. Eve starts preparing at `prep` and rings the bell at `hour`. */
 export const MEALS=[
@@ -32,7 +33,19 @@ export const CHARACTER_SKILLS={
     blurb:'Cuts trees and breaks stone for the build pile, knows which animals to bring home, and wants a fenced farm and a stable so the coyotes stay out.'},
 };
 /** Daily limits for the work each friend does on their own. */
-export const SKILL_LIMITS={trees:10,rocks:6,plots:4};
+export const SKILL_LIMITS={trees:10,rocks:6,plots:4,fish:6};
 export const skillKey=name=>String(name||'').trim().toLowerCase().split(/\s+/)[0];
-export const skillFor=name=>CHARACTER_SKILLS[skillKey(name)]||null;
+/** Autopilot chore kinds (residents.js pickSkillChores) each base skill runs; other roles come from characters.mjs ROLES. */
+const BASE_CHORES={cook:['plant','pickup'],gardener:['guard','weeds','harvest','plow'],woodcutter:['stump','chop'],farmer:['chop','mine']};
+const withChores=sk=>{if(sk&&!sk.chores)sk.chores=new Set(ROLES[sk.id]?.chores||BASE_CHORES[sk.id]||[]);return sk;};
+/**
+ * The skill a friend carries: a base islander's skill, or one derived from the character canon for a Bible
+ * friend (Moses → leader, Peter → fisher …) whose role runs on existing chores. `chores` is a Set of chore kinds.
+ */
+export function skillFor(name){
+  const base=CHARACTER_SKILLS[skillKey(name)];if(base)return withChores(base);
+  const c=characterFor(name);if(!c.roleId)return null;
+  const role=ROLES[c.roleId];
+  return withChores({id:c.roleId,name:role?.name||c.roleName,icon:c.icon,short:[...c.strengths].join(' · ').toLowerCase(),blurb:c.bio,canon:true});
+}
 export const hasSkill=(name,id)=>skillFor(name)?.id===id;

@@ -9,9 +9,9 @@
 // usually gets.
 import {skillFor} from './character-skills.mjs';
 import {ACTIVITIES,LEVELS,skillLevel} from './settlement.mjs';
-import {CHARACTERS} from './characters.mjs';
+import {CHARACTERS,characterFor} from './characters.mjs';
 
-/** Per-skill cards for the named friends, read from the character canon (characters.mjs). `tasks` icons are names from ui.jsx ICONS. */
+/** Per-skill cards for the base islanders, read from the character canon (characters.mjs). Kept for older call sites; profileFor() reads the canon directly. */
 const cardLine=c=>`The foreman picks the day’s jobs — ${c.name} usually gets ${c.usually}.`;
 export const SKILL_PROFILES=Object.fromEntries(Object.values(CHARACTERS).filter(c=>c.roleId).map(c=>[c.roleId,{strengths:c.strengths,weaknesses:c.weaknesses,tasks:c.tasks,foreman:cardLine(c)}]));
 
@@ -25,11 +25,12 @@ const HELPER_TASKS=CHARACTERS.generic.tasks;
  */
 export function profileFor(resident,state){
   const name=resident?.name||'Friend';
-  const skill=skillFor(name);
-  if(skill&&SKILL_PROFILES[skill.id]){
-    const p=SKILL_PROFILES[skill.id];
-    // 'fence' has no picture icon in ui.jsx; the farmer shows the build hammer instead.
-    return {kind:'named',name,role:{name:skill.name,icon:skill.icon==='fence'?'build':skill.icon},strengths:p.strengths,weaknesses:p.weaknesses,tasks:p.tasks,foreman:p.foreman,learned:null};
+  const c=characterFor(name),skill=skillFor(name);
+  if(c.roleId){
+    // Base islander or Bible friend (characters.mjs): the card is their canon entry. 'fence' has no picture icon in ui.jsx; the farmer shows the build hammer instead.
+    const icon=skill?.icon||c.icon;
+    return {kind:'named',name,role:{name:skill?.name||c.roleName,icon:icon==='fence'?'build':icon},strengths:c.strengths,weaknesses:c.weaknesses,tasks:c.tasks,foreman:cardLine(c),learned:null,
+      story:c.storyLine||null,bibleRef:c.bibleRef||null,leadership:c.leadership??1};
   }
   const xp=state?.village?.xp?.[resident?.id]||{};
   const ranked=Object.keys(ACTIVITIES).map(a=>({activity:a,xp:xp[a]||0,level:skillLevel(xp[a]||0)})).sort((a,b)=>b.xp-a.xp);

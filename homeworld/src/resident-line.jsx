@@ -2,10 +2,10 @@ import React,{useEffect,useState} from 'react';
 import './resident-line.css';
 
 /** One short thought on a character tap; the island remains playable around it. `actions` keeps the card up until a button is chosen. */
-export function ResidentLine({name,line,onDismiss,actions}) {
+export function ResidentLine({name,line,onDismiss,actions,above}) {
   if (!line?.text) return null;
   const asking = actions?.length > 0;
-  return <aside className={`resident-line${asking ? ' resident-line-ask' : ''}`} aria-label={`${name} says`} onPointerDown={event => event.stopPropagation()}>
+  return <aside className={`resident-line${asking ? ' resident-line-ask' : ''}${above ? ' above' : ''}`} aria-label={`${name} says`} onPointerDown={event => event.stopPropagation()}>
     <strong>{name}</strong>
     <p role="status" aria-live="polite" aria-atomic="true">{line.text}</p>
     {asking

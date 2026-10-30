@@ -34,3 +34,13 @@
   .resident-line { left: max(12px, env(safe-area-inset-left, 0px)); transform: none; width: min(360px, calc(100% - 116px)); }
   .resident-line > p { font-size: 14px; }
 }
+/* Sitting on the tap menu: the remark stays above the buttons instead of covering them. */
+.resident-actions .resident-line.above {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: min(280px, calc(100vw - 24px));
+  margin: 0;
+  z-index: 1;
+}

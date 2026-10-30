@@ -1,4 +1,5 @@
 import LocalizedText from '../localization/LocalizedText';
+import { prepareSceneVideo } from '../utils/prepareSceneVideo.mjs';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Check, Lock, Volume2, VolumeX, List } from 'lucide-react';
@@ -572,7 +573,8 @@ const IslandScenePage: React.FC = () => {
   const [sourcesReady, setSourcesReady] = useState(false);
   const [backgroundReady, setBackgroundReady] = useState(false);
   const [backgroundLoadFailed, setBackgroundLoadFailed] = useState(false);
-  const [backgroundAttempt, setBackgroundAttempt] = useState(0);
+  const retryBackgroundRef = useRef<(() => void) | null>(null);
+  const [skipBackground, setSkipBackground] = useState(false);
   const [sceneLayoutPhone, setSceneLayoutPhone] = useState<SceneDeviceLayout | null>(
     null,
   );
@@ -644,6 +646,7 @@ const IslandScenePage: React.FC = () => {
     const controller = new AbortController();
 
     setSourcesReady(false);
+    setSkipBackground(false);
     setBackgroundReady(false);
     setBackgroundLoadFailed(false);
     setBgSrc(SCENE_BG_VIDEO);
@@ -971,39 +974,31 @@ const IslandScenePage: React.FC = () => {
     [seenActivities],
   );
 
-  // Buffer the actual visible video element, preserving Safari byte-range streaming.
-  // Readiness means a decoded frame, not a full-file download or canplaythrough.
+  // Start the actual native video muted. Retry must call load/play inside the
+  // click handler, rather than remounting later and losing user activation.
   useEffect(() => {
     setBackgroundReady(false);
     setBackgroundLoadFailed(false);
-    if (!sourcesReady) return;
-    const timeout = window.setTimeout(() => setBackgroundLoadFailed(true), 15000);
     const video = bgVideoRef.current;
-    const ready = () => {
-      window.clearTimeout(timeout);
-      setBackgroundReady(true);
-      setBackgroundLoadFailed(false);
-    };
-    const failed = () => {
-      window.clearTimeout(timeout);
-      setBackgroundLoadFailed(true);
-    };
-    video?.addEventListener('loadeddata', ready);
-    video?.addEventListener('canplay', ready);
-    video?.addEventListener('error', failed);
-    if (video && video.readyState >= 2) ready();
+    if (!sourcesReady || !video) return;
+    const loader = prepareSceneVideo(video, {
+      onLoading: () => { setBackgroundReady(false); setBackgroundLoadFailed(false); },
+      onReady: () => { setBackgroundReady(true); setBackgroundLoadFailed(false); },
+      onFailure: () => setBackgroundLoadFailed(true),
+    });
+    sceneSoundOnRef.current = false;
+    setSceneSoundOn(false);
+    retryBackgroundRef.current = loader.retry;
     return () => {
-      window.clearTimeout(timeout);
-      video?.removeEventListener('loadeddata', ready);
-      video?.removeEventListener('canplay', ready);
-      video?.removeEventListener('error', failed);
+      retryBackgroundRef.current = null;
+      loader.dispose();
     };
-  }, [sourcesReady, bgSrc, backgroundAttempt]);
+  }, [sourcesReady, bgSrc]);
 
   // Arrival reveal — once the background has a decoded frame, fade in.
 
   useEffect(() => {
-    if (arrivalDone || !sourcesReady || !backgroundReady) return;
+    if (arrivalDone || !sourcesReady || (!backgroundReady && !skipBackground)) return;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => setWhiteOpacity(0));
     });
@@ -1014,60 +1009,38 @@ const IslandScenePage: React.FC = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(doneId);
     };
-  }, [arrivalDone, sourcesReady, backgroundReady]);
+  }, [arrivalDone, sourcesReady, backgroundReady, skipBackground]);
 
   // Keep all scene videos in sync with the sound toggle
   useEffect(() => {
     for (const ref of [bgVideoRef, triggerVideoRef]) {
       const el = ref.current;
       if (!el) continue;
-      el.muted = !sceneSoundOn;
+      el.muted = !sceneSoundOn || (ref === bgVideoRef && !backgroundReady);
       if (ref === bgVideoRef) el.volume = 0.5;
-      if (sceneSoundOn && el.paused) {
+      if (sceneSoundOn && el.paused && (ref !== bgVideoRef || backgroundReady)) {
         void el.play().catch(() => {
           /* ignore */
         });
       }
     }
-  }, [sceneSoundOn]);
-
-  // Looping scene background — starts as soon as sources resolve
-  useEffect(() => {
-    if (!sourcesReady) return;
-    const bg = bgVideoRef.current;
-    if (!bg) return;
-    let cancelled = false;
-    bg.loop = true;
-    bg.playsInline = true;
-    const start = async () => {
-      // Prefer unmuted — navigation taps (Sail / story) often unlock audio.
-      bg.muted = !sceneSoundOnRef.current;
-      try {
-        await bg.play();
-      } catch {
-        if (cancelled) return;
-        // Autoplay with sound blocked — fall back muted; toggle re-enables.
-        bg.muted = true;
-        sceneSoundOnRef.current = false;
-        setSceneSoundOn(false);
-        pendingAutoUnmuteRef.current = true;
-        void bg.play().catch(() => {
-          /* autoplay may still fail; poster stays */
-        });
-      }
-    };
-    void start();
-    return () => {
-      cancelled = true;
-    };
-  }, [sourcesReady, bgSrc, backgroundAttempt]);
+  }, [sceneSoundOn, backgroundReady]);
 
   const toggleSceneSound = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    // Manual toggle wins over pending auto-unmute from autoplay policy
     pendingAutoUnmuteRef.current = false;
-    toggleSound();
-  }, [toggleSound]);
+    const enabled = !sceneSoundOn;
+    sceneSoundOnRef.current = enabled;
+    setSceneSoundOn(enabled);
+    if (soundOn !== enabled) toggleSound();
+    // Unmute/play within the gesture, including after a muted initial start.
+    for (const ref of [bgVideoRef, triggerVideoRef]) {
+      const video = ref.current;
+      if (!video) continue;
+      video.muted = !enabled;
+      if (enabled) void video.play().catch(() => {});
+    }
+  }, [sceneSoundOn, soundOn, toggleSound]);
 
   // Scene background music — loops once revealed; muted with the sound toggle; paused during trigger clips
   useEffect(() => {
@@ -1124,7 +1097,7 @@ const IslandScenePage: React.FC = () => {
 
   const showWhite = !arrivalDone || triggerFade !== 'idle';
   const showScene = sourcesReady;
-  const sceneInteractive = arrivalDone && backgroundReady;
+  const sceneInteractive = arrivalDone && (backgroundReady || skipBackground);
 
   const goHub = useCallback(() => {
     const storyId = storyIdParam || activeStoryId;
@@ -1571,28 +1544,31 @@ const IslandScenePage: React.FC = () => {
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#1a4a28]">
-      {(!sourcesReady || !backgroundReady) && (
+      {(!sourcesReady || (!backgroundReady && !skipBackground)) && (
         <div className="absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 px-8 text-center bg-[#103e50] text-[#fff4d9]" aria-busy={!backgroundLoadFailed}>
           <img src="/assets/images/language/language-globe-v1.png" alt="" width={110} height={110}/>
           <div role="status" aria-live="polite">
             <h2 className="font-display text-2xl">{backgroundLoadFailed ? 'The scene is taking longer to load' : 'Getting your adventure ready…'}</h2>
-            <p className="mt-2 text-sm text-white/80">{backgroundLoadFailed ? 'Check your connection, then try again.' : 'Preparing the story background.'}</p>
+            <p className="mt-2 text-sm text-white/80">{backgroundLoadFailed ? 'Tap to start the video, or continue without it.' : 'Preparing the story background.'}</p>
           </div>
-          {backgroundLoadFailed && <button className="rounded-xl bg-[#ffce70] px-8 py-3 font-bold text-[#513a17]" onClick={()=>setBackgroundAttempt(value=>value+1)}>Try again</button>}
+          {backgroundLoadFailed && <button className="rounded-xl bg-[#ffce70] px-8 py-3 font-bold text-[#513a17]" onClick={()=>retryBackgroundRef.current?.()}>Try again</button>}
+          {backgroundLoadFailed && <button className="rounded-xl border border-white/40 px-6 py-3 text-sm" onClick={() => { bgVideoRef.current?.pause(); setSkipBackground(true); }}>Continue without video</button>}
           <button className="rounded-xl border border-white/40 px-6 py-3 text-sm" onClick={()=>navigate('/crew')}>Back to ship</button>
         </div>
       )}
 
       {showScene && (
         <>
+          {skipBackground && storyHeroUrl && <img src={storyHeroUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           {/* Looping garden scene video */}
           <div className="absolute inset-0" aria-hidden>
             <video
               ref={bgVideoRef}
-              key={`${bgSrc}-${backgroundAttempt}`}
+              key={bgSrc}
+              poster={storyHeroUrl || undefined}
               src={bgSrc}
-              className="absolute inset-0 w-full h-full object-cover"
-              muted={!sceneSoundOn}
+              className={`absolute inset-0 w-full h-full object-cover ${skipBackground ? 'hidden' : ''}`}
+              muted={!backgroundReady || !sceneSoundOn}
               volume={0.5}
               loop
               playsInline

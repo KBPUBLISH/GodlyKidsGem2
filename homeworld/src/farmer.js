@@ -25,6 +25,7 @@ import {skillFor} from './character-skills.mjs';
 import {enclosureMap,regionAt,nearStable} from './fencing.mjs';
 import {animalById} from './animals.mjs';
 import {noteEvent} from './island-feed.mjs';
+import {checkIn,speakRefusal} from './foreman-check.mjs';
 import * as R from './farm-rules.mjs';
 
 const SCAN_MS=2500,PAY_TIMEOUT_MS=20000,BUBBLE_MS=5200,ROUNDUP='farmer:adam';
@@ -38,6 +39,7 @@ export class Farmer{
     this.planRev=null;this.planCache=null;this.planSig='';
     this.statusRev=null;this.statusCache=null;
     this.bubble=null;
+    this.foremanTold={};
     this.arrival=null;          // {requestId, ids:[animalId], stage:'dock'|'in', met:boolean}
     this.payingSince=0;
     this.coinsShort=null;       // last "need N more" from the parent, for the card
@@ -53,6 +55,8 @@ export class Farmer{
   /** Adam's actor (the friend with the farmer skill), or null when he is not ashore. */
   adam(){
     for(const [,actor] of this.g.residents?.models||[]){if(skillFor(actor.userData?.name)?.id==='farmer')return actor;}
+    const s=this.state(),me=s?.characters?.[s.activeCharacter];
+    if(me&&skillFor(me.name)?.id==='farmer'&&this.g.actor)return this.g.actor;
     return null;
   }
   isAdam(home){return !!home&&skillFor(home.name)?.id==='farmer';}
@@ -65,6 +69,13 @@ export class Farmer{
   /** The paddock plan for the current stables (cached per save revision; recomputed when the stables change). */
   plan(s=this.state()){
     if(!s)return null;
+    const kid=s.farm?.ranch?.kidFence;
+    if(kid?.stable?.key){
+      const drawn={side:'down',ring:kid.ring||[],gate:kid.gate||null,inside:kid.inside||[],ok:true,sig:'kid'};
+      if(drawn.ring.length){drawn.blocked=this.blockedCells(s,drawn);drawn.ok=drawn.blocked.length===0;}
+      else drawn.blocked=[];
+      return drawn;
+    }
     const stables=this.stables(s);
     const sig=stables.map(b=>`${b.id}@${b.key}/${b.rotation}`).join('|');
     if(sig===this.planSig&&this.planCache!==undefined&&this.planRev===s.revision)return this.planCache;
@@ -195,32 +206,22 @@ export class Farmer{
     if(this.bubble&&now>this.bubble.until){this.bubble=null;this.g.notify?.();}
   }
 
-  /** Adam puts up the first stable himself once the island can spare the materials. */
+  /**
+   * The stable's row slot. The foreman already said yes; this only turns that spot into a place to walk.
+   * It does not search the grass around camp.
+   */
+  farmSite(s,spot){
+    if(!spot?.key)return null;
+    const world=this.g.world;
+    const plan={kind:R.STABLE_KIND,key:spot.key,rotation:spot.rotation??0};
+    const fp=footprint(world,plan);
+    if(!fp||!buildSiteStatus(world,s,plan,gameTime(s)).ok)return null;
+    return {key:plan.key,rotation:plan.rotation,center:fp.center,work:workPoint(world,plan)};
+  }
+  /** No stable yet: the one thing that blocks the whole farm. Says so (once a minute) when the materials are short. */
   maybeStable(s,adam){
     if(!adam||this.stables(s).length)return;
-    const home=adam.userData;
-    if(adam===this.g.actor||home.chore||home.job||home.onDuty)return;
-    if(energyFor(s,home.id)<BUILD_ENERGY+5)return;
-    if(activeBuildings(s).some(b=>b.status!=='complete'&&!b.project))return;
-    const needs=this.g.village?.needs?.()||{wood:0,stone:0};
-    if(woodTotal(s)<STABLE_DEF.wood+(needs.wood||0)||(s.inventory.stone||0)<STABLE_DEF.stone+(needs.stone||0)){this.tellOnce('stable:materials',`Adam would love a stable for the animals: it takes ${STABLE_DEF.wood} wood and ${STABLE_DEF.stone} stone once the village has what it needs.`,4600);return;}
-    const candidates=this.g.village?.buildCandidates?.(s,R.STABLE_KIND)||[];
-    const min=gameTime(s);
-    let tries=0;
-    for(const plan of candidates){
-      if(tries>=6)break;
-      if(!buildSiteStatus(this.g.world,s,plan,min).ok)continue;
-      tries++;
-      const before=this.g.store.state,id=`farm:stable:${Date.now().toString(36)}`;
-      try{this.g.store.commitAs(home.id,home.name,{x:home.x,y:home.y},{type:'place_building',id,kind:R.STABLE_KIND,key:plan.key,rotation:plan.rotation,actionId:`farm:${home.id}:stable:${Date.now()}`});}catch(e){this.g.toast(e.message);return;}
-      if(this.g.store.state===before)continue;
-      this.g.refreshDynamic?.();
-      this.g.toast('Adam put up a stable for the animals. "Now the coyotes can keep their distance!"',5000);
-      this.feed('farm','Adam built a stable for the animals.');
-      this.say('A stable! Now for a fence all the way round. Thank You, God, for good wood.');
-      this.g.notify?.();
-      return;
-    }
+    if(woodTotal(s)<STABLE_DEF.wood||(s.inventory.stone||0)<STABLE_DEF.stone)this.tellOnce('stable:materials',`Adam wants to build a stable for the animals: ${STABLE_DEF.wood} wood and ${STABLE_DEF.stone} stone. He is gathering what he can.`,4600);
   }
 
   /** Keep the open request honest: raise one when the farm is ready, drop it when it stops being ready, time out a payment that never answered. */
@@ -233,14 +234,14 @@ export class Farmer{
         return;
       }
       if(req.status==='arriving'&&!this.arrival){this.arrival={requestId:req.id,ids:req.animalIds||[],stage:'in',met:true};this.herdIn(s,this.arrival.ids);}
-      if(req.status==='open'&&(!st.ready||R.allowedQty(s,req.qty)<req.qty)){
+      if(req.status==='open'&&(!R.canAsk(st)||R.allowedQty(s,req.qty)<req.qty)){
         const qty=R.allowedQty(s,req.qty);
-        if(st.ready&&qty>0)this.mutate(n=>{n.farm.ranch.request={...req,qty,price:R.bundlePrice(req.kind,qty),text:R.requestLine(req.kind,qty,st)};});
+        if(R.canAsk(st)&&qty>0)this.mutate(n=>{n.farm.ranch.request={...req,qty,price:R.bundlePrice(req.kind,qty),text:R.requestLine(req.kind,qty,st)};});
         else this.mutate(n=>{n.farm.ranch.request=null;n.village=R.closeRequest(n.village,req.id,'declined');});
       }
       return;
     }
-    if(!adam||!st.ready||min<ranch.askAgainAt)return;
+    if(!adam||!R.canAsk(st)||min<ranch.askAgainAt)return;
     const next=R.nextRequest(s);if(!next)return;
     const text=R.requestLine(next.kind,next.qty,st),id=`farm:animals:${Date.now().toString(36)}`;
     this.mutate(n=>{
@@ -264,11 +265,11 @@ export class Farmer{
     this.post({type:'gk-buy-animal',requestId:req.id,kind:req.kind,qty:req.qty,price:req.price});
     return true;
   }
-  /** Not now: Adam asks again tomorrow. */
+  /** Not now: Adam asks again next island morning. */
   decline(){
     const s=this.state(),req=this.ranch(s).request;
     if(!req)return;
-    this.mutate(n=>{n.farm.ranch.request=null;n.farm.ranch.askAgainAt=gameTime(s)+R.ASK_AGAIN_MINUTES;n.village=R.closeRequest(n.village,req.id,'declined');});
+    this.mutate(n=>{n.farm.ranch.request=null;n.farm.ranch.askAgainAt=R.nextMorning(gameTime(s));n.village=R.closeRequest(n.village,req.id,'declined');});
     this.coinsShort=null;
     this.say('That is all right! I will keep the paddock tidy until then.');
   }
@@ -341,7 +342,7 @@ export class Farmer{
     if(a.stage==='in'&&!running){
       this.arrival=null;
       const req=this.ranch(s).request;
-      if(req&&req.id===a.requestId)this.mutate(n=>{n.farm.ranch.request=null;n.farm.ranch.askAgainAt=gameTime(s)+720;});
+      if(req&&req.id===a.requestId)this.mutate(n=>{n.farm.ranch.request=null;n.farm.ranch.askAgainAt=R.nextMorning(gameTime(s));});
       this.g.animals?.sync?.();
     }
   }
@@ -349,12 +350,35 @@ export class Farmer{
   /* ---------------- chores (pulled by residents.pickChore for Adam) ---------------- */
   chores(home,s,min,here){
     if(!this.isAdam(home)||!this.active()||s.night)return [];
+    const hands=checkIn(s,{who:home.id,brain:'farmer',intent:{action:'tend',maintenance:true}});
+    if(!hands.ok){speakRefusal(this.g,this.foremanTold,home.id,home.name,hands);return [];}
     const ranch=this.ranch(s),st=this.status(s),plan=this.plan(s),{hour,day}=timeLabel(min),options=[];
     const push=(farm,target,o)=>{if(target)options.push({kind:'farm',farm,key:`farm:${farm}`,target,reach:1.2,dwell:1.6,...o});};
     if(this.arrival&&!this.arrival.met)push('collect',this.dockPoint(s,plan),{rank:0,label:'Welcoming the new animals',reach:1.8,dwell:2.2});
     if(hour>=20.3&&ranch.herdedDay!==day&&R.herdCount(s)>0&&st.stables)push('herd',this.gateOut(plan)||this.reachPoint(s,R.STABLE_KIND),{rank:0,label:'Counting the animals in',reach:1.6,dwell:2});
-    if(!plan)return options;
-    const herd=R.herdCount(s),energy=energyFor(s,home.id);
+    const herd=R.herdCount(s),energy=energyFor(s,home.id),underway=activeBuildings(s).some(b=>b.status!=='complete'&&!b.project);
+    // No stable yet. The foreman picks the flock slot before anyone walks. Squares the kid already
+    // tapped stay theirs; a refused row does not send Adam into a crack.
+    if(!this.stables(s).length){
+      if(underway||energy<BUILD_ENERGY+2||woodTotal(s)<STABLE_DEF.wood||(s.inventory.stone||0)<STABLE_DEF.stone)return options;
+      const gate=checkIn(s,{who:home.id,brain:'farmer',intent:{action:'paddock',kind:R.STABLE_KIND},world:this.g.world});
+      const noRoom=!gate.ok&&(gate.reason==='No room in the row yet'||gate.instead==='No room in the row yet');
+      if(!gate.ok&&!noRoom){speakRefusal(this.g,this.foremanTold,home.id,home.name,gate);return options;}
+      const kid=s.farm?.ranch?.kidFence;
+      if(kid?.stable?.key){
+        const hit=this.obstacle(s,kid.stable.keys||[kid.stable.key]);
+        if(hit){options.push(hit);return options;}
+        const drawn=this.farmSite(s,kid.stable);
+        if(!drawn){this.tellOnce('stable:spot','Adam cannot put the stable on those squares yet.');return options;}
+        push('stable',drawn.work,{rank:0.3,label:'Building a stable',reach:1.0,dwell:2.2,cellKey:drawn.key,rotation:drawn.rotation});
+        return options;
+      }
+      if(!gate.ok){speakRefusal(this.g,this.foremanTold,home.id,home.name,gate);return options;}
+      const site=this.farmSite(s,gate.site);
+      if(!site){speakRefusal(this.g,this.foremanTold,home.id,home.name,{ok:false,reason:'No room in the row yet',instead:'No room in the row yet'});return options;}
+      push('stable',site.work,{rank:0.3,label:'Building a stable',reach:1.0,dwell:2.2,cellKey:site.key,rotation:site.rotation});
+      return options;
+    }
     if(hour>=6.5&&hour<12){
       if(st.trough&&ranch.wateredDay!==day){
         const well=R.completeOf(s,'well')[0];
@@ -363,23 +387,29 @@ export class Farmer{
       }
       if(st.feedPile&&ranch.fedDay!==day)push('feed',this.reachPoint(s,R.FEED_KIND),{rank:1,label:herd?'Feeding the animals':'Topping up the feed pile',reach:2.4,dwell:2});
     }
-    const building=activeBuildings(s).some(b=>b.status!=='complete'&&!b.project);
-    if(!building&&energy>=BUILD_ENERGY+2){
-      const wood=woodTotal(s);
-      // The paddock comes before the next house. A trough, a feed pile, then the fence, as soon as those pieces can be paid for.
-      if(!st.trough&&!st.fenced&&wood>=4&&(s.inventory.stone||0)>=2){const spot=this.spotInside(s,plan,R.TROUGH_KIND);if(spot)push('trough',spot.center,{rank:0.4,label:'Building a water trough',reach:1.6,dwell:1.8,cellKey:spot.key,rotation:spot.rotation});}
-      else if(!st.feedPile&&!st.fenced&&wood>=2){const spot=this.spotInside(s,plan,R.FEED_KIND);if(spot)push('feedpile',spot.center,{rank:0.4,label:'Making a feed pile',reach:1.4,dwell:1.8,cellKey:spot.key,rotation:spot.rotation});}
-      if(st.trough&&st.feedPile&&wood>=2){
-        const k=R.nextFenceKey(plan,s.buildings);
-        if(k){
-          const blocked=plan.blocked.find(b=>b.key===k);
-          if(!blocked)push('fence',this.at(k),{rank:0.4,label:'Fencing the paddock',cellKey:k,reach:1.3,dwell:1.4,key:`farm:fence:${k}`});
-          else{const clear=this.clearChore(s,k);if(clear)options.push({...clear,rank:0.4});}
+    if(!underway&&energy>=BUILD_ENERGY+2&&!st.fenced){
+      const wood=woodTotal(s),nextFence=R.nextFenceKey(plan,s.buildings);
+      const wantsTrough=!st.trough&&wood>=4&&(s.inventory.stone||0)>=2;
+      const wantsFeed=!st.feedPile&&wood>=2;
+      const wantsFence=!!nextFence&&wood>=2;
+      const pad=(wantsTrough||wantsFeed||wantsFence)?checkIn(s,{who:home.id,brain:'farmer',intent:{action:'paddock',kind:wantsTrough?R.TROUGH_KIND:wantsFeed?R.FEED_KIND:R.FENCE_KIND}}):{ok:true};
+      if(!pad.ok)speakRefusal(this.g,this.foremanTold,home.id,home.name,pad);
+      else{
+        // The paddock comes before the next house: fence pieces go up as soon as there is wood for them, the trough and feed pile
+        // slot in (inside the ring, gate side) whenever their materials are there. The gate is left for last so Adam can still walk in.
+        if(wantsTrough){const spot=this.spotInside(s,plan,R.TROUGH_KIND);if(spot)push('trough',spot.center,{rank:0.35,label:'Building a water trough',reach:1.6,dwell:1.8,cellKey:spot.key,rotation:spot.rotation});}
+        else if(wantsFeed){const spot=this.spotInside(s,plan,R.FEED_KIND);if(spot)push('feedpile',spot.center,{rank:0.35,label:'Making a feed pile',reach:1.4,dwell:1.8,cellKey:spot.key,rotation:spot.rotation});}
+        if(wantsFence&&(nextFence!==plan.gate||(st.trough&&st.feedPile))){
+          const blocked=plan.blocked.find(b=>b.key===nextFence);
+          if(!blocked)push('fence',this.at(nextFence),{rank:0.4,label:'Fencing the paddock',cellKey:nextFence,reach:1.3,dwell:1.4,key:`farm:fence:${nextFence}`});
+          else{const clear=this.clearChore(s,nextFence);if(clear)options.push({...clear,rank:0.4});}
         }
+        // Something growing or lying inside the paddock-to-be: clear it so the animals have the whole yard.
+        const b=plan.blocked.find(x=>x.where==='inside');if(b){const clear=this.clearChore(s,b.key);if(clear)options.push(clear);}
       }
-      // Something growing or lying inside the paddock-to-be: clear it so the animals have the whole yard.
-      if(!st.fenced){const b=plan.blocked.find(x=>x.where==='inside');if(b){const clear=this.clearChore(s,b.key);if(clear)options.push(clear);}}
     }
+    const drawn=s.farm?.ranch?.kidFence;
+    if(drawn?.ring?.length&&st.fenced)this.g.buildAsk?.requestFence(home);
     // Midday: walk the fence line and mend what the coyotes chewed.
     if(hour>=12&&hour<16.5&&ranch.checkedDay!==day&&st.ring>0){
       const damaged=(s.buildings||[]).find(b=>b.status==='complete'&&R.FENCE_KINDS.has(b.kind)&&plan.ring.includes(b.key)&&(s.farm?.integrity?.[b.id]??1)<1);
@@ -387,6 +417,18 @@ export class Farmer{
       else push('check',this.gateOut(plan),{rank:4,label:'Checking the fences',reach:1.6,dwell:1.5});
     }
     return options;
+  }
+  /** A tree or rock on the stable footprint the kid chose. No toast when the square is already clear. */
+  obstacle(s,keys){
+    const g=this.g;
+    for(const k of keys||[]){
+      const p=this.at(k);
+      const tree=(g.trees||[]).find(t=>!s.removedTrees?.includes(t.id)&&Math.hypot(t.position[0]-p.x,t.position[1]-p.y)<(t.radius||.4)+1.1&&!t.cell);
+      if(tree&&!g.residents?.claims.has(`tree:${tree.id}`))return {kind:'chop',key:`tree:${tree.id}`,treeId:tree.id,target:{x:tree.position[0],y:tree.position[1]},reach:1.18+(tree.radius||0)*.2,dwell:1,label:'Clearing a tree for the stable',rank:0.2};
+      const rock=(g.world.boulders||[]).find(r=>!(s.removedRocks||[]).includes(r.id)&&Math.hypot(r.position[0]-p.x,r.position[1]-p.y)<(r.radius||.6)+1);
+      if(rock&&!g.residents?.claims.has(`rock:${rock.id}`))return {kind:'mine',key:`rock:${rock.id}`,rockId:rock.id,target:{x:rock.position[0],y:rock.position[1]},reach:(rock.radius||.6)+.85,dwell:1,label:'Breaking a rock for the stable',rank:0.2};
+    }
+    return null;
   }
   /** A tree or rock standing where a fence piece must go: chop or break it (the ordinary chore kinds). */
   clearChore(s,k){
@@ -417,6 +459,14 @@ export class Farmer{
       const left=R.fenceGaps(plan,g.store.state.buildings).length,total=plan?.ring.length||0;
       if(left===0){g.toast(`${who} closed the paddock gate. "There — snug as anything. Thank You, God, for good fences!"`,5200);this.feed('farm',`${who} finished the paddock fence around the stable.`);this.say('All the way round! Now we only need some animals to put in it.');this.mutate(n=>{n.village=R.closeRequest(n.village,'farm:paddock','done');},false);}
       else{if((total-left)%5===0||total-left===1)g.toast(`${who} put up a fence piece for the paddock (${total-left} of ${total}).`);this.mutate(n=>{n.village=R.upsertRequest(n.village,{id:'farm:paddock',kind:'fence',from:'adam',to:'adam',text:'Fence a paddock all the way round the stable',data:{done:total-left,total}});},false);}
+      g.residents?.reelEvent?.(actor);
+    }else if(c.farm==='stable'){
+      if(!commit({type:'place_building',id:`farm:stable:${Date.now().toString(36)}`,kind:R.STABLE_KIND,key:c.cellKey,rotation:c.rotation||0})){if(!tired())this.tellOnce('place:stable','No room in the row yet');return;}
+      g.music?.sfx?.play('chop');g.burst?.(c.target,'wood',.8);g.refreshDynamic?.();
+      g.toast(`${who} put up a stable for the animals. "Now the coyotes can keep their distance!"`,5000);
+      this.feed('farm',`${who} built a stable for the animals.`);
+      this.say('A stable! Now for a fence all the way round. Thank You, God, for good wood.');
+      this.mutate(n=>{n.village=R.upsertRequest(n.village,{id:'farm:paddock',kind:'fence',from:'adam',to:'adam',text:'Fence a paddock all the way round the stable',data:{done:0,total:0}});},false);
       g.residents?.reelEvent?.(actor);
     }else if(c.farm==='trough'||c.farm==='feedpile'){
       const kind=c.farm==='trough'?R.TROUGH_KIND:R.FEED_KIND,def=buildingById(kind);

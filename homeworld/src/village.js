@@ -12,8 +12,10 @@ import { buildingById, activeBuildings, footprint, workPoint, BUILD_ENERGY } fro
 import { projectPlan, assignedProject } from './project-rules.mjs';
 import { energyFor } from './nutrition.mjs';
 import { villagePlan, villageNeeds, skillXp, focusSatisfied } from './settlement.mjs';
+import { checkIn, speakRefusal, campSite } from './foreman-check.mjs';
+import { isStructure, rowSlotMismatch } from './build-ask.mjs';
 
-const SCAN_MS = 4500, ATTEMPTS_PER_TICK = 2, RING_CELLS = 16;
+const SCAN_MS = 4500;
 
 export class Village {
   constructor(game) {
@@ -25,6 +27,7 @@ export class Village {
     this.candidateKey = null;
     this.toldBlocked = null;
     this.announcedStage = null;
+    this.foremanTold = {};
   }
 
   /** The kid's build goal, if any, is the focus the planner honours first. */
@@ -120,26 +123,11 @@ export class Village {
     return n ? { x: x / n, y: y / n } : { x: s.player.x, y: s.player.y };
   }
 
-  /** Grid spots in rings around the centre, nearest first, keeping a cell clear of the garden. */
+  /** The one row slot the foreman already approved. Not a search for the nearest grass. */
   buildCandidates(s, kind) {
-    const g = this.g, world = g.world, c = this.centre(s);
-    const col0 = Math.floor(c.x - world.grid.origin[0]), row0 = Math.floor(c.y - world.grid.origin[1]);
-    const soil = Object.keys(s.cells || {}).filter((k) => s.cells[k]?.soil).map((k) => k.split(':').map(Number));
-    const nearGarden = (fp) => soil.some(([sc, sr]) => sc >= fp.col - 1 && sc <= fp.col + fp.w && sr >= fp.row - 1 && sr <= fp.row + fp.h);
-    const out = [];
-    for (let dr = -RING_CELLS; dr <= RING_CELLS; dr++) for (let dc = -RING_CELLS; dc <= RING_CELLS; dc++) {
-      const d = Math.hypot(dc, dr);
-      if (d < 1.5 || d > RING_CELLS) continue;
-      out.push({ key: `${col0 + dc}:${row0 + dr}`, d });
-    }
-    out.sort((a, b) => a.d - b.d);
-    const plans = [];
-    const rotations = [0, 1, 2, 3];
-    for (const o of out) {
-      if (!/^\d{1,3}:\d{1,3}$/.test(o.key)) continue;
-      for (const rotation of rotations) plans.push({ kind, key: o.key, rotation, d: o.d });
-    }
-    return plans.filter((p) => { const fp = footprint(world, p); return fp && !nearGarden(fp); });
+    const spot = campSite(s, this.g.world, kind);
+    if (!spot?.ok || !spot.key) return [];
+    return [{ kind, key: spot.key, rotation: spot.rotation ?? 0, d: 0 }];
   }
 
   tryPlace(s, goal) {
@@ -147,32 +135,40 @@ export class Village {
     if (!helpers.length) { this.tellOnce(`nohelp:${goal.kind}`, `Everyone is busy, so nobody can start the ${goal.name} yet.`); return; }
     const crew = this.crewFor(s, goal.kind, helpers);
     if (crew === null) { this.tellOnce(`crew:${goal.kind}`, `The ${goal.name} needs ${projectPlan(goal.kind).crew} builders free at once.`); return; }
-    const key = `${goal.kind}:${s.buildings?.length || 0}:${Object.keys(s.cells || {}).length}`;
-    if (this.candidateKey !== key || !this.candidates) { this.candidateKey = key; this.candidates = this.buildCandidates(s, goal.kind); }
-    const min = gameTime(s), builder = helpers[0], home = builder.userData;
-    let attempts = 0;
-    while (this.candidates.length && attempts < ATTEMPTS_PER_TICK) {
-      const plan = this.candidates.shift();
-      const site = buildSiteStatus(g.world, s, plan, min);
-      if (!site.ok) continue;
-      attempts++;
-      const id = `village:${goal.kind}:${Date.now().toString(36)}`;
-      const before = g.store.state;
-      try {
-        g.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'place_building', id, kind: plan.kind, key: plan.key, rotation: plan.rotation, crew, actionId: `helper:${home.id}:place:${Date.now()}` });
-      } catch (e) { g.toast(e.message); return; }
-      if (g.store.state === before) continue;
-      this.candidates = null;
-      this.toldBlocked = null;
-      const placed = g.store.state.buildings.find((b) => b.id === id);
-      if (!placed?.project && home.chore) { g.residents.claims.delete(home.chore.key); home.chore = null; home.strollState = { wait: 0 }; g.residents.lastChoreScan = 0; }
-      g.refreshDynamic?.();
-      g.residents?.reelEvent?.(builder);
-      g.toast(placed?.project ? `${home.name} marked out a ${goal.name} and the crew is getting to work.` : `${home.name} is going to build a ${goal.name} for the village.`, 4500);
-      g.notify?.();
+    const noah = g.buildAsk?.bySkill?.('woodcutter');
+    const builder = (noah && helpers.includes(noah)) ? noah : helpers[0], home = builder.userData;
+    const head = checkIn(s, { who: home.id, brain: 'builder', intent: { action: 'build', kind: goal.kind }, world: g.world });
+    if (!head.ok && !rowSlotMismatch(head)) { speakRefusal(g, this.foremanTold, home.id, home.name, head); return; }
+    const saved = isStructure(goal.kind) ? g.buildAsk?.buildingSite?.(goal.kind, s) : null;
+    if (isStructure(goal.kind) && g.buildAsk && !saved) { g.buildAsk.requestBuilding(home, goal.kind, goal.name); return; }
+    if (saved && g.buildAsk?.siteClearChore?.(noah?.userData || home, s)) return;
+    const plan = saved ? { kind: goal.kind, key: saved.key, rotation: saved.rotation || 0 } : head.site;
+    const waited = { ok: false, reason: 'No room in the row yet', instead: 'No room in the row yet' };
+    if (!plan?.key) { speakRefusal(g, this.foremanTold, home.id, home.name, waited); return; }
+    const min = gameTime(s);
+    const ground = saved ? { ...s, player: { x: home.x, y: home.y } } : s;
+    if (!buildSiteStatus(g.world, ground, { kind: plan.kind, key: plan.key, rotation: plan.rotation }, min).ok) {
+      if (!saved) speakRefusal(g, this.foremanTold, home.id, home.name, waited);
       return;
     }
-    if (!this.candidates.length) { this.candidates = null; this.tellOnce(`site:${goal.kind}`, `Nobody can find a flat spot for the ${goal.name} near camp. Clearing trees or stumps would help.`); }
+    const id = `village:${goal.kind}:${Date.now().toString(36)}`;
+    const before = g.store.state;
+    try {
+      g.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'place_building', id, kind: plan.kind, key: plan.key, rotation: plan.rotation, crew, actionId: `helper:${home.id}:place:${Date.now()}` });
+    } catch (e) { g.toast(e.message); return; }
+    if (g.store.state === before) { speakRefusal(g, this.foremanTold, home.id, home.name, waited); return; }
+    this.candidates = null;
+    if (saved) {
+      const next = g.store.state, sites = { ...(next.village?.buildSites || {}) };
+      delete sites[goal.kind];
+      try { g.store.save({ ...next, village: { ...(next.village || {}), buildSites: sites } }); } catch { /* the building still stands */ }
+    }
+    const placed = g.store.state.buildings.find((b) => b.id === id);
+    if (!placed?.project && home.chore) { g.residents.claims.delete(home.chore.key); home.chore = null; home.strollState = { wait: 0 }; g.residents.lastChoreScan = 0; }
+    g.refreshDynamic?.();
+    g.residents?.reelEvent?.(builder);
+    g.toast(placed?.project ? `${home.name} marked out a ${goal.name} and the crew is getting to work.` : `${home.name} is going to build a ${goal.name} for the village.`, 4500);
+    g.notify?.();
   }
 
   tryUpgrade(s, goal) {
@@ -180,7 +176,10 @@ export class Village {
     if (!helpers.length) return;
     const crew = this.crewFor(s, goal.kind, helpers);
     if (crew === null) { this.tellOnce(`crew:${goal.kind}`, `The ${goal.name} needs ${projectPlan(goal.kind).crew} builders free at once.`); return; }
-    const home = helpers[0].userData, before = g.store.state;
+    const home = helpers[0].userData;
+    const head = checkIn(s, { who: home.id, brain: 'builder', intent: { action: 'upgrade', kind: goal.kind } });
+    if (!head.ok) { speakRefusal(g, this.foremanTold, home.id, home.name, head); return; }
+    const before = g.store.state;
     try {
       g.store.commitAs(home.id, home.name, { x: home.x, y: home.y }, { type: 'upgrade_building', id: goal.upgradeId, kind: goal.kind, crew, actionId: `helper:${home.id}:upgrade:${Date.now()}` });
     } catch (e) { g.toast(e.message); return; }

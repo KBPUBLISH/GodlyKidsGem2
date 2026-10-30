@@ -4,6 +4,7 @@ import {gameTime,timeLabel} from './core.mjs';
 import {skillFor} from './character-skills.mjs';
 import {noteEvent} from './island-feed.mjs';
 import {pickRecipe,noticed,recipeDay} from './recipes.mjs';
+import {checkIn,speakRefusal} from './foreman-check.mjs';
 
 /** Island hours after breakfast, lunch and dinner when a cook checks the bag. */
 export const CRAFT_HOURS=[9,14,16,20];
@@ -20,7 +21,7 @@ export function isFeeder(name){
 const BUBBLE_MS=5200;
 
 export class RecipeKitchen{
-  constructor(game){this.g=game;this.bubble=null;this.seen=null;}
+  constructor(game){this.g=game;this.bubble=null;this.seen=null;this.foremanTold={};}
   /** Story friends ashore, Eve first. On the standalone island the built-in Eve counts too. */
   feeders(){
     const g=this.g,out=[];
@@ -57,6 +58,10 @@ export class RecipeKitchen{
     const recipe=pickRecipe(s.inventory);
     this.seen=key;
     if(!recipe)return;
+    const home=feeder.userData||{};
+    const id=home.id||home.residentId||'eve',name=home.name||'Eve';
+    const gate=checkIn(s,{who:id,brain:'cook',intent:{action:'craft'}});
+    if(!gate.ok){speakRefusal(g,this.foremanTold,id,name,gate);return;}
     this.craft(feeder,recipe,key,day);
   }
   craft(actor,recipe,key,day){

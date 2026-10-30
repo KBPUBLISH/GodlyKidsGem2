@@ -16,6 +16,7 @@ import { skillFor } from './character-skills.mjs';
 import { noteEvent } from './island-feed.mjs';
 import { gardenFocus, edgeSpawn } from './fencing.mjs';
 import { gardenStatus, deriveRequests, planNextPlots, seedForCell, outsideFence, keeperLine, currentPlan, shapeById, SHAPE_IDS, RULES, FENCE_BEFORE_PLOTS, SHAPE_MIN_PLOTS } from './garden-rules.mjs';
+import { checkIn, speakRefusal } from './foreman-check.mjs';
 
 const SCAN_MS = 2500;
 
@@ -28,6 +29,7 @@ export class GardenKeeper {
     this.lastRevision = -1;
     this.attackDay = null;    // the farm day whose attack we already noticed
     this.nightTarget = null;  // where Abel stands at night
+    this.foremanTold = {};
   }
 
   get world() { return this.game.world; }
@@ -79,6 +81,7 @@ export class GardenKeeper {
     this.rememberBlock(status);
     this.syncRequests(requests);
     this.requests = requests;
+    if (this.game.gardenPlan?.wantsAsk()) this.game.buildAsk?.requestGarden(this.keeperHome());
   }
 
   /** Keep the block Abel chose so the garden does not wander as trees come down. */
@@ -181,10 +184,23 @@ export class GardenKeeper {
   /* ---------------------------------------------------------------- the gardener's own work */
   /** Tiles the gardener tills next, or null to let the old "beside the garden" rule run (no plan yet). */
   plowTargets(s) {
+    const outline = this.game.gardenPlan?.active(s);
+    if (this.game.gardenPlan) {
+      if (!outline?.keys?.length) return [];
+      const home = this.keeperHome();
+      const gate = checkIn(s, { who: home?.id || 'abel', brain: 'gardener', intent: { action: 'tend', maintenance: true } });
+      if (!gate.ok) return [];
+      return outline.keys.filter((k) => canPlow(this.world, s, k) && !s.cells?.[k]?.soil);
+    }
     if (!this.status) return null;
     try {
       const plan = planNextPlots(s, this.world, this.status);
-      return plan.tiles.map((t) => t.key).filter((k) => canPlow(this.world, s, k));
+      const tiles = plan.tiles.map((t) => t.key).filter((k) => canPlow(this.world, s, k));
+      if (!tiles.length) return tiles;
+      const home = this.keeperHome();
+      const gate = checkIn(s, { who: home?.id || 'abel', brain: 'gardener', intent: { action: 'expand' } });
+      if (!gate.ok) { speakRefusal(this.game, this.foremanTold, home?.id || 'abel', home?.name || 'Abel', gate); return []; }
+      return tiles;
     } catch { return null; }
   }
   /** Why the garden is not growing right now (card + Abel's line), or null. */
@@ -203,14 +219,9 @@ export class GardenKeeper {
    * marked out. Once a fence ring is closed she also stays inside it.
    */
   allowsPlant(key) {
-    if (this.outsideFence(key)) return false;
-    const primary = this.status?.primary;
-    if (!primary) return true;
-    if (primary.keys.includes(key)) return true;
-    try {
-      const plan = planNextPlots(this.state, this.world, this.status);
-      if (plan.tiles.some((t) => t.key === key)) return true;
-    } catch { /* no plan yet */ }
+    const outline = this.game.gardenPlan?.active();
+    if (outline) return outline.keys.includes(key);
+    if (this.state?.cells?.[key]?.soil) return !this.outsideFence(key);
     return false;
   }
 
@@ -222,7 +233,7 @@ export class GardenKeeper {
    *   clear / wood              → he chops or digs a little himself, or the request stays until wood is in the store
    */
   builderChores(home, s, here, claims) {
-    if (!this.requests.length || !this.isKeeper(home) || s.night) return [];
+    if (!this.isKeeper(home) || s.night) return [];
     if (energyFor(s, home.id) < 12) return [];
     const game = this.game, world = this.world, out = [], free = (key) => !claims?.has(key);
     const busyId = game.order?.id || game.action?.id || null;
@@ -232,12 +243,18 @@ export class GardenKeeper {
     // One stroke piece at a time: the reducer refuses a new placement while another unfinished non-project building exists.
     const queuedElsewhere = activeBuildings(s).some((b) => b.status !== 'complete' && !b.project);
     for (const r of this.requests) {
+      if (r.rule === 'room_to_grow' && this.game.gardenPlan) continue;
       // Attacked sides (and the chopping they are waiting on) beat watering. Comfort asks wait their turn.
     const rank = r.priority >= 100 ? 0.45 : 1 + Math.max(0, (120 - r.priority) / 40);
+      const project = gardenProject(this.status, r);
+      if (project) {
+        const gate = checkIn(s, { who: home.id, brain: 'gardener', intent: project });
+        if (!gate.ok) { speakRefusal(game, this.foremanTold, home.id, home.name, gate); continue; }
+      }
       if (r.kind === 'fence' || r.kind === 'brick_fence' || r.kind === 'gate' || r.kind === 'scarecrow' || r.kind === 'path') {
-        if (queuedElsewhere) continue; // place_building allows one unfinished piece at a time — Abel waits, he does not hand it off
-
         const kind = r.kind === 'gate' ? 'path' : r.kind, def = buildingById(kind);
+        // Instant fence strokes do not take the build slot, so Abel keeps fencing while Noah raises a house.
+        if (queuedElsewhere && !(def?.stroke && def?.instant)) continue;
         if (!def || !this.canPay(s, kind)) continue;
         for (const key of r.tiles) {
           const ck = `garden:${key}`;
@@ -273,6 +290,11 @@ export class GardenKeeper {
         const trees = activeTrees(world, s, gameTime(s)).filter((t) => !t.cell && t.id !== busyId && free(`tree:${t.id}`)).sort((a, b) => dist({ x: a.position[0], y: a.position[1] }, focus) - dist({ x: b.position[0], y: b.position[1] }, focus));
         for (const t of trees.slice(0, 3)) out.push({ kind: 'chop', key: `tree:${t.id}`, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.18 + (t.radius || 0) * .2, dwell: 1, label: 'Cutting wood for the garden fence', rank, auto: 'village' });
       }
+    }
+    const outline = game.gardenPlan?.fenceChore(home);
+    if (outline && free(outline.key)) {
+      const head = checkIn(s, { who: home.id, brain: 'gardener', intent: { action: 'tend', maintenance: true } });
+      if (head.ok) out.push(outline);
     }
     return out.filter((o) => dist(o.target, here) <= 90);
   }
@@ -432,6 +454,15 @@ export class GardenKeeper {
 }
 
 function nearest(list, p) { return [...list].sort((a, b) => dist(p, { x: a.position[0], y: a.position[1] }) - dist(p, { x: b.position[0], y: b.position[1] }))[0] || null; }
+/** A new fence ring, or the next block of plots. Pieces on a ring already started are maintenance. */
+function gardenProject(status, request) {
+  if (!request) return null;
+  const fenced = status?.fencedPct || 0;
+  const ring = request.rule === 'fence_ring' || request.kind === 'fence' || request.kind === 'brick_fence';
+  if (ring && fenced <= 0) return { action: 'fence', newRing: true, kind: request.kind, key: request.tiles?.[0], rotation: 0 };
+  if (request.rule === 'room_to_grow' || request.rule === 'move_fence') return { action: 'expand', kind: request.kind, key: request.tiles?.[0] };
+  return null;
+}
 function pieceName(kind) { return { fence: 'a fence piece', brick_fence: 'a brick fence piece', path: 'the gate stone', scarecrow: 'the scarecrow' }[kind] || buildingById(kind)?.name?.toLowerCase() || 'a piece'; }
 function labelFor(r) { return { fence: 'Fencing the garden', brick_fence: 'Walling the garden in brick', gate: 'Making the garden gate', scarecrow: 'Putting up a scarecrow', path: 'Laying stones to the garden' }[r.kind] || 'Helping in the garden'; }
 /** "the garden fence on the east side", "the garden gate" … for feed lines. */

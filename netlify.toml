@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+# This isolated branch includes the rebuilt island prototype. The normal app's
+# build keeps its existing command and published island assets.
+[context."codex/living-world-player-test"]
+  command = "npm run living-test:build"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

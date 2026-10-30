@@ -570,6 +570,9 @@ const IslandScenePage: React.FC = () => {
     () => resolveMediaUrl(navState?.heroImageUrl) || '',
   );
   const [sourcesReady, setSourcesReady] = useState(false);
+  const [backgroundReady, setBackgroundReady] = useState(false);
+  const [backgroundLoadFailed, setBackgroundLoadFailed] = useState(false);
+  const [backgroundAttempt, setBackgroundAttempt] = useState(0);
   const [sceneLayoutPhone, setSceneLayoutPhone] = useState<SceneDeviceLayout | null>(
     null,
   );
@@ -641,6 +644,8 @@ const IslandScenePage: React.FC = () => {
     const controller = new AbortController();
 
     setSourcesReady(false);
+    setBackgroundReady(false);
+    setBackgroundLoadFailed(false);
     setBgSrc(SCENE_BG_VIDEO);
     setCmsTitle(null);
     setQuizContent({ available: false });
@@ -966,9 +971,39 @@ const IslandScenePage: React.FC = () => {
     [seenActivities],
   );
 
-  // Arrival reveal — once sources are ready, fade the white overlay out.
+  // Buffer the actual visible video element, preserving Safari byte-range streaming.
+  // Readiness means a decoded frame, not a full-file download or canplaythrough.
   useEffect(() => {
-    if (arrivalDone || !sourcesReady) return;
+    setBackgroundReady(false);
+    setBackgroundLoadFailed(false);
+    if (!sourcesReady) return;
+    const timeout = window.setTimeout(() => setBackgroundLoadFailed(true), 15000);
+    const video = bgVideoRef.current;
+    const ready = () => {
+      window.clearTimeout(timeout);
+      setBackgroundReady(true);
+      setBackgroundLoadFailed(false);
+    };
+    const failed = () => {
+      window.clearTimeout(timeout);
+      setBackgroundLoadFailed(true);
+    };
+    video?.addEventListener('loadeddata', ready);
+    video?.addEventListener('canplay', ready);
+    video?.addEventListener('error', failed);
+    if (video && video.readyState >= 2) ready();
+    return () => {
+      window.clearTimeout(timeout);
+      video?.removeEventListener('loadeddata', ready);
+      video?.removeEventListener('canplay', ready);
+      video?.removeEventListener('error', failed);
+    };
+  }, [sourcesReady, bgSrc, backgroundAttempt]);
+
+  // Arrival reveal — once the background has a decoded frame, fade in.
+
+  useEffect(() => {
+    if (arrivalDone || !sourcesReady || !backgroundReady) return;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => setWhiteOpacity(0));
     });
@@ -979,7 +1014,7 @@ const IslandScenePage: React.FC = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(doneId);
     };
-  }, [arrivalDone, sourcesReady]);
+  }, [arrivalDone, sourcesReady, backgroundReady]);
 
   // Keep all scene videos in sync with the sound toggle
   useEffect(() => {
@@ -1025,7 +1060,7 @@ const IslandScenePage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [sourcesReady, bgSrc]);
+  }, [sourcesReady, bgSrc, backgroundAttempt]);
 
   const toggleSceneSound = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -1089,7 +1124,7 @@ const IslandScenePage: React.FC = () => {
 
   const showWhite = !arrivalDone || triggerFade !== 'idle';
   const showScene = sourcesReady;
-  const sceneInteractive = arrivalDone;
+  const sceneInteractive = arrivalDone && backgroundReady;
 
   const goHub = useCallback(() => {
     const storyId = storyIdParam || activeStoryId;
@@ -1536,8 +1571,16 @@ const IslandScenePage: React.FC = () => {
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#1a4a28]">
-      {!sourcesReady && (
-        <div className="absolute inset-0 z-30 bg-black" aria-busy="true" aria-label="Loading scene" />
+      {(!sourcesReady || !backgroundReady) && (
+        <div className="absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 px-8 text-center bg-[#103e50] text-[#fff4d9]" aria-busy={!backgroundLoadFailed}>
+          <img src="/assets/images/language/language-globe-v1.png" alt="" width={110} height={110}/>
+          <div role="status" aria-live="polite">
+            <h2 className="font-display text-2xl">{backgroundLoadFailed ? 'The scene is taking longer to load' : 'Getting your adventure ready…'}</h2>
+            <p className="mt-2 text-sm text-white/80">{backgroundLoadFailed ? 'Check your connection, then try again.' : 'Preparing the story background.'}</p>
+          </div>
+          {backgroundLoadFailed && <button className="rounded-xl bg-[#ffce70] px-8 py-3 font-bold text-[#513a17]" onClick={()=>setBackgroundAttempt(value=>value+1)}>Try again</button>}
+          <button className="rounded-xl border border-white/40 px-6 py-3 text-sm" onClick={()=>navigate('/crew')}>Back to ship</button>
+        </div>
       )}
 
       {showScene && (
@@ -1546,7 +1589,7 @@ const IslandScenePage: React.FC = () => {
           <div className="absolute inset-0" aria-hidden>
             <video
               ref={bgVideoRef}
-              key={bgSrc}
+              key={`${bgSrc}-${backgroundAttempt}`}
               src={bgSrc}
               className="absolute inset-0 w-full h-full object-cover"
               muted={!sceneSoundOn}

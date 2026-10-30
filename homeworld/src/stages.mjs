@@ -34,7 +34,8 @@ export const livestock=state=>(state?.animals||[]).filter(a=>a&&!a.wild&&!String
 
 /** Milestone numbers in one place so the panel, the badge, travellers.js and the report agree. */
 export const POPULATION={camp:10,homestead:20,village:40,harbour_town:60};
-export const FOOD={homestead:30,village:300,harbour_town:1000};
+/** Pieces of food the island has to produce. Camp is a real pantry, not a few meals. */
+export const FOOD={camp:500,homestead:1200,village:2500,harbour_town:5000};
 export const ANIMALS={village:3,harbour_town:6};
 
 const people=(id,hint)=>({id:'people',label:'People living here',short:'People',need:POPULATION[id],have:population,hint:hint||'Welcome travellers so they settle · every settler needs a bed'});
@@ -53,6 +54,7 @@ export const STAGE_LADDER=[
     people('camp','Drop off story friends from the ship · travellers may settle too'),
     {id:'tent',label:'Somewhere to sleep',short:'Roof',need:1,have:s=>homes(s,0),hint:'Build › Homes · Prayer Tent'},
     building('campfire','A campfire','Campfire','Build › Decorations'),
+    food('camp'),
   ]},
   {id:'homestead',name:'Homestead',icon:'homestead',blurb:'Twenty people, a real home and a garden to feed them.',requirements:[
     people('homestead'),

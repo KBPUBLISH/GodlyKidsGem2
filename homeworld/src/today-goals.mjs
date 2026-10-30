@@ -273,14 +273,23 @@ export function journeyMeter(state,garden,project){
       tracks.push({id:'garden',label:'Garden',value:`${Math.min(got,bed.need)}/${bed.need}`,met:got>=bed.need});
     }
   }
-  const foodReq=(dest.requirements||[]).find(r=>r.id==='food');
-  if(foodReq){
-    const produced=Math.max(0,foodProduced(state)||0);
-    tracks.push({id:'food',label:'Food',value:`${produced}/${foodReq.need}`,met:produced>=foodReq.need});
+  // Camp's own pantry, then the next stage's. A full Camp (500) stays marked done
+  // while Homestead (1200) is still short. People, garden and buildings are untouched.
+  const produced=Math.max(0,foodProduced(state)||0);
+  const currentStage=STAGE_LADDER.find(s=>s.id===here.id)||STAGE_LADDER[0];
+  const foodStages=[currentStage,dest].filter((s,i,arr)=>s&&arr.findIndex(x=>x.id===s.id)===i);
+  const foodRows=foodStages.map(stage=>({stage,req:(stage.requirements||[]).find(r=>r.id==='food')})).filter(row=>row.req);
+  for(const {stage,req} of foodRows){
+    tracks.push({
+      id:stage.id===dest.id?'food':`food-${stage.id}`,
+      label:foodRows.length>1?`${stage.name} food`:'Food',
+      value:`${produced}/${req.need}`,
+      met:produced>=req.need,
+    });
   }
   const met=tracks.filter(t=>t.met).length;
   const finished=!nextDef&&stageDone(state,dest);
-  const line=finished?`${dest.name} has what it needs.`:joinNeeds(dest.name,tracks.filter(t=>!t.met).map(t=>NEED_LINE[t.id]));
+  const line=finished?`${dest.name} has what it needs.`:joinNeeds(dest.name,tracks.filter(t=>!t.met).map(t=>NEED_LINE[String(t.id).startsWith('food')?'food':t.id]));
   const pct=tracks.length?met/tracks.length:1;
   return {
     people,need,gap,full,pct,met,total:tracks.length,line,tracks,

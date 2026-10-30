@@ -7,6 +7,14 @@
 [context."codex/living-world-player-test"]
   command = "npm run living-test:build"
 
+[images]
+  remote_images = ['https://storage\.googleapis\.com/productiongk/.*', 'https://backendgk2-0\.onrender\.com/uploads/.*']
+
+[[headers]]
+  for = "/preview-islands.json"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

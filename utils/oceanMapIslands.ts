@@ -2,6 +2,9 @@ import { getBibleMapApiRoot, resolveBibleMapMediaUrl } from './bibleMapApi';
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { isPlayableMainMapStory, isStoryPackComplete } from './mainMapStoryUnlock';
 import type { TryItPayload } from './tryItContent';
+import { LIVING_TEST_BUILD } from './livingTestMode';
+import { fetchPreviewIslandRows } from './previewIslandCatalogue';
+import { previewIslandArt } from './previewIslandArt.mjs';
 
 export type OceanMapIslandStatus = 'complete' | 'current' | 'locked';
 
@@ -20,6 +23,7 @@ export interface OceanMapIsland {
   mapArtUrl?: string;
   /** Optional sail-carousel upload; sail deck prefers map art, then this. */
   sailArtUrl?: string;
+  previewArtUrl?: string;
   mainMapUrl?: string;
   mainMapVideoUrl?: string;
   /** True when this row came from the Bible Map API. */
@@ -57,6 +61,7 @@ export type ApiIslandRow = {
   description?: string;
   mapArtUrl?: string;
   sailArtUrl?: string;
+  previewArtUrl?: string;
   mainMapUrl?: string;
   mainMapVideoUrl?: string;
   mapPosition?: { x?: number; y?: number };
@@ -83,8 +88,10 @@ export const getOceanIslandArtSrc = (island: OceanMapIsland): string | undefined
   island.mapArtUrl || undefined;
 
 /** Sail deck island art — same map icon the ocean map uses, then sail upload. */
-export const getSailIslandArtSrc = (island: OceanMapIsland): string | undefined =>
-  island.mapArtUrl || island.sailArtUrl || undefined;
+export const getSailIslandArtSrc = (island: OceanMapIsland): string | undefined => {
+  const source = island.mapArtUrl || island.sailArtUrl || undefined;
+  return LIVING_TEST_BUILD ? island.previewArtUrl || previewIslandArt(source, window.location.hostname) : source;
+};
 
 export const mapApiIslandToOceanIsland = (
   row: ApiIslandRow,
@@ -122,6 +129,7 @@ export const mapApiIslandToOceanIsland = (
     y,
     mapArtUrl: resolveBibleMapMediaUrl(row.mapArtUrl) || undefined,
     sailArtUrl: resolveBibleMapMediaUrl(row.sailArtUrl) || undefined,
+    previewArtUrl: row.previewArtUrl?.startsWith('/assets/preview-islands/') ? row.previewArtUrl : undefined,
     mainMapUrl: resolveBibleMapMediaUrl(row.mainMapUrl) || undefined,
     mainMapVideoUrl: resolveBibleMapMediaUrl(row.mainMapVideoUrl) || undefined,
     fromApi: true,
@@ -138,6 +146,13 @@ export const mapApiIslandToOceanIsland = (
 export const fetchOceanMapIslands = async (
   signal?: AbortSignal,
 ): Promise<OceanMapIsland[] | null> => {
+  if (LIVING_TEST_BUILD) {
+    const rows = await fetchPreviewIslandRows();
+    signal?.throwIfAborted();
+    const mapped = rows.filter(row => row.status !== 'archived')
+      .map(mapApiIslandToOceanIsland).filter((row): row is OceanMapIsland => row != null);
+    return mapped.length ? mapped : null;
+  }
   const res = await fetch(`${getBibleMapApiRoot()}/bible-map/islands?status=all`, {
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(CMS_ISLANDS_TIMEOUT_MS)]) : AbortSignal.timeout(CMS_ISLANDS_TIMEOUT_MS),
   });

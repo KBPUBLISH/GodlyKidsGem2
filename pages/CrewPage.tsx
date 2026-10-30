@@ -1,5 +1,5 @@
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
-import { warmPreviewNextScreen } from '../utils/previewWarmup';
+import { stopPreviewWarmup, warmPreviewNextScreen } from '../utils/previewWarmup';
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
@@ -146,68 +146,28 @@ const ISLAND_PILL_INSET_FRAC = 0.12;
 
 /** Where an island PNG's paint actually is, as fractions of its height. */
 type IslandArtFit = { paintedTop: number; paintedBottom: number; aspect: number };
-const islandArtFitCache = new Map<string, Promise<IslandArtFit | null>>();
-/**
- * Readable copy of an island PNG. The bucket sends
- * `Access-Control-Allow-Origin: *`, so a CORS fetch of the bare URL works
- * (and hits the image service worker's cache when the preloader filled it).
- * But if that cache holds the `<img>`'s no-cors (opaque) response, the worker
- * hands it back to the CORS request, which the browser rejects — so retry
- * under a distinct cache key, which makes the worker fetch fresh in CORS mode.
- */
-const fetchIslandArtBlob = async (src: string): Promise<Blob | null> => {
+/** Measure the image already displayed. Never download another copy for layout. */
+const measureLoadedIslandArt = (img: HTMLImageElement): IslandArtFit | null => {
   try {
-    const res = await fetch(src, { mode: 'cors' });
-    if (res.ok) return await res.blob();
-  } catch {
-    /* opaque cache hit — fall through */
-  }
-  const url = new URL(src, window.location.href);
-  url.searchParams.set('alpha', '1');
-  const res = await fetch(url.toString(), { mode: 'cors' });
-  return res.ok ? res.blob() : null;
-};
-/** Scans an island PNG's alpha (downsampled) for its first/last painted rows. */
-const measureIslandArt = (src: string): Promise<IslandArtFit | null> => {
-  let pending = islandArtFitCache.get(src);
-  if (!pending) {
-    pending = (async () => {
-      try {
-        const blob = await fetchIslandArtBlob(src);
-        if (!blob) return null;
-        const bitmap = await createImageBitmap(blob);
-        const aspect = bitmap.height / bitmap.width;
-        const w = 192;
-        const h = Math.max(1, Math.round(w * aspect));
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return null;
-        ctx.drawImage(bitmap, 0, 0, w, h);
-        const alpha = ctx.getImageData(0, 0, w, h).data;
-        bitmap.close();
-        const rowPainted = (y: number) => {
-          for (let x = 0; x < w; x++) if (alpha[(y * w + x) * 4 + 3] > 40) return true;
-          return false;
-        };
-        let bottom = h - 1;
-        while (bottom >= 0 && !rowPainted(bottom)) bottom--;
-        if (bottom < 0) return null;
-        let top = 0;
-        while (top < bottom && !rowPainted(top)) top++;
-        return { paintedTop: top / h, paintedBottom: (bottom + 1) / h, aspect };
-      } catch {
-        return null;
-      }
-    })().then((fit) => {
-      // Don't pin a transient failure (offline, 5xx) for the whole session.
-      if (!fit) islandArtFitCache.delete(src);
-      return fit;
-    });
-    islandArtFitCache.set(src, pending);
-  }
-  return pending;
+    const aspect = img.naturalHeight / img.naturalWidth;
+    if (!Number.isFinite(aspect) || aspect <= 0) return null;
+    const w = 192, h = Math.max(1, Math.round(w * aspect));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    const alpha = ctx.getImageData(0, 0, w, h).data;
+    const painted = (y: number) => {
+      for (let x=0; x<w; x++) if (alpha[(y*w+x)*4+3] > 40) return true;
+      return false;
+    };
+    let bottom=h-1, top=0;
+    while (bottom>=0 && !painted(bottom)) bottom--;
+    if (bottom<0) return null;
+    while (top<bottom && !painted(top)) top++;
+    return {paintedTop:top/h, paintedBottom:(bottom+1)/h, aspect};
+  } catch { return null; } // Cross-origin art can use the existing default bounds.
 };
 /** Sea panorama tile (crew-voyage-sea-pano.jpg) width ÷ height. */
 const SEA_PANO_ASPECT = 3840 / 1229;
@@ -353,7 +313,7 @@ const CREW_TAB_ART: Record<string, string> = {
 };
 const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.webp?v=1';
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
-const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+const WOOD_TEX = '/assets/images/wheel-background-wood.webp';
 /** Dark rounded plank behind the four bow buttons. Matches the headboard. */
 const CREW_BUTTON_PLANK = '/assets/images/crew-button-plank.webp?v=1';
 
@@ -627,8 +587,9 @@ const ShipDeckTabBar: React.FC<{
   wheelTransition?: string;
   /** Pointer down on the wheel; move/up are tracked on window with capture. */
   onWheelDown: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onArtReady?: () => void;
   stage: StageRect;
-}> = ({ tabs, disabled, wheelRef, rotation, wheelTransition, onWheelDown, stage }) => {
+}> = ({ tabs, disabled, wheelRef, rotation, wheelTransition, onWheelDown, onArtReady, stage }) => {
   // Bow spans the screen width on phones. On tablets (the deck art is taller
   // than the screen, so the lower deck is already cropped) the bow is kept
   // smaller so the hatch and walkable planks stay in view. Wheel sits on the
@@ -664,6 +625,8 @@ const ShipDeckTabBar: React.FC<{
     />
     <img
       src={CREW_TAB_BAR}
+      fetchPriority="high"
+      onLoad={onArtReady}
       alt=""
       draggable={false}
       className="pointer-events-none absolute bottom-0 left-1/2 z-[1] max-w-none -translate-x-1/2 select-none"
@@ -1088,7 +1051,7 @@ const CrewPage: React.FC = () => {
   const [storyError, setStoryError] = useState('');
   const [storyLoading, setStoryLoading] = useState(true);
   const [storyRetry, setStoryRetry] = useState(0);
-  useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('island') : undefined, []);
+  useEffect(() => { if (LIVING_TEST_BUILD) stopPreviewWarmup(); }, []);
 
   const [mapStories, setMapStories] = useState<OceanMapStoryRow[] | null>(null);
   const [progressTick, setProgressTick] = useState(0);
@@ -1419,20 +1382,15 @@ const CrewPage: React.FC = () => {
    * the sky, so cap it and let the flat sky color fill the rest.
    */
   const skyMirrorH = Math.min(Math.ceil(panoTop) + 1, Math.floor(panoSkyPx) - 1);
-  /** Measured paint bounds per island art src (see measureIslandArt). */
+  /** Paint bounds measured from each displayed island, without extra requests. */
   const [islandFits, setIslandFits] = useState<Record<string, IslandArtFit>>({});
+  const [loadedIslandArt, setLoadedIslandArt] = useState<Set<string>>(() => new Set());
+  const [deckArtReady, setDeckArtReady] = useState({hull:false, bow:false});
   useEffect(() => {
-    let alive = true;
-    voyageIslands.forEach((island) => {
-      measureIslandArt(island.src).then((fit) => {
-        if (!alive || !fit) return;
-        setIslandFits((prev) => (prev[island.src] ? prev : { ...prev, [island.src]: fit }));
-      });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [voyageIslands]);
+    if (LIVING_TEST_BUILD && deckArtReady.hull && deckArtReady.bow && loadedIslandArt.has(voyageIslands[lookIndex]?.src)) {
+      warmPreviewNextScreen('island');
+    }
+  }, [deckArtReady, loadedIslandArt, voyageIslands, lookIndex]);
   /**
    * How an island seats on the shore line: the share of its own height sunk
    * below it (so ISLAND_SUBMERGE_PX of paint go under, whatever the PNG's
@@ -2028,6 +1986,10 @@ const CrewPage: React.FC = () => {
           const offset = i - lookIndex;
           const distance = Math.abs(offset);
 
+          // Paint the active island before requesting its neighbors. Distant
+          // destinations must not compete for a child's mobile connection.
+          if (distance > 1.1 || (distance > 0 && !loadedIslandArt.has(voyageIslands[lookIndex]?.src))) return null;
+
           const scale = Math.max(0.46, 1 - distance * 0.3);
           const slide = 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease';
           const fade = Math.max(0.4, 1 - distance * 0.28);
@@ -2056,6 +2018,13 @@ const CrewPage: React.FC = () => {
                 data-voyage-index={i}
                 data-voyage-sink={sinkPct}
                 src={island.src}
+                fetchPriority={i === lookIndex ? 'high' : 'low'}
+                decoding="async"
+                onLoad={event => {
+                  const fit = measureLoadedIslandArt(event.currentTarget);
+                  if (fit) setIslandFits(previous => ({...previous, [island.src]:fit}));
+                  setLoadedIslandArt(previous => new Set(previous).add(island.src));
+                }}
                 onError={event => { const img = event.currentTarget; if (LIVING_TEST_BUILD && !img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/assets/images/crew-horizon-island-a.webp?v=1"; } }}
                 alt=""
                 draggable={false}
@@ -2180,6 +2149,8 @@ const CrewPage: React.FC = () => {
       {/* Hull fills the stage frame — same mapping as the 3D walk zone. */}
       <img
         src={CREW_VOYAGE_HULL}
+        fetchPriority="high"
+        onLoad={() => setDeckArtReady(previous => ({...previous, hull:true}))}
         alt=""
         aria-hidden
         draggable={false}
@@ -2436,6 +2407,7 @@ const CrewPage: React.FC = () => {
           then the whole board stays so his spotlight has a target. */}
       {(showJourneyBtn || showCrewBtn) && (
         <ShipDeckTabBar
+          onArtReady={() => setDeckArtReady(previous => ({...previous, bow:true}))}
           disabled={chromeLocked || sailingIsland || wheelSpinOut}
           stage={stage}
           wheelRef={wheelRef}

@@ -1,5 +1,6 @@
 import { createAssetWarmupQueue } from './assetWarmupQueue.mjs';
 import { previewWarmupAssets } from './previewAssets.mjs';
+import { warmFirstStoryIsland } from './previewIslandCatalogue';
 
 const queue = createAssetWarmupQueue(async (url: string, signal: AbortSignal) => {
   // Share the existing media cache even if the service worker has not taken control yet.
@@ -16,6 +17,7 @@ const queue = createAssetWarmupQueue(async (url: string, signal: AbortSignal) =>
 export function warmPreviewNextScreen(screen: 'onboarding' | 'ship' | 'island'): () => void {
   const connection = (navigator as Navigator & {connection?: {saveData?: boolean; effectiveType?: string}}).connection;
   queue.start(previewWarmupAssets(screen, connection));
+  if (screen !== 'island') void warmFirstStoryIsland();
   // Screen changes must not throw away an in-flight island download.
   return () => {};
 }

@@ -2,7 +2,7 @@ import { languageDirection } from '../localization/languageDirection';
 import {translate as translateStoryText} from '../localization/LocalizedText';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, X, Play, Pause, Volume2, Mic, Check, Music, Speaker, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -192,26 +192,6 @@ async function translateReaderPage(page: Page, language: string) {
     const boxes = page.content?.textBoxes?.length ? page.content.textBoxes : page.textBoxes?.length ? page.textBoxes : [{text:page.content?.text || ''}];
     const translatedTextBoxes = await Promise.all(boxes.map(async box => ({translatedText: await translateStoryText(box.text || '', language)})));
     return {translatedText: translatedTextBoxes.map(box=>box.translatedText).join(' '),translatedTextBoxes};
-}
-
-/** Page has video soundtrack the kid can mute/unmute (layered audio or native video track). */
-function pageHasLayeredVideoSound(page: Page | null | undefined): boolean {
-    if (!page) return false;
-    if ((page.backgroundAudioUrl || '').trim()) return true;
-    if (
-        page.useVideoSequence &&
-        Array.isArray(page.videoSequence) &&
-        page.videoSequence.some((v) => (v.audioUrl || '').trim() || (v.url || '').trim())
-    )
-        return true;
-    if (
-        page.backgroundType === 'video' ||
-        (page.backgroundUrl && /\.(mp4|webm|mov|m4v)$/i.test(page.backgroundUrl)) ||
-        page.files?.background?.type === 'video'
-    ) {
-        return !!(page.backgroundUrl || page.files?.background?.url);
-    }
-    return false;
 }
 
 /**
@@ -1078,8 +1058,8 @@ const BookReaderPage: React.FC = () => {
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
-    /** Kid toggle for layered soundtrack from uploaded video (`backgroundAudioUrl` / clip `audioUrl`), separate from narration. */
-    const [pageVideoSoundEnabled, setPageVideoSoundEnabled] = useState(true);
+    /** Layered soundtrack from uploaded video (`backgroundAudioUrl` / clip `audioUrl`) always plays; the kid-facing speaker toggle was removed from the reader toolbar. */
+    const pageVideoSoundEnabled = true;
     const [musicVolume] = useState(0.4); // Fixed volume at 40%
 
     // Use ref to track music enabled state for intervals/callbacks
@@ -5141,31 +5121,6 @@ const BookReaderPage: React.FC = () => {
                             )}
                         </div>
                     )}
-
-                    {pageHasLayeredVideoSound(currentPage) ? (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPageVideoSoundEnabled((v) => !v);
-                            }}
-                            className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${
-                                pageVideoSoundEnabled
-                                    ? 'border-cyan-400/50 shadow-lg shadow-cyan-400/20'
-                                    : 'border-white/20'
-                            }`}
-                            title={
-                                pageVideoSoundEnabled
-                                    ? 'Mute video soundtrack on this page'
-                                    : 'Play video soundtrack on this page'
-                            }
-                            aria-label={
-                                pageVideoSoundEnabled ? 'Mute page video soundtrack' : 'Unmute page video soundtrack'
-                            }
-                        >
-                            <Speaker className={`w-6 h-6 ${pageVideoSoundEnabled ? 'text-cyan-300' : 'text-white/50'}`} />
-                        </button>
-                    ) : null}
 
                     {/* Voice Selector */}
                     <div

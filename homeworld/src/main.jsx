@@ -6,7 +6,7 @@ import {SEEDS,realDuration,label,waterWindow} from './core.mjs';
 import {MINERALS,TOOL_TIERS,upgradeStatus,toolTier,forgeProgress,forgeTimeLeft,forgeEstimate} from './mining.mjs';
 import {SHOVEL_TIERS,shovelStatus,shovelTier,haveOf,hasWell} from './digging.mjs';
 import {FOODS,FOOD_RECIPES,MAX_ENERGY,MAX_HUNGER,energyFor,hungerFor,mealGain,canCook,restGain,energyCost} from './nutrition.mjs';
-import {completedFires,litFires,completedOvens,hotOvens,buildingById,woodTotal} from './building.mjs';
+import {completedFires,litFires,completedOvens,hotOvens} from './building.mjs';
 import {Icon,ItemIcon,ActionButton,TOOLS,useDialogFocus} from './ui.jsx';
 import {BuildMenu,PlacementControls,StrokeBar} from './building-ui.jsx';
 import {ActionMenu,QUICK_TOOLS} from './action-menu.jsx';
@@ -23,7 +23,6 @@ const FriendsIcon=()=><img className="picture-icon" src="/icons/higgsfield/frien
 const SHIP_ICON=['', 'assets', 'images', 'sail-tab-ship.png'].join('/');
 import {FishingGame} from './fishing-ui.jsx';
 import {skillFor} from './character-skills.mjs';
-import {assignCrew} from './island-plan.js';
 import {IslandPlan} from './island-plan.jsx';
 import {IslandTour,onboardingPending} from './onboarding.jsx';
 import {ArrivalProfile} from './arrival-profile.jsx';
@@ -172,7 +171,8 @@ function App(){
   const [sleepHomeId,setSleepHomeId]=useState(null);
   // Island to-do list: pops up once the Players World has settled, reopenable from the side buttons.
   const [plan,setPlan]=useState(null),planShown=useRef(false);
-  const openPlan=()=>{const g=engine.current;if(!g?.loaded)return;setActionsOpen(false);setPanel(null);const goal=g.goal;const def=goal&&buildingById(goal.kind);setPlan({items:g.plan(),crew:g.crew(),village:g.village?.plan()||null,goal:def?{kind:goal.kind,name:def.name,need:{wood:def.wood,stone:def.stone},have:{wood:woodTotal(g.store.state),stone:g.store.state.inventory.stone||0}}:null});};
+  const openPlan=()=>{const g=engine.current;if(!g?.loaded)return;setActionsOpen(false);setPanel(null);try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'gk-coins-please'},location.origin);}catch{/* standalone island */}setPlan({today:g.todayCard(),village:g.village?.plan()||null,coins:g.coinBalance()});};
+  const refreshPlan=()=>{const g=engine.current;if(!g?.loaded)return;setPlan(p=>p?{today:g.todayCard(),village:g.village?.plan()||null,coins:g.coinBalance()}:p);};
   useEffect(()=>{if(view.ui?.openPlan)openPlan();},[view.ui?.openPlan]);
   // First-visit tour (onboarding.jsx): while it is pending the to-do sheet waits; the tour's "Homes" step opens it by hand.
   const [tourActive,setTourActive]=useState(false);
@@ -180,7 +180,7 @@ function App(){
   useDialogFocus(panel,drawer,()=>close());
   useDialogFocus(showTime,timeDialog,()=>setShowTime(false));
   useEffect(()=>{if(panel&&drawer.current)drawer.current.scrollTop=0;},[panel]);
-  useEffect(()=>{const game=new HomeWorld(host.current,setView);engine.current=game;return()=>game.dispose();},[]);
+  useEffect(()=>{const game=new HomeWorld(host.current,setView);engine.current=game;window.__hw=game;return()=>{if(window.__hw===game)delete window.__hw;game.dispose();};},[]);
   const lastToast=view.toasts?.[0];useEffect(()=>{if(!lastToast){setToast('');setToastLife(0);return;}setToast(lastToast.text);setToastLife(lastToast.ms||0);const timer=setTimeout(()=>{setToast('');setToastLife(0);},lastToast.ms||6000);return()=>clearTimeout(timer);},[lastToast?.id]);
   const game=()=>engine.current,inventory=view.state?.inventory||{},busy=view.busy,stats=view.state?.stats||{};
   const invoke=(fn)=>{try{fn(game());}catch(e){setToast(e.message);}};
@@ -322,7 +322,7 @@ function App(){
       <footer>One game day = ten real minutes · {view.clock?.text} on Day {view.clock?.day}</footer>
     </section></div>}
     </div>
-    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan plan={plan.items} crew={plan.crew} goal={plan.goal} village={plan.village} working={view.work?.label||null} onClose={()=>setPlan(null)} onDropGoal={()=>{invoke(g=>g.clearGoal());setPlan(null);}} onGo={(task,who)=>{setPlan(null);invoke(g=>assignCrew(g,task,who));}}/>}
+    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan today={plan.today} village={plan.village} stages={view.stages} coins={Number.isFinite(view.coins)?view.coins:plan.coins} onClose={()=>setPlan(null)} onDismiss={id=>{invoke(g=>g.dismissFriendGoal(id));refreshPlan();}} onAssign={(id,choice)=>{invoke(g=>g.assignFriendGoal(id,choice));refreshPlan();}} onAdd={choice=>{invoke(g=>g.addTodayGoal(choice));refreshPlan();}} onClearExtra={()=>{invoke(g=>g.clearTodayGoal());refreshPlan();}}/>}
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
     {/* Welcome-ashore profile card: waits for the first-visit tour, fishing, the map and night to clear. */}
     {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive&&!plan}/>}

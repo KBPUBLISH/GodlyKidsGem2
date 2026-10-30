@@ -7,6 +7,7 @@ import {FOODS,hungerFor,activeCharacter} from './nutrition.mjs';
 import {footprint,workPoint,completedFires,litFires,fireCanTakeLog} from './building.mjs';
 import {HALL_SEATS,TABLE_TOP_Y,completedHalls,hallById,hallPoint,hallApproach,seatYaw,planMeal,servedLabel} from './dining.mjs';
 import {skillFor,MEAL_FISH,MEAL_TIMES,mealAt,hourLabel} from './character-skills.mjs';
+import {servesMeal} from './today-goals.mjs';
 import {turnToward,resetAnimatedPose} from './character-motion.js';
 import {fishModel} from './nutrition.js';
 import {noteEvent} from './island-feed.mjs';
@@ -174,12 +175,14 @@ export class Dining {
   }
 
   // ---- Meals: an hour before each meal Eve fishes and picks what is ripe while Noah grills the catch; Eve rings the bell. ----
-  cookActor(){for(const [,actor] of this.g.residents?.models||[])if(skillFor(actor.userData.name)?.id==='cook')return actor;return null;}
+  /** A friend the kid sent off the kitchen today (guard, wood, the garden) skips the meal. No override: same as before. */
+  servesKitchen(actor){const home=actor?.userData;if(!home?.id)return true;return servesMeal(this.g.store?.state,home.id,home.name);}
+  cookActor(){for(const [,actor] of this.g.residents?.models||[])if(skillFor(actor.userData.name)?.id==='cook'&&this.servesKitchen(actor))return actor;return null;}
   /** Who grills before meals: the friend whose skill says `grills` (Noah). Eve covers it when he is away or being played. */
   grillActor(){
     const g=this.g;let cook=null;
-    for(const [,actor] of g.residents?.models||[]){const sk=skillFor(actor.userData.name);if(sk?.grills&&actor!==g.actor)return actor;if(sk?.id==='cook')cook=actor;}
-    return cook&&cook!==g.actor?cook:null;
+    for(const [,actor] of g.residents?.models||[]){const sk=skillFor(actor.userData.name);if(sk?.grills&&actor!==g.actor&&this.servesKitchen(actor))return actor;if(sk?.id==='cook')cook=actor;}
+    return cook&&cook!==g.actor&&this.servesKitchen(cook)?cook:null;
   }
   /** The meal Eve is working toward right now (null between windows). Used by residents so her own chores wait. */
   cooking(){const r=this.routine;return r.meal&&r.stage!=='done'&&r.stage!=='idle'?r.meal:null;}
@@ -228,7 +231,9 @@ export class Dining {
   }
   /** Noah's side of the meal: while Eve fishes he fetches a log if the fire is cold, then grills whatever she caught. */
   grillUpdate(eve,meal){
-    const g=this.g,s=g.store.state,minutes=gameTime(s),r=this.routine;if(r.grill==='done')return;
+    const g=this.g,s=g.store.state,minutes=gameTime(s),r=this.routine;
+    if(this.grill&&!this.servesKitchen(this.grill.actor))this.stopGrill();
+    if(r.grill==='done')return;
     const who=this.grillActor();if(!who)return;const home=who.userData,what=meal.name.toLowerCase();
     if(r.grill==='grilling'){if(!this.grill)r.grill='done';return;}
     if(r.grill==='wood'){if(home.job?.type==='chop')return;r.grill='idle';}

@@ -34,6 +34,8 @@ import {Fishing} from './fishing.js';
 import {Animals} from './animals.js';
 import {NightSky} from './night-sky.js';
 import {planFor} from './island-plan.js';
+import {todayBag,withToday,displayGoal,optionsFor,addChoices,dismissOverride,setOverride,assignExtra,clearExtra,displayCoins,GOALS,defaultGoalId} from './today-goals.mjs';
+import {characterKey} from './characters.mjs';
 import {registerWellAssets} from './well-model.js';
 import {registerOvenAssets} from './oven-model.js';
 import {registerDiningHallAssets} from './dining-hall-model.js';
@@ -771,6 +773,73 @@ export class HomeWorld {
   get goal(){try{const v=JSON.parse(localStorage.getItem(GOAL_KEY)||'null');return v?.kind&&buildingById(v.kind)?v:null;}catch{return null;}}
   setGoal(kind){if(!buildingById(kind))return;localStorage.setItem(GOAL_KEY,JSON.stringify({kind,at:Date.now()}));this.toast(`Goal set: build a ${buildingById(kind).name}!`);this.notify();}
   clearGoal(){localStorage.removeItem(GOAL_KEY);this.notify();}
+  /** Gold the island shop spends (parent `gk-coins`, or the same profile wallet when the parent has not posted). */
+  coinBalance(){return displayCoins(this.coins);}
+  /** One large goal per friend ashore, plus the single extra the kid may have added today. */
+  todayCard(){
+    const s=this.store?.state;if(!s)return {day:1,friends:[],extra:null,choices:[]};
+    const project=this.village?.plan()?.goal||null;
+    const order={eve:0,noah:1,adam:2,abel:3};
+    const friends=this.crew().map(c=>({...c,goal:displayGoal(s,c.id,c.name),options:optionsFor(c.name,project)}))
+      .sort((a,b)=>(order[characterKey(a.name)]??50)-(order[characterKey(b.name)]??50)||a.name.localeCompare(b.name));
+    const bag=todayBag(s);
+    return {day:bag.day,friends,extra:bag.extra,choices:addChoices(project)};
+  }
+  /** Write today's goals into the island save and, when the extra is a building, point the settlement at it. */
+  _saveGoals(bag,pinKind,unpinKind){
+    const s=this.store.state;
+    this.store.save({...s,village:withToday(s.village,bag)});
+    if(pinKind&&buildingById(pinKind))localStorage.setItem(GOAL_KEY,JSON.stringify({kind:pinKind,at:Date.now()}));
+    else if(unpinKind){try{const cur=JSON.parse(localStorage.getItem(GOAL_KEY)||'null');if(cur?.kind===unpinKind)localStorage.removeItem(GOAL_KEY);}catch{/* leave the build goal */}}
+  }
+  /** Drop the helper's current background chore so the new goal can start. A job the kid handed them stays. */
+  releaseFriend(id){
+    const actor=this.residents?.models?.get(id);if(!actor)return;
+    const home=actor.userData;
+    if(this.dining?.grill?.actor===actor)this.dining.stopGrill();
+    if(home.job?.explicit)return;
+    if(home.job)this.residents.stopJob(actor,false);
+    else if(home.chore){this.residents.claims.delete(home.chore.key);home.chore=null;}
+  }
+  dismissFriendGoal(id){
+    const s=this.store?.state;if(!s||!id)return;
+    const prev=todayBag(s),next=dismissOverride(prev,id);
+    try{this._saveGoals(next,null,prev.extra?.who===id?prev.extra.kind:null);}catch(e){this.toast(e.message);return;}
+    this.releaseFriend(id);this.notify();
+  }
+  assignFriendGoal(id,choice){
+    const s=this.store?.state;if(!s||!id||!choice)return;
+    const prev=todayBag(s);
+    const next=choice.foreman?setOverride(prev,id,null):setOverride(prev,id,choice);
+    const pin=!choice.foreman&&choice.kind?choice.kind:null;
+    const unpin=prev.extra?.who===id&&prev.extra.kind&&prev.extra.kind!==pin?prev.extra.kind:null;
+    try{this._saveGoals(next,pin,unpin);}catch(e){this.toast(e.message);return;}
+    this.releaseFriend(id);
+    const who=this.residents?.models?.get(id)?.userData?.name||'Your friend';
+    const title=choice.foreman?(GOALS[defaultGoalId(who)]?.title||'the foreman\'s goal'):(choice.title||GOALS[choice.id]?.title);
+    this.toast(choice.foreman?`${who} is back on the foreman's goal.`:`${who}'s goal today: ${title}.`);
+    this.notify();
+  }
+  addTodayGoal(choice){
+    const s=this.store?.state;if(!s||!choice?.id||!GOALS[choice.id])return;
+    const prev=todayBag(s);
+    const {bag,who}=assignExtra(prev,this.crew(),choice);
+    if(!who){this.toast('Drop off a friend first.');this.notify();return;}
+    const unpin=prev.extra?.kind&&prev.extra.kind!==(choice.kind||null)?prev.extra.kind:null;
+    try{this._saveGoals(bag,choice.kind||null,unpin);}catch(e){this.toast(e.message);return;}
+    this.releaseFriend(who.id);
+    if(prev.extra?.who&&prev.extra.who!==who.id)this.releaseFriend(prev.extra.who);
+    this.toast(`${who.name}'s goal today: ${choice.title}.`);
+    this.notify();
+  }
+  clearTodayGoal(){
+    const s=this.store?.state;if(!s)return;
+    const prev=todayBag(s);if(!prev.extra)return;
+    try{this._saveGoals(clearExtra(prev),null,prev.extra.kind||null);}catch(e){this.toast(e.message);return;}
+    this.releaseFriend(prev.extra.who);
+    this.toast('The extra goal is off. The foreman chooses again.');
+    this.notify();
+  }
   /** Everyone living on the island right now; `active` is the body currently being played. */
   crew(){return [...(this.residents?.models?.values()||[])].map(a=>({id:a.userData.residentId,name:a.userData.name||'Friend',imageUrl:a.userData.imageUrl||'',active:a===this.actor}));}
   /** Hand a job to a specific friend: switch bodies if needed, then start the task. */
@@ -875,7 +944,7 @@ export class HomeWorld {
   notify(){if(this.disposed)return;this.onUpdate(this.snapshot());}
   snapshot(){
     if(!this.store)return {loaded:false,status:this.status,error:this.error};const s=this.store.state,minutes=gameTime(s),clock=timeLabel(minutes),phase=s.clock.cycle===1?dayPhase(s.clock,Date.now()):null;const plants=Object.entries(s.cells).filter(([,c])=>c.seed).map(([key,c])=>({key,...growth(c,minutes)}));
-    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),dining:this.dining?.snapshot()||null,reel:this.residents?.reelSnapshot?.()||null,diningCard:this.building?.openMenu?.id==='dining'?this.dining?.preview?.(this.building.openMenu.hallId)||null:null,fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,arrival:this.arrivals?.snapshot()||null,stages:this.stages?.snapshot()||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,garden:this.gardenKeeper?.card()||null,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
+    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),dining:this.dining?.snapshot()||null,reel:this.residents?.reelSnapshot?.()||null,diningCard:this.building?.openMenu?.id==='dining'?this.dining?.preview?.(this.building.openMenu.hallId)||null:null,fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,arrival:this.arrivals?.snapshot()||null,stages:this.stages?.snapshot()||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,coins:Number.isFinite(this.coins)?this.coins:null,garden:this.gardenKeeper?.card()||null,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
   }
   tick() {
     if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const frameDt=this.clock.getDelta(),dt=Math.min(.08,frameDt),now=performance.now();this.frameDt=frameDt;this.frameSerial=(this.frameSerial||0)+1;

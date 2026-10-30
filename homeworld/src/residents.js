@@ -20,6 +20,7 @@ import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.m
 import { noteEvent } from './island-feed.mjs';
 import { practiceRate, learnedRole } from './settlement.mjs';
 import { buildingProgress } from './building.mjs';
+import { focusFor } from './today-goals.mjs';
 
 /** Collected Bible characters living on the Players World island. Same key as the app, scoped per kid profile (storage-scope.mjs). */
 export const RESIDENTS_KEY_BASE = 'godlykids_players_world_residents_v1';
@@ -552,15 +553,20 @@ export class Residents {
     }
     const game = this.game, s = game.store?.state;
     if (!s || s.night || !game.loaded || energyFor(s, home.id) <= 10) return null;
+    // A goal the kid set for today replaces the foreman's default. `off` means they dismissed it
+    // and have not picked a new one, so this friend waits instead of continuing the old role.
+    const focus = focusFor(s, home.id, home.name);
+    if (focus?.id === 'off') return null;
+    const allow = (kind) => !focus || focus.chores.includes(kind);
     const min = gameTime(s), here = { x: home.x, y: home.y }, busyKey = game.order?.key || game.action?.key || null, busyFire = game.order?.fireId || null;
     const options = [];
     const hasWood = Object.entries(s.inventory || {}).some(([id, n]) => id.endsWith('_wood') && n > 0);
-    if (hasWood) for (const fire of firesNeedingLog(s, min)) {
+    if (allow('stoke') && hasWood) for (const fire of firesNeedingLog(s, min)) {
       const key = `fire:${fire.id}`;
       if (this.claims.has(key) || fire.id === busyFire) continue;
       options.push({ kind: 'stoke', key, fireId: fire.id, target: workPoint(game.world, fire), reach: 1.2, label: 'Adding a log to the fire', rank: 0 });
     }
-    for (const [cellKey, cell] of Object.entries(s.cells || {})) {
+    if (allow('water')) for (const [cellKey, cell] of Object.entries(s.cells || {})) {
       const g = growth(cell, min);
       if (!g?.thirsty || g.seed.kind !== 'crop') continue;
       const key = `cell:${cellKey}`;
@@ -570,7 +576,12 @@ export class Residents {
     options.push(...this.pickSkillChores(home, s, min, here, busyKey));
     options.push(...this.pickVillageChores(home, s, min, here));
     // Abel's garden fences and scarecrows. builderChores returns nothing for Noah, Adam, and everyone else.
-    if (game.gardenKeeper && game.playersOnly) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
+    // A friend sent off the garden (or onto a different goal) leaves the fences for another day.
+    if (game.gardenKeeper && game.playersOnly && allow('gardenWork')) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
+    if (focus) {
+      const allowed = new Set(focus.chores);
+      for (let i = options.length - 1; i >= 0; i--) if (!allowed.has(options[i].kind)) options.splice(i, 1);
+    }
     if (!options.length) return null;
     options.sort((a, b) => a.rank - b.rank || dist(a.target, here) - dist(b.target, here));
     for (const o of options.slice(0, 18)) {
@@ -593,12 +604,16 @@ export class Residents {
    */
   pickSkillChores(home, s, min, here, busyKey) {
     const game = this.game, skill = skillFor(home.name);
-    if (!skill) return [];
+    const focus = focusFor(s, home.id, home.name);
+    if (focus?.id === 'off') return [];
+    // No override: the friend's own skill, exactly as before. An override swaps in that goal's chores
+    // so a gardener asked to stock wood chops, and a builder asked to tend the garden weeds.
+    if (!skill && !focus) return [];
+    const does = (kind) => focus ? focus.chores.includes(kind) : !!skill?.chores?.has(kind);
     const { day } = timeLabel(min);
     const auto = home.auto && home.auto.day === day ? home.auto : (home.auto = { day, trees: 0, rocks: 0, plots: 0 });
     const busyId = game.order?.id || game.action?.id || null, free = (key) => !this.claims.has(key), options = [];
     const near = (o) => dist(o.target, here) <= 60;
-    const does = (kind) => skill.chores?.has(kind);
     if (does('stump')) {
       for (const t of activeStumps(game.world, s)) {
         const key = `stump:${t.id}`;

@@ -1,5 +1,9 @@
 import React,{useState} from 'react';
 import {Icon} from './ui.jsx';
+import {StageIcon} from './stage-journey.jsx';
+
+/** Settlement stage id (settlement.mjs) → journey icon (stage-journey.jsx). */
+const STAGE_ICONS={camp:'camp',homestead:'homestead',village:'village',harbour_town:'harbor'};
 
 const PICK_KEY='gk-plan-who';
 const memory={};
@@ -32,6 +36,7 @@ function VillageStrip({village,goal,onDropGoal}){
   const status=!g?'Everything on the plan is built. The friends keep the island running.':g.blocked?g.blocked:g.underway?`${g.name}: the friends are on it.`:g.ready?`${g.name}: materials ready, waiting for a free builder.`:`${g.name}: the friends are gathering ${needLine||'what it needs'}.`;
   return <div className="plan-village">
     <div className="plan-village-head">
+      <StageIcon id={STAGE_ICONS[stage.id]||'camp'} size={34} className="plan-village-icon"/>
       <div><small>OUR VILLAGE · {stage.name.toUpperCase()}</small><strong>{g?(g.focus?'Your pick: ':'Next: ')+g.name:'All built!'}</strong></div>
       <span className="plan-stage-dots" aria-label={`Stage ${stage.index+1} of ${stage.total}`}>{Array.from({length:stage.total},(_,i)=><i key={i} className={i<stage.index?'done':i===stage.index?'now':''}/>)}</span>
     </div>

@@ -11,7 +11,7 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players155&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players156&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
@@ -404,6 +404,16 @@ const MyHomePage: React.FC = () => {
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
       if (data.type === 'gk-back-to-ship') navigate('/crew');
+      if (data.type === 'gk-character-profile-please') {
+        // A story friend the island's canon does not know: fetch a Gemini-written profile and hand it back
+        // (services/islandCharacterService.ts). Null keeps the generic helper card.
+        const ask = data as { name?: unknown; id?: unknown; sourceStoryId?: unknown };
+        if (typeof ask.name === 'string' && ask.name.trim()) {
+          const name = ask.name.trim();
+          void fetchIslandCharacterProfile({ name, id: typeof ask.id === 'string' ? ask.id : '', sourceStoryId: typeof ask.sourceStoryId === 'string' ? ask.sourceStoryId : '' })
+            .then((profile) => post({ type: 'gk-character-profile', name, profile }));
+        }
+      }
       if (data.type === 'gk-resident-pray') {
         const pray = data as { id?: unknown; text?: unknown; tts?: unknown };
         if (typeof pray.id === 'string' && data.character?.id && typeof pray.text === 'string') {

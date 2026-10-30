@@ -1,7 +1,7 @@
 /**
  * The village mind (pure rules, no network).
  *
- * The island grows through stages: Camp → Homestead → Village → Town. Each stage lists the
+ * The island grows through stages: Camp → Homestead → Village → Harbour Town. Each stage lists the
  * buildings and upgrades that finish it. `nextGoal` picks the next feasible one (the kid can
  * sway it by setting a build goal), `villageNeeds` turns that into quantities every friend
  * can work toward, and `creditSkill` lets each friend learn from what they actually do, so
@@ -21,8 +21,10 @@ export const STAGES=[
     goals:[{kind:'hut'},{kind:'garden'},{kind:'wood_store_20'}]},
   {id:'village',name:'Village',motto:'Room for everyone, meals together and water close by.',
     goals:[{kind:'cottage',upgrade:'hut'},{kind:'dining_hall'},{kind:'wood_store_50'},{kind:'hut',count:2},{kind:'well'}]},
-  {id:'town',name:'Town',motto:'Workshops, a stable for the animals and a church on the hill.',
-    goals:[{kind:'forge'},{kind:'stable'},{kind:'townhouse',upgrade:'cottage'},{kind:'oven'},{kind:'church'}]},
+  // Same ladder as stages.mjs (Camp → Homestead → Village → Harbour Town). The market and the dock come first
+  // here so travellers (travellers.js) start calling by boat as soon as the village plan is done.
+  {id:'harbour_town',name:'Harbour Town',motto:'A market and a dock by the water, workshops, a stable and a church on the hill.',
+    goals:[{kind:'market'},{kind:'dock'},{kind:'forge'},{kind:'stable'},{kind:'townhouse',upgrade:'cottage'},{kind:'oven'},{kind:'hut',count:5},{kind:'church'}]},
 ];
 
 /** Activities a friend can get better at, and what each action teaches. */

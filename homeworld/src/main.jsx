@@ -27,6 +27,7 @@ import {assignCrew} from './island-plan.js';
 import {IslandPlan} from './island-plan.jsx';
 import {IslandTour,onboardingPending} from './onboarding.jsx';
 import {ArrivalProfile} from './arrival-profile.jsx';
+import {StageBadge,StageJourney} from './stage-journey.jsx';
 import LoadingTips from './loading-tips.jsx';
 import './style.css';
 
@@ -283,6 +284,8 @@ function App(){
       <button className="tools-chip" aria-label="Open tools and upgrades" disabled={!view.loaded||view.ambient} onClick={()=>openPanel('tools')}><Icon type="mine"/><span>Tools</span></button>
     </nav>
     {view.reel&&<div className="reel-caption" role="status" aria-live="polite"><span className="reel-dot"/><span className="friend-face">{view.reel.imageUrl?<img src={view.reel.imageUrl} alt=""/>:view.reel.name[0]}</span><span className="reel-text"><strong>Watching {view.reel.name}</strong><small>{view.reel.label}</small></span><button type="button" onClick={()=>invoke(g=>g.residents.stopReel())}>Take over</button></div>}
+    {/* Stage badge sits top-left; the Friends button hangs directly below it (stage-journey.css / .friends-button). */}
+    {view.loaded&&view.playersOnly&&!view.ambient&&!view.fishing&&!view.inside&&view.stages&&<StageBadge stages={view.stages} onOpen={()=>{setActionsOpen(false);setFriendsOpen(false);setPanel(null);setShowTime(false);setPlan(null);invoke(g=>g.stages?.toggle());}}/>}
     {view.playersOnly&&!view.fishing&&!view.inside&&<button type="button" className={`friends-button ${friendsOpen?'open':''}`} aria-expanded={friendsOpen} aria-label={view.friendsWaiting?.count?`Friends. ${view.friendsWaiting.count} waiting to come ashore`:'Friends'} disabled={!view.loaded} onClick={()=>{setActionsOpen(false);if(!view.friends?.length){window.parent?.postMessage({type:'gk-open-friends'},location.origin);return;}setFriendsOpen(o=>!o);}}><FriendsIcon/><span>{view.friendsWaiting?.count>0&&view.friendsWaiting.name&&!friendsOpen?<>Drop off<br/>{view.friendsWaiting.name}</>:'Friends'}</span>{view.friendsWaiting?.count>0&&<b className="friends-badge">{view.friendsWaiting.count}</b>}</button>}
     {friendsOpen&&view.playersOnly&&!view.fishing&&<><div className="friends-shade" onClick={()=>setFriendsOpen(false)}/><div className="friends-menu" role="menu" aria-label="Friends on the island">
       {view.friends.map(f=><button key={f.id} type="button" role="menuitem" className={`friend-row ${f.selected?'selected':''} ${f.energy<=20||f.hunger<=25?'low':''}`} onClick={()=>{setFriendsOpen(false);invoke(g=>g.residents.select(f.id));}} aria-label={`${f.name}. Energy ${f.energy}. Tummy ${f.hunger} percent. ${f.status}. ${f.selected?'You are playing as them':'Tap to watch them; play as them from their card'}`}>
@@ -322,6 +325,8 @@ function App(){
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
     {/* Welcome-ashore profile card: waits for the first-visit tour, fishing, the map and night to clear. */}
     {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive&&!plan}/>}
+    {/* Island journey panel + new-stage celebration (stage-journey.jsx); the badge in the top bar opens it. */}
+    {view.playersOnly&&<StageJourney engine={engine} stages={view.stages} enabled={view.loaded&&!view.ambient&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive}/>}
     <EnergyFx engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!view.night?.sleeping}/>
     {view.playersOnly&&<IslandTour engine={engine} view={view} ui={{panel,showTime,mapOnly,actionsOpen,actionsTab,friendsOpen,plan:!!plan}} onActive={setTourActive}/>}
     <MorningNote report={view.loaded&&!view.night?.sleeping?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>

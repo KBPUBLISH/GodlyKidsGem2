@@ -54,7 +54,8 @@ function makeTable(){
 }
 
 function furnish(kind){
-  const def=buildingById(kind),beds=def?.beds||1,g=new THREE.Group();
+  // Homes sleep more friends than the ground floor shows (building.mjs `beds`); at most four beds are drawn, the rest are "upstairs".
+  const def=buildingById(kind),beds=Math.min(4,def?.beds||1),g=new THREE.Group();
   g.name='home-interior';
   const fw=Math.min((def?.size[0]||2)*.72,3.1),fd=Math.min((def?.size[1]||2)*.62,2.8);
   g.add(board(fw,.04,fd,MAT.floor,0,.03,-.05));

@@ -1,0 +1,66 @@
+/* Island journey: stage badge (top bar), ladder panel and the new-stage celebration (stage-journey.jsx). */
+/* Top-left, same row as the clock; the Friends button (style.css) hangs 8px below it: badge is 48px tall, Friends starts at +56px. */
+.stage-badge{position:absolute;z-index:13;top:var(--island-hud-top,max(12px,env(safe-area-inset-top)));left:max(12px,env(safe-area-inset-left));display:flex;align-items:center;gap:7px;height:48px;min-height:0;padding:4px 12px 4px 7px;border:2px solid #fff1c5;border-radius:16px;background:#fff9e9f2;color:#354b38;box-shadow:0 4px 0 #9a95614d;text-align:left}
+.stage-badge .stage-icon{flex:none;filter:drop-shadow(0 1px 0 #0001)}
+.stage-badge>span{display:grid;line-height:1.05}
+.stage-badge small{font-size:9px;font-weight:900;letter-spacing:.09em;color:#8a7a4a}
+.stage-badge strong{font-size:14px;font-weight:900;white-space:nowrap}
+.stage-badge-dot{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 5px;display:grid;place-items:center;border-radius:999px;background:#e7623f;color:#fff;font-size:11px;font-weight:900;font-style:normal;border:2px solid #fff9e9}
+.stage-badge.cheer{animation:stage-badge-cheer 1.1s ease-in-out infinite;border-color:#ffd36b}
+@keyframes stage-badge-cheer{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+/* Narrow phones: a little tighter so the badge and the clock never meet. */
+@media(max-width:400px){.stage-badge{padding:4px 10px 4px 6px}.stage-badge strong{font-size:13px}}
+/* Stage icon on the to-do card's village strip (island-plan.jsx). */
+.plan-village-head .plan-village-icon{flex:none;padding:3px;border-radius:12px;background:#fff;border:2px solid #a9cf8f}
+.plan-village-head>div{flex:1;min-width:0}
+
+.journey-shade{position:absolute;inset:0;z-index:42;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:#1d3d2833;backdrop-filter:blur(2px);animation:plan-in .25s ease-out;pointer-events:auto}
+.journey-card{width:min(100%,440px);max-height:min(82dvh,640px);overflow:auto;scrollbar-width:none;padding:14px 14px 12px;margin-bottom:max(8px,env(safe-area-inset-bottom,0px));display:grid;gap:12px;border-color:#e7c25a;background:#fff8e9fa}
+.journey-head{display:flex;align-items:flex-start;gap:12px}.journey-head>div{flex:1;min-width:0}.journey-head h2{margin:2px 0 4px;font-size:21px;line-height:1.1;letter-spacing:-.2px}.journey-head p{margin:0;font-size:13px;line-height:1.35;color:#5c4a1c;font-weight:700}
+.journey-head-icon{flex:none;padding:5px;border-radius:16px;background:#fff1c7;border:2px solid #e7c25a;box-sizing:content-box}
+.journey-head .close{flex:none}
+.journey-ladder{list-style:none;margin:0;padding:0;display:grid;gap:0;position:relative}
+.journey-step{position:relative;display:grid;grid-template-columns:48px 1fr;gap:10px;padding:8px 0 10px}
+.journey-step::before{content:'';position:absolute;left:23px;top:50px;bottom:-6px;width:3px;border-radius:2px;background:#e8dcc3}
+.journey-step:last-child::before{display:none}
+.journey-step.done::before{background:#8fbf6a}
+.journey-step-icon{position:relative;width:48px;height:48px;display:grid;place-items:center;border-radius:50%;background:#fff;border:2.5px solid #e8dcc3;align-self:start}
+.journey-step.done .journey-step-icon{background:#f1f9e6;border-color:#8fbf6a}
+.journey-step.current .journey-step-icon{background:#fff1c7;border-color:#e7c25a;box-shadow:0 0 0 4px rgba(255,217,90,.35)}
+.journey-step.next .journey-step-icon{border-style:dashed;border-color:#c9b48a}
+.journey-step.later-stage{opacity:.55}.journey-step.later-stage .journey-step-icon{border-style:dashed}
+.journey-check{position:absolute;right:-5px;bottom:-4px;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:#4a8c59;color:#fff;font-size:12px;font-weight:900;border:2px solid #fff8e9}
+.journey-step-body{min-width:0;padding-top:2px}
+.journey-step-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.journey-step-title strong{font-size:16px;font-weight:900;color:#2f3a24}.journey-step-title small{font-size:11px;font-weight:900;letter-spacing:.04em;color:#8a7a4a;white-space:nowrap}
+.journey-step.current .journey-step-title small{color:#9a7a1f}.journey-step.done .journey-step-title small{color:#3d7a45}
+.journey-step-body>p{margin:2px 0 0;font-size:12.5px;line-height:1.35;color:#5a6a4a;font-weight:650}
+.stage-reqs{list-style:none;margin:8px 0 0;padding:8px 10px;display:grid;gap:7px;border-radius:14px;background:#fff;border:2px solid #ece4cc}
+.stage-req{display:grid;grid-template-columns:22px 1fr;gap:6px 8px;align-items:center}
+.stage-req-mark{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;border:2px solid #d8ccae;background:#fffdf2;font-size:12px;font-weight:900;color:#fff}
+.stage-req.done .stage-req-mark{background:#4a8c59;border-color:#367d55}
+.stage-req-body{min-width:0;display:grid;line-height:1.2}.stage-req-body strong{font-size:13.5px;font-weight:900;color:#2f3a24}.stage-req-body strong b{color:#9a7a1f;font-variant-numeric:tabular-nums}.stage-req-body small{font-size:11px;color:#8a7a4a;font-weight:700}
+.stage-req.done .stage-req-body strong{color:#3d7a45;text-decoration:line-through;text-decoration-color:#8fbf6a99}
+.stage-req-bar{grid-column:2;height:7px;border-radius:999px;background:#e9dcae;overflow:hidden}.stage-req-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8fc45f,#4f9d3a);transition:width .4s ease}
+.stage-req.done .stage-req-bar i{background:linear-gradient(90deg,#f3c84a,#e0a21d)}
+.journey-island{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.journey-island span{display:grid;justify-items:center;padding:7px 6px;border-radius:12px;background:#fff;border:1.5px solid #ece4cc}.journey-island b{font-size:20px;font-weight:900;color:#2f3a24;line-height:1}.journey-island small{font-size:10.5px;font-weight:800;color:#8a7a4a;text-align:center;line-height:1.2;margin-top:2px}
+.journey-foot{margin:0;font-size:12px;line-height:1.35;color:#8a7a4a;font-weight:700;text-align:center}
+.journey-visitors{padding:10px 12px;border-radius:16px;background:linear-gradient(180deg,#e6f3fb,#d7ebf7);border:2px solid #9fc8e2}
+.journey-visitors .eyebrow{color:#2f6a8c}
+.journey-visitor-stats{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}.journey-visitor-stats span{display:grid;justify-items:center;min-width:92px;padding:6px 10px;border-radius:12px;background:#fff;border:1.5px solid #b9d8ea}.journey-visitor-stats b{font-size:20px;font-weight:900;color:#2f6a8c;line-height:1}.journey-visitor-stats small{font-size:10.5px;font-weight:800;color:#4a6a7a;text-align:center;line-height:1.2;margin-top:2px}
+.journey-visitors>p{margin:0;font-size:12.5px;line-height:1.35;color:#3d5a6a;font-weight:700}
+@media(max-height:560px){.journey-card{max-height:calc(100dvh - 24px)}}
+
+/* Celebration: confetti over the island and a card in the middle; tap anywhere to clear. */
+.stage-cheer{position:absolute;inset:0;z-index:46;display:grid;place-items:center;pointer-events:auto;animation:stage-cheer-life 6.5s linear forwards}
+@keyframes stage-cheer-life{0%{opacity:0}4%{opacity:1}85%{opacity:1}100%{opacity:0}}
+.stage-confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.stage-confetti i{position:absolute;top:-16px;width:11px;height:16px;border-radius:3px;background:hsl(var(--h) 85% 60%);animation:stage-confetti-fall var(--fall) ease-in var(--d) forwards;opacity:0}
+.stage-confetti i:nth-child(odd){width:8px;height:8px;border-radius:50%}
+@keyframes stage-confetti-fall{0%{transform:translateY(0) rotate(0);opacity:0}6%{opacity:1}100%{transform:translateY(110vh) rotate(var(--spin));opacity:.9}}
+.stage-cheer-card{position:relative;display:grid;justify-items:center;gap:4px;padding:18px 26px 16px;border-radius:24px;background:#fff8e9fa;border:3px solid #e7c25a;box-shadow:0 10px 35px #101b3e45;text-align:center;animation:stage-cheer-pop .5s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes stage-cheer-pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.stage-cheer-icon{display:grid;place-items:center;width:92px;height:92px;border-radius:50%;background:#fff1c7;border:3px solid #e7c25a;margin-bottom:4px;animation:stage-cheer-wiggle 1.2s ease-in-out infinite}
+@keyframes stage-cheer-wiggle{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.stage-cheer-card strong{font-size:22px;line-height:1.1;color:#2f3a24;font-weight:900}
+.stage-cheer-card small{font-size:12px;font-weight:800;color:#8a7a4a}
+@media(prefers-reduced-motion:reduce){.stage-confetti{display:none}.stage-cheer-icon,.stage-badge.cheer{animation:none}}

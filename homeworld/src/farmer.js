@@ -357,8 +357,7 @@ export class Farmer{
     if(this.arrival&&!this.arrival.met)push('collect',this.dockPoint(s,plan),{rank:0,label:'Welcoming the new animals',reach:1.8,dwell:2.2});
     if(hour>=20.3&&ranch.herdedDay!==day&&R.herdCount(s)>0&&st.stables)push('herd',this.gateOut(plan)||this.reachPoint(s,R.STABLE_KIND),{rank:0,label:'Counting the animals in',reach:1.6,dwell:2});
     const herd=R.herdCount(s),energy=energyFor(s,home.id),underway=activeBuildings(s).some(b=>b.status!=='complete'&&!b.project);
-    // No stable yet. The foreman picks the flock slot before anyone walks. Squares the kid already
-    // tapped stay theirs; a refused row does not send Adam into a crack.
+    // No stable yet. Adam asks where the fence should go, then builds on the squares the kid tapped.
     if(!this.stables(s).length){
       if(underway||energy<BUILD_ENERGY+2||woodTotal(s)<STABLE_DEF.wood||(s.inventory.stone||0)<STABLE_DEF.stone)return options;
       const gate=checkIn(s,{who:home.id,brain:'farmer',intent:{action:'paddock',kind:R.STABLE_KIND},world:this.g.world});
@@ -373,10 +372,7 @@ export class Farmer{
         push('stable',drawn.work,{rank:0.3,label:'Building a stable',reach:1.0,dwell:2.2,cellKey:drawn.key,rotation:drawn.rotation});
         return options;
       }
-      if(!gate.ok){speakRefusal(this.g,this.foremanTold,home.id,home.name,gate);return options;}
-      const site=this.farmSite(s,gate.site);
-      if(!site){speakRefusal(this.g,this.foremanTold,home.id,home.name,{ok:false,reason:'No room in the row yet',instead:'No room in the row yet'});return options;}
-      push('stable',site.work,{rank:0.3,label:'Building a stable',reach:1.0,dwell:2.2,cellKey:site.key,rotation:site.rotation});
+      this.g.buildAsk?.requestFence(home);
       return options;
     }
     if(hour>=6.5&&hour<12){

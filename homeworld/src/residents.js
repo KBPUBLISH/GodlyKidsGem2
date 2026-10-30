@@ -18,6 +18,7 @@ import { emitWorkSweat } from './work-sweat.js';
 import { gatherSample, applyGatherPose, chopHandWeight, emitChopChips, shakeTreeInstance } from './gather-animation.js';
 import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.mjs';
 import { noteEvent } from './island-feed.mjs';
+import { pickNames } from './farm-rules.mjs';
 import { practiceRate, learnedRole } from './settlement.mjs';
 import { buildingProgress } from './building.mjs';
 import { focusFor } from './today-goals.mjs';
@@ -579,10 +580,28 @@ export class Residents {
     // A friend sent off the garden (or onto a different goal) leaves the fences for another day.
     if (game.gardenKeeper && game.playersOnly && allow('gardenWork')) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
     // Adam's farm brain: paddock fence, trough, feed pile, daily feed/water, arrivals (farmer.js).
-    if (game.farmer && game.playersOnly && allow('farm')) options.push(...game.farmer.chores(home, s, min, here).filter((c) => !this.claims.has(c.key)));
+    if (game.farmer && game.playersOnly && (allow('farm') || s.farm?.ranch?.kidFence)) options.push(...game.farmer.chores(home, s, min, here).filter((c) => !this.claims.has(c.key)));
     if (focus) {
       const allowed = new Set(focus.chores);
-      for (let i = options.length - 1; i >= 0; i--) if (!allowed.has(options[i].kind)) options.splice(i, 1);
+      const outline = game.gardenPlan?.active(s);
+      const kidFence = s.farm?.ranch?.kidFence;
+      const keep = (o) => {
+        if (allowed.has(o.kind) || o.requestId === 'outline') return true;
+        if (outline && (o.kind === 'plow' || o.kind === 'plant') && outline.keys.includes(o.cellKey)) return true;
+        if (kidFence && (o.farm === 'stable' || o.farm === 'fence' || /for the stable|for the fence|Fencing the paddock/.test(o.label || ''))) return true;
+        return false;
+      };
+      for (let i = options.length - 1; i >= 0; i--) if (!keep(options[i])) options.splice(i, 1);
+    }
+    // A garden outline or a build site the kid already tapped is not cancelled by today's other goal.
+    if (game.gardenPlan && game.playersOnly) {
+      const fence = game.gardenPlan.fenceChore(home);
+      if (fence && !this.claims.has(fence.key) && !options.some((o) => o.key === fence.key)) options.push(fence);
+      for (const c of game.gardenPlan.plantChores(home, s, this.claims) || []) if (!this.claims.has(c.key)) options.push(c);
+    }
+    if (game.buildAsk && game.playersOnly) {
+      const clear = game.buildAsk.siteClearChore(home, s);
+      if (clear && !this.claims.has(clear.key)) options.push(clear);
     }
     if (!options.length) return null;
     options.sort((a, b) => a.rank - b.rank || dist(a.target, here) - dist(b.target, here));
@@ -656,12 +675,12 @@ export class Residents {
       const empty = Object.values(cells).filter((c) => c.soil && !c.seed).length;
       // With a garden keeper the rows follow its layout plan (full rows, fence first, heart/smiley blocks); [] means "wait".
       const planned = does('plow') && game.gardenKeeper ? game.gardenKeeper.plowTargets(s) : null;
-      if (planned && auto.plots < SKILL_LIMITS.plots && empty < 4) {
+      if (planned && (game.gardenPlan?.active(s) || (auto.plots < SKILL_LIMITS.plots && empty < 8))) {
         for (const k of planned) {
           if (cells[k] || k === busyKey || !free(`cell:${k}`)) continue;
-          options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Tilling to the garden plan', rank: 4, auto: 'plots' });
+          options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Digging a new row', rank: 2, auto: 'plots' });
         }
-      } else if (!planned && does('plow') && auto.plots < SKILL_LIMITS.plots && empty < 4) {
+      } else if (!planned && does('plow') && auto.plots < SKILL_LIMITS.plots && empty < 8) {
         const seen = new Set();
         for (const cellKey of Object.keys(cells)) {
           const [cx, cy] = cellKey.split(':').map(Number);
@@ -670,7 +689,7 @@ export class Residents {
             if (seen.has(k) || cells[k]) continue;
             seen.add(k);
             if (k === busyKey || !free(`cell:${k}`) || !canPlow(game.world, s, k)) continue;
-            options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Tilling a new row', rank: 4, auto: 'plots' });
+            options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Digging a new row', rank: 2, auto: 'plots' });
           }
         }
       }
@@ -705,6 +724,55 @@ export class Residents {
     return options.filter(near);
   }
 
+  /** One line for the live feed: "Adam — naming a chicken." Skips the friend the kid is playing. */
+  noteTask(home, label) {
+    const game = this.game, s = game.store?.state;
+    if (!home?.name || !label || !s || home.id === s.activeCharacter) return;
+    const task = String(label).replace(/\.$/, '');
+    const text = `${home.name} — ${task.charAt(0).toLowerCase()}${task.slice(1)}.`;
+    try { noteEvent('note', text, { who: home.name }); } catch { /* feed is best-effort */ }
+  }
+
+  /**
+   * A short beat when the real work is done: a prayer, a chat, a rest, or Adam naming a chicken.
+   * Real chores always win — this only runs when pickChore found nothing.
+   */
+  pickBeat(home) {
+    if ((home.beatAt || 0) > performance.now()) return null;
+    const game = this.game, s = game.store?.state;
+    if (!s || s.night || energyFor(s, home.id) <= 8) return null;
+    const here = { x: home.x, y: home.y }, free = (key) => !this.claims.has(key);
+    if (skillFor(home.name)?.id === 'farmer') {
+      const names = s.farm?.ranch?.names || {};
+      const chickens = (s.animals || []).filter((a) => a && !a.wild && a.kind === 'chicken');
+      const unnamed = chickens.find((a) => !names[a.id] && free(`name:${a.id}`));
+      if (unnamed) return { kind: 'name', key: `name:${unnamed.id}`, animalId: unnamed.id, animalKind: 'chicken', target: { x: unnamed.x, y: unnamed.y }, reach: 1.5, dwell: 2.4, label: 'Naming a chicken' };
+      const named = chickens.find((a) => names[a.id]);
+      if (named && Math.random() < 0.4 && free(`hello:${named.id}`)) return { kind: 'hello', key: `hello:${named.id}`, target: { x: named.x, y: named.y }, reach: 1.5, dwell: 2.2, label: `Checking on ${names[named.id]}` };
+    }
+    const others = [];
+    for (const actor of this.models.values()) {
+      const other = actor.userData;
+      if (!other?.id || other.id === home.id || actor === game.actor) continue;
+      others.push(other);
+    }
+    others.sort((a, b) => dist(here, a) - dist(here, b));
+    const pal = others[0];
+    const roll = Math.random();
+    if (pal && roll < 0.5) {
+      const key = `talk:${[home.id, pal.id].sort().join(':')}`;
+      if (free(key)) return { kind: 'talk', key, target: { x: pal.x, y: pal.y }, reach: 1.6, dwell: 3.2, label: `Talking with ${pal.name || 'a friend'}` };
+    }
+    const { day } = timeLabel(gameTime(s));
+    const tent = (s.buildings || []).find((b) => b.status === 'complete' && (b.kind === 'tent' || b.kind === 'hut' || b.kind === 'cottage'));
+    if (tent && home.prayedDay !== day && roll < 0.75 && free(`pray:${home.id}`)) {
+      home.prayedDay = day;
+      return { kind: 'pray', key: `pray:${home.id}`, target: workPoint(game.world, tent), reach: 1.6, dwell: 3, label: 'Praying' };
+    }
+    if (energyFor(s, home.id) < 35 && free(`rest:${home.id}`)) return { kind: 'rest', key: `rest:${home.id}`, target: here, reach: 3, dwell: 4, label: 'Resting' };
+    return null;
+  }
+
   /** Log a friend's finished action to the persisted island feed (Crew page notices). Never the character the kid plays. */
   feed(home, kind, text) {
     const s = this.game.store?.state;
@@ -729,20 +797,24 @@ export class Residents {
     const adamFencing = trade === 'farmer' && game.farmer?.stables?.(s)?.length && !game.farmer.status?.(s)?.fenced;
     if (site && !String(site.id).startsWith('garden-') && trade !== 'gardener' && trade !== 'cook' && !adamFencing && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
       const def = buildingById(site.kind);
-      options.push({ kind: 'build', key: `build:${site.id}`, buildingId: site.id, target: workPoint(game.world, site), reach: .6, label: `Building the ${def?.name || 'building'}`, rank: 1 });
+      const label = site.upgradeFrom ? `Upgrading into a ${def?.name || 'home'}` : `Raising the ${def?.name || 'building'}`;
+      options.push({ kind: 'build', key: `build:${site.id}`, buildingId: site.id, target: workPoint(game.world, site), reach: .6, label, rank: 1 });
     }
     const { day } = timeLabel(min);
     const auto = home.auto && home.auto.day === day ? home.auto : (home.auto = { day, trees: 0, rocks: 0, plots: 0 });
     auto.village ??= 0;
     if (auto.village >= Residents.VILLAGE_DAILY) return options.filter((o) => dist(o.target, here) <= 80);
     const needs = village.needs();
-    if (needs.wood > 0 && woodRoom(s)) {
+    // Eve never chops (that is her weakness — meals and the garden are hers). Abel stays on the garden fence and the hoe.
+    const staysHome = trade === 'cook' || trade === 'gardener';
+    if (trade === 'cook' && game.dining?.cooking()) return options.filter((o) => dist(o.target, here) <= 80);
+    if (!staysHome && needs.wood > 0 && woodRoom(s)) {
       for (const t of activeTrees(game.world, s, min)) {
         if (t.cell || t.id === busyId || !free(`tree:${t.id}`)) continue;
         options.push({ kind: 'chop', key: `tree:${t.id}`, treeId: t.id, target: { x: t.position[0], y: t.position[1] }, reach: 1.18 + (t.radius || 0) * .2, dwell: 1, label: 'Cutting wood for the village', rank: 5, auto: 'village' });
       }
     }
-    if (needs.stone > 0) {
+    if (!staysHome && needs.stone > 0) {
       const tier = toolTier(s);
       for (const r of activeRocks(game.world, s)) {
         if (r.id === busyId || !free(`rock:${r.id}`) || rockProfile(r).minTier > tier.tier) continue;
@@ -751,7 +823,7 @@ export class Residents {
         options.push({ kind: 'mine', key: `rock:${r.id}`, rockId: r.id, target: { x: r.position[0], y: r.position[1] }, reach: (r.radius || .6) + .85, dwell: 1, label: 'Breaking stone for the village', rank: 5, auto: 'village' });
       }
     }
-    if (needs.fish > 0 && !(trade === 'cook' && (s.inventory?.fish || 0) >= RAW_FISH_BUFFER) && !game.dining?.cooking()) {
+    if (needs.fish > 0 && trade !== 'gardener' && !(trade === 'cook' && (s.inventory?.fish || 0) >= RAW_FISH_BUFFER) && !game.dining?.cooking()) {
       const spot = game.world.fishingSpots?.[0];
       if (spot && free(`spot:${spot.id}`)) options.push({ kind: 'fish', key: `spot:${spot.id}`, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, reach: 1.05, dwell: 6, label: 'Fishing for the table', rank: 6, auto: 'village' });
     }
@@ -792,6 +864,18 @@ export class Residents {
     if (!s) return;
     const min = gameTime(s), who = home.name || 'Your friend';
     try {
+      if (c.kind === 'talk' || c.kind === 'pray' || c.kind === 'hello' || c.kind === 'rest') { home.beatAt = performance.now() + 22000; return; }
+      if (c.kind === 'name') {
+        home.beatAt = performance.now() + 22000;
+        const names = s.farm?.ranch?.names || {};
+        if (names[c.animalId]) return;
+        const name = pickNames(c.animalKind || 'chicken', 1, Object.values(names), Date.now())[0];
+        const word = c.animalKind === 'chicken' ? 'chicken' : (c.animalKind || 'animal');
+        game.farmer?.mutate?.((n) => { n.farm.ranch.names = { ...(n.farm.ranch.names || {}), [c.animalId]: name }; });
+        game.toast(`${who} named the ${word} ${name}.`);
+        this.feed(home, 'note', `${who} named the ${word} ${name}.`);
+        return;
+      }
       if (c.kind === 'build') { this.buildStep(actor, c); return; }
       if (c.kind === 'gardenWork') { game.gardenKeeper?.finishWork(actor, c, this); game.notify?.(); return; }
       if (c.kind === 'farm') { game.farmer?.finish(actor, c); return; }
@@ -1449,12 +1533,20 @@ export class Residents {
     const home = actor.userData, game = this.game;
     if (this.buildDuty(actor, dt)) return;
     if (game.store?.state?.night) { home.strollState = null; if (!game.gardenKeeper?.nightWatch(actor, dt, this)) this.idleActor(actor, dt); return; }
+    if (skillFor(home.name)?.id === 'cook' && (home.job?.type === 'chop' || home.job?.type === 'mine')) this.stopJob(actor, false);
     if (skillFor(home.name)?.id === 'cook' && (game.store?.state?.inventory?.fish || 0) >= RAW_FISH_BUFFER) {
       if (home.job?.type === 'fish' && !home.job.explicit) this.stopJob(actor, false);
       if (home.chore?.kind === 'fish') { this.claims.delete(home.chore.key); home.chore = null; home.strollState = { wait: 0 }; this.lastChoreScan = 0; }
     }
     if (home.chore) {
       const c = home.chore;
+      // A cook never keeps a wood or stone chore. Drop it so the next pass can put her on a meal.
+      if ((c.kind === 'chop' || c.kind === 'mine') && skillFor(home.name)?.id === 'cook') {
+        this.claims.delete(c.key);
+        home.chore = null;
+        home.strollState = { wait: 0 };
+        this.lastChoreScan = 0;
+      } else {
       if (c.resting > 0) {
         // Rest break: stand by the work, catch a breath, then the job carries on.
         c.resting -= dt;
@@ -1492,19 +1584,26 @@ export class Residents {
         this.swingHelper(actor, dt);
         return;
       }
-      if (c.path.length) { this.walkAlong(actor, c.path, 1.7, dt); return; }
+      if (c.path?.length) { this.walkAlong(actor, c.path, 1.7, dt); return; }
       if (c.dwell == null) { c.dwell = c.kind === 'fish' ? 6 : c.kind === 'chop' || c.kind === 'mine' ? 1 : 1.1; c.baseDwell = c.dwell; }
       c.dwell -= dt * (c.kind === 'fish' ? practiceRate(game.store.state, home.id, 'fishing') : c.kind === 'harvest' ? practiceRate(game.store.state, home.id, 'garden') : workRate(game.store.state, gameTime(game.store.state), home.id));
       if (c.target) turnToward(actor, Math.atan2(c.target.x - home.x, -(c.target.y - home.y)), dt);
       this.idleActor(actor, dt);
       if (c.dwell <= 0) { this.finishChore(actor); home.strollState = { wait: 4 + Math.random() * 4 }; }
       return;
+      }
     }
     const st = home.strollState || (home.strollState = { wait: 2 + Math.random() * 6 });
     if (!st.path?.length && performance.now() - this.lastChoreScan > 1200) {
       this.lastChoreScan = performance.now();
-      const chore = this.pickChore(home, actor);
-      if (chore) { home.chore = chore; this.claims.set(chore.key, home.id); game.notify?.(); return; }
+      const chore = this.pickChore(home, actor) || this.pickBeat(home);
+      if (chore) {
+        if (chore.target && dist({ x: home.x, y: home.y }, chore.target) > (chore.reach || 1.2) + 0.4) {
+          const path = game.nav?.approach({ x: home.x, y: home.y }, chore.target, chore.reach || 1.2);
+          if (path?.length) chore.path = path;
+        }
+        home.chore = chore; this.claims.set(chore.key, home.id); this.noteTask(home, chore.label); game.notify?.(); return;
+      }
     }
     if (st.path?.length) {
       const speed = 1.05, pos = { x: home.x, y: home.y };

@@ -43,10 +43,12 @@ import {Dining} from './dining.js';
 import {RecipeKitchen} from './recipe-kitchen.js';
 import {Village} from './village.js';
 import {GardenKeeper} from './garden-keeper.js';
+import {GardenPlan} from './garden-plan.js';
+import {BuildAsk} from './build-ask.js';
 import {Farmer} from './farmer.js';
 import {Stall} from './stall.js';
 import {registerFarmBrainAssets} from './farm-model.js';
-import {noteEvent} from './island-feed.mjs';
+import {noteEvent,readFeed} from './island-feed.mjs';
 import {registerForgeAssets} from './forge-model.js';
 import {registerMarketAssets} from './market-model.js';
 import {registerDockAssets} from './dock-model.js';
@@ -110,7 +112,7 @@ export class HomeWorld {
     this.ray=new THREE.Raycaster();this.mouse=new THREE.Vector2();this.groundPlane=new THREE.Plane(V(0,1,0),-.14);
     this.boundResize=()=>this.resize();this.observer=new ResizeObserver(this.boundResize);this.observer.observe(container);
     this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Drag or swipe sideways to turn the view, and up or down to tilt it. Tap the ground to walk; choose a tool to interact.');
-    this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),tap:e=>this.click(e)});
+    this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),drag:(dx,dy)=>this.panView(dx,dy),tap:e=>this.click(e)});
     this.wheel=e=>{e.preventDefault();this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
     // Pinch zooms the camera. preventDefault only while two fingers are on the canvas, so the
     // browser does not scale the page. One-finger drags and taps stay on pointer events.
@@ -150,7 +152,7 @@ export class HomeWorld {
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
     this.bones={};this.model.traverse(o=>{if(o.isBone)this.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
     this.tools={};for(const id of ['axe','hoe','pickaxe','seed_pouch','watering_can','sickle']){const obj=this.asset(`tool_${id}`);this.tools[id]=obj;obj.visible=false;this.scene.add(obj);}this.mining.prepareTools();
-    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
+    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.gardenPlan=new GardenPlan(this);this.buildAsk=new BuildAsk(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
   }
   asset(id) {
     const source=this.library[id];if(!source)throw Error(`Missing asset: ${id}`);
@@ -274,7 +276,7 @@ export class HomeWorld {
     }
   }
   /** Island point the scene is built around: the friend the camera is watching (or a crew focus), else the body you play. Culling and the shadow box follow it, so watching a friend across the island never shows pop-in or cut shadows. */
-  viewPoint(){const a=this.residents?.watchActor?.()||this.community?.focusActor?.();return a?.position?{x:a.position.x,y:-a.position.z}:this.player;}
+  viewPoint(){if(this.freeCamera())return {x:this.focus.x,y:-this.focus.z};const a=this.residents?.watchActor?.()||this.community?.focusActor?.();return a?.position?{x:a.position.x,y:-a.position.z}:this.player;}
   refreshDynamic() {
     if(!this.store)return;const state=this.store.state,minutes=gameTime(state),view=this.viewPoint();this.trees=activeTrees(this.world,state,minutes);this.allTrees=[...this.world.trees,...plantedTrees(this.world,state,minutes)];
     const nearby=this.trees.filter(t=>dist(view,{x:t.position[0],y:t.position[1]})<(this.overview?200:36)&&t.id!==this.fallingId);const matrix=new THREE.Matrix4(),rot=Q();
@@ -308,6 +310,21 @@ export class HomeWorld {
   }
   updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=this.overview?220:40;this.scene.fog.far=this.overview?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
   rotateView(delta){if(!this.loaded||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookYaw=THREE.MathUtils.clamp((this.interior.lookYaw||0)+delta,-.8,.8);return;}this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
+  /** Nobody is being played or watched, so a drag should travel the island instead of spinning on one point. */
+  freeCamera(){return !!(this.loaded&&this.ambient&&!this.overview&&!this.mapOnly&&!this.interior&&!this.fishing?.firstPerson&&!this.building?.preview&&!this.residents?.watchActor?.()&&!this.community?.focusActor?.());}
+  panView(dx,dy){
+    if(!this.freeCamera()||!this.world)return false;
+    const off=cameraOffset(this.viewYaw||0,false,this.viewPitch||0);
+    const fx=-off[0],fz=-off[2],fl=Math.hypot(fx,fz)||1,fwx=fx/fl,fwz=fz/fl,rx=-fwz,rz=fwx;
+    const metres=(this.zoom||19)/Math.max(1,this.container?.clientHeight||this.renderer?.domElement?.clientHeight||600);
+    const mx=-dx*metres,my=dy*metres;
+    this.focus.x+=rx*mx+fwx*my;this.focus.z+=rz*mx+fwz*my;
+    const [x0,x1,y0,y1]=BAKE_FRAME;
+    this.focus.x=Math.min(x1,Math.max(x0,this.focus.x));
+    const gy=Math.min(y1,Math.max(y0,-this.focus.z));
+    this.focus.z=-gy;this.focus.y=heightAt(this.world,this.focus.x,gy)+1;
+    return true;
+  }
   tiltView(delta){if(!this.loaded||this.overview||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookPitch=THREE.MathUtils.clamp((this.interior.lookPitch||0)+delta,-.35,.45);return;}this.viewPitch=Math.min(PITCH_MAX,Math.max(PITCH_MIN,(this.viewPitch||0)+delta));}
   /** The last three tools the player reached for, newest first, so they sit one tap away at the bottom of the screen. */
   get recentTools(){if(!this._recentTools){try{const v=JSON.parse(localStorage.getItem('gk_island_recent_tools_v1')||'[]');this._recentTools=Array.isArray(v)?v.filter(id=>typeof id==='string').slice(0,5):[];}catch{this._recentTools=[];}}return this._recentTools;}
@@ -368,7 +385,7 @@ export class HomeWorld {
   }
   allCharacterVitalsSnapshots(wall=Date.now()){return Object.keys(this.store?.state.characters||{}).map(id=>this.characterVitalsSnapshot(wall,id)).filter(Boolean);}
   click(e) {
-    if(!this.loaded||this.mapOnly||this.fishing?.active)return;if(this.residents?.consumeTap(e))return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);
+    if(!this.loaded||this.mapOnly||this.fishing?.active)return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);if(this.buildAsk?.picking){this.buildAsk.takeTap(e);return;}if(this.residents?.consumeTap(e))return;
     if(this.store?.state.night||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep){if(!this.interior)this.animals?.roundUp(this.animals.pick(this.ray));return;}
     if(this.interior){if(this.interior.phase!=='exit') this.lookInside(e,r);return;}
     if(this.building?.preview?.stroke){this.building.aimFromEvent(e);this.building.stamp();return;}
@@ -472,7 +489,7 @@ export class HomeWorld {
   }
   runPrompt(actionId){
     const p=this.prompt;if(!p)return;this.prompt=null;
-    if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);else if(actionId==='enter')this.building.enterHome(p.id);else if(actionId==='remove')this.building.askRemove(p.id);
+    if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);else if(actionId==='enter')this.building.enterHome(p.id);else if(actionId==='move')this.building.moveExisting(p.id);else if(actionId==='remove')this.building.askRemove(p.id);
     this.notify();
   }
   /** Walk to an apple tree and gather its fruit. No tool or energy needed; the tree fruits again later. */
@@ -785,12 +802,45 @@ export class HomeWorld {
     const id=home.residentId;
     const s=this.store?.state;
     const asleep=!!(s?.night||s?.characters?.[id]?.sleep);
-    if(asleep)return {working:false,asleep:true};
+    const task=this.liveTask(actor,asleep);
+    if(asleep)return {working:false,asleep:true,task};
     const dining=this.dining;
     const atMeal=!!(dining&&(dining.grill?.actor===actor||dining.owns?.(actor)));
     const playing=actor===this.actor&&(!!this.action||!!this.order||!!this.autoWork?.active);
     const working=!!(home.chore||home.job||home.onDuty||atMeal||playing);
-    return {working,asleep:false};
+    return {working,asleep:false,task};
+  }
+  /** The specific thing this friend is doing right now, in the foreman's own words. */
+  liveTask(actor,asleep){
+    const home=actor?.userData||{};
+    if(asleep)return 'Sleeping';
+    const dining=this.dining;
+    if(dining?.grill?.actor===actor)return 'Grilling the fish';
+    const stage=dining?.routine?.stage;
+    if(dining?.cookActor?.()===actor&&(stage==='fishing'||stage==='gather'))return 'Fishing for the meal';
+    if(dining?.cookActor?.()===actor&&stage==='picking')return 'Picking food for the recipe';
+    if(dining?.cookActor?.()===actor&&stage==='ready')return 'Ringing everyone to eat';
+    if(dining?.owns?.(actor))return 'Eating with everyone';
+    if(home.onDuty){
+      const id=home.residentId||home.id;
+      const site=(this.store?.state?.buildings||[]).find(b=>b?.project&&b.status!=='complete'&&(b.project.crew||[]).includes(id));
+      const name=site&&buildingById(site.kind)?.name;
+      if(name)return site.upgradeFrom?`Upgrading into a ${name}`:`Raising the ${name}`;
+      return 'Hammering with the crew';
+    }
+    const label=home.chore?.label||home.job?.label;
+    if(label)return home.chore?.path?.length?`On the way to ${label.charAt(0).toLowerCase()}${label.slice(1)}`:label;
+    if(actor===this.actor){
+      const t=this.action?.type;
+      const words={pray:'Praying',fish:'Fishing',chop:'Chopping wood',chop_hit:'Chopping wood',rest:'Resting',cook:'Making a recipe',eat:'Having a snack',mine:'Breaking rocks',plant:'Planting seeds',water:'Watering the garden',harvest:'Picking the crop'};
+      if(t&&words[t])return words[t];
+      if(this.order?.type==='build')return 'Walking to a building';
+      if(this.autoWork?.active)return this.autoWork.snapshot?.()?.label||'Working';
+    }
+    if(home.strollState?.path?.length)return 'Taking a walk';
+    const energy=this.store?.state?energyFor(this.store.state,home.residentId||home.id):99;
+    if(energy<=15)return 'Resting';
+    return 'Waiting for the next job';
   }
   /** Fence and plots from the garden keeper when it has read the garden. */
   gardenSnap(){
@@ -800,15 +850,16 @@ export class HomeWorld {
   }
   /** One large goal per friend ashore, plus the single extra the kid may have added today. */
   todayCard(){
-    const s=this.store?.state;if(!s)return {day:1,friends:[],extra:null,choices:[],meter:null};
+    const s=this.store?.state;if(!s)return {day:1,friends:[],extra:null,choices:[],meter:null,feed:[]};
     const project=this.village?.plan()?.goal||null;
     const order={eve:0,noah:1,adam:2,abel:3};
     const friends=this.crew().map(c=>{
       const actor=this.residents?.models?.get(c.id);
-      return {...c,...(actor?this.friendActivity(actor):{working:false,asleep:false}),goal:displayGoal(s,c.id,c.name),options:optionsFor(c.name,project)};
+      return {...c,...(actor?this.friendActivity(actor):{working:false,asleep:false,task:'Waiting to come ashore'}),goal:displayGoal(s,c.id,c.name),options:optionsFor(c.name,project)};
     }).sort((a,b)=>(order[characterKey(a.name)]??50)-(order[characterKey(b.name)]??50)||a.name.localeCompare(b.name));
     const bag=todayBag(s);
-    return {day:bag.day,friends,extra:bag.extra,choices:addChoices(project),meter:journeyMeter(s,this.gardenSnap(),project)};
+    const feed=readFeed().slice(-6).reverse().map(e=>({id:e.id,text:e.text}));
+    return {day:bag.day,friends,extra:bag.extra,choices:addChoices(project),meter:journeyMeter(s,this.gardenSnap(),project),feed};
   }
   /** Write today's goals into the island save and, when the extra is a building, point the settlement at it. */
   _saveGoals(bag,pinKind,unpinKind){
@@ -990,10 +1041,10 @@ export class HomeWorld {
       if(this.action){resetAnimatedPose(this);this.actor.updateMatrixWorld(true);this.animateWork(dt);}
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
-      this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
+      this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
       if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
-      else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const target=fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
+      else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const free=this.freeCamera();const target=free?null:fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;if(target)this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');const view=this.viewPoint();if(sig!==this.fieldSignature.join('|')||dist(view,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...view};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.
@@ -1006,5 +1057,5 @@ export class HomeWorld {
     }
     this.renderer.render(this.scene,this.fishing?.firstPerson?this.fishing.camera:this.camera);
   }
-  dispose(){this.disposed=true;this.music?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
+  dispose(){this.disposed=true;this.music?.dispose();this.buildAsk?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
 }

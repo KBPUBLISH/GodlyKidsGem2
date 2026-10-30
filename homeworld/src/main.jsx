@@ -3,6 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {HomeWorld} from './world.js';
 import {SEEDS,realDuration,label,waterWindow} from './core.mjs';
+import {yearClockLabel} from './calendar.mjs';
 import {MINERALS,TOOL_TIERS,upgradeStatus,toolTier,forgeProgress,forgeTimeLeft,forgeEstimate} from './mining.mjs';
 import {SHOVEL_TIERS,shovelStatus,shovelTier,haveOf,hasWell} from './digging.mjs';
 import {FOODS,FOOD_RECIPES,MAX_ENERGY,MAX_HUNGER,energyFor,hungerFor,mealGain,canCook,restGain,energyCost} from './nutrition.mjs';
@@ -265,7 +266,7 @@ function App(){
       {view.loaded&&!view.playersOnly&&<button className="selected-character" aria-label={`Choose character. Playing as ${view.state.characters[view.state.activeCharacter].name}`} onClick={()=>openPanel('characters')}><span className={`community-avatar ${view.state.activeCharacter}`} aria-hidden="true">{view.state.characters[view.state.activeCharacter].name[0]}</span><span><small>Playing as</small><strong>{view.state.characters[view.state.activeCharacter].name} ⌄</strong></span></button>}
       <div className="top-actions">
         <button type="button" className={`sound-button ${view.music===false?'off':''}`} aria-pressed={view.music!==false} aria-label={view.music===false?'Sound is off. Turn music on':'Sound is on. Turn music off'} onClick={()=>invoke(g=>g.setMusic(g.music?.on===false))}><span className="sound-mark" aria-hidden="true">{view.music===false?'🔇':'🔊'}</span><span>{view.music===false?'Off':'Sound'}</span></button>
-        <button className="clock-button" onClick={()=>{setActionsOpen(false);setPanel(null);setShowTime(!showTime);}} aria-label="Day and time" aria-expanded={showTime}><Icon type={view.night?.dusk||view.night?.night?"moon":"sun"}/><span><strong>Day {view.clock?.day||1} · {view.clock?.text||'8:00 AM'}</strong><small>{view.state?.clock.paused?'Time is paused':view.night?.dusk?'Bedtime soon':'Bedtime at 10 PM'}</small></span><span className="chevron">⌄</span></button>
+        <button className="clock-button" onClick={()=>{setActionsOpen(false);setPanel(null);setShowTime(!showTime);}} aria-label="Day and time" aria-expanded={showTime}><Icon type={view.night?.dusk||view.night?.night?"moon":"sun"}/><span><strong>{yearClockLabel(view.clock?.day||1)} · {view.clock?.text||'8:00 AM'}</strong><small>{view.state?.clock.paused?'Time is paused':view.night?.dusk?'Bedtime soon':'Bedtime at 10 PM'}</small></span><span className="chevron">⌄</span></button>
       </div>
     </header>
     {view.loaded&&activeTool&&!panel&&!showTime&&!view.building?.preview&&!showRecent&&<div className="equipped-tool-chip" role="group" aria-label="Equipped tool"><Icon type={activeTool.id} size={32}/><span>{activeTool.name}<small>Tool ready</small></span><button aria-label={`Put away ${activeTool.name} tool`} title="Put tool away. Walk normally." onClick={()=>runAction(g=>{g.unequipTool();g.renderer.domElement.focus({preventScroll:true});})}><b aria-hidden="true">×</b><small>Put away</small></button></div>}

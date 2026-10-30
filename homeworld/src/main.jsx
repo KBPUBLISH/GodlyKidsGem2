@@ -13,6 +13,7 @@ import {BuildMenu,PlacementControls,StrokeBar} from './building-ui.jsx';
 import {ActionMenu,QUICK_TOOLS} from './action-menu.jsx';
 import {SleepPanel,SleepBubble} from './sleep-ui.jsx';
 import {BagPanel} from './bag-ui.jsx';
+import {RecipeBook,RecipeBubble} from './recipe-book.jsx';
 import {CommunityPanel} from './community-ui.jsx';
 import {ReturnReportPanel} from './project-ui.jsx';
 import {ResourceHealth} from './resource-health.jsx';
@@ -56,10 +57,11 @@ function CampfirePanel({view,fireId,onGrill,onDryClay,onStoke,onEat,onFish}){
 }
 function DiningPanel({view,onRing,onCook,onFish}){
   const card=view.diningCard;
-  if(!card)return <p>The hall is gone. Build a new one from Build › Community.</p>;
+  if(!card)return <><RecipeBook inventory={view.state?.inventory||{}}/><p>The hall is gone. Build a new one from Build › Community.</p></>;
   const ready=!card.inProgress&&!card.night&&card.servings>0;
   const hungryCount=card.hungry.filter(h=>h.hunger<MAX_HUNGER-10).length;
   return <>
+    <RecipeBook inventory={view.state?.inventory||{}}/>
     <div className={`campfire-status ${ready?'lit':'out'}`}><span className="campfire-flame" aria-hidden="true">🔔</span><div><strong>{card.inProgress?'Mealtime is on!':card.night?'Everyone is asleep':card.empty?'The shelf is empty':card.everyoneFull?'Everyone is full':`${card.servings} helping${card.servings===1?'':'s'} ready to serve`}</strong><small>{card.inProgress?'Everyone is at the table.':card.empty?'Cook or gather some food first.':card.everyoneFull?'Save the food for later.':`Ring the bell and ${card.hungry.length} friend${card.hungry.length===1?'':'s'} come to eat: ${card.servedLabel}.`}</small></div><button type="button" disabled={!ready} onClick={onRing} aria-label="Ring the bell for a meal">Ring the bell</button></div>
     <p className="catalogue-note">Everyone sits down together. The meal is served from your bag, hungriest first, and anything not needed stays in the bag.{card.cook?` ${card.cook} rings the bell for breakfast, lunch and dinner at ${card.mealTimes}${card.griller?`, and ${card.griller} grills the catch beforehand`:''}.`:''}</p>
     <h2>Who is hungry</h2>
@@ -311,6 +313,7 @@ function App(){
     {toast&&<div className={`toast${toastLife?' brief':''}`} style={toastLife?{'--toast-life':`${toastLife}ms`}:undefined} role="status">{toast}</div>}
     {view.animals?.hello&&<div key={view.animals.hello.shownAt} className="toast animal-hello" role="status">{view.animals.hello.text}</div>}
     {view.loaded&&view.animals?.confirming&&!view.animals?.placing&&!panel&&<div className="animal-confirm animal-place-chip" role="dialog" aria-label={`Buy a ${view.animals.confirming.name}`}><span className="animal-place-emoji" aria-hidden="true">{view.animals.confirming.emoji}</span><span>Buy a {view.animals.confirming.name.toLowerCase()} for <b>{view.animals.confirming.price}</b> gold coins?</span><button type="button" onClick={()=>invoke(g=>g.animals?.confirmBuy())}>Buy</button><button type="button" className="plain" onClick={()=>invoke(g=>g.animals?.cancelPlace())}>Not now</button></div>}
+    {view.loaded&&!view.night?.sleeping&&<RecipeBubble bubble={view.recipeBubble}/>}
     {view.loaded&&view.animals?.placing&&!panel&&<div className="animal-place-chip" role="status"><span className="animal-place-emoji" aria-hidden="true">{view.animals.placing.emoji}</span><span>Tap grass to place the {view.animals.placing.name.toLowerCase()}<small>Water and buildings are off limits</small></span><button onClick={()=>invoke(g=>g.animals?.cancelPlace())} aria-label="Cancel placing the animal">Cancel</button></div>}
     {view.nutrition?.sleep&&<SleepBubble sleep={view.nutrition.sleep} onWake={()=>invoke(g=>g.nutrition.wakeUp())} onRetry={()=>invoke(g=>g.nutrition.retrySleep())}/>}
     {view.loaded&&<section className={`bottom-hud ${view.building?.preview?'placing':''} ${actionsOpen?'actions-open':''}`}>

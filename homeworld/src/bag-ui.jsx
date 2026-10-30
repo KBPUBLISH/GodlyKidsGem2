@@ -6,6 +6,7 @@ import {FOODS,MATERIALS,mealGain,canCook} from './nutrition.mjs';
 import {litFires} from './building.mjs';
 import {Icon,ItemIcon} from './ui.jsx';
 import {WoodStorageCard} from './wood-storage-ui.jsx';
+import {RecipeBook} from './recipe-book.jsx';
 
 const SEED_IDS=new Set(SEEDS.map(s=>s.id));
 const STAGES={seeded:'Just planted',seedling:'Sprouting',growing:'Growing',ready:'Ready to pick!'};
@@ -62,6 +63,7 @@ export function BagPanel({view,busy,onEat,onGrill,onPlant,onBuildStorage}){
       <span><Icon type="plant" size={22}/><b>{plants.length}</b> growing</span>
     </div>
 
+    <RecipeBook inventory={inv}/>
     <WoodStorageCard state={s} onBuild={onBuildStorage}/>
 
     {kinds===0&&<div className="bag-empty"><Icon type="bag" size={56}/><strong>Your bag is empty</strong><p>Chop a tree, break a rock or pick a ripe crop and it will show up here.</p></div>}

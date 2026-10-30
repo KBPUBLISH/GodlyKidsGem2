@@ -11,6 +11,14 @@ export const FOODS={
   cooked_fish:{name:'Grilled fish',icon:'🐟',energy:40,source:'Catch a fish, then grill it on a campfire.'},
   bread:{name:'Bread',icon:'🍞',energy:40,source:'An old loaf from before the oven was built.'},
   manna:{name:'Manna',icon:'🍞',energy:50,source:'Bake wheat and water in a hot clay oven.'},
+  garden_salad:{name:'Garden salad',icon:'🥗',energy:72,source:'A cook mixes a carrot and a pumpkin.'},
+  seed_crackers:{name:'Seed crackers',icon:'🌾',energy:48,source:'A cook bakes a wheat seed and a sunflower seed.'},
+  nut_butter_greens:{name:'Nut butter on greens',icon:'🌻',energy:56,source:'A cook spreads an acorn on sunflower greens.'},
+  roasted_seeds:{name:'Roasted seeds',icon:'🎃',energy:44,source:'A cook roasts a pumpkin seed and a pine seed.'},
+  veggie_stew:{name:'Veggie stew',icon:'🥕',energy:58,source:'A cook simmers a carrot and some wheat.'},
+  pumpkin_coconut:{name:'Pumpkin coconut',icon:'🥥',energy:68,source:'A cook stirs pumpkin with coconut.'},
+  apple_nut:{name:'Apple nut bite',icon:'🍎',energy:46,source:'A cook tucks an acorn into an apple.'},
+  carrot_bites:{name:'Carrot seed bites',icon:'🥕',energy:52,source:'A cook presses carrot onto sunflower seeds.'},
 };
 /** Every recipe is made at a station: `campfire` needs a lit fire beside you, `oven` a clay oven that has heated up. `seconds` is how long the character works at it. */
 export const FOOD_RECIPES={

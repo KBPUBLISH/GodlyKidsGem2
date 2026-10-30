@@ -204,7 +204,9 @@ export class Nutrition {
         a.startedAt=sleep.startedAt;a.duration=SLEEP_SECONDS;this.sleepVisualActive=true;this.g.actor.visible=false;this.g.status='Sleeping at home…';
       }catch(e){a.failed=true;a.duration=0;this.g.toast(e.message);}
     }else if(a.type==='eat'){
-      this.held=a.item==='cooked_fish'?fishModel(true):a.item==='bread'||a.item==='manna'?breadModel():a.item==='apple'?appleModel():this.g.asset(`produce_${a.item}`);
+      const named=a.item==='cooked_fish'?fishModel(true):a.item==='bread'||a.item==='manna'?breadModel():a.item==='apple'?appleModel():null;
+      const produceId=`produce_${a.item}`;
+      this.held=named||(this.g.library?.[produceId]?this.g.asset(produceId):new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),material('#e7c56a')));
       if(['carrot','pumpkin'].includes(a.item))this.held.scale.setScalar(a.item==='pumpkin'?.28:.55);this.g.scene.add(this.held);this.g.status=`Eating ${FOODS[a.item].name.toLowerCase()}…`;
     }else if(a.type==='grill'&&a.recipe!=='grill_fish'){
       const r=RECIPES[a.recipe];a.duration=r?.seconds||4;this.held=a.recipe==='dry_clay'?brickModel():breadModel();this.g.scene.add(this.held);this.g.status=a.recipe==='dry_clay'?'Drying clay bricks by the fire…':'Baking manna in the oven…';a.smokeAt=0;

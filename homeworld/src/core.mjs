@@ -18,6 +18,7 @@ import {applyFarmSpan,dayIndex as farmDay,gardenFocus} from './fencing.mjs';
 import {rememberResidentAction,rememberCompletedBuildings,nextResidentLine} from './resident-dialogue.mjs';
 import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
 import {creditSkill} from './settlement.mjs';
+import {combine as combineRecipe,recipeById,sameStocks,recipeDay} from './recipes.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
 export const SAVE_KEY_BASE = 'godlykids_homeworld_playtest_v1';
 export const SAVE_KEY = scopeKey(SAVE_KEY_BASE);
@@ -307,7 +308,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
   if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','serve_meal','fish','cook','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
   if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge'].includes(a.type))return state;
@@ -433,6 +434,15 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(!station||dist(state.player,workPoint(world,station))>1.45)return state;
     for(const [id,n]of Object.entries(recipe.ingredients))inv[id]-=n;add(recipe.item,recipe.quantity);
     if(FOODS[recipe.item])next.stats.foodPrepared=(next.stats.foodPrepared||0)+recipe.quantity;else next.stats.crafted=(next.stats.crafted||0)+recipe.quantity;
+  } else if(a.type==='craft_recipe') {
+    // A cook combines two bag items into one snack. No station: it happens between meals.
+    const dish=recipeById(a.recipe);if(!dish)return state;
+    const made=combineRecipe(state.inventory,dish.id);if(sameStocks(made,state.inventory))return state;
+    for(const id of Object.keys(inv))if(!(id in made))delete inv[id];
+    for(const [id,n] of Object.entries(made))inv[id]=n;
+    next.stats.foodPrepared=(next.stats.foodPrepared||0)+1;
+    const day=recipeDay(minutes),prev=state.recipeNotices?.day===day?state.recipeNotices.ids||[]:[];
+    if(!prev.includes(dish.id))next.recipeNotices={day,ids:[...prev,dish.id]};
   } else if(a.type==='stoke') {
     const fire=heatSources(state).find(b=>b.id===a.fireId);if(!fire||dist(state.player,workPoint(world,fire))>1.45||!fireCanTakeLog(fire,minutes))return state;
     const log=Object.entries(inv).filter(([id,n])=>id.endsWith('_wood')&&n>0).sort((x,y)=>y[1]-x[1])[0];if(!log)return state;

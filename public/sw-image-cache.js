@@ -63,7 +63,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+  // Safari probes video with byte ranges. A cached 200 response cannot
+  // satisfy that request; let the browser/server negotiate streaming.
+  if (request.headers.has('range') || request.destination === 'video' || request.destination === 'audio') return;
   const url = new URL(request.url);
+  if (/\.(mp4|webm|mov|m4v|m3u8|mp3|m4a|aac|ogg|wav)$/i.test(url.pathname)) return;
   if (!shouldCacheMedia(url)) return;
 
   event.respondWith(
@@ -96,7 +100,10 @@ self.addEventListener('message', (event) => {
   }
   
   if (event.data && event.data.type === 'PREFETCH_IMAGES') {
-    const urls = event.data.urls || [];
+    const urls = (event.data.urls || []).filter((value) => {
+      try { return !/\.(mp4|webm|mov|m4v|m3u8|mp3|m4a|aac|ogg|wav)$/i.test(new URL(value, self.location.origin).pathname); }
+      catch { return false; }
+    });
     event.waitUntil(
       caches.open(CACHE_NAME).then((cache) => {
         return Promise.all(

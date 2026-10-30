@@ -61,7 +61,7 @@ export class BuildAsk {
 
   request(spec) {
     const s = this.state();
-    if (!s || s.night || !spec?.id) return false;
+    if (!s || s.night || !spec?.id || s.village?.siteDraft) return false;
     if (!canOffer({
       open: !!this.open,
       picking: !!this.picking,
@@ -110,7 +110,8 @@ export class BuildAsk {
       const name = p.buildingName || 'building';
       return {
         name: p.name,
-        text: p.spot ? `The ${name} sits on the green squares. Build it here?` : `Tap the grass to place the ${name}.`,
+        text: p.spot ? `The ${name} sits on the green squares. Build it here?` : `Tap the grass to place the ${name}. The arrows slide the view.`,
+        picking: true,
         goLabel: 'Build it here',
         waitLabel: 'Not now',
         goEnabled: !!p.spot,
@@ -119,7 +120,8 @@ export class BuildAsk {
     const n = p.keys.length, cap = p.cap || GARDEN_CAP;
     return {
       name: p.name,
-      text: `Tap the grass. ${n}/${cap}`,
+      text: `Tap the grass. The arrows slide the view. ${n}/${cap}`,
+      picking: true,
       goLabel: p.mode === 'fence' ? "That's the fence" : "That's the garden",
       waitLabel: 'Not now',
       goEnabled: n > 0,
@@ -127,12 +129,13 @@ export class BuildAsk {
   }
 
   show() {
-    if (this.picking) { this.picking = { ...this.picking }; this.open = null; this.g.notify?.(); return; }
+    if (this.picking) { this.picking = { ...this.picking }; this.open = null; this.g.enterSiteView?.(); this.g.notify?.(); return; }
     if (!this.open) return;
     const spec = this.open;
     this.open = null;
     this.picking = { ...spec, keys: [], spot: null };
     this.paint([]);
+    this.g.enterSiteView?.();
     this.g.notify?.();
   }
 
@@ -147,6 +150,8 @@ export class BuildAsk {
     this.open = null;
     this.picking = null;
     this.paint([]);
+    this.clearDraft();
+    this.g.leaveSiteView?.();
     this.g.notify?.();
   }
 
@@ -169,6 +174,7 @@ export class BuildAsk {
     }
     this.picking = null;
     this.paint([]);
+    this.g.leaveSiteView?.();
     this.g.notify?.();
   }
 
@@ -183,7 +189,9 @@ export class BuildAsk {
     const s = this.state();
     if (!s) return;
     const sites = { ...(s.village?.buildSites || {}), [p.kind]: { key: p.spot.key, rotation: p.spot.rotation || 0, keys: p.spot.keys } };
-    try { this.g.store.save({ ...s, village: { ...(s.village || {}), buildSites: sites } }); }
+    const village = { ...(s.village || {}), buildSites: sites };
+    delete village.siteDraft;
+    try { this.g.store.save({ ...s, village }); }
     catch (e) { this.g.toast?.(e.message); }
   }
 
@@ -199,9 +207,13 @@ export class BuildAsk {
     if (!plan?.stable) { this.g.toast?.('Tap the edge where the stable should sit.'); return false; }
     plan.ring = (plan.ring || []).filter(k => this.grass(k));
     if (plan.gate && !plan.ring.includes(plan.gate)) plan.gate = plan.ring[plan.ring.length - 1] || null;
-    const write = (n) => { n.farm.ranch.kidFence = plan; };
+    const write = (n) => { n.farm.ranch.kidFence = plan; if (n.village?.siteDraft) delete n.village.siteDraft; };
     if (this.g.farmer?.mutate) this.g.farmer.mutate(write, false);
-    else try { this.g.store.save({ ...s, farm: { ...(s.farm || {}), ranch: { ...(s.farm?.ranch || {}), kidFence: plan } } }); } catch (e) { this.g.toast?.(e.message); return false; }
+    else try {
+      const village = { ...(s.village || {}) };
+      delete village.siteDraft;
+      this.g.store.save({ ...s, farm: { ...(s.farm || {}), ranch: { ...(s.farm?.ranch || {}), kidFence: plan } }, village });
+    } catch (e) { this.g.toast?.(e.message); return false; }
     return true;
   }
 
@@ -213,12 +225,36 @@ export class BuildAsk {
     return fenceGaps(plan, s.buildings).length === 0;
   }
 
+  /** The squares the kid marked, still waiting to be finished. The foreman reads this list. */
+  savedTasks(s = this.state()) {
+    if (!s) return [];
+    const tasks = [];
+    const outline = this.g.gardenPlan?.active?.(s);
+    if (outline?.keys?.length) tasks.push({ id: 'garden', who: 'Abel', label: 'Fence and plant the garden you marked', keys: outline.keys, ring: outline.ring || [], gate: outline.gate || null });
+    for (const [kind, site] of Object.entries(s.village?.buildSites || {})) {
+      if (!site?.keys?.length) continue;
+      const standing = site.placedId && (s.buildings || []).find((b) => b.id === site.placedId);
+      if (standing?.status === 'complete') continue;
+      tasks.push({ id: `build:${kind}`, who: 'Noah', label: standing ? 'Finish the building on the squares you marked' : 'Clear and build on the squares you marked', kind, keys: site.keys, key: site.key, placedId: site.placedId || null });
+    }
+    const fence = s.farm?.ranch?.kidFence;
+    if (fence?.stable?.key && !this.fenceDone(fence, s)) tasks.push({ id: 'fence', who: 'Adam', label: 'Put the stable and fence where you marked', stable: fence.stable.key, ring: fence.ring || [], gate: fence.gate || null });
+    const draft = s.village?.siteDraft;
+    if (draft?.keys?.length && !this.picking) tasks.push({ id: 'draft', who: draft.name || 'Friend', label: 'Finish choosing those squares', mode: draft.mode, keys: draft.keys });
+    return tasks;
+  }
+
   /** Trees (then the stumps they leave) on a confirmed building site. Not ordinary chopping. */
   siteClearChore(home, s) {
     if (!home || !s) return null;
-    const goal = this.g.village?.needs?.()?.goal;
-    const site = goal && this.buildingSite(goal.kind, s);
+    const pinned = this.g.goal?.kind || this.g.village?.needs?.()?.goal?.kind;
+    let site = pinned ? this.buildingSite(pinned, s) : null;
+    if (!site?.keys?.length) {
+      const waiting = Object.values(s.village?.buildSites || {}).filter((v) => v?.keys?.length);
+      site = waiting.length === 1 ? waiting[0] : null;
+    }
     if (!site?.keys?.length) return null;
+    if (site.placedId && (s.buildings || []).some((b) => b.id === site.placedId && b.status === 'complete')) return null;
     const noah = this.bySkill('woodcutter');
     if (noah && home.id !== noah.userData.id) return null;
     const tree = this.blocker(activeTrees(this.g.world, s, gameTime(s)), site.keys, t => (t.radius || .4) + .45);
@@ -278,7 +314,54 @@ export class BuildAsk {
       p.keys = next;
       this.paint(p.mode === 'build' ? (p.spot?.keys || []) : next);
     }
+    this.persistDraft();
     this.g.notify?.();
+  }
+
+  /** Write the squares the kid just tapped. They stay until the work is finished or the kid says not now. */
+  persistDraft() {
+    const s = this.state(), p = this.picking;
+    if (!s || !p || !this.g.store) return;
+    const draft = { id: p.id, mode: p.mode, kind: p.kind || null, name: p.name, buildingName: p.buildingName || null, size: p.size || null, cap: p.cap || null, text: p.text || '', keys: [...(p.keys || [])], spot: p.spot ? { key: p.spot.key, rotation: p.spot.rotation || 0, keys: [...(p.spot.keys || [])] } : null };
+    try { this.g.store.save({ ...s, village: { ...(s.village || {}), siteDraft: draft } }); }
+    catch (e) { this.g.toast?.(e.message); }
+  }
+
+  clearDraft() {
+    const s = this.state();
+    if (!s?.village?.siteDraft || !this.g.store) return;
+    const village = { ...s.village };
+    delete village.siteDraft;
+    try { this.g.store.save({ ...s, village }); }
+    catch (e) { this.g.toast?.(e.message); }
+  }
+
+  restoreDraft() {
+    const draft = this.state()?.village?.siteDraft;
+    if (!draft?.mode || !draft.id) return;
+    if (this.picking?.id === draft.id && (this.picking.keys || []).join() === (draft.keys || []).join()) return;
+    this.open = null;
+    this.picking = { ...draft, keys: [...(draft.keys || [])], spot: draft.spot ? { ...draft.spot, keys: [...(draft.spot.keys || [])] } : null };
+    this.paint(this.picking.mode === 'build' ? (this.picking.spot?.keys || this.picking.keys) : this.picking.keys);
+    this.g.enterSiteView?.();
+    this.g.notify?.();
+  }
+
+  /** Drop a build spot only once that building is finished. A cancelled building keeps the squares. */
+  releaseFinishedSites() {
+    const s = this.state(), sites = s?.village?.buildSites;
+    if (!s || !sites || !this.g.store) return;
+    let changed = false;
+    const next = { ...sites };
+    for (const [kind, site] of Object.entries(sites)) {
+      if (!site?.placedId) continue;
+      const standing = (s.buildings || []).find((b) => b.id === site.placedId);
+      if (standing?.status === 'complete') { delete next[kind]; changed = true; }
+      else if (!standing) { next[kind] = { ...site, placedId: null }; changed = true; }
+    }
+    if (!changed) return;
+    try { this.g.store.save({ ...s, village: { ...s.village, buildSites: next } }); }
+    catch { /* the squares stay until the next visit */ }
   }
 
   paint(keys) {
@@ -302,7 +385,26 @@ export class BuildAsk {
   }
 
   update() {
-    if (this.state()?.night && (this.open || this.picking)) { this.open = null; this.picking = null; this.paint([]); this.g.notify?.(); }
+    const night = !!this.state()?.night;
+    if (night) {
+      if (this.open) { this.open = null; this.g.notify?.(); }
+      if (this.picking) {
+        this.persistDraft();
+        this.picking = null;
+        this.paint([]);
+        this.g.leaveSiteView?.();
+        this.shelved = true;
+        this.g.notify?.();
+      }
+      return;
+    }
+    this.releaseFinishedSites();
+    this.g.gardenPlan?.refreshDone?.();
+    if (!this.restored || this.shelved) {
+      this.restored = true;
+      this.shelved = false;
+      this.restoreDraft();
+    }
     if (!this.picking && this.group?.children.length) this.paint([]);
   }
 

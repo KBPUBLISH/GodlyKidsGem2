@@ -19,15 +19,15 @@ export function overviewSpan(yaw,aspect){
 }
 
 export class MapGesture {
- constructor(surface,{rotate,tilt,tap,threshold=10}){
-  this.surface=surface;this.rotate=rotate;this.tilt=tilt;this.tap=tap;this.threshold=threshold;this.down=null;
+ constructor(surface,{rotate,tilt,tap,drag,threshold=10}){
+  this.surface=surface;this.rotate=rotate;this.tilt=tilt;this.tap=tap;this.drag=drag;this.threshold=threshold;this.down=null;
   this.handlers={pointerdown:e=>this.begin(e),pointermove:e=>this.move(e),pointerup:e=>this.end(e),pointercancel:()=>this.cancel(),lostpointercapture:()=>this.cancel()};
   for(const [type,handler]of Object.entries(this.handlers))surface.addEventListener(type,handler);
  }
  begin(e,tap=null){
   // UI sheets (the friends roster) sit above the canvas. A touch that starts there must
   // scroll that sheet, never orbit the island, even if the event is retargeted here.
-  if(e.composedPath?.().some(n=>n.classList?.contains?.('friends-menu')||n.classList?.contains?.('friends-menu-scroll')))return;
+  if(e.composedPath?.().some(n=>n.classList?.contains?.('friends-menu')||n.classList?.contains?.('friends-menu-scroll')||n.classList?.contains?.('site-pan')||n.classList?.contains?.('resident-line')))return;
   // A second finger cancels the gesture, so it cannot accidentally become a tap.
   if(e.isPrimary===false){this.cancel();return;}
   if(e.button!==0||this.down)return;
@@ -40,8 +40,11 @@ export class MapGesture {
   d.dragged=true;this.surface.dataset.rotating='true';
   const rect=this.surface.getBoundingClientRect(),width=Math.max(1,rect.width),height=Math.max(1,rect.height);
   const dx=e.clientX-d.lastX,dy=e.clientY-d.lastY;
-  if(dx)this.rotate(-dx/width*Math.PI);
-  if(dy&&this.tilt)this.tilt(-dy/height*Math.PI*0.85);
+  // No character selected: drag slides the view. A selected character keeps the orbit.
+  if(!(this.drag&&this.drag(dx,dy))){
+   if(dx)this.rotate(-dx/width*Math.PI);
+   if(dy&&this.tilt)this.tilt(-dy/height*Math.PI*0.85);
+  }
   d.lastX=e.clientX;d.lastY=e.clientY;
  }
  end(e){

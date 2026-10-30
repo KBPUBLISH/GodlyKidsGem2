@@ -308,11 +308,40 @@ export class HomeWorld {
     const ratio=this.resolution.forSize(w,h);
     if(Math.abs(this.renderer.getPixelRatio()-ratio)>.001)this.renderer.setPixelRatio(ratio);
   }
-  updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=this.overview?220:40;this.scene.fog.far=this.overview?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
+  updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,wide=this.overview||!!this.siteView,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=wide?220:40;this.scene.fog.far=wide?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
   rotateView(delta){if(!this.loaded||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookYaw=THREE.MathUtils.clamp((this.interior.lookYaw||0)+delta,-.8,.8);return;}this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
   /** Nobody is being played or watched, so a drag should travel the island instead of spinning on one point. */
   freeCamera(){return !!(this.loaded&&this.ambient&&!this.overview&&!this.mapOnly&&!this.interior&&!this.fishing?.firstPerson&&!this.building?.preview&&!this.residents?.watchActor?.()&&!this.community?.focusActor?.());}
+  /** Overhead planning view: HUD hides, the camera looks straight down, and a drag or the arrow pad slides anywhere on the island. */
+  enterSiteView(){
+    if(this.siteView||!this.loaded)return;
+    this.residents?.stopReel?.();
+    this.siteView={overview:this.overview,zoom:this.zoom,yaw:this.viewYaw||0,pitch:this.viewPitch||0,focus:this.focus.clone()};
+    this.overview=false;this.viewYaw=0;this.viewPitch=0;this.zoom=46;this.updateProjection();
+    try{window.parent?.postMessage({type:'gk-site-view',on:true},location.origin);}catch{/* The island can run on its own. */}
+    this.notify();
+  }
+  leaveSiteView(){
+    const saved=this.siteView;if(!saved)return;
+    this.siteView=null;this.overview=saved.overview;this.zoom=saved.zoom;this.viewYaw=saved.yaw;this.viewPitch=saved.pitch;this.focus.copy(saved.focus);
+    this.camera.up.set(0,1,0);this.updateProjection();
+    try{window.parent?.postMessage({type:'gk-site-view',on:false},location.origin);}catch{/* The island can run on its own. */}
+    this.notify();
+  }
+  /** Metres on the ground. Screen up is north (−Z) while the overhead camera is up. */
+  nudgeSite(x,z){
+    if(!this.siteView||!this.world)return false;
+    const [x0,x1,y0,y1]=BAKE_FRAME;
+    this.focus.x=Math.min(x1,Math.max(x0,this.focus.x+x));
+    const gy=Math.min(y1,Math.max(y0,-this.focus.z+z));
+    this.focus.z=-gy;this.focus.y=0;return true;
+  }
   panView(dx,dy){
+    if(this.siteView){
+      const h=Math.max(1,this.container?.clientHeight||this.renderer?.domElement?.clientHeight||600);
+      const metres=(this.zoom||46)/h;
+      return this.nudgeSite(-dx*metres,dy*metres);
+    }
     if(!this.freeCamera()||!this.world)return false;
     const off=cameraOffset(this.viewYaw||0,false,this.viewPitch||0);
     const fx=-off[0],fz=-off[2],fl=Math.hypot(fx,fz)||1,fwx=fx/fl,fwz=fz/fl,rx=-fwz,rz=fwx;
@@ -679,6 +708,7 @@ export class HomeWorld {
       const zoom=THREE.MathUtils.clamp(next,base*0.72,base*1.32);
       inn.camFrom.zoom=zoom;inn.camTo.zoom=zoom;this.zoom=zoom;this.updateProjection();return;
     }
+    if(this.siteView){this.zoom=THREE.MathUtils.clamp(next,16,96);this.updateProjection();return;}
     if(this.overview||this.mapOnly)return;
     this.zoom=THREE.MathUtils.clamp(next,8,28);this.updateProjection();
   }
@@ -1020,14 +1050,14 @@ export class HomeWorld {
   notify(){if(this.disposed)return;this.onUpdate(this.snapshot());}
   snapshot(){
     if(!this.store)return {loaded:false,status:this.status,error:this.error};const s=this.store.state,minutes=gameTime(s),clock=timeLabel(minutes),phase=s.clock.cycle===1?dayPhase(s.clock,Date.now()):null;const plants=Object.entries(s.cells).filter(([,c])=>c.seed).map(([key,c])=>({key,...growth(c,minutes)}));
-    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),dining:this.dining?.snapshot()||null,reel:this.residents?.reelSnapshot?.()||null,diningCard:this.building?.openMenu?.id==='dining'?this.dining?.preview?.(this.building.openMenu.hallId)||null:null,fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,arrival:this.arrivals?.snapshot()||null,stages:this.stages?.snapshot()||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,coins:Number.isFinite(this.coins)?this.coins:null,garden:this.gardenKeeper?.card()||null,farm:this.farmer?.snapshot()||null,market:this.stall?.card()||null,recipeBubble:this.kitchen?.card()||null,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
+    return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,sitePicking:!!this.siteView,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),dining:this.dining?.snapshot()||null,reel:this.residents?.reelSnapshot?.()||null,diningCard:this.building?.openMenu?.id==='dining'?this.dining?.preview?.(this.building.openMenu.hallId)||null:null,fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,arrival:this.arrivals?.snapshot()||null,stages:this.stages?.snapshot()||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,coins:Number.isFinite(this.coins)?this.coins:null,garden:this.gardenKeeper?.card()||null,farm:this.farmer?.snapshot()||null,market:this.stall?.card()||null,recipeBubble:this.kitchen?.card()||null,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
   }
   tick() {
     if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const frameDt=this.clock.getDelta(),dt=Math.min(.08,frameDt),now=performance.now();this.frameDt=frameDt;this.frameSerial=(this.frameSerial||0)+1;
     if(this.resolution){this.resolution.sample(frameDt,this.loaded&&!document.hidden);this.applyResolution();}
     if(this.loaded){
       this.mining?.settleForge();
-      if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
+      if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
       if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
       this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
@@ -1044,7 +1074,8 @@ export class HomeWorld {
       this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
       if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
-      else{const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const free=this.freeCamera();const target=free?null:fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;if(target)this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
+      else if(this.siteView){this.camera.up.set(0,0,-1);this.camera.position.set(this.focus.x,80,this.focus.z);this.camera.lookAt(this.focus.x,0,this.focus.z);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
+      else{if(this.camera.up.y<0.9)this.camera.up.set(0,1,0);const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const free=this.freeCamera();const target=free?null:fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;if(target)this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');const view=this.viewPoint();if(sig!==this.fieldSignature.join('|')||dist(view,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...view};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.

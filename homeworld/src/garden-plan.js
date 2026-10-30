@@ -25,11 +25,12 @@ export class GardenPlan {
     return terrainType(world, p.x, p.y) === 2;
   }
 
-  patch(outline) {
+  patch(outline, clearDraft = false) {
     const s = this.state();
     if (!s || !this.g.store) return;
-    const garden = { ...(s.village?.garden || {}), playerOutline: outline };
-    try { this.g.store.save({ ...s, village: { ...(s.village || {}), garden } }); }
+    const village = { ...(s.village || {}), garden: { ...(s.village?.garden || {}), playerOutline: outline } };
+    if (clearDraft) delete village.siteDraft;
+    try { this.g.store.save({ ...s, village }); }
     catch (e) { this.g.toast?.(e.message); }
   }
 
@@ -50,7 +51,7 @@ export class GardenPlan {
     const plan = gardenPlanFromTaps(plots, toward);
     plan.ring = (plan.ring || []).filter(k => this.grass(k) && !taken.has(k) && !s.cells?.[k]?.soil);
     if (plan.gate && !plan.ring.includes(plan.gate)) plan.gate = plan.ring[0] || null;
-    this.patch(plan);
+    this.patch(plan, true);
     return plan;
   }
 

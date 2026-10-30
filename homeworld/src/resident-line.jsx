@@ -42,8 +42,17 @@ export function SiteAsk({engine,enabled}) {
     return () => cancelAnimationFrame(frame);
   }, [engine, enabled]);
   if (!enabled || !card) return null;
-  return <ResidentLine name={card.name} line={{text: card.text}} actions={[
-    {id: 'go', label: card.goLabel, disabled: card.goEnabled === false, onClick: () => engine.current?.buildAsk?.accept?.()},
-    {id: 'wait', label: card.waitLabel || 'Not now', onClick: () => engine.current?.buildAsk?.decline?.()},
-  ]} />;
+  const slide = (x, z) => engine.current?.nudgeSite?.(x, z);
+  return <>
+    {card.picking && <div className="site-pan" role="group" aria-label="Move around the island">
+      <button type="button" aria-label="Move up" onPointerDown={event => event.stopPropagation()} onClick={() => slide(0, 10)}>↑</button>
+      <button type="button" aria-label="Move left" onPointerDown={event => event.stopPropagation()} onClick={() => slide(-10, 0)}>←</button>
+      <button type="button" aria-label="Move right" onPointerDown={event => event.stopPropagation()} onClick={() => slide(10, 0)}>→</button>
+      <button type="button" aria-label="Move down" onPointerDown={event => event.stopPropagation()} onClick={() => slide(0, 10)}>↓</button>
+    </div>}
+    <ResidentLine name={card.name} line={{text: card.text}} actions={[
+      {id: 'go', label: card.goLabel, disabled: card.goEnabled === false, onClick: () => engine.current?.buildAsk?.accept?.()},
+      {id: 'wait', label: card.waitLabel || 'Not now', onClick: () => engine.current?.buildAsk?.decline?.()},
+    ]} />
+  </>;
 }

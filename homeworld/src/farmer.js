@@ -557,7 +557,9 @@ export class Farmer{
   foremanContext(){
     const s=this.state();if(!s)return null;
     const ranch=this.ranch(s),st=this.status(s),day=this.day(s);
+    const marked=s.farm?.ranch?.kidFence;
     return {ready:st.ready,waitingFor:st.waiting?.label||null,herd:st.herd,capacity:st.capacity,feed:st.feed,water:st.water,fencePieces:st.ring?`${st.ring-st.gaps}/${st.ring}`:null,fedToday:ranch.fedDay===day,wateredToday:ranch.wateredDay===day,
+      markedPaddock:marked?.stable?.key?{stable:marked.stable.key,fence:marked.ring||[],gate:marked.gate||null}:null,
       request:ranch.request?{kind:ranch.request.kind,qty:ranch.request.qty,price:ranch.request.price,status:ranch.request.status}:null,prices:R.FARM_PRICES,names:Object.values(ranch.names),gathered:ranch.gathered};
   }
   /** Screen position above Adam's head for his speech bubble. */

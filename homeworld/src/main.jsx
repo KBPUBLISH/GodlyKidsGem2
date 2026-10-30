@@ -257,6 +257,7 @@ function App(){
   const planOpen=!!plan;
   useEffect(()=>{if(!planOpen)return;const t=setInterval(refreshPlan,1000);return()=>clearInterval(t);},[planOpen]);
   useEffect(()=>{if(view.ui?.openPlan)openPlan();},[view.ui?.openPlan]);
+  useEffect(()=>{if(!view.sitePicking)return;setPanel(null);setShowTime(false);setActionsOpen(false);setFriendsOpen(false);setPlan(null);},[view.sitePicking]);
   // First-visit tour (onboarding.jsx): while it is pending the to-do sheet waits; the tour's "Homes" step opens it by hand.
   const [tourActive,setTourActive]=useState(false);
   useEffect(()=>{if(!view.loaded||!view.playersOnly||view.ambient||planShown.current||onboardingPending())return;planShown.current=true;const t=setTimeout(openPlan,1400);return()=>clearTimeout(t);},[view.loaded,view.playersOnly,view.ambient]);
@@ -339,7 +340,7 @@ function App(){
   const activeTool=TOOLS.find(t=>t.id===view.tool);
   const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
-  return <main className={`game-shell ${mapOnly?'map-only':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
+  return <main className={`game-shell ${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
     <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>
     <header className="topbar">
@@ -354,7 +355,7 @@ function App(){
     <CharacterVitals engine={engine} onInspect={()=>setActionsOpen(false)} enabled={view.loaded&&!view.playersOnly&&!mapOnly&&!view.overview&&!panel&&!showTime&&!view.building?.preview}/>
     <ResidentGreeting engine={engine} enabled={view.loaded&&view.playersOnly&&!mapOnly&&!view.overview&&!panel&&!showTime&&!view.building?.preview&&!view.fishing}/>
     <MealAsk engine={engine} enabled={view.loaded&&view.playersOnly&&!mapOnly&&!view.fishing}/>
-    <SiteAsk engine={engine} enabled={view.loaded&&view.playersOnly&&!mapOnly&&!view.fishing}/>
+    <div className="site-ask"><SiteAsk engine={engine} enabled={view.loaded&&view.playersOnly&&!mapOnly&&!view.fishing}/></div>
     <PlantPeek engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!panel&&!showTime&&!view.building?.preview&&!view.fishing}/>
     <BuildPeeks engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!panel&&!showTime&&!view.building?.preview&&!view.fishing&&!plan}/>
     {showTime&&<div className="time-shade" onClick={()=>setShowTime(false)}><section ref={timeDialog} tabIndex={-1} className="time-panel panel" role="dialog" aria-modal="true" aria-label="Day and time" onClick={e=>e.stopPropagation()}><div className="panel-title"><strong><Icon type="sun" size={28}/> Day & night</strong><button data-dialog-close className="close" onClick={()=>setShowTime(false)} aria-label="Back to island">← Back</button></div><p>A full island day takes 10 minutes. Dusk arrives in the last minute before 10 PM bedtime. Everyone rests through a 10-second night, then wakes at 7 AM. Homes give a full energy refill. Plants keep growing overnight.</p><details className="grownup-tools"><summary>Grown-up test tools</summary><p>These buttons change time or restart this local game.</p><div className="time-buttons"><button disabled={!view.loaded} onClick={()=>invoke(g=>g.clockChange(0,!view.state.clock.paused))}>{view.state?.clock.paused?'▶ Start time':'Ⅱ Pause time'}</button><button onClick={()=>invoke(g=>g.previewTime('dusk'))}>Preview dusk</button><button onClick={()=>{setShowTime(false);invoke(g=>g.previewTime('bedtime'));}}>Preview bedtime</button><button onClick={()=>invoke(g=>g.clockChange(360))}>Skip 6 hours</button><button onClick={()=>invoke(g=>g.clockChange(1440))}>Skip 1 day</button></div><label className="slow"><input type="checkbox" checked={view.animationRate<1} onChange={e=>invoke(g=>g.setAnimationRate(e.target.checked?.35:1))}/>Slow down tool moves</label><div className="reset-row"><button disabled={busy} onClick={()=>setConfirmReset(true)}>Start a new test</button><button disabled={busy} onClick={()=>invoke(g=>g.reset(true))}>Bring back previous test</button></div>{confirmReset&&<div className="reset-question" role="group" aria-label="Start a new test?"><p>Start again? We’ll keep your current game as the previous test.</p><button onClick={()=>{invoke(g=>g.reset());setConfirmReset(false);}}>Start new test</button><button onClick={()=>setConfirmReset(false)}>Keep playing</button></div>}</details></section></div>}
@@ -415,15 +416,15 @@ function App(){
       <footer>One game day = ten real minutes · {view.clock?.text} on Day {view.clock?.day}</footer>
     </section></div>}
     </div>
-    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan today={plan.today} village={plan.village} stages={view.stages} coins={Number.isFinite(view.coins)?view.coins:plan.coins} state={view.state} onClose={()=>setPlan(null)} onAdd={choice=>{invoke(g=>{if(choice?.kind)pinBuildGoal(g,choice.kind);else g.addTodayGoal(choice);});refreshPlan();}} onClearExtra={()=>{invoke(g=>g.clearTodayGoal());refreshPlan();}}/>}
+    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.sitePicking&&!view.night?.sleeping&&<IslandPlan today={plan.today} village={plan.village} stages={view.stages} coins={Number.isFinite(view.coins)?view.coins:plan.coins} state={view.state} onClose={()=>setPlan(null)} onAdd={choice=>{invoke(g=>{if(choice?.kind)pinBuildGoal(g,choice.kind);else g.addTodayGoal(choice);});refreshPlan();}} onClearExtra={()=>{invoke(g=>g.clearTodayGoal());refreshPlan();}}/>}
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
     {/* Welcome-ashore profile card: waits for the first-visit tour, fishing, the map and night to clear. */}
-    {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive&&!plan}/>}
+    {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.sitePicking&&!view.night?.sleeping&&!tourActive&&!plan}/>}
     {/* Island journey panel + new-stage celebration (stage-journey.jsx); the badge in the top bar opens it. */}
-    {view.playersOnly&&<StageJourney engine={engine} stages={view.stages} enabled={view.loaded&&!view.ambient&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive}/>}
-    <EnergyFx engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!view.night?.sleeping}/>
-    {view.playersOnly&&<IslandTour engine={engine} view={view} ui={{panel,showTime,mapOnly,actionsOpen,actionsTab,friendsOpen,plan:!!plan}} onActive={setTourActive}/>}
-    <MorningNote report={view.loaded&&!view.night?.sleeping?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>
+    {view.playersOnly&&<StageJourney engine={engine} stages={view.stages} enabled={view.loaded&&!view.ambient&&!view.fishing&&!mapOnly&&!view.sitePicking&&!view.night?.sleeping&&!tourActive}/>}
+    <EnergyFx engine={engine} enabled={view.loaded&&!mapOnly&&!view.overview&&!view.sitePicking&&!view.night?.sleeping}/>
+    {view.playersOnly&&!view.sitePicking&&<IslandTour engine={engine} view={view} ui={{panel,showTime,mapOnly,actionsOpen,actionsTab,friendsOpen,plan:!!plan}} onActive={setTourActive}/>}
+    <MorningNote report={view.loaded&&!view.night?.sleeping&&!view.sitePicking?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>
     <NightRest night={view.night}/>
     {mapOnly&&!view.night?.sleeping&&<button ref={backToPlay} className="map-only-return" onClick={returnToPlay} aria-label="Back to play. Show game buttons"><span aria-hidden="true">←</span> Back to play</button>}
     {!view.loaded&&<div className={`loading ${view.error?'':'with-tips'}`}>{view.error?<><div className="loading-mark">✦</div><h1>The island needs another try</h1><p>{view.status}</p><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<><LoadingTips/><div className="loading-foot"><div className="loading-track"><i/></div><p>{view.status}</p></div></>}</div>}

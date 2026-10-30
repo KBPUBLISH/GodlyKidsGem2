@@ -140,6 +140,7 @@ export class Village {
     const head = checkIn(s, { who: home.id, brain: 'builder', intent: { action: 'build', kind: goal.kind }, world: g.world });
     if (!head.ok) { speakRefusal(g, this.foremanTold, home.id, home.name, head); return; }
     const saved = isStructure(goal.kind) ? g.buildAsk?.buildingSite?.(goal.kind, s) : null;
+    if (saved?.placedId && activeBuildings(s).some((b) => b.id === saved.placedId)) return;
     if (saved && g.buildAsk?.siteClearChore?.(noah?.userData || home, s)) return;
     const plan = saved ? { kind: goal.kind, key: saved.key, rotation: saved.rotation || 0 } : head.site;
     const waited = { ok: false, reason: 'No room in the row yet', instead: 'No room in the row yet' };
@@ -158,8 +159,7 @@ export class Village {
     if (g.store.state === before) { speakRefusal(g, this.foremanTold, home.id, home.name, waited); return; }
     this.candidates = null;
     if (saved) {
-      const next = g.store.state, sites = { ...(next.village?.buildSites || {}) };
-      delete sites[goal.kind];
+      const next = g.store.state, sites = { ...(next.village?.buildSites || {}), [goal.kind]: { ...saved, placedId: id } };
       try { g.store.save({ ...next, village: { ...(next.village || {}), buildSites: sites } }); } catch { /* the building still stands */ }
     }
     const placed = g.store.state.buildings.find((b) => b.id === id);
@@ -206,6 +206,6 @@ export class Village {
   /** Work for the plan card: what each friend is doing right now. */
   snapshot() {
     const g = this.g, needs = this.lastNeeds;
-    return { goal: needs.goal ? { kind: needs.goal.kind, name: needs.goal.name, ready: needs.goal.ready, blocked: needs.goal.blocked, missing: needs.goal.missing, underway: needs.goal.underway } : null, needs: { wood: needs.wood, stone: needs.stone, fish: needs.fish }, stage: this.lastPlan?.stage || null, farm: g.farmer?.foremanContext?.() || null, garden: g.gardenKeeper?.foremanContext?.() || null };
+    return { goal: needs.goal ? { kind: needs.goal.kind, name: needs.goal.name, ready: needs.goal.ready, blocked: needs.goal.blocked, missing: needs.goal.missing, underway: needs.goal.underway } : null, needs: { wood: needs.wood, stone: needs.stone, fish: needs.fish }, stage: this.lastPlan?.stage || null, farm: g.farmer?.foremanContext?.() || null, garden: g.gardenKeeper?.foremanContext?.() || null, tasks: g.buildAsk?.savedTasks?.() || [] };
   }
 }

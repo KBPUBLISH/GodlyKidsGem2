@@ -411,6 +411,7 @@ export class GardenKeeper {
       scarecrows: { count: st.scarecrows.count, needed: st.scarecrows.needed, uncovered: st.scarecrows.uncovered }, threatLevel: st.threatLevel, exposure: st.exposure,
       lastAttack: st.lastAttack ? { day: st.lastAttack.day, kind: st.lastAttack.kind, sides: st.lastAttack.sides, ate: st.lastAttack.ate } : null,
       upgradesAvailable: st.upgradesAvailable.map((u) => u.id), shape: currentPlan(this.state, st.primary).shape, shapesUnlocked: currentPlan(this.state, st.primary).shapesUnlocked,
+      playerSquares: this.game.gardenPlan?.active?.() ? { plots: this.game.gardenPlan.active().keys, fence: this.game.gardenPlan.active().ring, gate: this.game.gardenPlan.active().gate } : null,
       requests: this.requests.map((r) => ({ id: r.id, kind: r.kind, side: r.side || null, need: r.need, reason: r.reason, priority: r.priority })),
       rules: RULES.map((r) => r.text),
     };

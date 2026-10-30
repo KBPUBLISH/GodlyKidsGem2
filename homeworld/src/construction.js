@@ -291,6 +291,7 @@ export class Construction {
   try{g.store.commit({type:'remove_building',id,actionId:crypto.randomUUID()});}
   catch(e){g.toast(e.message);g.notify();return false;}
   if(g.store.state===before){g.toast(`${name} could not be taken down.`);g.notify();return false;}
+  if(this.preview?.movingId===id||this.preview?.upgradingId===id)this.cancelPreview();
   if(g.order?.id===id){g.order=null;g.path=[];}
   g.refreshDynamic();
   g.toast(`${name} taken down. The materials are back in the bag.`);
@@ -336,7 +337,7 @@ export class Construction {
   const rig=this.rigHome(n,b),p=V(0,1.25,rig.doorZ);
   n.root.updateWorldMatrix(true,true);n.root.localToWorld(p);
   const x=p.x,y=-p.z,h=p.y-heightAt(this.g.world,x,y);
-  this.g.showPrompt('home',b.id,{x,y},h,[{id:'enter',label:'Go in',icon:'walk'},{id:'remove',label:'Take down',icon:'build'}]);
+  this.g.showPrompt('home',b.id,{x,y},h,[{id:'enter',label:'Go in',icon:'walk'},{id:'move',label:'Move',icon:'build'}]);
  }
  enterHome(id){
   const g=this.g;if(g.interior) return;

@@ -136,7 +136,7 @@ export function migrateState(state){
  const characters=Object.fromEntries(Object.entries({...builtIns,...state.characters}).map(([id,c])=>{const {fatigue,awakeSince,...character}=c;return [id,Number.isFinite(character.hunger)?character:{...character,hunger:MAX_HUNGER,hungerAt:state.clock?.minutes??0}];}));
  const next={constructionVersion:1,...state,buildings:state.buildings||[],animals:state.animals||[],woodDrops:state.woodDrops||[],removedStumps:state.removedStumps||[],applePicks:state.applePicks||{},treeDamage:state.treeDamage||{},removedRocks:state.removedRocks||[],rockDamage:state.rockDamage||{},tools:normalizeTools(state.tools),activeCharacter:state.activeCharacter||'adam',characters,recentActions:state.recentActions||[],stats:{rocks:0,toolUpgrades:0,gems:0,fishCaught:0,mealsEaten:0,foodPrepared:0,rests:0,sleeps:0,built:0,...state.stats}};
  // Release an old fatigue-only helper nap without granting a refill or reward.
- if(hadSleepMeter&&next.community){next.community=structuredClone(next.community);for(const [id,m]of Object.entries(next.community.members)){if(m.job?.kind==='rest'&&(characters[id]?.energy??0)>LOW_ENERGY){m.position=memberPosition(m,state.clock.minutes);m.job=null;m.readyAt=state.clock.minutes;m.status='Ready to help';}}}
+  if(hadSleepMeter&&next.community){next.community=structuredClone(next.community);for(const [id,m]of Object.entries(next.community.members)){if(m.job?.kind==='rest'&&(characters[id]?.energy??0)>LOW_ENERGY){m.position=memberPosition(m,state.clock.minutes);m.job=null;m.readyAt=state.clock.minutes;m.status='Ready to help';}}}
  return collapsePrayerTents(next);
 }
 function repairState(s, world) {
@@ -344,8 +344,10 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     }
     b.key=a.key;b.rotation=a.rotation;b.baseHeight=status.baseHeight;
   } else if(a.type==='place_building') {
-    if(activeBuildings(state).some(b=>b.status!=='complete'&&!b.project)||(state.buildings||[]).some(b=>b.id===a.id)||typeof a.id!=='string'||!a.id||a.id.length>128)return state;
     const def=buildingById(a.kind),stroke=!!(def?.stroke&&a.stroke);
+    // A fence stroke is finished the moment it is placed, so the garden fence can go up while a house is still being raised.
+    const busy=activeBuildings(state).some(b=>b.status!=='complete'&&!b.project);
+    if((busy&&!(stroke&&def?.instant))||(state.buildings||[]).some(b=>b.id===a.id)||typeof a.id!=='string'||!a.id||a.id.length>128)return state;
     if(def?.once&&activeBuildings(state).some(b=>b.kind===a.kind))return state;
     const status=stroke?strokePlacementStatus(world,state,a,minutes,a.people||[]):buildPlacementStatus(world,state,a,minutes);if(!status.ok)return state;
     const paidMaterials=spendMaterials(next,a.kind),instant=!!def?.instant;
@@ -580,7 +582,8 @@ function strokeStanders(state,people){
 /** Instant fence and brick strokes. Same ground rules as other buildings, without a walk to each piece. */
 export function strokePlacementStatus(world,state,plan,minutes=gameTime(state),people=[]){
   const status=buildSiteStatus(world,state,plan,minutes);if(!status.ok)return status;
-  if(activeBuildings(state).some(b=>b.status!=='complete'&&!b.project))return {...status,ok:false,reason:'Finish your building first.'};
+  const strokeDef=buildingById(plan.kind);
+  if(activeBuildings(state).some(b=>b.status!=='complete'&&!b.project)&&!(strokeDef?.instant&&strokeDef?.stroke))return {...status,ok:false,reason:'Finish your building first.'};
   const need=strokeNeed(state,plan.kind);if(need)return {...status,ok:false,reason:need};
   if(energyFor(state)<BUILD_ENERGY)return {...status,ok:false,reason:'Need 5 energy.'};
   const fp=status.footprint;

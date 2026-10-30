@@ -199,6 +199,7 @@ export function describeBundle(kind,qty){
 /** Adam's own words for the card (canon voice: curious, names things, thanks God). */
 export function requestLine(kind,qty,status){
   const what=describeBundle(kind,qty);
+  if(status&&!status.fenced)return `The stable is up and the fence is going round it! Could we get ${what}? I already have names picked out.`;
   if(status?.herd===0)return `The paddock is ready! Could we get ${what}? I already have names picked out.`;
   if(kind==='chicken')return `There is room for ${what} more. I keep thinking of names for them!`;
   if(kind==='cow')return `Could we bring home ${what}? Milk for everyone — God is so good to us.`;

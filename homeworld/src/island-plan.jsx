@@ -4,8 +4,8 @@ import {BUILDINGS,materialStatus,activeBuildings} from './building.mjs';
 
 /**
  * "Today on the island": the stage the island is growing through, one large goal for each
- * friend ashore, and the two jobs only the kid can do. The chores those goals create
- * (a fence, a log, the grill, the hut) stay off this card — the friends keep doing them.
+ * friend ashore, and the two jobs only the kid can do. Each friend shows the specific
+ * task the foreman just handed them, and a short live feed of those beats.
  */
 function Face({friend}){
   return <span className="plan-face">{friend.imageUrl?<img src={friend.imageUrl} alt=""/>:friend.name.slice(0,1)}</span>;
@@ -53,8 +53,9 @@ function buildingPicks(state){
 
 function FriendRow({friend}){
   const g=friend.goal;
-  const live=!!friend.working&&!g.dismissed;
-  const line=g.dismissed?g.title:live?g.title:(friend.asleep?'Sleeping':'Resting');
+  const line=g.dismissed?'Waiting for a new job':(friend.task||'Waiting for the next job');
+  const quiet=g.dismissed||/^(Resting|Sleeping|Waiting|Taking a walk)/.test(line);
+  const live=!quiet;
   return <li className={`${g.dismissed?'waiting':''} ${g.yours?'yours':''} ${live?'busy':'idle'}`}>
     <Face friend={friend}/>
     <div className="plan-friend-body">
@@ -87,6 +88,12 @@ export function IslandPlan({today,village,stages,coins,state,onClose,onAdd,onCle
       {friends.length?<ul className="plan-friends">
         {friends.map(f=><FriendRow key={f.id} friend={f}/>)}
       </ul>:<p className="plan-empty">No friends ashore yet. Drop one off and the foreman will give them a goal.</p>}
+      {!!today.feed?.length&&<>
+        <div className="eyebrow plan-kicker">JUST NOW</div>
+        <ul className="plan-feed">
+          {today.feed.map(e=><li key={e.id}>{e.text}</li>)}
+        </ul>
+      </>}
       {today.extra&&<p className="plan-extra"><span>Today's extra: <b>{today.extra.title}</b></span><button type="button" className="plan-x" onClick={onClearExtra} aria-label="Take today's extra goal off">✕</button></p>}
       <div className="eyebrow plan-kicker">FOR YOU</div>
       <ul className="plan-you">

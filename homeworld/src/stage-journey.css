@@ -71,3 +71,14 @@
 .stage-cheer-card strong{font-size:22px;line-height:1.1;color:#2f3a24;font-weight:900}
 .stage-cheer-card small{font-size:12px;font-weight:800;color:#8a7a4a}
 @media(prefers-reduced-motion:reduce){.stage-confetti{display:none}.stage-cheer-icon,.stage-badge.cheer{animation:none}}
+
+/* Keep sound reachable beside the journey badge on phones. The clock uses
+   the first row; sound sits beneath it, opposite the Friends button. */
+@media(max-width:600px){
+  .game-controls:has(>.stage-badge) .topbar .top-actions{display:grid;grid-template-columns:auto;justify-items:end;gap:0}
+  .game-controls:has(>.stage-badge) .top-actions>.clock-button{grid-row:1}
+  .game-controls:has(>.stage-badge) .top-actions>.sound-button{grid-row:2}
+}
+@media(max-width:360px){
+  .stage-badge>span{display:none}
+}

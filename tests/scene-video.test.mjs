@@ -14,7 +14,7 @@ function fixture(t, play) {
 }
 test('WKWebView NotAllowedError replays inside the next tap instead of failing',async t=>{
   let allowed=false;
-  const {video,win,calls,states}=fixture(t,v=>allowed?(v.readyState=4,Promise.resolve()):Promise.reject(Object.assign(new Error('gesture'),{name:'NotAllowedError'})));
+  const {video,win,calls,states}=fixture(t,v=>allowed?(v.readyState=4,v.paused=false,Promise.resolve()):Promise.reject(Object.assign(new Error('gesture'),{name:'NotAllowedError'})));
   await Promise.resolve(); await Promise.resolve();
   assert.deepEqual(states,['loading']);
   allowed=true;
@@ -57,4 +57,17 @@ test('cleanup prevents events and timeouts affecting another scene',t=>{
   t.mock.timers.tick(20000);
   loader.retry();
   assert.deepEqual(states,['loading']);
+});
+
+test('a decoded but autoplay-blocked video still starts on the next tap',async t=>{
+ const video=new EventTarget(), win=new EventTarget();let calls=0,allowed=false,ready=0;
+ Object.assign(video,{paused:true,readyState:2,play(){calls++;if(!allowed)return Promise.reject(Object.assign(new Error('gesture required'),{name:'NotAllowedError'}));this.paused=false;return Promise.resolve();}});
+ const loader=prepareSceneVideo(video,{onLoading(){},onReady(){ready++;},onFailure(){assert.fail('unexpected failure');}},win);
+ t.after(()=>loader.dispose());
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(ready,1);assert.equal(video.paused,true);
+ allowed=true;win.dispatchEvent(new Event('pointerdown'));
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(calls,2);assert.equal(video.paused,false);
+ win.dispatchEvent(new Event('click'));assert.equal(calls,2);
 });

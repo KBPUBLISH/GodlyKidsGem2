@@ -15,10 +15,13 @@ export function prepareSceneVideo(video, { onLoading, onReady, onFailure }, win 
     for (const name of GESTURES) win.removeEventListener?.(name, onGesture, true);
   };
   const check = () => {
-    if (disposed || ready || video.readyState < 2) return;
+    if (disposed || video.readyState < 2) return;
+    // A decoded poster frame is not proof that autoplay was permitted.
+    // Keep the gesture recovery until the video actually leaves paused state.
+    if (!video.paused) disarm();
+    if (ready) return;
     ready = true;
     clear();
-    disarm();
     onReady();
   };
   const fail = () => {
@@ -29,7 +32,7 @@ export function prepareSceneVideo(video, { onLoading, onReady, onFailure }, win 
   // WKWebView drops a muted autoplay once the tap that opened the scene is
   // stale (the CMS fetch outruns it). Replay inside the very next gesture.
   const onGesture = () => {
-    if (disposed || ready) return disarm();
+    if (disposed || (ready && !video.paused)) return disarm();
     if (video.paused) {
       try { Promise.resolve(video.play()).then(check, () => {}); } catch {}
     }

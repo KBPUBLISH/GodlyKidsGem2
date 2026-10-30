@@ -4,7 +4,7 @@ import {
   FARM_PRICES,STABLE_CAPACITY,MAX_REQUEST_QTY,PADDOCK_CELLS_PER_ANIMAL,PADDOCK_MIN,FARM_BUILDINGS,
   paddockPlan,ringKeys,rectKeys,fenceGaps,nextFenceKey,parseKey,
   herdCount,herdCapacity,roomFor,allowedQty,bundlePrice,nextRequest,farmStatus,ensureRanch,
-  pickNames,joinNames,arrivalLine,dailyProduce,requestLine,upsertRequest,closeRequest,openRequests,
+  pickNames,joinNames,arrivalLine,dailyProduce,requestLine,upsertRequest,closeRequest,openRequests,canAsk,nextMorning,
 } from '../src/farm-rules.mjs';
 
 const stable={col:10,row:10,w:3,h:2};
@@ -81,7 +81,22 @@ test('nextRequest climbs the ladder: chickens first, then a sheep, capped by roo
   assert.deepEqual(nextRequest(two),{kind:'sheep',qty:1,price:150});
   const nearlyFull=state({animals:[{id:'a',kind:'sheep'},{id:'b',kind:'cow'},{id:'c',kind:'goat'}]});
   assert.deepEqual(nextRequest(nearlyFull),{kind:'chicken',qty:1,price:60},'one spot left → one chicken');
-  assert.match(requestLine('chicken',2,{herd:0}),/two chickens/);
+  assert.match(requestLine('chicken',2,{herd:0,fenced:true}),/paddock is ready.*two chickens/);
+  assert.match(requestLine('chicken',2,{herd:0,fenced:false}),/stable is up.*two chickens/);
+});
+
+test('Adam asks as soon as a stable with room stands, and "Not now" waits for the next island morning',()=>{
+  const plan=paddockPlan([stable],4);
+  assert.equal(canAsk(farmStatus(state({buildings:[]}),null)),false,'no stable → no ask');
+  const st=farmStatus(state(),plan);
+  assert.equal(st.fenced,false);
+  assert.equal(canAsk(st),true,'stable up, fence still open → ask');
+  const full=state({animals:['a','b','c','d'].map(id=>({id,kind:'chicken'}))});
+  assert.equal(canAsk(farmStatus(full,plan)),false);
+  // 07:00 is minute 420 of each day; declining at 10:00 on day 2 waits for 07:00 on day 3
+  assert.equal(nextMorning(1440+600),2*1440+420);
+  assert.equal(nextMorning(1440+419),1440+420,'just before dawn → that same dawn');
+  assert.ok(nextMorning(1000)>1000);
 });
 
 test('farmStatus is ready only with fence, trough, feed pile, stock and room',()=>{

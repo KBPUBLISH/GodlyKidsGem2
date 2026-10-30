@@ -89,7 +89,9 @@ export const practiceRate=(state,id,activity)=>1+skillLevel(skillXp(state,id,act
 const complete=state=>activeBuildings(state).filter(b=>b.status==='complete');
 function countFor(state,goal){
   const done=complete(state);
-  if(HOME_RANK[goal.kind]!==undefined&&goal.kind!=='tent')return done.filter(b=>(HOME_RANK[b.kind]??-1)>=HOME_RANK[goal.kind]).length;
+  // A Prayer Tent that is queued or going up already finishes the camp roof. The crew must not raise another.
+  if(goal.kind==='tent'||buildingById(goal.kind)?.once)return activeBuildings(state).filter(b=>b.kind===goal.kind).length;
+  if(HOME_RANK[goal.kind]!==undefined)return done.filter(b=>(HOME_RANK[b.kind]??-1)>=HOME_RANK[goal.kind]).length;
   return done.filter(b=>b.kind===goal.kind).length;
 }
 const underway=(state,kind)=>activeBuildings(state).some(b=>b.status!=='complete'&&b.kind===kind);

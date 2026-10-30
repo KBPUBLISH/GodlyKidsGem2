@@ -9,7 +9,7 @@
 import {SEEDS,gameTime,growth} from './core.mjs';
 import {woodStorage} from './wood-storage.mjs';
 import {energyFor,FOODS,FOOD_RECIPES,completedHomes,canCook,LOW_ENERGY} from './nutrition.mjs';
-import {buildingById,completedFires,litFires,firesNeedingLog,woodTotal} from './building.mjs';
+import {buildingById,activeBuildings,completedFires,litFires,firesNeedingLog,woodTotal} from './building.mjs';
 import {toolTier,TOOL_TIERS,MINERALS,upgradeStatus} from './mining.mjs';
 
 const MAX_ITEMS=4;
@@ -75,7 +75,7 @@ export function planFor(game){
     else if(fire)add('chop_fire','axe',`Chop ${fire.wood-wood} more wood`,`A campfire needs ${fire.wood} wood to grill those ${fish} fish.`,{type:'chop',goal:'build',count:Math.max(1,fire.wood-wood)});
   }
   // 5. Somewhere to sleep.
-  if(!homes){
+  if(!homes&&!activeBuildings(s).some(b=>b.kind==='tent')){
     const tent=buildingById('tent');
     if(tent&&wood>=tent.wood)add('build_home','build',`Put up a ${tent.name}`,'Nobody has a bed yet. A home gives a full energy refill at night.',{type:'build',item:'tent'});
     else if(tent)add('chop_home','axe',`Chop ${tent.wood-wood} more wood for a ${tent.name}`,'Nobody has a bed yet. Homes need wood first.',{type:'chop',goal:'build',count:Math.max(1,tent.wood-wood)});

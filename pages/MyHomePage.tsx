@@ -13,7 +13,7 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players176&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players177&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 

@@ -56,6 +56,11 @@ export class Village {
     if (goal.blocked) { this.tellOnce(`blocked:${goal.kind}`, `${goal.name}: ${goal.blocked}`); return; }
     if (goal.underway) return;
     if ((goal.have || 0) >= (goal.count || 1)) return;
+    // One Prayer Tent (placed, walking, or finished) completes that goal. Do not queue another.
+    if (buildingById(goal.kind)?.once && activeBuildings(s).some((b) => b.kind === goal.kind)) {
+      if (this.focus() === goal.kind) g.clearGoal?.();
+      return;
+    }
     if (!goal.ready) { this.candidates = null; return; }
     // The one small-build slot stays with Adam until the stable has a fence. A new hut can wait.
     if (this.paddockWaiting(s)) return;
@@ -197,7 +202,7 @@ export class Village {
   /** A queued or half-built small building that no one (and not the kid) is on. */
   openBuild(s) {
     const g = this.g;
-    return activeBuildings(s).find((b) => b.status !== 'complete' && !b.project && g.action?.id !== b.id && g.order?.id !== b.id) || null;
+    return activeBuildings(s).find((b) => b.status !== 'complete' && !b.project && g.action?.id !== b.id && g.order?.id !== b.id && !(buildingById(b.kind)?.once && activeBuildings(s).some((o) => o.id !== b.id && o.kind === b.kind && (o.status === 'complete' || o.status === 'building')))) || null;
   }
 
   /** Work for the plan card: what each friend is doing right now. */

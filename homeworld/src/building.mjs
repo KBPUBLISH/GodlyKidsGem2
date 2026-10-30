@@ -10,7 +10,7 @@ export const BUILDINGS=[
   {id:'dining_hall',name:'Dining Hall',category:'Community',size:[7,5],height:4.45,wood:70,stone:30,seconds:40,solid:true,poster:'dining_hall',description:'An open timber hall with one long table and benches. Ring the bell and every friend comes to eat together; the meal is served from your bag and leftovers go back.'},
   {id:'market',name:'Market',category:'Community',size:[5,4],height:3.8,wood:60,stone:25,seconds:40,solid:true,description:'Two stalls under a striped awning with baskets and crates of island food. Travellers come by boat more often to browse, and the friends can welcome them.'},
   {id:'dock',name:'Harbour Dock',category:'Community',size:[2,5],height:2.6,wood:45,stone:10,seconds:30,solid:true,description:'A wooden pier with mooring posts and a lantern. Travellers’ boats tie up here, and the friends wave them in.'},
-  {id:'tent',name:'Prayer Tent',category:'Homes',size:[3,2],height:2.3,wood:8,stone:0,seconds:10,solid:true,beds:1,description:'A peaceful green tent for your island.'},
+  {id:'tent',name:'Prayer Tent',category:'Homes',size:[3,2],height:2.3,wood:8,stone:0,seconds:10,solid:true,beds:1,once:true,description:'A peaceful green tent for your island. One is enough for the camp.'},
   {id:'chest',name:'Storage Chest',category:'Decorations',size:[2,1],height:1.1,wood:4,stone:2,seconds:6,solid:true,description:'A wooden chest. Your items still live in My bag in this test.'},
   {id:'wood_store_20',name:'Wood Bin',category:'Storage',size:[2,1],height:.85,wood:6,stone:2,seconds:8,solid:true,woodCapacity:20,description:'An open wooden bin. Adds space for 20 wood.'},
   {id:'wood_store_50',name:'Log Rack',category:'Storage',size:[2,2],height:1.62,wood:12,stone:4,seconds:12,solid:true,woodCapacity:50,description:'A covered rack. Adds space for 50 wood.'},
@@ -32,6 +32,31 @@ export const BUILDINGS=[
 export const buildingById=id=>BUILDINGS.find(b=>b.id===id);
 export const woodTotal=state=>Object.entries(state.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0);
 export const activeBuildings=state=>(state.buildings||[]).filter(b=>b.status!=='cancelled');
+/**
+ * One Prayer Tent is the whole camp roof. When a save has a pile, keep the first and drop the
+ * rest with no material refund. Other building kinds are left alone. Sleep spots in a dropped
+ * copy move to the tent that stays.
+ */
+export function collapsePrayerTents(state){
+  const buildings=state?.buildings;
+  if(!Array.isArray(buildings))return state;
+  const live=[];
+  for(const b of buildings)if(b&&b.kind==='tent'&&b.status!=='cancelled')live.push(b);
+  if(live.length<2)return state;
+  const keep=live[0],drop=new Set(live.slice(1).map(b=>b.id));
+  const next={...state,buildings:buildings.filter(b=>!drop.has(b?.id))};
+  if(state.characters&&Object.values(state.characters).some(c=>drop.has(c?.sleep?.homeId))){
+    const characters={...state.characters};
+    for(const [id,c] of Object.entries(characters))if(drop.has(c?.sleep?.homeId))characters[id]={...c,sleep:{...c.sleep,homeId:keep.id}};
+    next.characters=characters;
+  }
+  if(state.night?.homes&&Object.values(state.night.homes).some(id=>drop.has(id))){
+    const homes={...state.night.homes};
+    for(const [id,homeId] of Object.entries(homes))if(drop.has(homeId))homes[id]=keep.id;
+    next.night={...state.night,homes};
+  }
+  return next;
+}
 export const completedFires=state=>activeBuildings(state).filter(b=>b.kind==='campfire'&&b.status==='complete');
 /** Every finished home sleeps a few friends; a new friend can only move in when there is a bed for them. */
 export const bedCount=state=>activeBuildings(state).filter(b=>b.status==='complete').reduce((n,b)=>n+(buildingById(b.kind)?.beds||0),0);
@@ -139,7 +164,9 @@ export function siteStatus(world,state,plan,{trees,rocks,terrain,height,inBlocke
   }
  }
  if(Math.max(...heights)-Math.min(...heights)>.28)return fail('That ground is too steep. Try flatter grass.');
- if(activeBuildings(state).some(b=>boundsOverlap(fp.bounds,footprint(world,b).bounds)))return fail('Another building already has that spot.');
+ // Finished and in-progress buildings both hold their cells. A missing footprint must not skip the rest.
+ const occupied=activeBuildings(state).map(b=>footprint(world,b)).filter(Boolean);
+ if(occupied.some(o=>boundsOverlap(fp.bounds,o.bounds)||o.keys.some(k=>fp.keys.includes(k))))return fail('Another building already has that spot.');
  const circleHits=(x,y,r)=>Math.hypot(x-Math.max(fp.x,Math.min(fp.x+fp.w,x)),y-Math.max(fp.y,Math.min(fp.y+fp.h,y)))<r;
  if(trees.some(t=>circleHits(t.position[0],t.position[1],t.radius+.4)))return fail('Chop the tree here first, or choose another spot.');
  if(rocks.some(r=>circleHits(r.position[0],r.position[1],r.radius+.16)))return fail('Smash the rock here first, or choose another spot.');

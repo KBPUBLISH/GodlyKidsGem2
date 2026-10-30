@@ -444,9 +444,10 @@ export class Construction {
    else{this.preview=this.clearPlan;this.clearPlan=null;g.persist();g.tool='build';this.rebuildGhost();this.updatePreview();g.notify();}
   }
   const current=activeBuildings(g.store.state).find(b=>b.status!=='complete'&&!b.project);
+  const tentStanding=current?.kind==='tent'&&activeBuildings(g.store.state).some(b=>b.kind==='tent'&&b.status==='complete'&&b.id!==current.id);
   if(current&&current.status==='building'&&buildingProgress(current,now)>=1&&g.action?.type!=='build'){
-   try{g.store.commit({type:'finish_building',id:current.id,actionId:jobToken('finish',current)});if(g.order?.id===current.id){g.order=null;g.path=[];}g.refreshDynamic();g.status=`${buildingById(current.kind).name} built!`;g.toast(g.status);}catch(e){g.toast(e.message);}
-  }else if(current&&!g.action&&!g.order&&!this.preview&&!g.interior&&!g.residents?.claims?.has(`build:${current.id}`)&&!String(current.id).startsWith('village:')&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
+   try{g.store.commit({type:'finish_building',id:current.id,actionId:jobToken('finish',current)});const done=g.store.state.buildings.find(b=>b.id===current.id);if(done?.status==='complete'){if(g.order?.id===current.id){g.order=null;g.path=[];}g.refreshDynamic();g.status=`${buildingById(current.kind).name} built!`;g.toast(g.status);if(done.kind==='tent'&&g.goal?.kind==='tent')g.clearGoal?.();}}catch(e){g.toast(e.message);}
+  }else if(current&&!tentStanding&&!g.action&&!g.order&&!this.preview&&!g.interior&&!g.residents?.claims?.has(`build:${current.id}`)&&!String(current.id).startsWith('village:')&&now-this.lastResume>3000){this.lastResume=now;this.go(current.id);}
   this.refresh();
  }
  snapshot(){

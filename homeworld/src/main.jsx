@@ -7,7 +7,8 @@ import {yearClockLabel} from './calendar.mjs';
 import {MINERALS,TOOL_TIERS,upgradeStatus,toolTier,forgeProgress,forgeTimeLeft,forgeEstimate} from './mining.mjs';
 import {SHOVEL_TIERS,shovelStatus,shovelTier,haveOf,hasWell} from './digging.mjs';
 import {FOODS,FOOD_RECIPES,MAX_ENERGY,MAX_HUNGER,energyFor,hungerFor,mealGain,canCook,restGain,energyCost} from './nutrition.mjs';
-import {completedFires,litFires,completedOvens,hotOvens} from './building.mjs';
+import {completedFires,litFires,completedOvens,hotOvens,BUILDINGS} from './building.mjs';
+import {ANIMALS} from './animals.mjs';
 import {Icon,ItemIcon,ActionButton,TOOLS,useDialogFocus} from './ui.jsx';
 import {BuildMenu,PlacementControls,StrokeBar} from './building-ui.jsx';
 import {ActionMenu,QUICK_TOOLS} from './action-menu.jsx';
@@ -179,6 +180,60 @@ function Toolbench({view,onCraft,onCraftShovel,onFind,onBuild}){
     <div className="upgrade-cards shovel-cards">{SHOVEL_TIERS.slice(1).map(t=><ShovelToolCard key={t.tier} t={t} view={view} onCraft={onCraftShovel} onBuild={onBuild}/>)}</div>
     <button className="find-stone" disabled={view.busy} onClick={()=>onFind('stone')}><Icon type="stone" size={28}/><span>Smash a stone rock</span></button><p className="catalogue-note">Coloured crystals mark mineral veins. Ordinary stone sometimes hides copper or a diamond. The forge makes one thing at a time — a tool set or a shovel. Tools you already made stay made. A shovel still in the forge is not ready yet.</p><div className="stats-row"><span>{view.state.stats.rocks||0} rocks broken</span><span>{view.state.stats.gems||0} diamonds found</span></div></>;
 }
+const TOAST_BUILDINGS=[...BUILDINGS].sort((a,b)=>b.name.length-a.name.length);
+const TOAST_ANIMALS=[...ANIMALS].sort((a,b)=>b.name.length-a.name.length);
+/** Icon for a toast line. Uses a kind when one is passed; otherwise reads the words. */
+function toastArt(text,kind){
+  const t=String(text||'').toLowerCase();
+  if(kind==='chop'||kind==='wood'||kind==='fire') return {icon:kind==='chop'&&!/\blog|wood|campfire/.test(t)?'axe':'wood'};
+  if(kind==='meal'||kind==='food') return {icon:'food'};
+  if(kind==='garden') return {icon:'plant'};
+  if(kind==='fence') return {poster:'fence'};
+  if(kind==='build') return {icon:'build'};
+  if(kind==='animal'){const named=TOAST_ANIMALS.find(a=>t.includes(a.name.toLowerCase()));return {emoji:named?.emoji||'🐑'};}
+  const logFire=/\blog\b/.test(t)&&/\b(campfire|oven|fire)\b/.test(t);
+  if(/\b(put a log|log added|logs? in the bag|wood put away|wood space|extra logs)\b/.test(t)||/\+\d+[^\n]{0,48}\bwood\b/.test(t)||logFire) return {icon:'wood'};
+  if(/\b(felled|chopped|chop)\b/.test(t)) return {icon:'axe'};
+  const named=TOAST_BUILDINGS.find(b=>t.includes(b.name.toLowerCase()));
+  const placing=/\b(finished|built|put up|started on|heaped up|build a|build the)\b/.test(t);
+  if(placing&&named) return {poster:named.poster||named.id};
+  if(/\b(fence|paddock|gate)\b/.test(t)) return {poster:'fence'};
+  if(placing) return {icon:'build'};
+  if(/cooked fish|grilled fish/.test(t)) return {icon:'cookedfish'};
+  if(/raw fish/.test(t)) return {icon:'rawfish'};
+  if(/\bmanna\b/.test(t)) return {icon:'manna'};
+  if(/\bbread\b/.test(t)) return {icon:'bread'};
+  if(/\bapples?\b/.test(t)) return {icon:'apple_seed'};
+  if(/\bcarrots?\b/.test(t)&&!/\bwater/.test(t)) return {icon:'carrot'};
+  if(/\bpumpkins?\b/.test(t)&&!/\bwater/.test(t)) return {icon:'pumpkin'};
+  if(/\bwheat\b/.test(t)&&!/\bwater/.test(t)) return {icon:'wheat'};
+  if(/\b(salad|meal|snack|snacks|breakfast|eaten|food|hungry|tummy|yum)\b/.test(t)||/\bfish\b/.test(t)) return {icon:'food'};
+  if(/\bcampfire\b/.test(t)) return {icon:'wood'};
+  if(/\b(weed|weeds|planted|planting|garden|plot|sprout|seeds?)\b/.test(t)) return {icon:'plant'};
+  if(/\b(picked|harvest|crops)\b/.test(t)) return {icon:'harvest'};
+  if(/\b(water|watered|trough|thirsty|bucket|well)\b/.test(t)) return {icon:'water'};
+  const animal=TOAST_ANIMALS.find(a=>t.includes(a.name.toLowerCase()));
+  if(animal) return {emoji:animal.emoji};
+  if(/\b(animals?|herd|strays?|arrivals?)\b/.test(t)) return {emoji:'🐑'};
+  if(/\b(smash|pickaxe|rocks?|diamond|copper|iron)\b/.test(t)) return {icon:'mine'};
+  if(/\bstone\b/.test(t)) return {icon:'stone'};
+  if(/\b(shovel|dig|mud)\b/.test(t)) return {icon:'shovel'};
+  if(/\b(sleep|rest|tired|energy|wake|awake)\b/.test(t)) return {icon:'rest'};
+  if(/\bpray/.test(t)||/\bamen\b/.test(t)) return {icon:'pray'};
+  return {star:true};
+}
+function ToastMark({text,kind}){
+  const art=toastArt(text,kind);
+  if(art.poster) return <img className="toast-icon" src={`/assets/build_${art.poster}.png`} width={28} height={28} alt="" aria-hidden="true" draggable={false} decoding="async"/>;
+  if(art.emoji) return <span className="toast-emoji" aria-hidden="true">{art.emoji}</span>;
+  if(art.star||!art.icon) return <svg className="toast-icon toast-star" viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><path fill="#e2b04a" stroke="#a67c2d" strokeWidth="1.2" strokeLinejoin="round" d="M14 3.2 16.8 9.6 23.8 10.2 18.5 14.8 20.1 21.7 14 18.1 7.9 21.7 9.5 14.8 4.2 10.2 11.2 9.6Z"/></svg>;
+  return <Icon type={art.icon} size={28}/>;
+}
+function ToastLine({text,kind,className,style}){
+  const art=toastArt(text,kind);
+  const mark=art.poster?`poster:${art.poster}`:art.emoji?'animal':art.star||!art.icon?'star':art.icon;
+  return <div className={className} style={style} role="status" data-toast-icon={mark}><ToastMark text={text} kind={kind}/><span className="toast-text">{text}</span></div>;
+}
 function App(){
   const host=useRef(null),engine=useRef(null);const [view,setView]=useState({loaded:false,status:'Loading your island…'}),[panel,setPanel]=useState(null),[showTime,setShowTime]=useState(false),[toast,setToast]=useState(''),[toastLife,setToastLife]=useState(0),[confirmReset,setConfirmReset]=useState(false);
   const drawer=useRef(null),timeDialog=useRef(null),mapButton=useRef(null),backToPlay=useRef(null),previousOverview=useRef(false);
@@ -323,13 +378,13 @@ function App(){
     {view.loaded&&!panel&&!actionsOpen&&!view.building?.preview&&!view.fishing&&!view.night?.sleeping&&view.snakePrompts?.map(s=><div key={s.id} className="snake-prompt" style={{left:s.x,top:s.y}}><button type="button" aria-label="Shoo the snake" onClick={()=>invoke(g=>g.animals?.shoo(s.id))}>🐍 Shoo</button></div>)}
     {view.loaded&&!panel&&!view.night?.sleeping&&view.prayer&&<div className={`prayer-bubble ${view.prayer.praying?'':'done'}`} style={{left:view.prayer.x,top:view.prayer.y}} role="status" aria-live="polite"><Icon type="pray" size={30}/><div className="prayer-body"><strong>{view.prayer.name} prays</strong><p>{view.prayer.text}</p><small>{view.prayer.verse}</small></div></div>}
     {view.loaded&&!panel&&!actionsOpen&&!view.building?.preview&&!view.fishing&&!view.night?.sleeping&&!view.inside&&view.prompt&&(view.prompt.kind==='home'
-      ? <div className="object-prompt home-go-in" style={{left:view.prompt.x,top:view.prompt.y}} role="group" aria-label="Go in or take down"><button type="button" className="go-in-button" onClick={()=>invoke(g=>g.runPrompt('enter'))}>Go in</button><button type="button" className="go-in-button take-down" onClick={()=>invoke(g=>g.runPrompt('remove'))}>Take down</button></div>
+      ? <div className="object-prompt home-go-in" style={{left:view.prompt.x,top:view.prompt.y}} role="group" aria-label="Go in or move"><button type="button" className="go-in-button" onClick={()=>invoke(g=>g.runPrompt('enter'))}>Go in</button><button type="button" className="go-in-button" onClick={()=>invoke(g=>g.runPrompt('move'))}>Move</button></div>
       : <div className="object-prompt" style={{left:view.prompt.x,top:view.prompt.y}} role="group" aria-label="What to do here">{view.prompt.actions.map(a=><button key={a.id} type="button" onClick={()=>invoke(g=>g.runPrompt(a.id))} aria-label={a.label}><span className="object-prompt-icon"><Icon type={a.icon} size={28}/></span><small>{a.label}</small></button>)}</div>)}
     {view.loaded&&!panel&&!view.fishing&&!view.night?.sleeping&&!view.inside&&<WellCard engine={engine} enabled/>}
     {view.loaded&&!panel&&!actionsOpen&&!view.building?.preview&&!view.fishing&&!view.night?.sleeping&&view.firePrompts?.map(f=><button key={f.id} type="button" className={`fire-prompt ${f.out?'out':''}`} style={{left:f.x,top:f.y}} aria-label={f.out?'The campfire is out. Add a log':`The campfire burns out in ${f.minutes} minutes. Add a log`} onClick={()=>invoke(g=>g.nutrition.stokeFire(f.id))}><Icon type="wood" size={26}/><b>!</b></button>)}
     {view.fishPrompt&&!panel&&!actionsOpen&&!view.building?.preview&&<button type="button" className={`fish-prompt ${view.fishPrompt.near?'near':''}`} style={{left:view.fishPrompt.x,top:view.fishPrompt.y}} onClick={()=>invoke(g=>g.nutrition.goFish())} aria-label="Go fishing from the dock"><Icon type="fish" size={30}/><span>Fish?</span></button>}
-    {toast&&<div className={`toast${toastLife?' brief':''}`} style={toastLife?{'--toast-life':`${toastLife}ms`}:undefined} role="status">{toast}</div>}
-    {view.animals?.hello&&<div key={view.animals.hello.shownAt} className="toast animal-hello" role="status">{view.animals.hello.text}</div>}
+    {toast&&<ToastLine text={toast} className={`toast${toastLife?' brief':''}`} style={toastLife?{'--toast-life':`${toastLife}ms`}:undefined}/>}
+    {view.animals?.hello&&<ToastLine key={view.animals.hello.shownAt} text={view.animals.hello.text} className="toast animal-hello"/>}
     {view.loaded&&view.animals?.confirming&&!view.animals?.placing&&!panel&&<div className="animal-confirm animal-place-chip" role="dialog" aria-label={`Buy a ${view.animals.confirming.name}`}><span className="animal-place-emoji" aria-hidden="true">{view.animals.confirming.emoji}</span><span>Buy a {view.animals.confirming.name.toLowerCase()} for <b>{view.animals.confirming.price}</b> gold coins?</span><button type="button" onClick={()=>invoke(g=>g.animals?.confirmBuy())}>Buy</button><button type="button" className="plain" onClick={()=>invoke(g=>g.animals?.cancelPlace())}>Not now</button></div>}
     {view.loaded&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!view.inside&&!view.animals?.confirming&&!view.animals?.placing&&!view.building?.preview&&<FarmCard farm={view.farm} onRun={invoke}/>}
     {view.loaded&&!panel&&!view.night?.sleeping&&!view.inside&&<FarmBubble farm={view.farm}/>}
@@ -337,7 +392,7 @@ function App(){
     {view.loaded&&view.animals?.placing&&!panel&&<div className="animal-place-chip" role="status"><span className="animal-place-emoji" aria-hidden="true">{view.animals.placing.emoji}</span><span>Tap grass to place the {view.animals.placing.name.toLowerCase()}<small>Water and buildings are off limits</small></span><button onClick={()=>invoke(g=>g.animals?.cancelPlace())} aria-label="Cancel placing the animal">Cancel</button></div>}
     {view.nutrition?.sleep&&<SleepBubble sleep={view.nutrition.sleep} onWake={()=>invoke(g=>g.nutrition.wakeUp())} onRetry={()=>invoke(g=>g.nutrition.retrySleep())}/>}
     {view.loaded&&<section className={`bottom-hud ${view.building?.preview?'placing':''} ${actionsOpen?'actions-open':''}`}>
-      {view.building?.preview?.stroke?<StrokeBar preview={view.building.preview} onDone={()=>invoke(g=>g.building.cancelPreview())}/>:view.building?.preview?<PlacementControls preview={view.building.preview} onPlace={()=>invoke(g=>g.building.place())} onCrew={ids=>invoke(g=>g.building.setCrew(ids))} onRotate={()=>invoke(g=>g.building.rotate())} onCancel={()=>invoke(g=>g.building.cancelPreview())} onMove={(x,y)=>invoke(g=>g.building.nudge(x,y))} onFind={()=>invoke(g=>g.building.findAnother())} onClear={()=>invoke(g=>g.building.clearSpot())} onClearWith={id=>invoke(g=>g.building.beginClear(id))} onGoal={()=>invoke(g=>g.building.setGoalFromPreview())}/>:<>
+      {view.building?.preview?.stroke?<StrokeBar preview={view.building.preview} onDone={()=>invoke(g=>g.building.cancelPreview())}/>:view.building?.preview?<PlacementControls preview={view.building.preview} onPlace={()=>invoke(g=>g.building.place())} onCrew={ids=>invoke(g=>g.building.setCrew(ids))} onRotate={()=>invoke(g=>g.building.rotate())} onCancel={()=>invoke(g=>g.building.cancelPreview())} onMove={(x,y)=>invoke(g=>g.building.nudge(x,y))} onFind={()=>invoke(g=>g.building.findAnother())} onClear={()=>invoke(g=>g.building.clearSpot())} onClearWith={id=>invoke(g=>g.building.beginClear(id))} onGoal={()=>invoke(g=>g.building.setGoalFromPreview())} onTakeDown={()=>invoke(g=>g.building.askRemove(g.building.preview?.movingId))}/>:<>
       {buildProgressItems(view.building?.items).map(b=><div className="build-progress panel" key={b.id} role="status"><span><Icon type="build" size={34}/></span><div><strong>{b.name}</strong><small>{b.status==='queued'?'Walking to build…':`Building… ${b.remaining}s`}</small><progress value={b.progress} max="1"/></div></div>)}
       {showRecent&&<div className="recent-tools" role="toolbar" aria-label="Recent tools"><span className="recent-tools-label">Recent Tools</span><div className="recent-tools-row">{activeTool&&<button type="button" className="recent-put-away" aria-label={`Put away ${activeTool.name} tool`} title="Put tool away. Walk normally." onClick={()=>runAction(g=>{g.unequipTool();g.renderer.domElement.focus({preventScroll:true});})}><span className="put-away-x" aria-hidden="true">×</span><span className="tool-name">Put away</span></button>}{view.recentTools.map(id=>QUICK_TOOLS.find(t=>t.id===id)).filter(Boolean).slice(0,4).map(t=>{const selected=view.tool===t.id;return <button key={t.id} type="button" className={`tool-button recent-tool ${selected?'selected':''}`} style={{'--tool-color':t.color,'--tool-soft':t.soft}} aria-label={t.name} aria-pressed={t.id==='food'||t.id==='harvest'?undefined:selected} onClick={()=>{if(t.id==='food'){invoke(g=>g.noteTool('food'));openPanel('food');}else if(t.id==='harvest')runAction(g=>{g.noteTool('harvest');g.nutrition.harvestFood();});else invoke(g=>{g.setTool(t.id);g.renderer.domElement.focus({preventScroll:true});});}}><span className="tool-picture"><Icon type={t.id}/></span><span className="tool-name">{t.name}</span>{selected&&<span className="chosen-mark" aria-hidden="true">✓</span>}</button>;})}</div></div>}
       </>}

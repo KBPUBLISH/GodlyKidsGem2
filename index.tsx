@@ -2,6 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+/** True when a returning family (language chosen, at least one kid) should reopen on the island. */
+function openFriendsWorldOnColdStart() {
+  try {
+    if (localStorage.getItem('godlykids_language_selected') !== 'true') return false;
+    const raw = localStorage.getItem('godly_kids_data_v6');
+    if (!raw) return false;
+    const userData = JSON.parse(raw);
+    return Array.isArray(userData.kids) && userData.kids.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================
 // URL NORMALIZATION & DEEP LINK HANDLING - MUST RUN BEFORE REACT MOUNTS
 // ============================================================
@@ -174,6 +187,15 @@ import App from './App';
         if ((!url.hash || url.hash === '#' || url.hash === '#/') && lastRoute && !isDeepLinkPath) {
           targetHash = lastRoute;
           console.log('📱 Despia: Restoring to saved route:', targetHash);
+        }
+      } else if (!isDeepLinkPath && openFriendsWorldOnColdStart()) {
+        // App was closed (not a quick switch back). Land on the island.
+        const hashPath = (targetHash || '').replace(/^#/, '').split('?')[0];
+        const keepSetup = ['/onboarding', '/signin', '/sign-in', '/paywall', '/create-profile', '/edit-profile', '/reset-password', '/language']
+          .some((path) => hashPath === path || hashPath.startsWith(`${path}/`));
+        if (!keepSetup && hashPath !== '/my-home') {
+          targetHash = '#/my-home';
+          console.log('📱 Despia: Cold start opens Friends World');
         }
       }
       

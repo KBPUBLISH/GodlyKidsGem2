@@ -48,6 +48,15 @@ import {MarketPanel} from './market-ui.jsx';
 import LoadingTips from './loading-tips.jsx';
 import './style.css';
 
+/** Kid profile name from the parent app (`?player=` or a `gk-player-name` message). */
+function readPlayerName(value){
+  return String(value||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,24);
+}
+function playerNameFromUrl(){
+  try{return readPlayerName(new URLSearchParams(location.search).get('player'));}
+  catch{return '';}
+}
+
 function FoodPanel({view,onEat,onCook,onFish,onRest,onHarvest,onSleep}){
   const s=view.state,energy=energyFor(s),inventory=s.inventory,name=view.nutrition?.name||'Adam',hunger=Math.round(hungerFor(s,view.minutes)),full=energy>=MAX_ENERGY&&hunger>=MAX_HUNGER;
   return <><p>Hungry? Pick vegetables or catch a fish. Food fills the tummy and gives energy; resting at home refills energy only. A hungry tummy makes chopping, digging and building slower · an empty one makes them very slow. Only running out of energy stops the work.</p><button className="food-sleep-link" onClick={onSleep}><Icon type="rest" size={36}/><span><strong>{view.nutrition.lowEnergy?'Low energy? Rest at home':'Rest at home'}</strong><small>Full energy and a fresh start →</small></span></button><div className="food-energy"><div><strong>{name}’s energy</strong><b>{energy} / {MAX_ENERGY}</b></div><progress value={energy} max={MAX_ENERGY} aria-label={`${name} energy`}/><small>{energy===MAX_ENERGY?'Your energy is full! Keep your snacks for later.':energy<15?'Low energy. Sleep at home for a full refill.':'A snack gives you energy to play and grow.'}</small></div><div className={`food-energy food-hunger ${hunger<=25?'low':''}`}><div><strong>{name}’s tummy</strong><b>{hunger}%</b></div><progress value={hunger} max={MAX_HUNGER} aria-label={`${name} hunger`}/><small>{hunger<=0?'Empty tummy · work is very slow until you eat.':hunger<=25?'Getting hungry · work is slower. Grow and eat food to stay strong.':hunger>=MAX_HUNGER?'A full tummy. Food can wait.':'The tummy empties slowly through the day. Only food fills it.'}</small></div>
@@ -246,6 +255,15 @@ function pinBuildGoal(g,kind){
 }
 function App(){
   const host=useRef(null),engine=useRef(null);const [view,setView]=useState({loaded:false,status:'Loading your island…'}),[panel,setPanel]=useState(null),[showTime,setShowTime]=useState(false),[toast,setToast]=useState(''),[toastLife,setToastLife]=useState(0),[confirmReset,setConfirmReset]=useState(false);
+  const [playerName,setPlayerName]=useState(playerNameFromUrl);
+  useEffect(()=>{
+    const onMessage=e=>{
+      if(e.origin!==location.origin||!e.data||e.data.type!=='gk-player-name')return;
+      setPlayerName(readPlayerName(e.data.name));
+    };
+    window.addEventListener('message',onMessage);
+    return()=>window.removeEventListener('message',onMessage);
+  },[]);
   const drawer=useRef(null),timeDialog=useRef(null),mapButton=useRef(null),backToPlay=useRef(null),previousOverview=useRef(false);
   const [mapOnly,setMapOnly]=useState(false),[actionsOpen,setActionsOpen]=useState(false),[actionsTab,setActionsTab]=useState('actions'),[friendsOpen,setFriendsOpen]=useState(false);
   const actionsButton=useRef(null);
@@ -347,7 +365,7 @@ function App(){
       {view.loaded&&!view.playersOnly&&<button className="selected-character" aria-label={`Choose character. Playing as ${view.state.characters[view.state.activeCharacter].name}`} onClick={()=>openPanel('characters')}><span className={`community-avatar ${view.state.activeCharacter}`} aria-hidden="true">{view.state.characters[view.state.activeCharacter].name[0]}</span><span><small>Playing as</small><strong>{view.state.characters[view.state.activeCharacter].name} ⌄</strong></span></button>}
       <div className="top-actions">
         <button type="button" className={`sound-button ${view.music===false?'off':''}`} aria-pressed={view.music!==false} aria-label={view.music===false?'Sound is off. Turn music on':'Sound is on. Turn music off'} onClick={()=>invoke(g=>g.setMusic(g.music?.on===false))}><span className="sound-mark" aria-hidden="true">{view.music===false?'🔇':'🔊'}</span><span>{view.music===false?'Off':'Sound'}</span></button>
-        <button className="clock-button" onClick={()=>{setActionsOpen(false);setPanel(null);setShowTime(!showTime);}} aria-label="Day and time" aria-expanded={showTime}><Icon type={view.night?.dusk||view.night?.night?"moon":"sun"}/><span><strong>{yearClockLabel(view.clock?.day||1)} · {view.clock?.text||'8:00 AM'}</strong><small>{view.state?.clock.paused?'Time is paused':view.night?.dusk?'Bedtime soon':'Bedtime at 10 PM'}</small></span><span className="chevron">⌄</span></button>
+        <button className="clock-button" onClick={()=>{setActionsOpen(false);setPanel(null);setShowTime(!showTime);}} aria-label={playerName?`Day and time. Playing as ${playerName}`:'Day and time'} aria-expanded={showTime}><Icon type={view.night?.dusk||view.night?.night?"moon":"sun"}/><span className="clock-readout"><strong>{yearClockLabel(view.clock?.day||1)} · {view.clock?.text||'8:00 AM'}</strong><small>{playerName?<b className="clock-player">{playerName}</b>:null}<span className="clock-bedtime">{view.state?.clock.paused?'Time is paused':view.night?.dusk?'Bedtime soon':'Bedtime at 10 PM'}</span></small></span><span className="chevron">⌄</span></button>
       </div>
     </header>
     {view.loaded&&activeTool&&!panel&&!showTime&&!view.building?.preview&&!showRecent&&<div className="equipped-tool-chip" role="group" aria-label="Equipped tool"><Icon type={activeTool.id} size={32}/><span>{activeTool.name}<small>Tool ready</small></span><button aria-label={`Put away ${activeTool.name} tool`} title="Put tool away. Walk normally." onClick={()=>runAction(g=>{g.unequipTool();g.renderer.domElement.focus({preventScroll:true});})}><b aria-hidden="true">×</b><small>Put away</small></button></div>}

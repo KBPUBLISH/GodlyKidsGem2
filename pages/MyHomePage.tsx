@@ -13,9 +13,10 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRICES, ISLAND_SELL_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players189&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players190&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
-const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
+const homeworldUrlFor = (scope: string, playerName: string) =>
+  `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
@@ -198,7 +199,13 @@ type DropCharacter = {
  */
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { coins, spendCoins, addCoins } = useUser();
+  const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
+  const playerName = useMemo(() => {
+    const kid = currentProfileId ? kids.find((k) => k.id === currentProfileId) : null;
+    const raw = String(kid?.name || (currentProfileId ? '' : parentName) || '').trim();
+    if (!raw || raw === 'Parent') return '';
+    return raw.slice(0, 24);
+  }, [kids, currentProfileId, parentName]);
   const coinsRef = useRef(coins);
   const spendRef = useRef(spendCoins);
   const addRef = useRef(addCoins);
@@ -561,8 +568,9 @@ const MyHomePage: React.FC = () => {
     // Belt and braces: the island already got the scope from its URL; if it ever
     // disagrees (stale frame) it reloads itself under the right profile.
     post({ type: 'gk-profile', scope: profileScope });
+    post({ type: 'gk-player-name', name: playerName });
     post({ type: 'gk-residents-sync' });
-  }, [post, ready, profileScope]);
+  }, [post, ready, profileScope, playerName]);
 
   useEffect(() => {
     if (!ready) return;
@@ -825,7 +833,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={homeworldUrlFor(profileScope)}
+          src={homeworldUrlFor(profileScope, playerName)}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

@@ -641,6 +641,18 @@ const isUserAuthenticated = (): boolean => {
   } catch { return false; }
 };
 
+/** A saved kid profile means a closed app should reopen on Friends World, not the ship. */
+const savedKidProfile = (): boolean => {
+  try {
+    const savedData = localStorage.getItem('godly_kids_data_v6');
+    if (!savedData) return false;
+    const data = JSON.parse(savedData);
+    return Array.isArray(data.kids) && data.kids.length > 0;
+  } catch {
+    return false;
+  }
+};
+
 // Tutorial steps that are valid for specific routes
 const TUTORIAL_VALID_ROUTES: Record<string, string[]> = {
   '/welcome': ['welcome_book_tap'],
@@ -1406,7 +1418,7 @@ const App: React.FC = () => {
               console.log('📱 Despia: User not authenticated, going to landing page');
               window.location.hash = '#/';
             } else {
-              const targetRoute = lastRoute || '#/world';
+              const targetRoute = lastRoute || (savedKidProfile() ? '#/my-home' : '#/crew');
               console.log('📱 Despia: Restoring route to:', targetRoute);
               window.location.hash = targetRoute;
             }

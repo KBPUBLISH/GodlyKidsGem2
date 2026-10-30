@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
-import { SAVE_KEY, freshState, restoreState, currentRequest, progress, readyToDeliver, collect, deliver, REQUESTS } from './quests.mjs';
+import { SAVE_KEY, freshState, restoreState, currentRequest, readyToDeliver, collect, deliver, REQUESTS, DELIVERY_SITES } from './quests.mjs';
 
 const icons = {
   leaf: '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M26 5C11 3 4 10 8 19c7 7 19 0 18-14Z" fill="#6f9566"/><path d="M5 28 22 10M12 21l-1-7m7 1h6" stroke="#456d47" stroke-width="2.4" stroke-linecap="round"/></svg>',
@@ -16,8 +16,9 @@ root.innerHTML = `
   <section class="task-card" aria-label="Current help request"></section>
   <div class="entity-controls" aria-label="Friends and things in the world"></div>
   <div class="world-label"><span class="player-dot"></span>YOU</div>
+  <button class="site-label" aria-label="Walk to delivery circle"></button>
   <div class="speech" hidden></div><div class="toast" role="status" aria-live="polite" hidden></div>
-  <footer class="bottom-area"><div class="walk-hint">Tap to walk. Tap a log, crop, or friend to help.</div><div class="bottom-row"><div class="you-card"><span class="you-icon">${icons.you}</span><div><div class="you-title">Your own adventure</div><div class="you-sub">You + your Bible friends</div></div></div><button class="tasks-button">${icons.tasks}My tasks<span class="count">1</span></button></div></footer>
+  <footer class="bottom-area"><div class="walk-hint">Tap where you want to go. Collect and deliver as you walk.</div><div class="bottom-row"><div class="you-card"><span class="you-icon" aria-hidden="true">🎒</span><div><div class="you-title carry-count">Carrying 0 / 4</div><div class="you-sub">A little help, hands-free</div></div></div><button class="tasks-button">${icons.tasks}My tasks<span class="count">1</span></button></div></footer>
   <dialog class="sheet" aria-labelledby="sheet-title"><div class="sheet-header"><div><div class="eyebrow">ONE LITTLE THING AT A TIME</div><h2 id="sheet-title">Helping each other</h2></div><button class="close-button" aria-label="Close tasks">×</button></div><div class="task-list"></div><p class="sheet-note">Your friends have their own little routines. Help when you’re ready. There’s no timer and no rush.</p><button class="primary">Back to our world</button></dialog>`;
 
 let state;
@@ -33,8 +34,10 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.setClearColor(0xd5e9df, 1);
-renderer.domElement.setAttribute('aria-label', '3D island. You control the teal character. Tap the ground to walk, or use arrow keys or W A S D. Tap highlighted supplies to collect them and friends to talk.');
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.setClearColor(0xc5e5e2, 1);
+renderer.domElement.setAttribute('aria-label', '3D island. Tap the ground to walk, or use arrow keys or W A S D. Nearby supplies are collected automatically. Stand on the glowing circle to deliver.');
 renderer.domElement.setAttribute('tabindex', '0');
 root.prepend(renderer.domElement);
 const scene = new THREE.Scene();
@@ -54,7 +57,10 @@ scene.add(sun);
 const materials = new Map();
 function mat(color, extra = {}) {
   const key = `${color}-${JSON.stringify(extra)}`;
-  if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({ color, roughness: .95, ...extra }));
+  if (!materials.has(key)) {
+    const { unlit, ...properties } = extra;
+    materials.set(key, unlit ? new THREE.MeshBasicMaterial({ color, ...properties }) : new THREE.MeshStandardMaterial({ color, roughness: .95, ...properties }));
+  }
   return materials.get(key);
 }
 function mesh(geometry, color, parent = scene, x = 0, y = 0, z = 0, extra = {}) {
@@ -138,6 +144,19 @@ function person({robe,skin,hair,player=false,beard=false}) {
 const player=person({robe:0x4b9b99,skin:0xbd8a64,hair:0x473f32,player:true});
 player.position.set(state.player.x,.07,state.player.z);
 player.rotation.y=.4;
+const cargo=new THREE.Group();player.add(cargo);cargo.position.set(0,.86,-.28);
+const cargoSlots=[];
+for(let i=0;i<4;i++){
+  const slot=new THREE.Group();cargo.add(slot);slot.position.y=i*.18;
+  const wood=new THREE.Group();slot.add(wood);
+  const log=cylinder(.09,.09,.57,0xa47b46,wood,0,0,0,8);log.rotation.z=Math.PI/2;
+  const cut=cylinder(.085,.085,.015,0xf4d49a,wood,.29,0,0,8);cut.rotation.z=Math.PI/2;
+  const carrot=new THREE.Group();slot.add(carrot);
+  const orange=mesh(new THREE.ConeGeometry(.085,.35,7),0xf0a447,carrot,0,.01,0);orange.rotation.z=Math.PI/2;
+  const leaf=mesh(new THREE.ConeGeometry(.08,.16,5),0x76a051,carrot,-.23,.01,0);leaf.rotation.z=Math.PI/2;
+  const flower=new THREE.Group();slot.add(flower);sphere(.09,0xffd572,flower,0,.04,0);sphere(.045,0x6e9a55,flower,0,-.06,0);
+  cargoSlots.push({slot,wood,carrot,flower});
+}
 const playerRing=mesh(new THREE.RingGeometry(.36,.41,36),0xfff2bb,scene,player.position.x,.075,player.position.z,{side:THREE.DoubleSide});playerRing.rotation.x=-Math.PI/2;
 const friends = [
   {id:'noah',name:'Noah',face:'👨🏽‍🦳',color:0xb88c69,skin:0xba8a68,hair:0xe0d5bd,beard:true,points:[[-1.1,-1.8],[-.5,-2.4],[-2,-2.1],[-1.3,-.8]],line:'I’m making a cozy place for us. Thanks for being here.'},
@@ -177,14 +196,35 @@ box(.32,.34,.06,0x779a98,finishedHome,-.6,1,.78);box(.36,.045,.075,0xf2dfae,fini
 sphere(.025,0xe8c977,finishedHome,.13,.49,.82);
 const welcomeFlowers=new THREE.Group();home.add(welcomeFlowers);
 for(let i=0;i<6;i++){const f=sphere(.095,i%2?0xf0c975:0xe7b59f,welcomeFlowers,-.95+i*.38,.19,.99);sphere(.05,0x8c9a55,welcomeFlowers,-.95+i*.38,.09,.99);}
+const porch=new THREE.Group();home.add(porch);
+box(2.4,.16,.8,0xc7a474,porch,0,.1,1.05);
+for(const x of [-1,1])cylinder(.055,.055,1.25,0xa17b50,porch,x,.76,1.25,7);
+box(2.4,.13,.9,0xb97953,porch,0,1.42,1.08);
+box(1,.08,.3,0xd3b88a,porch,0,.04,1.56);
 const bench=new THREE.Group();scene.add(bench);bench.position.set(2.7,.1,2.9);box(1.2,.11,.4,0xb79866,bench,0,.34,0);box(.1,.35,.3,0x8d7855,bench,-.45,.16,0);box(.1,.35,.3,0x8d7855,bench,.45,.16,0);
 const basket=cylinder(.23,.19,.25,0xc59b64,scene,3.7,.22,2.8,10);
+const kitchen=new THREE.Group();scene.add(kitchen);kitchen.position.set(3.3,.08,2.7);
+box(1.6,.7,.75,0xbb9661,kitchen,0,.4,0);box(1.75,.09,.9,0xe5ca8b,kitchen,0,.8,0);
+const pot=cylinder(.23,.18,.28,0x526f63,kitchen,0,1,0,14);cylinder(.24,.24,.035,0xbdaa78,kitchen,0,1.16,0,14);
+sphere(.05,0x526f63,kitchen,0,1.2,0);
+const pads=new Map();
+for(const [id,site] of Object.entries(DELIVERY_SITES)){
+  const pad=new THREE.Group();pad.position.set(site.x,.09,site.z);scene.add(pad);
+  const fill=mesh(new THREE.CircleGeometry(.84,40),0xffd741,pad,0,0,0,{unlit:true,toneMapped:false,side:THREE.DoubleSide,transparent:true,opacity:.35,depthWrite:false});fill.rotation.x=-Math.PI/2;fill.castShadow=false;
+  const ring=mesh(new THREE.RingGeometry(.78,.9,48),0xffdd35,pad,0,.018,0,{unlit:true,toneMapped:false,side:THREE.DoubleSide});ring.rotation.x=-Math.PI/2;ring.castShadow=false;
+  pads.set(id,{pad,ring,fill});interactive(pad,{kind:'site',id});
+}
 const destinationRing=mesh(new THREE.RingGeometry(.16,.22,32),0xfff5d8,scene,0,.09,0,{side:THREE.DoubleSide,transparent:true,opacity:.9});destinationRing.rotation.x=-Math.PI/2;destinationRing.visible=false;
 
-let destination=null,pending=null,gathering=null,time=0,toastUntil=0,speechUntil=0,speechFriend=null,disposed=false;
+let destination=null,pending=null,gathering=null,time=0,toastUntil=0,speechUntil=0,speechFriend=null,disposed=false,nextPickup=0,nextDeposit=0;
 const keys=new Set();
 const taskCard=document.querySelector('.task-card'),sheet=document.querySelector('.sheet'),toast=document.querySelector('.toast'),speech=document.querySelector('.speech');
 const entityControls=document.querySelector('.entity-controls');
+const siteLabel=document.querySelector('.site-label');
+siteLabel.addEventListener('click',()=>{
+  const task=currentRequest(state);if(!task)return;
+  const site=DELIVERY_SITES[task.friend];walkTo(new THREE.Vector3(site.x,.07,site.z));
+});
 const entityButtons=new Map();
 function addEntityButton(id,label,getPosition,onClick){
   const button=document.createElement('button');button.className='entity-button';button.setAttribute('aria-label',label);
@@ -214,9 +254,17 @@ function renderUI(){
   const task=currentRequest(state),ready=readyToDeliver(state);
   if(task){
     const friend=friends.find(f=>f.id===task.friend);
-    taskCard.innerHTML=`<div class="task-heading"><span class="portrait ${friend.id}" aria-hidden="true">${friend.face}</span><div><div class="eyebrow">${task.name.toUpperCase()} HAS A LITTLE REQUEST</div><h1>${task.title}</h1></div></div><p class="request-copy">“${task.ask}”</p><div class="task-bottom"><span class="next-action">${icons.hand}${ready?task.delivery:task.action}</span><span class="progress" aria-label="${progress(state)} of ${task.count} ${task.item} collected">${Array.from({length:task.count},(_,i)=>`<i class="${i<progress(state)?'done':''}"></i>`).join('')}<b>${progress(state)}/${task.count}</b></span></div>`;
+    const deposited=state.deposits[task.item];
+    taskCard.innerHTML=`<div class="task-heading"><span class="portrait ${friend.id}" aria-hidden="true">${friend.face}</span><div><div class="eyebrow">${task.name.toUpperCase()} HAS A LITTLE REQUEST</div><h1>${task.title}</h1></div></div><p class="request-copy">“${task.ask}”</p><div class="task-bottom"><span class="next-action">${icons.hand}${ready?task.delivery:task.action}</span><span class="progress" aria-label="${deposited} of ${task.count} delivered">${Array.from({length:task.count},(_,i)=>`<i class="${i<deposited?'done':''}"></i>`).join('')}<b>${deposited}/${task.count}</b></span></div>`;
   }else taskCard.innerHTML=`<div class="eyebrow">A LITTLE WORLD, BUILT TOGETHER</div><h1>You belong here.</h1><div class="completion-card">A home, a garden, and friends beside you. Take a walk and say hello. More adventures can wait.</div>`;
   document.querySelector('.count').textContent=task?'1':'✓';
+  const carrying=Object.values(state.inventory).reduce((a,b)=>a+b,0);
+  document.querySelector('.carry-count').textContent=`Carrying ${carrying} / 4`;
+  const carried=Object.entries(state.inventory).flatMap(([type,n])=>Array(n).fill(type));
+  cargoSlots.forEach((slot,i)=>{slot.slot.visible=i<carried.length;for(const type of ['wood','carrot','flower'])slot[type].visible=carried[i]===type;});
+  for(const [id,{pad}] of pads)pad.visible=task?.friend===id;
+  siteLabel.hidden=!task;
+  if(task){siteLabel.textContent=`${task.item==='wood'?'🪵':task.item==='carrot'?'🥕':'🌼'} ${state.deposits[task.item]} / ${task.count}`;siteLabel.setAttribute('aria-label',`Walk to ${DELIVERY_SITES[task.friend].label.toLowerCase()} delivery circle`);}
   document.querySelector('.task-list').innerHTML=REQUESTS.map((t,i)=>`<div class="task-row ${i<state.stage?'complete':i>state.stage?'future':''}"><span class="status">${i<state.stage?'✓':i===state.stage?'•':'·'}</span><div><strong>${i>state.stage?'A new little adventure':t.title}</strong><small>${i<state.stage?'You helped '+t.name:i===state.stage?(ready?t.delivery:t.count+' '+t.item+' for '+t.name):'Discover it together, a little later'}</small></div></div>`).join('');
   for(const r of resources.values()){
     r.group.visible=!state.gathered.includes(r.id);
@@ -224,7 +272,9 @@ function renderUI(){
     entityButtons.get(r.id).button.hidden=!r.group.visible||!active;
   }
   for(const f of friends){f.model.visible=f.id!=='ruth'||state.stage>=2;f.marker.visible=task?.friend===f.id;entityButtons.get(f.id).button.hidden=!f.model.visible;}
-  frame.visible=state.stage>=1&&state.homeWork<1;finishedHome.visible=state.homeWork>=1;foundation.visible=state.stage>=1;welcomeFlowers.visible=state.stage>=3;
+  frame.visible=state.homeWork<1;frame.scale.y=state.stage===0 ? .3 : 1;
+  finishedHome.visible=state.homeWork>=1;foundation.visible=true;welcomeFlowers.visible=state.stage>=3;
+  porch.visible=state.stage>=3&&state.homeWork>=1;
 }
 renderUI();
 document.querySelector('.tasks-button').addEventListener('click',()=>sheet.showModal());
@@ -254,6 +304,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
       walkTo(group.position.clone(),interaction);return;
     }
     if(interaction.kind==='friend'){walkTo(group.position.clone(),interaction);return;}
+    if(interaction.kind==='site'){walkTo(group.position.clone());return;}
   }
   const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p))walkTo(p);
 });
@@ -268,17 +319,13 @@ addEventListener('blur',()=>keys.clear(),{signal:lifecycle.signal});
 function interact(){
   if(!pending)return;
   if(pending.kind==='resource'){
-    const r=resources.get(pending.id);
-    if(!r||!r.group.visible){pending=null;return;}
-    gathering={id:r.id,finish:time+.65};pending=null;
+    pending=null; // Proximity collection works for taps and ordinary walking alike.
   }else{
     const friend=friends.find(f=>f.id===pending.id);pending=null;
     if(!friend)return;
     friend.wait=4;
     const task=currentRequest(state);
-    if(task?.friend===friend.id&&readyToDeliver(state)){
-      const next=deliver(state,friend.id);if(next!==state){state=next;save();renderUI();speak(friend,task.thanks);say(state.stage===2?'A new home. A new friend. Welcome, Ruth!':state.stage===3?'You made this place a little more like home.':'Noah is building. Eve has a little request for you.',5);}
-    }else speak(friend,task?.friend===friend.id?task.ask:friend.line);
+    speak(friend,task?.friend===friend.id?task.ask:friend.line);
   }
 }
 function move(model,target,speed,dt,stop=.08){
@@ -329,16 +376,41 @@ function frameLoop(){
       moving=move(player,destination,1.9,dt,stopDistance);
       if(!moving){destination=null;destinationRing.visible=false;interact();}
     }
-    if(gathering&&time>=gathering.finish){
-      const next=collect(state,gathering.id);gathering=null;
-      if(next!==state){state=next;save();renderUI();say(readyToDeliver(state)?`All ready! Tap ${currentRequest(state).name} to bring these over.`:`A little help goes a long way. ${progress(state)} of ${currentRequest(state).count} collected.`,3);}
+    const task=currentRequest(state);
+    if(task&&time>=nextPickup){
+      const nearby=[...resources.values()].filter(r=>r.group.visible&&r.type===task.item&&Math.hypot(r.group.position.x-player.position.x,r.group.position.z-player.position.z)<.7)
+        .sort((a,b)=>a.group.position.distanceToSquared(player.position)-b.group.position.distanceToSquared(player.position));
+      if(nearby.length){
+        const next=collect(state,nearby[0].id);
+        if(next!==state){state=next;nextPickup=time+.25;gathering={finish:time+.2};save();renderUI();}
+      }
     }
+    if(task&&readyToDeliver(state)&&time>=nextDeposit){
+      const site=DELIVERY_SITES[task.friend];
+      if(Math.hypot(site.x-player.position.x,site.z-player.position.z)<.86){
+        const previousStage=state.stage,next=deliver(state,task.friend);
+        if(next!==state){
+          state=next;nextDeposit=time+.35;save();renderUI();
+          if(state.stage!==previousStage){
+            const friend=friends.find(f=>f.id===task.friend);speak(friend,task.thanks);
+            say(state.stage===1?'Delivered! Noah is building your home.':state.stage===2?'A meal to share. Welcome to our world, Ruth!':'Your home has a new porch and flowers. Built together!',4);
+          }
+        }
+      }
+    }
+    if(gathering&&time>=gathering.finish)gathering=null;
   }
   animatePerson(player,moving,dt,!!gathering);
   playerRing.position.set(player.position.x,.08,player.position.z);
   destinationRing.scale.setScalar(1+Math.sin(time*5)*.1);
-  const label=document.querySelector('.world-label'),p=player.position.clone().add(new THREE.Vector3(0,1.6,0)).project(camera);
+  const label=document.querySelector('.world-label'),p=player.position.clone().add(new THREE.Vector3(0,1.65,0)).project(camera);
   label.style.left=`${(p.x+1)*innerWidth/2}px`;label.style.top=`${(-p.y+1)*innerHeight/2}px`;
+  const task=currentRequest(state);
+  if(task){
+    const site=DELIVERY_SITES[task.friend],p=new THREE.Vector3(site.x,1.25,site.z).project(camera);
+    siteLabel.style.left=`${(p.x+1)*innerWidth/2}px`;siteLabel.style.top=`${(-p.y+1)*innerHeight/2}px`;
+    const pad=pads.get(task.friend);pad.fill.scale.setScalar(1+Math.sin(time*3)*.04);
+  }
   for(const {button,getPosition} of entityButtons.values()){
     if(button.hidden)continue;
     const p=getPosition().project(camera);button.style.left=`${(p.x+1)*innerWidth/2}px`;button.style.top=`${(-p.y+1)*innerHeight/2}px`;
@@ -349,7 +421,7 @@ function frameLoop(){
   renderer.render(scene,camera);
 }
 function resize(){
-  const aspect=innerWidth/innerHeight,width=innerWidth<700?16:18*aspect,height=width/aspect;
+  const aspect=innerWidth/innerHeight,width=innerWidth<700?13.5:18*aspect,height=width/aspect;
   camera.left=-width/2;camera.right=width/2;camera.top=height/2;camera.bottom=-height/2;camera.near=.1;camera.far=100;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 }

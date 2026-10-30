@@ -26,17 +26,33 @@ async def main():
         assert start['player'] == (await saved())['player'], 'Player must not move autonomously'
         assert abs(before['x'] - after['x']) + abs(before['y'] - after['y']) > 1, 'Noah must move autonomously'
         print('PASS: friends move autonomously while player remains still', flush=True)
-        collected = 0
-        for stage, kind, count, friend in [(0, 'Collect log', 3, 'Noah'), (1, 'Pick carrot', 4, 'Eve'), (2, 'Pick flower', 3, 'Ruth')]:
+        assert await page.locator('[aria-label*="joystick" i]').count() == 0
+        # A single log is deposited before the rest are collected. No conversation or
+        # confirmation button completes the delivery: the player walks onto the pad.
+        await page.get_by_role('button', name='Collect log 1', exact=True).click(force=True)
+        await page.wait_for_function('(k)=>JSON.parse(localStorage.getItem(k))?.gathered.includes("log-1")', arg=KEY, timeout=45000)
+        await page.get_by_role('button', name='Walk to home delivery circle', exact=True).click(force=True)
+        await page.wait_for_function('(k)=>JSON.parse(localStorage.getItem(k))?.deposits.wood===1', arg=KEY, timeout=45000)
+        assert (await saved())['stage'] == 0
+        assert (await saved())['inventory']['wood'] == 0
+        await page.reload(wait_until='domcontentloaded')
+        await page.wait_for_timeout(1000)
+        assert (await saved())['deposits']['wood'] == 1
+        print('PASS: automatic partial delivery and reload with no joystick', flush=True)
+        for stage, kind, count, site, prefix in [(0, 'Collect log', 3, 'home', 'log'), (1, 'Pick carrot', 4, 'kitchen', 'carrot'), (2, 'Pick flower', 3, 'home', 'flower')]:
             for i in range(1, count + 1):
+                resource_id = f'{prefix}-{i}'
+                if resource_id in (await saved())['gathered']:
+                    continue
                 print('Picking',kind,i,flush=True)
                 await page.get_by_role('button', name=f'{kind} {i}', exact=True).click(force=True)
-                collected += 1
-                await page.wait_for_function('([k,n])=>JSON.parse(localStorage.getItem(k))?.gathered.length>=n', arg=[KEY, collected], timeout=45000)
-                print('Collected',collected,flush=True)
-            await page.get_by_role('button', name=f'Talk to {friend}', exact=True).click(force=True)
+                await page.wait_for_function('([k,id])=>JSON.parse(localStorage.getItem(k))?.gathered.includes(id)', arg=[KEY, resource_id], timeout=45000)
+                print('Auto-collected',resource_id,flush=True)
+                if stage == 1:
+                    await page.screenshot(path='/tmp/living-world-carrying.png')
+            await page.get_by_role('button', name=f'Walk to {site} delivery circle', exact=True).click(force=True)
             await page.wait_for_function('([k,n])=>JSON.parse(localStorage.getItem(k))?.stage===n', arg=[KEY, stage + 1], timeout=45000)
-            print('PASS: completed request for', friend, flush=True)
+            print('PASS: auto-delivered to', site, flush=True)
             if stage == 1:
                 await page.screenshot(path='/tmp/living-world-new-friend.png')
         assert (await saved())['player']['id'] == 'you'

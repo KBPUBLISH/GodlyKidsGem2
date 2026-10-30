@@ -17,7 +17,7 @@ test('three logs are unique and must be handed to Noah before the next request',
   assert.equal(readyToDeliver(state), true);
   assert.equal(deliver(state, 'eve'), state);
   assert.equal(deliver(state, 'noah', 'eve'), state);
-  state = deliver(state, 'noah');
+  for(let i=0;i<3;i++) state = deliver(state, 'noah');
   assert.equal(state.stage, 1);
   assert.equal(state.inventory.wood, 0);
   assert.equal(deliver(state, 'noah'), state);
@@ -28,12 +28,32 @@ test('the complete sequence consumes supplies once and preserves player identity
   const groups = [['log-1', 'log-2', 'log-3'], ['carrot-1', 'carrot-2', 'carrot-3', 'carrot-4'], ['flower-1', 'flower-2', 'flower-3']];
   for (const [i, ids] of groups.entries()) {
     ids.forEach(id => { state = collect(state, id); });
-    state = deliver(state, REQUESTS[i].friend);
+    ids.forEach(() => { state = deliver(state, REQUESTS[i].friend); });
   }
   assert.equal(state.stage, 3);
   assert.equal(state.player.id, PLAYER_ID);
   assert.deepEqual(state.inventory, { wood: 0, carrot: 0, flower: 0 });
   assert.deepEqual(restoreState(JSON.parse(JSON.stringify(state))), state);
+});
+
+test('one carried log can be deposited early and partial delivery survives reload', () => {
+  let state = collect(freshState(), 'log-1');
+  state = deliver(state, 'noah');
+  assert.equal(state.stage, 0);
+  assert.equal(state.deposits.wood, 1);
+  assert.equal(state.inventory.wood, 0);
+  assert.equal(deliver(state, 'noah'), state);
+  assert.deepEqual(restoreState(JSON.parse(JSON.stringify(state))), state);
+});
+
+test('the earlier prototype save retains completed construction and supplies', () => {
+  const old = { version: 1, stage: 1, homeWork: .6, gathered: ['log-1','log-2','log-3','carrot-1'], player: { x: 1, z: 2 } };
+  const state = restoreState(old);
+  assert.equal(state.stage, 1);
+  assert.equal(state.deposits.wood, 3);
+  assert.equal(state.inventory.carrot, 1);
+  assert.equal(state.homeWork, .6);
+  assert.deepEqual(state.player, { id: PLAYER_ID, x: 1, z: 2 });
 });
 
 test('invalid saves cannot inject inventory, control a friend, or skip milestones', () => {

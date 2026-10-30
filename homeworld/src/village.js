@@ -190,6 +190,6 @@ export class Village {
   /** Work for the plan card: what each friend is doing right now. */
   snapshot() {
     const g = this.g, needs = this.lastNeeds;
-    return { goal: needs.goal ? { kind: needs.goal.kind, name: needs.goal.name, ready: needs.goal.ready, blocked: needs.goal.blocked, missing: needs.goal.missing, underway: needs.goal.underway } : null, needs: { wood: needs.wood, stone: needs.stone, fish: needs.fish }, stage: this.lastPlan?.stage || null };
+    return { goal: needs.goal ? { kind: needs.goal.kind, name: needs.goal.name, ready: needs.goal.ready, blocked: needs.goal.blocked, missing: needs.goal.missing, underway: needs.goal.underway } : null, needs: { wood: needs.wood, stone: needs.stone, fish: needs.fish }, stage: this.lastPlan?.stage || null, farm: g.farmer?.foremanContext?.() || null, garden: g.gardenKeeper?.foremanContext?.() || null };
   }
 }

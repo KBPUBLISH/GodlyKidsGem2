@@ -380,6 +380,13 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(b.upgradeFrom){const old=b.upgradeFrom;for(const [id,n]of Object.entries(b.paidMaterials)){const refund=n-(old.paidMaterials[id]||0);if(refund)add(id,refund);}delete b.upgradeFrom;delete b.jobId;delete b.project;Object.assign(b,old);}
     else{for(const [id,n]of Object.entries(b.paidMaterials))add(id,n);b.status='cancelled';}
     setEnergy(next,energyFor(next)+BUILD_ENERGY);
+  } else if(a.type==='remove_fence') {
+    // Take down one finished fence piece (or a lone path stone) and get the materials back: the garden keeper's builders move
+    // the ring outward when the garden grows. Needs someone standing beside it.
+    const b=next.buildings?.find(b=>b.id===a.id),def=b&&buildingById(b.kind);
+    if(!b||b.status!=='complete'||!def||!(def.stroke||b.kind==='path')||!footprint(world,b)||dist(state.player,footprint(world,b).center)>2.2)return state;
+    for(const [id,n]of Object.entries(b.paidMaterials||{}))add(id,n);b.status='cancelled';
+    if(next.farm?.integrity)delete next.farm.integrity[b.id];
   } else if(a.type==='place_animal') {
     if(typeof a.id!=='string'||!a.id||a.id.length>128||(state.animals||[]).some(x=>x.id===a.id)||!animalPlacementStatus(world,state,a).ok)return state;
     next.animals??=[];next.animals.push({id:a.id,kind:a.kind,x:a.x,y:a.y,placedAt:wall});

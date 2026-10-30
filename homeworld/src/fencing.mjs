@@ -37,16 +37,69 @@ function hashRoll(id,day){
   return (h>>>0)%2===0;
 }
 
-/** 4-connected flood from the map edge. Fence cells are walls. Region 0 is the open island. */
+/** The island's own fences and borders in the scenery (DEMO_HW_GardenLeftFence…): they keep coyotes out like a built fence. */
+export const isSceneryFence=id=>/fence|border|wall|hedge/i.test(String(id||''));
+const sceneryCache=new WeakMap();
+function polygonHit(polygon,x,y){
+  let inside=false;
+  for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
+    const [ax,ay]=polygon[j],[bx,by]=polygon[i];
+    if((ay>y)!==(by>y)&&x<(bx-ax)*(y-ay)/(by-ay)+ax)inside=!inside;
+  }
+  return inside;
+}
+/**
+ * Scenery blockers (fences, props, cliffs) rasterised to grid cells: Map key → blocker id. A cell counts when the
+ * blocker's box overlaps it (polygon blockers are sampled). Cached per world. Used so a wheelbarrow or the demo
+ * fence closes a gap the way the navigation already treats it: nothing walks through.
+ */
+export function sceneryCells(world){
+  if(!world?.grid)return new Map();
+  let map=sceneryCache.get(world);if(map)return map;
+  map=new Map();
+  const origin=world.grid.origin,cols=world.grid.columns,rows=world.grid.rows,eps=.02;
+  for(const b of world.blockers||[]){
+    const [x0,y0,x1,y1]=b.bounds;
+    const c0=Math.max(0,Math.floor(x0-origin[0])),c1=Math.min(cols-1,Math.floor(x1-origin[0]-eps)),r0=Math.max(0,Math.floor(y0-origin[1])),r1=Math.min(rows-1,Math.floor(y1-origin[1]-eps));
+    for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+      const key=`${c}:${r}`;if(map.has(key))continue;
+      if(b.polygon){
+        const bx=origin[0]+c,by=origin[1]+r;let hit=false;
+        for(let i=0;i<3&&!hit;i++)for(let j=0;j<3;j++){if(polygonHit(b.polygon,bx+.1+i*.4,by+.1+j*.4)){hit=true;break;}}
+        if(!hit)continue;
+      }
+      map.set(key,b.id);
+    }
+  }
+  sceneryCache.set(world,map);
+  return map;
+}
+/**
+ * Garden gates: a finished stone path tile with a fence, scenery or another wall on two opposite sides. Friends
+ * walk over it; at night it counts as closed, so the pen stays a pen. Returns Set of cell keys.
+ */
+export function gateTiles(world,state){
+  const out=new Set(),buildings=state?.buildings||[],scenery=sceneryCells(world),walls=new Set(scenery.keys());
+  for(const b of buildings){if(!done(b)||!fenceKind(b.kind))continue;const fp=footprint(world,b);if(fp)for(const k of fp.keys)walls.add(k);}
+  for(const b of buildings){
+    if(!done(b)||b.kind!=='path')continue;
+    const fp=footprint(world,b);if(!fp)continue;
+    const [c,r]=fp.keys[0].split(':').map(Number);
+    const ns=walls.has(`${c}:${r+1}`)&&walls.has(`${c}:${r-1}`),ew=walls.has(`${c+1}:${r}`)&&walls.has(`${c-1}:${r}`);
+    if(ns||ew)out.add(fp.keys[0]);
+  }
+  return out;
+}
+/** 4-connected flood from the map edge. Fence cells, scenery and shut gates are walls. Region 0 is the open island. */
 export function enclosureMap(world,buildings){
   const cols=world.grid.columns,rows=world.grid.rows,wall=new Uint8Array(cols*rows);
+  const mark=key=>{const [c,r]=key.split(':').map(Number);if(c>=0&&r>=0&&c<cols&&r<rows)wall[r*cols+c]=1;};
+  for(const key of sceneryCells(world).keys())mark(key);
+  for(const key of gateTiles(world,{buildings}))mark(key);
   for(const b of buildings||[]){
     if(!done(b)||!fenceKind(b.kind))continue;
     const fp=footprint(world,b);if(!fp)continue;
-    for(const key of fp.keys){
-      const [c,r]=key.split(':').map(Number);
-      if(c>=0&&r>=0&&c<cols&&r<rows)wall[r*cols+c]=1;
-    }
+    for(const key of fp.keys)mark(key);
   }
   const seen=new Uint8Array(cols*rows),stack=[];
   const push=(c,r)=>{
@@ -129,21 +182,30 @@ export function edgeSpawn(world,toward,side){
 }
 export function threatTarget(world,state){return gardenFocus(world,state);}
 
-function fencesAlong(world,buildings,from,to){
-  const byKey=new Map();
+/**
+ * Everything on the straight run from the island edge to the crops that stops a coyote, in order:
+ * built fences and shut gates (`{building}`) and the scenery's own fences (`{scenery:id}`, never damaged).
+ */
+function barriersAlong(world,buildings,from,to){
+  const byKey=new Map(),gates=gateTiles(world,{buildings}),scenery=sceneryCells(world);
   for(const b of buildings||[]){
-    if(!done(b)||!fenceKind(b.kind))continue;
+    if(!done(b)||!(fenceKind(b.kind)||(b.kind==='path'&&gates.has(b.key))))continue;
     const fp=footprint(world,b);if(!fp)continue;
     for(const key of fp.keys)if(!byKey.has(key))byKey.set(key,b);
   }
-  const steps=Math.max(1,Math.ceil(Math.hypot(to.x-from.x,to.y-from.y)));
+  const steps=Math.max(1,Math.ceil(Math.hypot(to.x-from.x,to.y-from.y)*2));
   const hit=[],seen=new Set();
   for(let i=0;i<=steps;i++){
-    const t=i/steps,x=from.x+(to.x-from.x)*t,y=from.y+(to.y-from.y)*t,b=byKey.get(cellKey(world,x,y));
-    if(b&&!seen.has(b.id)){seen.add(b.id);hit.push(b);}
+    const t=i/steps,x=from.x+(to.x-from.x)*t,y=from.y+(to.y-from.y)*t,key=cellKey(world,x,y),b=byKey.get(key);
+    if(b&&!seen.has(b.id)){seen.add(b.id);hit.push({building:b});continue;}
+    const id=scenery.get(key);
+    if(id&&isSceneryFence(id)&&!seen.has(id)){seen.add(id);hit.push({scenery:id});}
   }
   return hit;
 }
+function fencesAlong(world,buildings,from,to){return barriersAlong(world,buildings,from,to).filter(h=>h.building).map(h=>h.building);}
+/** True when something (a fence, a shut gate, the scenery's fence) stands between `from` and `to`. */
+export function lineShielded(world,state,from,to){return barriersAlong(world,state.buildings,from,to).length>0;}
 function eatCrop(cell,minutes){
   if(!cell?.seed||cell.hold)return false;
   delete cell.seed;delete cell.plantedAt;delete cell.wateredAt;delete cell.watered;delete cell.grown;
@@ -341,13 +403,20 @@ export function farmNightfall(state,world,day){
     // Someone standing guard by the garden tonight (Abel's dusk duty) turns the coyotes away from the crops and fences. The animals still get a scare.
     const guard=next.farm.guard?.day===day?next.farm.guard:null;
     if(guard)lines.push(`${guard.name||'Abel'} chased ${sides.length>1?'the coyotes':'a coyote'} away from the garden`);
+    // What the garden keeper reads in the morning (garden-keeper.js): which sides the coyotes came through and what they did.
+    const attack={day,kind:'coyote',sides:[],ate:0,fenceHit:false,broke:false,guarded:!!guard};
     for(const side of sides){
       if(guard)continue;
-      const from=edgeSpawn(world,focus,side);
-      const fence=fencesAlong(world,next.buildings,from,focus)[0];
-      if(fence){
+      const from=edgeSpawn(world,focus,side),sideName=side>0?'east':'west';
+      const barrier=barriersAlong(world,next.buildings,from,focus)[0];
+      if(barrier?.scenery){
+        if(!fences.has(barrier.scenery))fences.set(barrier.scenery,'A coyote rattled the old garden fence');
+        attack.fenceHit=true;
+      }else if(barrier?.building){
+        const fence=barrier.building,gate=fence.kind==='path';
         const wood=!brickKind(fence.kind),loss=wood?WOOD_LOSS:BRICK_LOSS;
         const left=(next.farm.integrity[fence.id]??1)-loss;
+        attack.fenceHit=true;
         if(left<=BREAK_AT){
           const b=next.buildings.find(x=>x.id===fence.id);
           if(b&&b.status==='complete'&&brickKind(b.kind)&&layerCount(b)>1){
@@ -358,24 +427,28 @@ export function farmNightfall(state,world,day){
           }else{
             if(b&&b.status==='complete')b.status='cancelled';
             delete next.farm.integrity[fence.id];
-            fences.set(fence.id,wood?'The wood fence broke':'The brick fence broke');
+            fences.set(fence.id,gate?'The garden gate broke':wood?'The wood fence broke':'The brick fence broke');
+            attack.broke=true;attack.sides.push(sideName);
           }
         }else{
           next.farm.integrity[fence.id]=Math.round(left*1000)/1000;
-          if(!fences.has(fence.id))fences.set(fence.id,wood?'A coyote damaged the wood fence':'A coyote damaged the brick fence');
+          if(!fences.has(fence.id))fences.set(fence.id,gate?'A coyote scratched at the garden gate':wood?'A coyote damaged the wood fence':'A coyote damaged the brick fence');
         }
       }else{
         const open=seededCells(next).filter(([key])=>{
           const p=cellCenter(world,key);
           return !regionAt(map,world,p.x,p.y);
         });
+        let got=0;
         for(const [,cell] of open.slice(0,2)){
           const seed=cell?.seed;
-          if(eatCrop(cell,nightMinute(day)))eaten.set(seed,(eaten.get(seed)||0)+1);
+          if(eatCrop(cell,nightMinute(day))){eaten.set(seed,(eaten.get(seed)||0)+1);got++;}
         }
+        if(got){attack.ate+=got;attack.sides.push(sideName);}
       }
       next.animals.push({id:`coyote-${day}-${side>0?'e':'w'}`,kind:'coyote',x:from.x,y:from.y,placedAt:0,wild:true});
     }
+    if(!guard&&(attack.ate||attack.broke||attack.fenceHit))next.farm.lastAttack=attack;
     for(const animal of next.animals){
       if(!LIVESTOCK.has(animal.kind))continue;
       if(regionAt(map,world,animal.x,animal.y)||nearStable(world,next,animal.x,animal.y))continue;
@@ -407,6 +480,8 @@ export function farmDawn(state,world,day){
       if(eatCrop(cell,dawnMinute(day)))eaten.set(seed,(eaten.get(seed)||0)+1);
     }
     lines.push(...eatenLines('crows',eaten));
+    const pecked=[...eaten.values()].reduce((n,v)=>n+v,0);
+    if(pecked)next.farm.lastCrowAttack={day,kind:'crow',ate:pecked};
     const crows=next.animals.filter(a=>a.wild&&a.kind==='crow').length;
     for(let i=crows;i<3;i++){
       const p={x:focus.x+(i-1)*3.2,y:focus.y+2.4};

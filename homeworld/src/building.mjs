@@ -130,8 +130,10 @@ export function siteStatus(world,state,plan,{trees,rocks,terrain,height,inBlocke
   const x=fp.x+c+.5,y=fp.y+r+.5,key=`${fp.col+c}:${fp.row+r}`;
   if(terrain(x,y)!==2)return fail('Choose flat grass, away from the beach and water.');
   if(state.cells[key]?.soil||world.gardenSlots.some(s=>s.key===key))return fail('Keep your garden spots free for plants.');
-  for(const dx of [-.45,0,.45])for(const dy of [-.45,0,.45]){
-   heights.push(height(x+dx,y+dy));if(world.blockers.some(b=>inBlocker(b,x+dx,y+dy,.12)))return fail('Leave space around rocks, paths and fences.');
+  // One-tile pieces (fence, path, scarecrow) may butt up against the scenery's own fence ends; bigger buildings keep a little room.
+  const slim=def.size[0]===1&&def.size[1]===1,reach=slim?.3:.45,margin=slim?0:.12;
+  for(const dx of [-reach,0,reach])for(const dy of [-reach,0,reach]){
+   heights.push(height(x+dx,y+dy));if(world.blockers.some(b=>inBlocker(b,x+dx,y+dy,margin)))return fail('Leave space around rocks, paths and fences.');
   }
  }
  if(Math.max(...heights)-Math.min(...heights)>.28)return fail('That ground is too steep. Try flatter grass.');

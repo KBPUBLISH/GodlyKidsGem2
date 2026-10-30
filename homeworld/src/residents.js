@@ -569,6 +569,8 @@ export class Residents {
     }
     options.push(...this.pickSkillChores(home, s, min, here, busyKey));
     options.push(...this.pickVillageChores(home, s, min, here));
+    // Abel's garden fences and scarecrows (garden-keeper.js): high-priority idle jobs for the builders, nothing for Abel or Eve.
+    if (game.gardenKeeper && game.playersOnly) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
     if (!options.length) return null;
     options.sort((a, b) => a.rank - b.rank || dist(a.target, here) - dist(b.target, here));
     for (const o of options.slice(0, 18)) {
@@ -635,7 +637,14 @@ export class Residents {
       }
       // The garden grows a row at a time: till beside it once the empty plots are nearly all planted.
       const empty = Object.values(cells).filter((c) => c.soil && !c.seed).length;
-      if (does('plow') && auto.plots < SKILL_LIMITS.plots && empty < 4) {
+      // With a garden keeper the rows follow its layout plan (full rows, fence first, heart/smiley blocks); [] means "wait".
+      const planned = does('plow') && game.gardenKeeper ? game.gardenKeeper.plowTargets(s) : null;
+      if (planned && auto.plots < SKILL_LIMITS.plots && empty < 4) {
+        for (const k of planned) {
+          if (cells[k] || k === busyKey || !free(`cell:${k}`)) continue;
+          options.push({ kind: 'plow', key: `cell:${k}`, cellKey: k, target: cellFromKey(game.world, k), reach: .9, label: 'Tilling to the garden plan', rank: 4, auto: 'plots' });
+        }
+      } else if (!planned && does('plow') && auto.plots < SKILL_LIMITS.plots && empty < 4) {
         const seen = new Set();
         for (const cellKey of Object.keys(cells)) {
           const [cx, cy] = cellKey.split(':').map(Number);
@@ -655,7 +664,10 @@ export class Residents {
         if (cell.seed || !['tilled', 'harvested'].includes(cell.soil) || plotWeedy(cell, min)) continue;
         const key = `cell:${cellKey}`;
         if (!free(key) || cellKey === busyKey || communityClaim(s, cellKey)) continue;
-        options.push({ kind: 'plant', key, cellKey, seed: seeds[0][0], target: cellFromKey(game.world, cellKey), reach: .9, label: 'Planting seeds', rank: 2 });
+        // Eve plants to the garden plan: inside the marked rows, and inside the fence once a ring is closed.
+        if (game.gardenKeeper && !game.gardenKeeper.allowsPlant(cellKey)) continue;
+        const seed = game.gardenKeeper?.seedFor(cellKey, seeds.map(([id]) => id)) || seeds[0][0];
+        options.push({ kind: 'plant', key, cellKey, seed, target: cellFromKey(game.world, cellKey), reach: .9, label: 'Planting seeds', rank: 2 });
       }
       if (does('pickup')) for (const seed of game.world.seeds || []) {
         if ((s.pickedSeeds || []).includes(seed.id) || !free(`seed:${seed.id}`)) continue;
@@ -687,7 +699,7 @@ export class Residents {
     if (!village || !game.playersOnly) return [];
     const options = [], free = (key) => !this.claims.has(key), busyId = game.order?.id || game.action?.id || null;
     const site = village.openBuild(s);
-    if (site && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
+    if (site && skillFor(home.name)?.id !== 'gardener' && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
       const def = buildingById(site.kind);
       options.push({ kind: 'build', key: `build:${site.id}`, buildingId: site.id, target: workPoint(game.world, site), reach: .6, label: `Building the ${def?.name || 'building'}`, rank: 1 });
     }
@@ -753,6 +765,7 @@ export class Residents {
     const min = gameTime(s), who = home.name || 'Your friend';
     try {
       if (c.kind === 'build') { this.buildStep(actor, c); return; }
+      if (c.kind === 'gardenWork') { game.gardenKeeper?.finishWork(actor, c, this); game.notify?.(); return; }
       if (c.kind === 'water') {
         const cell = s.cells[c.cellKey], g = growth(cell, min);
         if (!g?.thirsty) return;
@@ -1083,6 +1096,9 @@ export class Residents {
     };
     try {
       this.line = game.store.residentLine({id:home.residentId,name:home.name},context);
+      // The gardener speaks up about the garden first: fences, gate, scarecrow (garden-keeper.js, in Abel's voice).
+      const ask = game.gardenKeeper?.greeting(home);
+      if (ask) this.line = ask;
     } catch (error) {
       game.toast?.(error.message);
     }
@@ -1262,6 +1278,7 @@ export class Residents {
   buildDuty(actor, dt) {
     const home = actor.userData, game = this.game, s = game.store?.state;
     if (!s || !game.loaded || home.id === s.activeCharacter || actor === game.actor) return false; // the one you play is yours, never the project's
+    if (skillFor(home.name)?.id === 'gardener') return false; // Abel never builds houses. Fences and scarecrows are his garden chores, not a project crew.
     const now = Date.now();
     const a = projectAssignments(s, now).find((m) => m.id === home.id);
     if (!a) { if (home.hammer) { home.hammer.visible = false; home.bench.visible = false; } if (home.onDuty) { home.onDuty = false; home.strollState = { wait: 2 + Math.random() * 3 }; home.anchor = null; } return false; }
@@ -1301,8 +1318,10 @@ export class Residents {
     if (!home.rig) {
       const rig = { actor, bones: home.bones, scene: game.scene, world: game.world, particleGeometry: game.particleGeometry, particleMaterials: game.particleMaterials, particles: game.particles };
       for (const name of ['ik', 'solveChain', 'localPoint']) rig[name] = game[name].bind(rig);
-      home.rig = rig; home.hammer = game.asset('tool_hammer'); home.bench = game.asset('construction_workbench'); home.hammer.visible = false; home.bench.visible = false; game.scene.add(home.hammer, home.bench);
+      home.rig = rig;
     }
+    // The rig may already exist from hoe/axe work (swingHelper); the hammer and bench are made the first time this friend builds.
+    if (!home.hammer) { home.hammer = game.asset('tool_hammer'); home.bench = game.asset('construction_workbench'); home.hammer.visible = false; home.bench.visible = false; game.scene.add(home.hammer, home.bench); }
     resetAnimatedPose(home); home.idling = false; home.flourish = null;
     const rig = home.rig, phase = (now % 820) / 820, { wrist, head } = game.building.targets(phase);
     home.bones.mixamorigSpine?.rotateX(.12); actor.updateMatrixWorld(true); rig.ik('Right', rig.localPoint(wrist)); rig.ik('Left', rig.localPoint([.3, .98, .66])); actor.updateMatrixWorld(true);
@@ -1384,7 +1403,7 @@ export class Residents {
   stroll(actor, dt) {
     const home = actor.userData, game = this.game;
     if (this.buildDuty(actor, dt)) return;
-    if (game.store?.state?.night) { home.strollState = null; this.idleActor(actor, dt); return; }
+    if (game.store?.state?.night) { home.strollState = null; if (!game.gardenKeeper?.nightWatch(actor, dt, this)) this.idleActor(actor, dt); return; }
     if (home.chore) {
       const c = home.chore;
       if (c.resting > 0) {
@@ -1396,10 +1415,10 @@ export class Residents {
         if (c.resting <= 0) this.endRest(actor);
         return;
       }
-      if (c.kind === 'build') {
+      if (c.kind === 'build' || c.kind === 'gardenWork') { // garden fence/gate/scarecrow pieces are hammered in the same way
         if (c.path?.length) { this.hideBuilderTools(home); this.walkAlong(actor, c.path, 1.7, dt); return; }
         const here = { x: home.x, y: home.y };
-        if (dist(here, c.target) > 1) { // the reducer wants the builder within 1.05 m of the front
+        if (dist(here, c.target) > (c.kind === 'gardenWork' ? 1.3 : 1)) { // the reducer wants the builder within 1.05 m of the front
           const near = game.nav?.approach(here, c.target, c.reach || .6), path = near?.length ? near : game.nav?.path(here, c.target);
           if (path?.length) { c.path = path; this.walkAlong(actor, c.path, 1.7, dt); return; }
           c.stuck = (c.stuck || 0) + dt;

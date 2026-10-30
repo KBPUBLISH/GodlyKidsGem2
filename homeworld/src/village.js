@@ -13,7 +13,7 @@ import { projectPlan, assignedProject } from './project-rules.mjs';
 import { energyFor } from './nutrition.mjs';
 import { villagePlan, villageNeeds, skillXp, focusSatisfied } from './settlement.mjs';
 import { checkIn, speakRefusal, campSite } from './foreman-check.mjs';
-import { isStructure, rowSlotMismatch } from './build-ask.mjs';
+import { isStructure } from './build-ask.mjs';
 
 const SCAN_MS = 4500;
 
@@ -138,9 +138,8 @@ export class Village {
     const noah = g.buildAsk?.bySkill?.('woodcutter');
     const builder = (noah && helpers.includes(noah)) ? noah : helpers[0], home = builder.userData;
     const head = checkIn(s, { who: home.id, brain: 'builder', intent: { action: 'build', kind: goal.kind }, world: g.world });
-    if (!head.ok && !rowSlotMismatch(head)) { speakRefusal(g, this.foremanTold, home.id, home.name, head); return; }
+    if (!head.ok) { speakRefusal(g, this.foremanTold, home.id, home.name, head); return; }
     const saved = isStructure(goal.kind) ? g.buildAsk?.buildingSite?.(goal.kind, s) : null;
-    if (isStructure(goal.kind) && g.buildAsk && !saved) { g.buildAsk.requestBuilding(home, goal.kind, goal.name); return; }
     if (saved && g.buildAsk?.siteClearChore?.(noah?.userData || home, s)) return;
     const plan = saved ? { kind: goal.kind, key: saved.key, rotation: saved.rotation || 0 } : head.site;
     const waited = { ok: false, reason: 'No room in the row yet', instead: 'No room in the row yet' };

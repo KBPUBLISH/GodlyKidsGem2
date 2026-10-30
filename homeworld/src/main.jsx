@@ -324,7 +324,7 @@ function App(){
       <footer>One game day = ten real minutes · {view.clock?.text} on Day {view.clock?.day}</footer>
     </section></div>}
     </div>
-    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan today={plan.today} village={plan.village} stages={view.stages} coins={Number.isFinite(view.coins)?view.coins:plan.coins} onClose={()=>setPlan(null)} onDismiss={id=>{invoke(g=>g.dismissFriendGoal(id));refreshPlan();}} onAssign={(id,choice)=>{invoke(g=>g.assignFriendGoal(id,choice));refreshPlan();}} onAdd={choice=>{invoke(g=>g.addTodayGoal(choice));refreshPlan();}} onClearExtra={()=>{invoke(g=>g.clearTodayGoal());refreshPlan();}}/>}
+    {plan&&view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&<IslandPlan today={plan.today} village={plan.village} stages={view.stages} coins={Number.isFinite(view.coins)?view.coins:plan.coins} onClose={()=>setPlan(null)} onAdd={choice=>{invoke(g=>g.addTodayGoal(choice));refreshPlan();}} onClearExtra={()=>{invoke(g=>g.clearTodayGoal());refreshPlan();}}/>}
     {view.fishing&&<FishingGame engine={engine} fishing={view.fishing}/>}
     {/* Welcome-ashore profile card: waits for the first-visit tour, fishing, the map and night to clear. */}
     {view.playersOnly&&<ArrivalProfile engine={engine} card={view.arrival} enabled={view.loaded&&!view.fishing&&!mapOnly&&!view.night?.sleeping&&!tourActive&&!plan}/>}

@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import {StageIcon} from './stage-journey.jsx';
+import {buildingById} from './building.mjs';
 
 /**
  * "Today on the island": the stage the island is growing through, one large goal for each
@@ -28,27 +29,43 @@ function Meter({meter}){
   </div>;
 }
 
-function FriendRow({friend,open,onToggle,onAssign}){
+/** Next settlement building, then the other ones this stage still lists. Pictures come from the build catalogue. */
+function buildingPicks(village){
+  const rows=[];
+  const goal=village?.goal;
+  if(goal?.kind)rows.push({kind:goal.kind,upgrade:goal.upgradeFrom||null});
+  for(const u of village?.upcoming||[])if(!u.done)rows.push({kind:u.kind,upgrade:u.upgrade||null});
+  const out=[],seen=new Set();
+  for(const row of rows){
+    const def=buildingById(row.kind);
+    if(!def)continue;
+    const key=`${row.kind}:${row.upgrade||''}`;
+    if(seen.has(key))continue;
+    seen.add(key);
+    out.push({
+      key,id:'raise',kind:row.kind,name:def.name,
+      title:row.upgrade?`Upgrading to the ${def.name}`:`Raising the ${def.name}`,
+      src:`/assets/build_${def.poster||def.id}.png`,
+    });
+  }
+  return out;
+}
+
+function FriendRow({friend}){
   const g=friend.goal;
   const live=!!friend.working&&!g.dismissed;
   const line=g.dismissed?g.title:live?g.title:(friend.asleep?'Sleeping':'Resting');
-  return <li className={`${open?'open':''} ${g.dismissed?'waiting':''} ${g.yours?'yours':''} ${live?'busy':'idle'}`}>
+  return <li className={`${g.dismissed?'waiting':''} ${g.yours?'yours':''} ${live?'busy':'idle'}`}>
     <Face friend={friend}/>
     <div className="plan-friend-body">
       <span className="plan-friend-name"><i className={live?'plan-dot live':'plan-dot'} aria-hidden="true"/>{friend.name}</span>
       <strong className="plan-friend-goal">{line}</strong>
       {g.yours&&live&&<small>Your pick for today</small>}
     </div>
-    <button type="button" className="plan-x" aria-expanded={open} aria-label={open?`Close ${friend.name}'s goals`:`Change ${friend.name}'s goal`} onClick={onToggle}>✕</button>
-    {open&&<div className="plan-picks" role="group" aria-label={`A new goal for ${friend.name}`}>
-      {friend.options.map(o=><button key={o.title} type="button" onClick={()=>onAssign(friend.id,o)}>{o.title}</button>)}
-      <button type="button" className="foreman" onClick={()=>onAssign(friend.id,{foreman:true})}>Let the foreman choose</button>
-    </div>}
   </li>;
 }
 
-export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssign,onAdd,onClearExtra}){
-  const [openId,setOpenId]=useState(null);
+export function IslandPlan({today,village,stages,coins,onClose,onAdd,onClearExtra}){
   const [adding,setAdding]=useState(false);
   if(!today?.meter)return null;
   const meter=today.meter;
@@ -58,12 +75,7 @@ export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssig
   const goldKnown=Number.isFinite(coins);
   const builds=(village?.upcoming||[]);
   const left=builds.filter(u=>!u.done).length;
-  const toggle=friend=>{
-    setAdding(false);
-    if(openId===friend.id){setOpenId(null);return;}
-    setOpenId(friend.id);
-    if(!friend.goal.dismissed)onDismiss(friend.id);
-  };
+  const picks=buildingPicks(village);
   return <div className="plan-shade" onClick={onClose}>
     <section className="plan-card panel" role="dialog" aria-modal="true" aria-labelledby="plan-title" onClick={e=>e.stopPropagation()}>
       <div className="plan-head">
@@ -73,7 +85,7 @@ export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssig
       <Meter meter={meter}/>
       <div className="eyebrow plan-kicker">THE CREW</div>
       {friends.length?<ul className="plan-friends">
-        {friends.map(f=><FriendRow key={f.id} friend={f} open={openId===f.id} onToggle={()=>toggle(f)} onAssign={(id,choice)=>{setOpenId(null);onAssign(id,choice);}}/>)}
+        {friends.map(f=><FriendRow key={f.id} friend={f}/>)}
       </ul>:<p className="plan-empty">No friends ashore yet. Drop one off and the foreman will give them a goal.</p>}
       {today.extra&&<p className="plan-extra"><span>Today's extra: <b>{today.extra.title}</b></span><button type="button" className="plan-x" onClick={onClearExtra} aria-label="Take today's extra goal off">✕</button></p>}
       <div className="eyebrow plan-kicker">FOR YOU</div>
@@ -91,11 +103,14 @@ export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssig
           <div><strong>Collect gold</strong><small>{goldKnown?`You have ${coins} gold coin${coins===1?'':'s'}`:'Gold coins from the ship'}</small></div>
         </li>
       </ul>
-      {adding?<div className="plan-picks plan-add-list" role="group" aria-label="Add a goal for today">
-        {(today.choices||[]).map(c=><button key={c.title} type="button" onClick={()=>{setAdding(false);onAdd(c);}}>{c.title}</button>)}
-        {today.extra&&<button type="button" className="foreman" onClick={()=>{setAdding(false);onClearExtra();}}>Take today's extra off</button>}
-        <button type="button" className="foreman" onClick={()=>setAdding(false)}>Not now</button>
-      </div>:<button type="button" className="plan-add" onClick={()=>{setOpenId(null);setAdding(true);}}>{today.extra?'Change today\'s goal':'Add a goal for today'}</button>}
+      {adding?<div className="plan-build-pick">
+        {picks.length?<div className="plan-builds" role="group" aria-label="Buildings we could raise today">
+          {picks.map(b=><button key={b.key} type="button" className={today.extra?.kind===b.kind?'chosen':''} aria-label={`Raise the ${b.name}`} onClick={()=>{setAdding(false);onAdd({id:b.id,title:b.title,kind:b.kind});}}>
+            <img src={b.src} alt=""/><strong>{b.name}</strong>
+          </button>)}
+        </div>:<p className="plan-empty">The buildings for this stage are already up.</p>}
+        <button type="button" className="plan-notnow" onClick={()=>setAdding(false)}>Not now</button>
+      </div>:<button type="button" className="plan-add" onClick={()=>setAdding(true)}>{today.extra?'Change today\'s goal':'Add a goal for today'}</button>}
       {builds.length>0&&<details className="plan-village-more"><summary>Other things we could build ({left})</summary>
         <div className="plan-village-goals">{builds.map(u=><span key={`${u.kind}:${u.upgrade||''}`} className={u.done?'done':''}>{u.done?'✓ ':''}{u.upgrade?`Upgrade to ${u.name}`:u.name}{u.count>1?` ${Math.min(u.have,u.count)}/${u.count}`:''}</span>)}</div>
       </details>}

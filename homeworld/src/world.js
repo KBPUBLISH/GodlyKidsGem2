@@ -1079,7 +1079,10 @@ export class HomeWorld {
       if(this.action){resetAnimatedPose(this);this.actor.updateMatrixWorld(true);this.animateWork(dt);}
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
-      this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
+      // The guided test owns its requests and supplies; regular campaign chores would
+      // otherwise issue unrelated building reminders and hunger/inventory updates.
+      if(this.livingTestMode){this.lighting(dt);this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.drainToasts();}
+      else{this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}}
       this.livingTest?.update(dt,speed);
       if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
@@ -1088,8 +1091,8 @@ export class HomeWorld {
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');const view=this.viewPoint();if(sig!==this.fieldSignature.join('|')||dist(view,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...view};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.
-        let changed=false;for(const seed of this.world.seeds){if(!this.store.state.pickedSeeds.includes(seed.id)&&dist(this.player,{x:seed.position[0],y:seed.position[1]})<Math.max(seed.radius||0,1.2)){try{this.store.commit({type:'pickup',id:seed.id});this.toast(`+${seed.quantity} ${label(seed.itemId)}`);changed=true;}catch(e){this.toast(e.message);break;}}}
-        if(this.collectNearbyWood())changed=true;
+        let changed=false;for(const seed of this.livingTestMode?[]:this.world.seeds){if(!this.store.state.pickedSeeds.includes(seed.id)&&dist(this.player,{x:seed.position[0],y:seed.position[1]})<Math.max(seed.radius||0,1.2)){try{this.store.commit({type:'pickup',id:seed.id});this.toast(`+${seed.quantity} ${label(seed.itemId)}`);changed=true;}catch(e){this.toast(e.message);break;}}}
+        if(!this.livingTestMode&&this.collectNearbyWood())changed=true;
         if(changed)this.refreshDynamic();
         const r=this.renderer.domElement.getBoundingClientRect();this.labels=this.trees.filter(t=>dist(this.player,{x:t.position[0],y:t.position[1]})<12).sort((a,b)=>dist(this.player,{x:a.position[0],y:a.position[1]})-dist(this.player,{x:b.position[0],y:b.position[1]})).slice(0,3).map(t=>{const p=nativePosition(t.position).add(V(0,3.6*t.scale[2],0)).project(this.camera);return {id:t.id,species:t.species,x:(p.x+1)/2*r.width,y:(1-p.y)/2*r.height,visible:Math.abs(p.x)<.85&&Math.abs(p.y)<.72};});this.mining.updateLabels(r);this.notify();
       }

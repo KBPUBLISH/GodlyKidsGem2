@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {freshState,restoreState,collect,deliver,currentRequest,REQUESTS} from '../src/living-test-rules.mjs';
+import {freshState,restoreState,collect,deliver,currentRequest,REQUESTS,guidance} from '../src/living-test-rules.mjs';
 
 test('a new child has a personal camp task, not a request from a Bible character',()=>{
   const state=freshState();assert.equal(currentRequest(state).friend,'you');
@@ -32,4 +32,13 @@ test('older prototype data and invalid delivery records cannot skip the solo ope
   assert.deepEqual(restoreState({version:2,stage:3,gathered:[]}),freshState());
   const s=restoreState({version:2,stage:0,gathered:['log-1','log-1','__proto__'],inventory:{wood:999},adamUnlocked:true});
   assert.deepEqual(s.gathered,['log-1']);assert.equal(s.inventory.wood,1);assert.equal(s.adamUnlocked,false);
+});
+
+test('guidance counts pickups immediately and switches to delivery only when enough are found',()=>{
+  let s=freshState();assert.equal(guidance(s).delivery,false);
+  s=collect(s,'log-1');assert.equal(guidance(s).found,1);assert.equal(guidance(s).delivery,false);
+  s=deliver(s,'you');assert.equal(guidance(s).found,1);
+  s=collect(collect(s,'log-2'),'log-3');assert.equal(guidance(s).delivery,true);
+  s=deliver(deliver(s,'you'),'you');assert.equal(guidance(s),null);
+  s.adamUnlocked=true;assert.equal(guidance(s).noun,'carrots');assert.equal(guidance(s).found,0);
 });

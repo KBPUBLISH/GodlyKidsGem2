@@ -74,3 +74,13 @@ export function deliver(state, friendId, actor = PLAYER_ID) {
   return { ...state, stage: state.stage + (delivered === task.count ? 1 : 0),
     deposits: { ...state.deposits, [task.id]: delivered }, inventory: { ...state.inventory, [task.item]: state.inventory[task.item] - 1 } };
 }
+
+/** One instruction at a time; carried pickups count before they are delivered. */
+export function guidance(state){
+  const task=currentRequest(state);if(!task)return null;
+  const found=state.deposits[task.id]+state.inventory[task.item],delivery=found>=task.count;
+  const noun=task.item==='wood'?'logs':'carrots',place=state.stage<2?'camp':'home';
+  return {found,delivery,noun,label:delivery?`Take ${noun} to ${place}`:task.item==='wood'?'Find a log':'Find a carrot',
+    instruction:delivery?'Tap the glowing circle. Your supplies go in by themselves.':task.item==='wood'?'Tap a log. Walk close to pick it up.':'Tap a carrot. Walk close to pick it up.',
+    progress:delivery?`${state.deposits[task.id]} / ${task.count} delivered`:`${found} / ${task.count} ${noun} found`};
+}

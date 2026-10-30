@@ -19,7 +19,7 @@ import { islandStoryProgressService } from '../services/islandStoryProgressServi
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import { isLibraryFromBasement } from '../utils/libraryFromBasement';
 import { getLibraryMode } from '../utils/libraryMode';
-import {completeLivingFirstFriendReading} from '../utils/livingFirstFriend';
+import {completeLivingFirstFriendReading,isLivingFirstFriendReading} from '../utils/livingFirstFriend';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
 import { BookPageRenderer, ScrollState } from '../components/features/BookPageRenderer';
 import WebViewPageRenderer from '../components/features/WebViewPageRenderer';
@@ -278,6 +278,10 @@ const BookReaderPage: React.FC = () => {
     );
     const navigateBackFromReader = useCallback(() => {
         stopBookAudioRef.current();
+        if(islandSceneReturn?.storyId&&isLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId)){
+            navigate('/my-home?livingTest=1',{replace:true});
+            return;
+        }
 
         if (islandSceneReturn) {
             // If the book was already finished, ensure scene unlock progress is saved

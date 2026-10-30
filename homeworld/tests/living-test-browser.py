@@ -41,28 +41,33 @@ async def main():
         assert await frame.evaluate('window.__hw.loaded'),await frame.evaluate('window.__hw.error')
         assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
         assert 'Noah' not in await frame.locator('body').inner_text()
+        assert await frame.get_by_role('button',name='Open build',exact=True).count()==0
+        assert await frame.get_by_role('button',name='Friends',exact=True).count()==0
+        assert await frame.locator('[aria-label*="joystick" i]').count()==0
         await quality(frame)
         await page.wait_for_timeout(1000)
         await page.screenshot(path='/tmp/solo-island-start.png')
         print('PASS: child starts alone with a personal task in the original island',flush=True)
-        for i in [1,2,3]:
-            rid=f'log-{i}'
-            if await frame.evaluate('(id)=>window.__hw.livingTest.state.gathered.includes(id)',rid):continue
-            await frame.evaluate('(id)=>{const t=window.__hw.livingTest;t.walk(t.resources.find(r=>r.id===id));}',rid)
-            await frame.wait_for_function('(id)=>window.__hw.livingTest.state.gathered.includes(id)',arg=rid,timeout=60000)
-        await frame.evaluate('window.__hw.livingTest.walk(window.__hw.livingTest.site())')
+        async def gather(label,count):
+            while await frame.evaluate('window.__hw.livingTest.state.gathered.length')<count:
+                before=await frame.evaluate('window.__hw.livingTest.state.gathered.length')
+                await frame.get_by_role('button',name=label,exact=True).click()
+                await frame.wait_for_function('(n)=>window.__hw.livingTest.state.gathered.length>n',arg=before,timeout=90000)
+        await gather('Find a log',3)
+        assert '3 / 3' in await frame.locator('.living-progress').inner_text() or 'delivered' in await frame.locator('.living-progress').inner_text()
+        await page.screenshot(path='/tmp/kids-carrying.png')
+        await frame.get_by_role('button',name='Take logs to camp',exact=True).click()
         await frame.wait_for_function('window.__hw.livingTest.state.stage===1',timeout=60000)
         assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
         assert await frame.evaluate('window.__hw.store.state.buildings.some(b=>b.id==="living-test-camp")')
+        await frame.get_by_role('button',name='Let’s read a story',exact=True).wait_for(timeout=30000)
         await page.screenshot(path='/tmp/solo-first-friend-invite.png')
         print('PASS: solo camp completed; invitation appears with no friend granted',flush=True)
         await frame.get_by_role('button',name='Let’s read a story',exact=True).click()
-        await page.wait_for_url('**/#/sail/genesis/lesson?storyId='+STORY,timeout=20000)
+        await page.wait_for_url('**/#/sail/genesis/lesson/hub?storyId='+STORY+'&livingFirstFriend=1',timeout=20000)
         print('PASS: actual app bridge opens the first CMS story pack',flush=True)
         await page.wait_for_timeout(2000)
-        await page.get_by_role('button',name='READ STORY',exact=True).click()
-        await page.get_by_role('button',name='Start',exact=True).click()
-        await page.get_by_role('button',name='3–5',exact=False).click()
+        await page.get_by_role('button',name='6–7',exact=False).click()
         await page.wait_for_timeout(4000)
         assert await page.evaluate('Object.keys(localStorage).filter(k=>k.startsWith("gk_living_first_friend_v1:")).every(k=>JSON.parse(localStorage[k]).phase==="reading")')
         for i in range(2):
@@ -77,6 +82,28 @@ async def main():
         assert await frame.evaluate('window.__hw.selectCharacter("adam")') is False
         await page.screenshot(path='/tmp/solo-adam-arrival.png')
         print('PASS: finishing the real reader returns to the island with only Adam and fixed player control',flush=True)
+        await frame.get_by_role('button',name='Welcome, Adam!',exact=True).click()
+        await page.screenshot(path='/tmp/kids-adam-and-player.png')
+        await gather('Find a carrot',7)
+        await frame.get_by_role('button',name='Take carrots to camp',exact=True).click()
+        await frame.wait_for_function('window.__hw.livingTest.state.stage===2',timeout=90000)
+        assert await frame.evaluate('window.__hw.livingTest.picnic.visible')
+        await gather('Find a log',10)
+        await frame.get_by_role('button',name='Take logs to home',exact=True).click()
+        await frame.wait_for_function('window.__hw.livingTest.state.homeWork===1',timeout=120000)
+        await frame.get_by_role('button',name='Explore our home',exact=True).click()
+        await frame.wait_for_function('window.__hw.interior?.phase==="inside"',timeout=30000)
+        await page.screenshot(path='/tmp/kids-home-interior.png')
+        await frame.get_by_role('button',name='Back to our island',exact=False).click()
+        await frame.wait_for_function('!window.__hw.interior',timeout=30000)
+        await page.context.storage_state(path='/tmp/kids-polished-completed.json')
+        for width,height in [(320,740),(820,1180)]:
+            await page.set_viewport_size({'width':width,'height':height})
+            assert await frame.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
+            await frame.get_by_role('button',name='Open my bag',exact=True).click()
+            assert await frame.get_by_role('dialog').is_visible()
+            await frame.get_by_role('button',name='Back to island',exact=True).click()
+        print('PASS: visible goal buttons complete the full loop, picnic appears, home can be entered and left',flush=True)
         assert not errors,errors
         print('ERRORS:',errors,flush=True)
         await b.close()

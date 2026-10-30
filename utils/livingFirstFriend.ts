@@ -24,7 +24,7 @@ export async function openLivingFirstFriendStory(scope: string) {
   if (scope !== getProfileScopeKey() || !beginFirstFriendStory(localStorage, key, islandId, storyId)) throw new Error('The story handoff could not be saved.');
   // Use the ordinary reader, without starting/resetting the previous ship onboarding.
   delete state.onboardingJourney;
-  return { path: `/sail/${encodeURIComponent(islandId)}/lesson?storyId=${encodeURIComponent(storyId)}`, state: { ...state, fromMyHome: true, livingFirstFriend: true } };
+  return { path: `/sail/${encodeURIComponent(islandId)}/lesson/hub?storyId=${encodeURIComponent(storyId)}&livingFirstFriend=1`, state: { ...state, fromMyHome: true, livingFirstFriend: true } };
 }
 
 /** Called by the real reader only at The End, after reading progress is recorded. */
@@ -36,4 +36,8 @@ export function completeLivingFirstFriendReading(islandId: string, storyId: stri
   if (!findAdam()) rewardsService.collectReward(storyId, ONBOARDING_ADAM_REWARD);
   if (!findAdam()) return false;
   return finishFirstFriendStory(localStorage, key, islandId, storyId);
+}
+
+export function isLivingFirstFriendReading(islandId: string, storyId: string): boolean {
+  return isFirstFriendReading(localStorage, firstFriendKey(getProfileScopeKey()), islandId, storyId);
 }

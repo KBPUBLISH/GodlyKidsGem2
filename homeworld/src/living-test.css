@@ -20,3 +20,35 @@
 .living-loading{position:absolute;z-index:30;left:50%;top:45%;transform:translate(-50%,-50%);padding:25px;text-align:center;width:min(340px,90vw)}
 .living-island-test .friends-list .friend-row{width:100%;text-align:left}
 @media(max-height:650px){.living-island-test .living-request{display:block;top:82px;padding:10px 12px}.living-request p{font-size:11px;margin:5px 0}.living-island-test .side-buttons{top:82px;grid-template-columns:1fr}}
+/* Progressive controls and short instructions keep the island visible. */
+.living-island-test .living-request{right:16px;max-width:350px;padding:14px 16px;top:98px}
+.living-request>strong{font-size:19px;line-height:1.2}
+.living-request p{font-size:13px;line-height:1.35;margin:6px 0 10px}
+.living-progress{gap:6px;font-size:12px}
+.living-pips{display:flex;gap:4px;margin-left:auto}
+.living-pips i{width:9px;height:9px;border:1.5px solid #829865;border-radius:50%;background:#f5f1df}
+.living-pips .filled{background:#7caa46}
+.living-goal-actions{display:flex;gap:8px;margin-top:10px}
+.living-guide{display:flex;align-items:center;justify-content:center;gap:7px;background:#eaf3d8;min-height:46px;width:100%;padding:8px 12px;font-size:14px;box-shadow:0 3px 0 #c9d7ad}
+.living-listen{flex:0 0 46px;padding:8px;min-height:46px}
+.living-island-test .side-buttons{top:330px}
+.living-carry{padding:6px 10px;min-height:58px}
+.living-carry button{display:flex;align-items:center;gap:7px;background:transparent;border:0;padding:6px;min-height:44px}
+.living-target{position:absolute;z-index:7;transform:translate(-50%,-50%);display:flex;align-items:center;gap:5px;min-height:44px;padding:5px 10px;background:#fff5bb;border-color:#dac16a;box-shadow:0 3px 0 #b9a35d;font-size:12px;white-space:nowrap}
+.living-target span{font-size:23px;animation:living-point 1.3s ease-in-out infinite}
+.living-pickup{position:absolute;z-index:12;top:51%;left:50%;transform:translate(-50%,-50%);background:#fff9de;border-radius:18px;padding:8px 16px;color:#36522e;font-weight:900;pointer-events:none;box-shadow:0 3px 14px #354e2933}
+.living-celebration{position:absolute;z-index:15;bottom:180px;left:50%;transform:translateX(-50%);width:max-content;max-width:90%;display:flex;align-items:center;gap:10px;padding:16px 20px;text-align:center}
+.living-island-test .living-milestone-shade{background:linear-gradient(transparent 20%,#283e2544);align-items:flex-end;padding:12px}
+.living-island-test .living-milestone{position:relative;inset:auto;width:min(100%,460px);height:auto;max-height:65%;border-radius:25px;padding:21px;box-shadow:0 6px 28px #21362244;margin:0 auto}
+.living-milestone .drawer-header{padding-right:75px;margin-bottom:12px}
+.living-milestone h1{font-size:24px;line-height:1.2;margin:6px 0}
+.living-milestone p{font-size:15px;line-height:1.5;margin:10px 0}
+.living-milestone .close{min-width:60px;padding:8px;font-size:12px}
+.living-milestone .food-actions{gap:8px}
+.living-milestone .food-actions button{min-height:50px;padding:10px 14px;font-size:15px}
+.living-milestone .food-actions button+button{background:transparent;box-shadow:none}
+@keyframes living-point{50%{transform:translateY(4px)}}
+@media(prefers-reduced-motion:reduce){.living-target span{animation:none}}
+@media(max-width:360px){.living-island-test .living-request{top:86px;padding:11px 12px}.living-request>strong{font-size:17px}.living-request p{font-size:12px}.living-island-test .living-request{left:10px;right:10px}.living-pips{gap:2px}.living-milestone h1{font-size:21px}}
+@media(max-height:650px){.living-island-test .living-request{top:76px;max-width:290px}.living-island-test .side-buttons{top:285px}.living-island-test .living-milestone{max-height:85%}}
+.living-island-test .living-milestone-shade{backdrop-filter:none}

@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {useUser} from '../context/UserContext';
+import {isLivingFirstFriendReading} from '../utils/livingFirstFriend';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, Video, X } from 'lucide-react';
 import WoodBackButton from '../components/WoodBackButton';
@@ -113,6 +115,8 @@ const resolveMediaUrl = (url: string | undefined | null): string => {
  */
 const IslandLessonPage: React.FC = () => {
   const navigate = useNavigate();
+  const {kids,currentProfileId}=useUser();
+  const firstFriendOpened=useRef(false);
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -445,6 +449,17 @@ const IslandLessonPage: React.FC = () => {
       onboardingJourney,
     ],
   );
+
+  // The island already asked to read: skip repeated Start screens for this handoff.
+  useEffect(()=>{
+    if(firstFriendOpened.current||searchParams.get('livingFirstFriend')!=='1'||!cmsBookId||!returnStoryId||!isLivingFirstFriendReading(islandId,returnStoryId))return;
+    firstFriendOpened.current=true;
+    const saved=readPersistedReadingLevel(cmsBookId);
+    const age=kids.find(k=>k.id===currentProfileId)?.age;
+    if(saved)openRead(saved);
+    else if(typeof age==='number'&&age>0)openRead(age<6?'ages_3_5':age<8?'ages_6_7':'ages_8_plus');
+    else setShowAgePicker(true);
+  },[cmsBookId,returnStoryId,islandId,searchParams,kids,currentProfileId,openRead]);
 
   const handleRereadStory = useCallback(() => {
     if (cmsBookId) {
@@ -1009,7 +1024,7 @@ const IslandLessonPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setShowAgePicker(false)}
+                onClick={() => {setShowAgePicker(false);if(searchParams.get('livingFirstFriend')==='1')navigate('/my-home?livingTest=1');}}
                 className="w-11 h-11 rounded-full bg-[#3D2914]/90 text-white flex items-center justify-center active:scale-95"
                 aria-label="Close"
               >

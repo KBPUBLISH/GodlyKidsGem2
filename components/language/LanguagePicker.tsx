@@ -2,6 +2,8 @@ import { languageDirection } from '../../localization/languageDirection';
 import React, { useState } from 'react';
 import { Check, ArrowRight, Compass } from 'lucide-react';
 import './LanguagePicker.css';
+import { LIVING_TEST_BUILD } from '../../utils/livingTestMode';
+import { PREVIEW_ART } from '../../utils/previewAssets.mjs';
 import { useLanguage } from '../../context/LanguageContext';
 import { LAUNCH_LANGUAGES } from '../../services/translationService';
 export { LAUNCH_LANGUAGES } from '../../services/translationService';
@@ -31,12 +33,12 @@ export default function LanguagePicker({onComplete}: {onComplete:()=>void}) {
   const [selected,setSelected] = useState(LAUNCH_LANGUAGES.includes(currentLanguage) ? currentLanguage : 'en');
   const copy = COPY[selected] || COPY.en;
   return <main className="language-screen" aria-labelledby="language-title" lang={selected} dir={languageDirection(selected)}>
-    <div className="language-ocean" aria-hidden="true"><div/><div/><div/></div>
+    <div className="language-ocean" style={LIVING_TEST_BUILD ? {backgroundImage:`url("${PREVIEW_ART.languageOcean}")`} : undefined} aria-hidden="true"><div/><div/><div/></div>
     <div className="language-shell">
       <div className="language-brand" dir="ltr" aria-hidden="true"><Compass size={22}/><span data-no-localize="true">GODLY KIDS</span></div>
       <section className="language-panel">
         <header className="language-header">
-          <div className="language-globe" aria-hidden="true"><img src="/assets/images/language/language-globe-v1.png" alt="" width="112" height="112"/></div>
+          <div className="language-globe" aria-hidden="true"><img src={LIVING_TEST_BUILD ? PREVIEW_ART.languageGlobe : '/assets/images/language/language-globe-v1.png'} alt="" width="112" height="112"/></div>
           <h1 id="language-title">{copy[0]}</h1>
           <p>{copy[1]}</p>
         </header>

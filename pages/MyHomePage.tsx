@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate,useLocation } from 'react-router-dom';
 import {openLivingFirstFriendStory} from '../utils/livingFirstFriend';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
+import { stopPreviewWarmup } from '../utils/previewWarmup';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import { rewardsService, type UnlockedCharacter } from '../services/rewardsService';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
@@ -203,6 +204,7 @@ const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
   const routeLocation=useLocation();
   const livingTestMode=LIVING_TEST_BUILD || new URLSearchParams(routeLocation.search).get('livingTest')==='1';
+  useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
   const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
   const playerName = useMemo(() => {

@@ -2,6 +2,9 @@ import LanguagePicker from '../components/language/LanguagePicker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { activityTrackingService } from '../services/activityTrackingService';
+import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
+import { PREVIEW_ART } from '../utils/previewAssets.mjs';
+import { subscribePreviewWarmup, warmPreviewNextScreen } from '../utils/previewWarmup';
 import {
   startAdventurePreload,
   subscribeAdventurePreload,
@@ -92,10 +95,16 @@ const LandingPage: React.FC = () => {
     setIsChecking(false);
   }, [navigate, replaySplash]);
 
-  useEffect(() => subscribeAdventurePreload(setPreload), []);
+  useEffect(() => LIVING_TEST_BUILD
+    ? subscribePreviewWarmup(({finished}) => setPreload(previous => ({...previous, finished})))
+    : subscribeAdventurePreload(setPreload), []);
 
   useEffect(() => {
     if (isChecking) return;
+    if (LIVING_TEST_BUILD) {
+      warmPreviewNextScreen('onboarding');
+      return;
+    }
     void startAdventurePreload();
   }, [isChecking]);
 
@@ -121,7 +130,7 @@ const LandingPage: React.FC = () => {
     const reduced =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) {
+    if (LIVING_TEST_BUILD || reduced) {
       goOnboarding();
       return;
     }
@@ -188,7 +197,8 @@ const LandingPage: React.FC = () => {
       )}
 
       <img
-        src={SPLASH_BOAT_POSTER}
+        src={LIVING_TEST_BUILD ? PREVIEW_ART.splash : SPLASH_BOAT_POSTER}
+        fetchPriority="high"
         alt=""
         aria-hidden
         className={`absolute inset-0 pointer-events-none select-none transition-opacity duration-500 ${mediaReady ? 'opacity-100' : 'opacity-0'}`}
@@ -197,7 +207,7 @@ const LandingPage: React.FC = () => {
         onError={() => setMediaReady(true)}
       />
 
-      <video
+      {!LIVING_TEST_BUILD && <video
         ref={continueRef}
         src={SPLASH_CONTINUE_VIDEO}
         poster={SPLASH_BOAT_POSTER}
@@ -206,10 +216,10 @@ const LandingPage: React.FC = () => {
         className={`absolute inset-0 z-30 pointer-events-none select-none transition-opacity duration-200 ${playingContinue ? 'opacity-100' : 'opacity-0'}`}
         style={SPLASH_COVER}
         aria-hidden
-      />
+      />}
 
       {/* Warm the family-page background so it is ready after the parrot clip. */}
-      <video src={ONBOARDING_FAMILY_BG_VIDEO} preload="auto" muted playsInline className="hidden" aria-hidden />
+      {!LIVING_TEST_BUILD && <video src={ONBOARDING_FAMILY_BG_VIDEO} preload="auto" muted playsInline className="hidden" aria-hidden />}
 
       <div
         className={`absolute left-0 right-0 z-10 flex w-full min-w-0 flex-col items-center px-6 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
@@ -218,7 +228,7 @@ const LandingPage: React.FC = () => {
         }}
       >
         <img
-          src="/assets/images/godly-kids-logo.png?v=1"
+          src={LIVING_TEST_BUILD ? PREVIEW_ART.logo : '/assets/images/godly-kids-logo.png?v=1'}
           alt="Godly Kids"
           draggable={false}
           className="m-0 block h-auto select-none"
@@ -322,7 +332,7 @@ const LandingPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleStartExplore}
-                className="mt-1 w-full text-center text-xs font-bold text-white/80 underline"
+                className="mt-1 min-h-[44px] w-full text-center text-sm font-bold text-white underline"
               >
                 Continue anyway
               </button>

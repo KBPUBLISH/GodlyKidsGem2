@@ -593,7 +593,6 @@ import MapPage from './pages/MapPage';
 import { startAssetCache } from './utils/assetCache';
 import { preloadCrewPageAssets } from './utils/assetPreloader';
 import { LIVING_TEST_BUILD } from './utils/livingTestMode';
-import QuickStartPage from './pages/QuickStartPage';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
 import IslandScenePage from './pages/IslandScenePage';
@@ -1549,7 +1548,7 @@ const App: React.FC = () => {
               <PostPurchaseAccountPrompt />
               <Layout>
                 <Routes>
-                  <Route path="/" element={LIVING_TEST_BUILD ? <QuickStartPage /> : <LandingPage />} />
+                  <Route path="/" element={<LandingPage />} />
                   <Route path="/language" element={<LanguagePage />} />
                   {/* Parent Quiz Funnel - web-to-app conversion */}
                   <Route path="/parentquiz" element={<ParentQuizPage />} />

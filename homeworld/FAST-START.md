@@ -101,7 +101,7 @@ fixtures and disposable browser storage, never real family saves.
 - `python homeworld/tests/preview-warm-cache-browser.py` enables the real service
   worker, waits for the six models to warm on the splash, then blocks their
   network URLs before entering the world. The island must still become playable
-  with its first chicken task, proving reuse instead of duplicate downloads.
+  with its opening island task, proving reuse instead of duplicate downloads.
 
 ## Crew destination artwork
 
@@ -195,3 +195,5 @@ saved child, the selected model in the actual island, and seed-based recovery
 after reload. `tests/living-avatars.test.mjs` checks all six models' scale and
 geometry budget and independent profile resolution. These tests use fixtures
 and disposable saves.
+
+The opening island task now expands a small garden. It reuses the existing soil, fences, tools, and carrot/pumpkin models; the cabbage uses a few local meshes. No extra model downloads were added. The mobile walkthrough now completes the garden before checking the optional chicken purchase.

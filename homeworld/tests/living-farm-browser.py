@@ -10,7 +10,7 @@ async def main():
   browser=await p.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader'])
   ctx=await browser.new_context(storage_state=os.environ.get('FARM_TEST_SAVE','/tmp/kids-polished-completed.json'),viewport={'width':430,'height':932})
   # Keep the earned island/story progress; exercise a fresh farm alongside it.
-  await ctx.add_init_script('for(const k of Object.keys(localStorage))if(k.startsWith("gk_living_farm_v1:"))localStorage.removeItem(k);')
+  await ctx.add_init_script('for(const k of Object.keys(localStorage))if(k.startsWith("gk_living_farm_v1:"))localStorage.setItem(k,JSON.stringify({version:1,coins:10,coop:0,animals:[],bag:{egg:0,milk:0},collected:0,nextId:1}));')
   page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.route('**/api/**',api)
   await page.route('https://cdn.tailwindcss.com/**',lambda r:r.fulfill(content_type='application/javascript',body='window.tailwind={config:{}}'))
@@ -40,7 +40,8 @@ async def main():
   await frame.get_by_role('textbox',name='Animal’s name').fill('Sunny')
   await page.screenshot(path='/tmp/farm-chicken-confirmation.png')
   await frame.get_by_role('button',name='Not now',exact=True).click();assert (await state())['coins']==10
-  await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+  await frame.get_by_role('button',name='Open my farm',exact=True).click()
+  await frame.get_by_role('button',name='Buy a chicken',exact=False).click()
   await frame.get_by_role('textbox',name='Animal’s name').fill('Sunny')
   await frame.get_by_role('button',name='Buy Sunny · 10 coins',exact=True).click()
   await frame.wait_for_function('window.__hw.animals.instances.get("living-farm-1")?.root',timeout=30000)

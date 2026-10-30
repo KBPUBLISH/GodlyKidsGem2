@@ -1,26 +1,32 @@
 import * as THREE from 'three';
+import {gardenFresh} from './living-garden-rules.mjs';
 import {heightAt} from './core.mjs';
 import {scopeKey} from './storage-scope.mjs';
-import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,FARM_PRICES} from './living-farm-rules.mjs';
+import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,farmPurchaseError,FARM_PRICES} from './living-farm-rules.mjs';
 const KEY=scopeKey('gk_living_farm_v1');
 
 export class LivingFarm{
  constructor(test){
   this.test=test;this.g=test.g;
-  try{this.state=farmRestore(JSON.parse(localStorage.getItem(KEY)));}catch{this.state=farmFresh();}
+  try{
+   const saved=JSON.parse(localStorage.getItem(KEY));this.state=farmRestore(saved);
+   // Existing adventures keep their animals, balance, and task position.
+   if(!saved?.garden&&(this.state.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.state.garden={...gardenFresh(),approved:true,dug:3,planted:3,completed:true};
+  }catch{this.state=farmFresh();}
   this.pending=null;this.error='';this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
  }
  commit(next){
   if(next===this.state)return false;
   try{localStorage.setItem(KEY,JSON.stringify(next));}catch{this.error='We couldn’t save that. Please try again.';this.g.notify();return false;}
-  this.state=next;this.error='';this.sync();this.test.sync();this.g.notify();return true;
+  this.state=next;this.error='';this.sync();this.test.garden?.sync();this.test.sync();this.g.notify();return true;
  }
  offer(kind){this.test.activity();this.pending={kind,...farmOffer(this.state,kind)};this.error='';this.g.notify();}
- cancel(){this.pending=null;this.error='';this.g.notify();}
+ dismissChicken(){this.commit({...this.state,chickenDismissed:true});}
+ cancel(){if(this.pending?.kind==='chicken'&&!this.state.animals.length)this.dismissChicken();this.pending=null;this.error='';this.g.notify();}
  confirm(name){
   const pending=this.pending;if(!pending)return false;
   const next=farmBuy(this.state,pending.kind,name,Date.now());
-  if(next===this.state){this.error=farmOffer(this.state,pending.kind).reason||(!String(name||'').trim()&&pending.kind!=='coop'?'Give your animal a name.':'You need a few more coins.');this.g.notify();return false;}
+  if(next===this.state){this.error=farmPurchaseError(this.state,pending.kind,name,Date.now())||'Please try again.';this.g.notify();return false;}
   if(!this.commit(next))return false;
   this.pending=null;this.test.celebrate(pending.kind==='coop'?'Your coop is bigger!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
  }

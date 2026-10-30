@@ -39,7 +39,7 @@ async def main():
   assert await frame.evaluate('window.__hw.loaded'),await frame.evaluate('window.__hw.error')
   assert not misses,misses
   await ns['quality'](frame)
-  await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).wait_for()
+  await frame.get_by_role('button',name='Make my garden bigger',exact=True).wait_for()
   assert not errors,errors
   print(f'PASS: all six splash-warmed island models reused with their network requests blocked; playable in {time.monotonic()-started:.2f}s locally; no JS errors',flush=True)
   await browser.close()

@@ -1,3 +1,4 @@
+import {prepareLivingGardenBase} from './living-garden-rules.mjs';
 import {AdaptiveResolution} from './adaptive-resolution.js';
 import {moveCharacter,resetAnimatedPose,updateLocomotion,WALK_SPEED} from './character-motion.js';
 import {animateGathering,emitChopChips} from './gather-animation.js';
@@ -163,7 +164,7 @@ export class HomeWorld {
       ...['construction','house-upgrades','wood-storage'].map(loadModel),
       this.livingTestMode?empty:loadModel('eve'),this.livingTestMode?empty:loadModel('noah'),loadModel('church')
     ]);if(this.disposed)return;
-    this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
+    this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(this.livingTestMode&&!this.store.locked)this.store.save(prepareLivingGardenBase(this.store.state,world));if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
     this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
@@ -207,7 +208,7 @@ export class HomeWorld {
     const bakedFor=o=>{if(!/^MAT_HW_(Grass|IslandBeach)/.test(o.material?.name||''))return null;for(let n=o;n;n=n.parent){if(/TerrainGrid/.test(n.name))return 'terrain';if(/Sand_Shore/.test(n.name))return 'shore';}return null;};
     this.bakedMaterials={};
     // The scenery's demo plots and crops sit on the 16 garden slots; the game draws real soil and crops there instead.
-    const demoGarden=o=>{for(let n=o;n;n=n.parent)if(/^DEMO_HW_(Plot|Crop)/.test(n.name||''))return true;return false;};
+    const demoGarden=o=>{for(let n=o;n;n=n.parent)if(/^DEMO_HW_(Plot|Crop)/.test(n.name||'')||(this.livingTestMode&&this.store.state.livingGardenLayout==='small'&&/^DEMO_HW_Garden/.test(n.name||'')))return true;return false;};
     root.traverse(o=>{if(!o.isMesh||!o.visible||demoGarden(o))return;const mats=Array.isArray(o.material)?o.material:[o.material];if(mats.length!==1){this.scene.add(o.clone());return;}const baked=bakedFor(o);let mat=mats[0];
       if(baked){mat=this.bakedMaterials[baked]||(this.bakedMaterials[baked]=this.bakedTerrainMaterial(baked,mat));}mat.roughness=Math.max(.65,mat.roughness||0);mat.metalness=0;const geo=o.geometry.clone().toNonIndexed();geo.applyMatrix4(o.matrixWorld);if(o.name==='ENV_HW_Water')geo.scale(6,1,6);for(const key of Object.keys(geo.attributes))if(!['position','normal','color','uv'].includes(key))geo.deleteAttribute(key);if(baked)this.planarUv(geo);if(!geo.attributes.normal)geo.computeVertexNormals();const key=mat.uuid+Object.entries(geo.attributes).map(([k,a])=>`${k}${a.itemSize}`).sort().join(',');if(!buckets.has(key))buckets.set(key,{mat,geos:[],water:/Water|Foam|Shallow/.test(o.name)});buckets.get(key).geos.push(geo);});
     this.staticMeshes=[];
@@ -323,6 +324,7 @@ export class HomeWorld {
     this.mining?.refresh();this.building?.refresh();this.refreshGroundCover();this.nav=new Navigation(this.world,state,minutes);
   }
   drawGardenGrid() {
+    if(this.livingTestMode&&this.store.state.livingGardenLayout==='small')return;
     const vs=[];for(let i=0;i<=4;i++){vs.push(-4+i,.17,0,-4+i,.17,-4);vs.push(-4,.17,-i,0,.17,-i);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));this.grid=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:'#e7e2ae',transparent:true,opacity:.35}));this.scene.add(this.grid);
   }
   playClip(name) {

@@ -1,4 +1,4 @@
-import { buildSiteStatus, cellAt, Navigation } from './core.mjs';
+import { buildSiteStatus, cellAt, cellFromKey, Navigation } from './core.mjs';
 
 // Uses the actual map's placement and navigation rules; never clears scenery to fit a test.
 export function livingTestLayout(world, state) {
@@ -26,7 +26,7 @@ export function livingTestLayout(world, state) {
     }
   }
   if (!home) throw new Error('No clear home site found on this island. Your existing worlds have not changed.');
-  const used = [home.pad], points = [];
+  const used = [home.pad,...world.gardenSlots.map(slot=>cellFromKey(world,slot.key))], points = [];
   const find = (desired, distance = 1.25) => {
     for (let ring = 0; ring <= 8; ring++) {
       for (let i = 0; i < 12; i++) {

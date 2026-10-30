@@ -1,7 +1,8 @@
+import {gardenFresh,gardenRestore} from './living-garden-rules.mjs';
 // A small, private test economy. These coins never spend the app's account coins.
 export const FARM_CYCLE_MS=3*60*1000, FIRST_EGG_MS=20000, PRODUCE_CAP=3;
 export const FARM_PRICES={chicken:10,cow:40,egg:5,milk:10};
-export const farmFresh=()=>({version:1,coins:10,coop:0,animals:[],bag:{egg:0,milk:0},collected:0,nextId:1});
+export const farmFresh=()=>({version:1,coins:0,garden:gardenFresh(),chickenDismissed:false,coop:0,animals:[],bag:{egg:0,milk:0},collected:0,nextId:1});
 const integer=(v,max=100000)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
 export const animalName=v=>String(v||'').trim().replace(/[\u0000-\u001f<>]/g,'').slice(0,24);
 export function farmRestore(v){
@@ -10,7 +11,7 @@ export function farmRestore(v){
   for(const a of v.animals){if(!a||!['chicken','cow'].includes(a.kind)||typeof a.id!=='string'||!a.id.startsWith('living-farm-')||ids.has(a.id)||!animalName(a.name)||!integer(a.ready,PRODUCE_CAP)||!Number.isFinite(a.nextAt)||a.nextAt<0)return farmFresh();ids.add(a.id);}
   if(v.animals.some(a=>Number(a.id.slice('living-farm-'.length))>=v.nextId))return farmFresh();
   if(!integer(v.bag?.egg)||!integer(v.bag?.milk)||!integer(v.collected))return farmFresh();
-  return {...v,animals:v.animals.map(a=>({...a,name:animalName(a.name)})),bag:{...v.bag}};
+  return {...v,garden:gardenRestore(v.garden),chickenDismissed:v.chickenDismissed===true,animals:v.animals.map(a=>({...a,name:animalName(a.name)})),bag:{...v.bag}};
 }
 export function farmOffer(s,kind){
   const count=k=>s.animals.filter(a=>a.kind===k).length;
@@ -19,8 +20,12 @@ export function farmOffer(s,kind){
   const reason=kind==='chicken'&&count(kind)>=2+s.coop*2?'Make your coop bigger first.':kind==='cow'&&s.coop<1?'Build your first coop before welcoming a cow.':kind==='cow'&&count(kind)>=2?'Your two cows have a lovely home here.':null;
   return {price:FARM_PRICES[kind],reason};
 }
+export function farmPurchaseError(s,kind,name,now){
+ const offer=farmOffer(s,kind);
+ return offer.reason||(!Number.isFinite(now)?'Please try again.':kind!=='coop'&&!animalName(name)?'Give your animal a name.':s.coins<offer.price?`You have ${s.coins} coins. Pick vegetables or sell eggs to earn ${offer.price-s.coins} more.`:null);
+}
 export function farmBuy(s,kind,name,now){
-  const offer=farmOffer(s,kind);if(offer.reason||s.coins<offer.price||!Number.isFinite(now))return s;
+  const offer=farmOffer(s,kind);if(farmPurchaseError(s,kind,name,now))return s;
   if(kind==='coop')return {...s,coins:s.coins-offer.price,coop:s.coop+1};
   const clean=animalName(name);if(!clean)return s;
   const animal={id:`living-farm-${s.nextId}`,kind,name:clean,ready:0,nextAt:now+(s.animals.length===0?FIRST_EGG_MS:FARM_CYCLE_MS)};

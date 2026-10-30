@@ -24,6 +24,17 @@ async def api(route):
 async def quality(frame):
     await frame.evaluate('''()=>{const g=window.__hw;g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;g.sun.castShadow=false;g.resize();const render=g.renderer.render.bind(g.renderer);let n=0;g.renderer.render=(...args)=>{g.camera.updateMatrixWorld();if(++n%8===0)render(...args);};}''')
 
+async def finish_garden(frame):
+    if not await frame.evaluate('window.__hw.livingTest.farm.state.garden.approved'):
+        await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
+        await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
+    for field,label in [('dug','Dig a spot'),('planted','Plant a seed')]:
+        while await frame.evaluate(f'window.__hw.livingTest.farm.state.garden.{field}')<3:
+            before=await frame.evaluate(f'window.__hw.livingTest.farm.state.garden.{field}')
+            await frame.get_by_role('button',name=label,exact=True).click()
+            await frame.wait_for_function(f'(n)=>window.__hw.livingTest.farm.state.garden.{field}>n',arg=before,timeout=90000)
+    await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.completed')
+
 async def main():
     async with async_playwright() as p:
         b=await p.chromium.launch(executable_path=shutil.which('chromium'),headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader'])
@@ -45,10 +56,12 @@ async def main():
         assert await frame.get_by_role('button',name='Friends',exact=True).count()==0
         assert await frame.locator('[aria-label*="joystick" i]').count()==0
         await quality(frame)
+        await finish_garden(frame)
         await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
         await frame.get_by_role('button',name='Not now',exact=True).click()
         assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
-        await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+        await frame.get_by_role('button',name='Open my farm',exact=True).click()
+        await frame.get_by_role('button',name='Buy a chicken',exact=False).click()
         await frame.get_by_role('textbox',name='Animal’s name',exact=True).fill('Sunny')
         await frame.get_by_role('button',name='Buy Sunny · 10 coins',exact=True).click()
         assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==0

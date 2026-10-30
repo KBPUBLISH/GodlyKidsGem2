@@ -87,10 +87,11 @@ async def main():
   assert 'living-test.html' in frame.url
   assert not any('/eve.glb' in u or '/noah.glb' in u or '/assets/adam.glb' in u or 'map-ocean-scroll' in u for u in requests)
   await ns['quality'](frame)
+  await ns['finish_garden'](frame)
   await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
   await frame.get_by_role('textbox',name='Animal’s name',exact=True).fill('Sunny')
   await frame.get_by_role('button',name='Buy Sunny · 10 coins',exact=True).click()
-  print(f'PASS: cold /my-home opens new test automatically in {elapsed:.2f}s at 8Mbps/100ms, chicken purchase works despite failed Adam download',flush=True)
+  print(f'PASS: cold /my-home opens new test automatically in {elapsed:.2f}s at 8Mbps/100ms, free garden and chicken purchase work despite failed Adam download',flush=True)
   print('PAGE ERRORS:',errors,flush=True)
   assert not errors,errors
   await b.close()

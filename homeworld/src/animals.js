@@ -5,6 +5,7 @@ import { heightAt, terrainType, dist, animalPlacementStatus, gameTime } from './
 import { activeBuildings, footprint, pointInBounds } from './building.mjs';
 import { ANIMALS, animalById, animalShop, ANIMAL_PRICE, DOG_CAPACITY, LIVESTOCK } from './animals.mjs';
 import { cellKey, enclosureMap, herdPlan, nearStable, regionAt, seedAmbient, threatTarget } from './fencing.mjs';
+import { MORNING } from './island-clock.mjs';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -13,6 +14,13 @@ const GROUND_LIFT = 0.01;
 const HIT_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
 /** Shortest signed angle from a to b. */
 const angleDelta = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+/** Stable day: the doors open at 7:00 island time and everyone is back inside by 18:00 (dusk herding starts 20:30). */
+const GRAZE_OUT = MORNING, GRAZE_IN = 1080, GRAZE_STAGGER = 45;
+/** How far from the stable the herd grazes when no fence closes a paddock around it. */
+const PASTURE_RADIUS = 6;
+const STABLE_MARGIN = 0.8;
+const TMP_Q = new THREE.Quaternion(), TMP_Q2 = new THREE.Quaternion(), TMP_V = new THREE.Vector3(), TMP_V2 = new THREE.Vector3();
+const hashId = (id) => { let h = 2166136261; const s = String(id || ''); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 
 /**
  * Placed farm and wild animals. Each GLB kind is loaded once and cloned per saved
@@ -62,7 +70,7 @@ export class Animals {
     return this.map;
   }
 
-  /** Livestock with no closed pen wander. Sheep range the farthest. A stable home stays put. */
+  /** Livestock with no closed pen wander. Sheep range the farthest. A stable home follows stableRoutine instead (pasture by day, stall by night). */
   roaming(inst) {
     if (!LIVESTOCK.has(inst.kind) || inst.record?.wild) return false;
     const home = inst.home || inst;
@@ -165,6 +173,9 @@ export class Animals {
     inst.model = model;
     inst.mixer = mixer;
     inst.actions = actions;
+    // Neck and Head bones take the procedural head-down graze; the GLBs ship only Idle and Walk clips.
+    inst.bones = ['Neck', 'Head'].map((name) => model.getObjectByName(name)).filter((b) => b && b.isBone);
+    inst.length = Math.max(0.4, size.z);
     inst.mode = 'idle';
     root.rotation.y = inst.yaw;
     this.place(inst, inst.x, inst.y);
@@ -199,15 +210,81 @@ export class Animals {
     inst.current = next;
   }
 
-  /** Is this ground point somewhere an animal may stand? Dry land, clear of buildings. */
-  walkable(x, y) {
+  /** Is this ground point somewhere an animal may stand? Dry land, clear of buildings (except `through`, its own stable). */
+  walkable(x, y, through = null) {
     if (terrainType(this.game.world, x, y) === 0) return false;
     const state = this.game.store.state;
     for (const b of activeBuildings(state)) {
+      if (through && b.id === through.id) continue;
       const fp = footprint(this.game.world, b);
       if (fp && pointInBounds({ x, y }, fp.bounds, 0.3)) return false;
     }
     return true;
+  }
+
+  /** Pasture grass: walkable, grass (not beach), and never a garden plot or a planted cell. */
+  grazeable(x, y) {
+    const world = this.game.world;
+    if (terrainType(world, x, y) !== 2 || !this.walkable(x, y)) return false;
+    const key = cellKey(world, x, y);
+    if (world.gardenSlots?.some((s) => s.key === key)) return false;
+    return !this.game.store.state.cells?.[key]?.seed;
+  }
+
+  /** The completed stable this animal lives in (its saved spot is within the stable margin), or null. */
+  stableFor(inst) {
+    if (!LIVESTOCK.has(inst.kind) || inst.record?.wild) return null;
+    const state = this.game.store?.state;
+    if (!state) return null;
+    const home = inst.home || inst;
+    if (inst._stableRev === state.revision && inst._stableHome === inst.home) return inst._stable;
+    inst._stableRev = state.revision;
+    inst._stableHome = inst.home;
+    inst._stable = null;
+    for (const b of state.buildings || []) {
+      if (b.status !== 'complete' || b.kind !== 'stable') continue;
+      const fp = footprint(this.game.world, b);
+      if (fp && pointInBounds(home, fp.bounds, STABLE_MARGIN)) { inst._stable = { ...fp, id: b.id }; break; }
+    }
+    return inst._stable;
+  }
+
+  /** Minute of the island day, 0–1439. */
+  dayMinute() {
+    const state = this.game.store?.state;
+    if (!state?.clock) return 720;
+    return ((gameTime(state) % 1440) + 1440) % 1440;
+  }
+
+  /** Daytime pasture hours for a stabled animal. Each animal keeps its own offset so the herd files out and back in rather than stampeding. */
+  grazingHours(inst) {
+    const state = this.game.store?.state;
+    if (!state || state.night) return false;
+    const stagger = (hashId(inst.id) % GRAZE_STAGGER);
+    const m = this.dayMinute();
+    return m >= GRAZE_OUT + stagger && m < GRAZE_IN - stagger * 0.6;
+  }
+
+  /** Each animal's own stall inside the stable, so a herd does not stand on one spot. */
+  stallFor(inst, fp) {
+    const h = hashId(inst.id), u = (h % 1000) / 1000, v = (Math.floor(h / 1000) % 1000) / 1000;
+    return { x: fp.x + 0.55 + u * Math.max(0, fp.w - 1.1), y: fp.y + 0.45 + v * Math.max(0, fp.h - 0.9) };
+  }
+
+  /** Open grass near the stable. Inside the fenced paddock when one closes around the stable; otherwise within the pasture radius, never into another pen. */
+  pickPasture(inst, fp) {
+    const world = this.game.world, map = this.penMap();
+    const paddock = fp.keys.map((k) => map.region.get(k) || 0).find(Boolean) || 0;
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * Math.PI * 2, r = 1.8 + Math.sqrt(Math.random()) * (PASTURE_RADIUS - 1.8);
+      const candidate = { x: fp.center.x + Math.cos(a) * r, y: fp.center.y + Math.sin(a) * r };
+      if (!this.grazeable(candidate.x, candidate.y) || regionAt(map, world, candidate.x, candidate.y) !== paddock) continue;
+      const snapped = this.game.nav?.nearest ? this.game.nav.nearest(candidate, 1) : candidate;
+      if (!snapped || dist(snapped, inst) < 0.8 || !this.grazeable(snapped.x, snapped.y)) continue;
+      if (regionAt(map, world, snapped.x, snapped.y) !== paddock) continue;
+      return snapped;
+    }
+    return null;
   }
 
   /** Random reachable spot near home, or null. */
@@ -236,15 +313,83 @@ export class Animals {
   }
 
   /** A path to the target: the island navigator when available, else a straight line over dry land. */
-  routeTo(inst, target) {
+  routeTo(inst, target, through = null) {
     const path = this.game.nav?.path?.(inst, target);
-    if (path && path.length) return path;
+    if (path && path.length) {
+      // The navigator stops at the stable wall; a stabled animal finishes the last step into its stall.
+      if (through && dist(path[path.length - 1], target) > 0.3) path.push(target);
+      return path;
+    }
     const steps = Math.max(2, Math.ceil(dist(inst, target) / 0.5));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      if (!this.walkable(inst.x + (target.x - inst.x) * t, inst.y + (target.y - inst.y) * t)) return null;
+      if (!this.walkable(inst.x + (target.x - inst.x) * t, inst.y + (target.y - inst.y) * t, through)) return null;
     }
     return [target];
+  }
+
+  /**
+   * A stabled animal's day. Out on the pasture during grazing hours (walk, stop, head-down graze);
+   * back to its stall by 18:00, and in for the night (and any time the kid sleeps).
+   */
+  stableRoutine(inst, fp, night) {
+    const inside = pointInBounds(inst, fp.bounds, STABLE_MARGIN);
+    if (!night && this.grazingHours(inst)) {
+      if (!inside && Math.random() < 0.6) { this.startGraze(inst); return; }
+      const target = this.pickPasture(inst, fp);
+      const path = target && this.routeTo(inst, target, fp);
+      if (!path) { inst.wait = rand(3, 7); return; }
+      inst.rush = 0;
+      inst.path = path;
+      inst.mode = 'move';
+      this.play(inst, 'move');
+      return;
+    }
+    if (inside) { inst.wait = rand(8, 15); return; }
+    const stall = this.stallFor(inst, fp);
+    inst.rush = 0;
+    inst.path = this.routeTo(inst, stall, fp) || [stall];
+    inst.mode = 'move';
+    this.play(inst, 'move');
+  }
+
+  /** Head down in the grass for a few seconds. Chickens peck; goats and sheep sometimes finish with a little hop. */
+  startGraze(inst) {
+    const peck = inst.kind === 'chicken';
+    inst.graze = { t: 0, dur: peck ? rand(2, 3.5) : rand(3, 6), peck, hop: !peck && (inst.kind === 'goat' || inst.kind === 'sheep') && Math.random() < 0.3 };
+    inst.mode = 'graze';
+    inst.path = null;
+    this.play(inst, 'idle');
+  }
+
+  stepGraze(inst, dt) {
+    const g = inst.graze;
+    if (!g) { inst.mode = 'idle'; inst.wait = 1; return; }
+    g.t += dt;
+    const u = Math.min(1, g.t / g.dur), env = Math.sin(Math.PI * u);
+    inst.pitch = g.peck ? 0.9 * env * (0.55 + 0.45 * Math.max(0, Math.sin(g.t * 11))) : 1.05 * env;
+    const lift = g.hop && u > 0.8 ? Math.sin(Math.PI * (u - 0.8) / 0.2) * 0.16 : 0;
+    if (lift !== (inst.lift || 0)) this.place(inst, inst.x, inst.y, lift);
+    if (u >= 1) {
+      inst.pitch = 0;
+      inst.graze = null;
+      inst.mode = 'idle';
+      inst.wait = rand(1.5, 4);
+      if (inst.lift) this.place(inst, inst.x, inst.y, 0);
+    }
+  }
+
+  /** Bend the neck and head toward the ground on top of whatever the clip did this frame. */
+  poseHead(inst) {
+    if (!inst.pitch || !inst.bones?.length) return;
+    const share = inst.pitch / inst.bones.length;
+    // Pitch about the body's sideways axis (model +x rotated by the yaw), expressed in each bone's parent frame.
+    TMP_V.set(1, 0, 0).applyQuaternion(inst.root.quaternion);
+    for (const bone of inst.bones) {
+      bone.parent.getWorldQuaternion(TMP_Q2).invert();
+      TMP_Q.setFromAxisAngle(TMP_V2.copy(TMP_V).applyQuaternion(TMP_Q2).normalize(), share);
+      bone.quaternion.premultiply(TMP_Q);
+    }
   }
 
   startWander(inst) {
@@ -442,11 +587,17 @@ export class Animals {
         this.stepMove(inst, stepDt);
       } else if (inst.mode === 'idle') {
         inst.wait -= dt;
-        if (inst.wait <= 0 && !night) {
-          if (wildlife) this.startHop(inst);
+        if (inst.wait <= 0) {
+          // A stabled animal keeps its own day: out to pasture after 7:00, back in its stall by 18:00, and it still heads home if night catches it outside.
+          const stable = !wildlife && this.stableFor(inst);
+          if (stable) this.stableRoutine(inst, stable, night);
+          else if (night) { /* asleep where it stands */ }
+          else if (wildlife) this.startHop(inst);
           else if (inst.actions.fly && !this.roaming(inst) && Math.random() < 0.35) this.startFlight(inst);
           else this.startWander(inst);
         }
+      } else if (inst.mode === 'graze') {
+        this.stepGraze(inst, stepDt);
       } else if (inst.mode === 'hop') {
         this.stepHop(inst, stepDt);
       } else if (inst.mode === 'move') {
@@ -472,6 +623,7 @@ export class Animals {
       const turn = inst.mode === 'fly' ? 6 : 8;
       inst.yaw += angleDelta(inst.yaw, inst.targetYaw) * Math.min(1, dt * turn);
       inst.root.rotation.y = inst.yaw;
+      this.poseHead(inst);
     }
     this.settleRoundup();
   }

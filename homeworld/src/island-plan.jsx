@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import {StageIcon} from './stage-journey.jsx';
-import {buildingById} from './building.mjs';
+import {BUILDINGS,materialStatus,activeBuildings} from './building.mjs';
 
 /**
  * "Today on the island": the stage the island is growing through, one large goal for each
@@ -29,26 +29,26 @@ function Meter({meter}){
   </div>;
 }
 
-/** Next settlement building, then the other ones this stage still lists. Pictures come from the build catalogue. */
-function buildingPicks(village){
-  const rows=[];
-  const goal=village?.goal;
-  if(goal?.kind)rows.push({kind:goal.kind,upgrade:goal.upgradeFrom||null});
-  for(const u of village?.upcoming||[])if(!u.done)rows.push({kind:u.kind,upgrade:u.upgrade||null});
-  const out=[],seen=new Set();
-  for(const row of rows){
-    const def=buildingById(row.kind);
-    if(!def)continue;
-    const key=`${row.kind}:${row.upgrade||''}`;
-    if(seen.has(key))continue;
-    seen.add(key);
-    out.push({
-      key,id:'raise',kind:row.kind,name:def.name,
-      title:row.upgrade?`Upgrading to the ${def.name}`:`Raising the ${def.name}`,
-      src:`/assets/build_${def.poster||def.id}.png`,
-    });
-  }
-  return out;
+/** One of each. A second dining hall (and the other unique halls) shows checked, not tappable. */
+const ONE_EACH=new Set(['dining_hall','tent','campfire','well','market','dock','church']);
+const PICK_FIRST=['dining_hall','hut','cottage','townhouse','market','oven','church','well','stable','dock','campfire','forge','tent'];
+
+/** Every building the catalogue can still add, including ones the settlement planner has not reached yet. */
+function buildingPicks(state){
+  if(!state?.inventory)return [];
+  const rank=id=>{const i=PICK_FIRST.indexOf(id);return i<0?PICK_FIRST.length:i;};
+  const standing=new Set(activeBuildings(state).map(b=>b.kind));
+  return BUILDINGS.filter(b=>!b.stroke).map((b,i)=>({b,i})).sort((a,c)=>rank(a.b.id)-rank(c.b.id)||a.i-c.i).map(({b})=>{
+    const money=materialStatus(state,b.id);
+    const done=(!!b.once||ONE_EACH.has(b.id))&&standing.has(b.id);
+    return {
+      key:b.id,id:'raise',kind:b.id,name:b.name,
+      title:`Raising the ${b.name}`,
+      src:`/assets/build_${b.poster||b.id}.png`,
+      missing:done||money.ok?'':(money.reason||'Needs more materials'),
+      done,
+    };
+  });
 }
 
 function FriendRow({friend}){
@@ -65,7 +65,7 @@ function FriendRow({friend}){
   </li>;
 }
 
-export function IslandPlan({today,village,stages,coins,onClose,onAdd,onClearExtra}){
+export function IslandPlan({today,village,stages,coins,state,onClose,onAdd,onClearExtra}){
   const [adding,setAdding]=useState(false);
   if(!today?.meter)return null;
   const meter=today.meter;
@@ -75,7 +75,7 @@ export function IslandPlan({today,village,stages,coins,onClose,onAdd,onClearExtr
   const goldKnown=Number.isFinite(coins);
   const builds=(village?.upcoming||[]);
   const left=builds.filter(u=>!u.done).length;
-  const picks=buildingPicks(village);
+  const picks=buildingPicks(state);
   return <div className="plan-shade" onClick={onClose}>
     <section className="plan-card panel" role="dialog" aria-modal="true" aria-labelledby="plan-title" onClick={e=>e.stopPropagation()}>
       <div className="plan-head">
@@ -105,10 +105,11 @@ export function IslandPlan({today,village,stages,coins,onClose,onAdd,onClearExtr
       </ul>
       {adding?<div className="plan-build-pick">
         {picks.length?<div className="plan-builds" role="group" aria-label="Buildings we could raise today">
-          {picks.map(b=><button key={b.key} type="button" className={today.extra?.kind===b.kind?'chosen':''} aria-label={`Raise the ${b.name}`} onClick={()=>{setAdding(false);onAdd({id:b.id,title:b.title,kind:b.kind});}}>
+          {picks.map(b=><button key={b.key} type="button" disabled={b.done} className={`${today.extra?.kind===b.kind?'chosen':''} ${b.done?'done':''}`} aria-label={b.done?`${b.name} is already built`:`Raise the ${b.name}`} onClick={()=>{if(b.done)return;setAdding(false);onAdd({id:b.id,title:b.title,kind:b.kind});}}>
             <img src={b.src} alt=""/><strong>{b.name}</strong>
+            {b.done?<small>✓ Already built</small>:b.missing?<small>{b.missing}</small>:null}
           </button>)}
-        </div>:<p className="plan-empty">The buildings for this stage are already up.</p>}
+        </div>:<p className="plan-empty">Every building we can raise is already up.</p>}
         <button type="button" className="plan-notnow" onClick={()=>setAdding(false)}>Not now</button>
       </div>:<button type="button" className="plan-add" onClick={()=>setAdding(true)}>{today.extra?'Change today\'s goal':'Add a goal for today'}</button>}
       {builds.length>0&&<details className="plan-village-more"><summary>Other things we could build ({left})</summary>

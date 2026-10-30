@@ -610,3 +610,15 @@
 .sell-row small{display:block;color:#5c6b55;font-size:12.5px}
 .sell-row button{min-height:44px;padding:8px 12px}
 .sell-icon{display:grid;place-items:center;width:44px;height:44px}
+
+.build-card-actions{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:2px}
+.build-card-actions button{width:100%;min-height:44px;padding:6px 8px;font-size:14px;font-weight:900;border-radius:12px}
+.build-card-actions .place-now{background:#fff;color:#243018;border-color:#c9d4b4}
+.build-card-actions .add-goal{background:#2f8a4b;border-color:#246b38;color:#fff}
+.build-card.built{opacity:.78}
+.build-short{display:block;color:#8a5a2b;font-size:12px;font-weight:800;line-height:1.25;text-align:center}
+.action-menu .build-card-actions{gap:4px}
+.action-menu .build-card-actions button{min-height:40px;font-size:12px;padding:4px 6px}
+.plan-builds button.done{opacity:.72;border-style:dashed}
+.plan-builds small{display:block;font-size:11px;font-weight:800;color:#8a5a2b;text-align:center;line-height:1.25}
+.plan-builds button.done small{color:#2f7a32}

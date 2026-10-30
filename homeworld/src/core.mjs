@@ -230,7 +230,7 @@ export class GameStore {
       working=applyAction(before,{type:'finish_sleep',sleepId:sleeper.id,actionId:`wake:${sleeper.id}`},this.world,gameTime(before,wall),wall);
       if(working!==before){for(const b of projectBuildings(working)){const w=b.project.workers[before.activeCharacter];if(w){w.position={...working.player};w.credited=0;w.phase='waiting';w.start=Math.max(b.project.cursor,sleeper.startedAt+SLEEP_SECONDS*1000);w.end=w.start;w.path=null;delete w.homeId;}}}
     }
-    const advanceWork=(state,to,opts)=>{const projects=convertProjectTiming(advanceProjects(state,this.world,to,projectAPI,{activePlayer:!!opts.active,offline:!!opts.offline}));const reservedMembers=projectBuildings(state).filter(b=>!b.project.paused).flatMap(b=>b.project.crew);return advanceCommunity(projects,this.world,gameTime(projects,to),to,{Navigation,growth,cellFromKey,applyAction},{...opts,reservedMembers});};
+    const advanceWork=(state,to,opts)=>{const projects=convertProjectTiming(advanceProjects(state,this.world,to,projectAPI,{activePlayer:!!opts.active,offline:!!opts.offline}));const reservedMembers=[...new Set([...(opts.reservedMembers||[]),...projectBuildings(state).filter(b=>!b.project.paused).flatMap(b=>b.project.crew)])];return advanceCommunity(projects,this.world,gameTime(projects,to),to,{Navigation,growth,cellFromKey,applyAction},{...opts,reservedMembers});};
     let next=advanceNightCycle(working,this.world,wall,advanceWork,options);
     if(options.offline)next=returnedReport(before,next,wall);
     if(options.offline)delete next.away;if(!options.background)next.lastOnlineWall=wall;return this.save(next,wall);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {initialState,Navigation,buildSiteStatus} from '../src/core.mjs';
+import {initialState,Navigation,buildSiteStatus,GameStore} from '../src/core.mjs';
 import {livingTestLayout} from '../src/living-test-layout.mjs';
 
 test('the play test uses reachable places and a valid home site on the original island',()=>{
@@ -10,7 +10,7 @@ test('the play test uses reachable places and a valid home site on the original 
   assert.equal(buildSiteStatus(world,state,layout.home.plan).ok,true);
   assert.equal(buildSiteStatus(world,state,layout.camp.plan).ok,true);
   assert.equal(layout.points.length,10);
-  for(const point of [layout.home.pad,layout.camp.pad,layout.kitchen,...layout.points])assert.ok(nav.path(state.player,point));
+  for(const point of [layout.home.pad,layout.camp.pad,layout.kitchen,layout.farmPad,...layout.farmSpots,...layout.points])assert.ok(nav.path(state.player,point));
   assert.equal(state.buildings.length,0);
   assert.equal(layout.points.filter(p=>p.type==='carrot').length,4);
 });
@@ -42,4 +42,14 @@ test('normal island profile names and migration behavior remain unchanged',async
     assert.deepEqual(scope.migrateLegacyKeys(['godlykids_homeworld_playtest_v1'],storage),['godlykids_homeworld_playtest_v1:ordinary-kid']);
     assert.equal(entries.get('godlykids_homeworld_playtest_v1:ordinary-kid'),'original-world');
   }finally{if(old===undefined)delete globalThis.location;else globalThis.location=old;}
+});
+
+test('community reservations keep an approached or unavailable friend from wandering away',()=>{
+  const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
+  const entries=new Map(),storage={getItem:k=>entries.get(k)??null,setItem:(k,v)=>entries.set(k,v),removeItem:k=>entries.delete(k)};
+  const wall=1800000000000,store=new GameStore(world,storage,wall);
+  store.communityStep({active:false,reservedMembers:['eve','noah']},wall);
+  const before=structuredClone(store.state.community.members);
+  store.communityStep({active:false,reservedMembers:['eve','noah']},wall+60000);
+  for(const id of ['eve','noah']){assert.equal(Boolean(store.state.community.members[id].job),false);assert.deepEqual(store.state.community.members[id].position,before[id].position);}
 });

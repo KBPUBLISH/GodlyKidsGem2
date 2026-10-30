@@ -45,6 +45,13 @@ async def main():
         assert await frame.get_by_role('button',name='Friends',exact=True).count()==0
         assert await frame.locator('[aria-label*="joystick" i]').count()==0
         await quality(frame)
+        await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+        await frame.get_by_role('button',name='Not now',exact=True).click()
+        assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
+        await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+        await frame.get_by_role('textbox',name='Animal’s name',exact=True).fill('Sunny')
+        await frame.get_by_role('button',name='Buy Sunny · 10 coins',exact=True).click()
+        assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==0
         await page.wait_for_timeout(1000)
         await page.screenshot(path='/tmp/solo-island-start.png')
         print('PASS: child starts alone with a personal task in the original island',flush=True)
@@ -57,6 +64,7 @@ async def main():
         assert '3 / 3' in await frame.locator('.living-progress').inner_text() or 'delivered' in await frame.locator('.living-progress').inner_text()
         await page.screenshot(path='/tmp/kids-carrying.png')
         await frame.get_by_role('button',name='Take logs to camp',exact=True).click()
+        await frame.get_by_role('button',name='Build camp',exact=True).click(timeout=90000)
         await frame.wait_for_function('window.__hw.livingTest.state.stage===1',timeout=60000)
         assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
         assert await frame.evaluate('window.__hw.store.state.buildings.some(b=>b.id==="living-test-camp")')
@@ -90,7 +98,9 @@ async def main():
         assert await frame.evaluate('window.__hw.livingTest.picnic.visible')
         await gather('Find a log',10)
         await frame.get_by_role('button',name='Take logs to home',exact=True).click()
+        await frame.get_by_role('button',name='Build home',exact=True).click(timeout=90000)
         await frame.wait_for_function('window.__hw.livingTest.state.homeWork===1',timeout=120000)
+        if await frame.evaluate('window.__hw.livingTest.watching'):await frame.get_by_role('button',name='Back to me',exact=True).click()
         await frame.get_by_role('button',name='Explore our home',exact=True).click()
         await frame.wait_for_function('window.__hw.interior?.phase==="inside"',timeout=30000)
         await page.screenshot(path='/tmp/kids-home-interior.png')

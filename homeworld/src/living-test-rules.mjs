@@ -18,7 +18,7 @@ export const RESOURCE_IDS = Object.freeze({
 });
 
 export function freshState() {
-  return { version: 2, player: { id: PLAYER_ID }, stage: 0, homeWork: 0, adamUnlocked:false, adamArrived:false, inviteDismissed:false,welcomeSeen:false,
+  return { version: 2, player: { id: PLAYER_ID }, stage: 0, homeWork: 0, approvedBuildings: {}, adamUnlocked:false, adamArrived:false, inviteDismissed:false,welcomeSeen:false,
     inventory: { wood: 0, carrot: 0 }, deposits: { 'first-camp':0,'garden-carrots':0,'home-wood':0 }, gathered: [] };
 }
 
@@ -43,6 +43,7 @@ export function restoreState(value) {
     clean.deposits[task.id] = amount;
   }
   if (clean.stage >= 3 && Number.isFinite(value.homeWork)) clean.homeWork = Math.max(0, Math.min(1, value.homeWork));
+  clean.approvedBuildings=Object.fromEntries(['first-camp','home-wood'].filter(id=>value.approvedBuildings?.[id]===true).map(id=>[id,true]));
   for(const key of ['adamArrived','inviteDismissed','welcomeSeen'])clean[key]=value[key]===true;
   return clean;
 }

@@ -1,0 +1,45 @@
+// A small, private test economy. These coins never spend the app's account coins.
+export const FARM_CYCLE_MS=3*60*1000, FIRST_EGG_MS=20000, PRODUCE_CAP=3;
+export const FARM_PRICES={chicken:10,cow:40,egg:5,milk:10};
+export const farmFresh=()=>({version:1,coins:10,coop:0,animals:[],bag:{egg:0,milk:0},collected:0,nextId:1});
+const integer=(v,max=100000)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
+export const animalName=v=>String(v||'').trim().replace(/[\u0000-\u001f<>]/g,'').slice(0,24);
+export function farmRestore(v){
+  if(!v||v.version!==1||!integer(v.coins)||!integer(v.coop,2)||!Array.isArray(v.animals)||v.animals.length>8||!integer(v.nextId)||v.nextId<1)return farmFresh();
+  const ids=new Set();
+  for(const a of v.animals){if(!a||!['chicken','cow'].includes(a.kind)||typeof a.id!=='string'||!a.id.startsWith('living-farm-')||ids.has(a.id)||!animalName(a.name)||!integer(a.ready,PRODUCE_CAP)||!Number.isFinite(a.nextAt)||a.nextAt<0)return farmFresh();ids.add(a.id);}
+  if(v.animals.some(a=>Number(a.id.slice('living-farm-'.length))>=v.nextId))return farmFresh();
+  if(!integer(v.bag?.egg)||!integer(v.bag?.milk)||!integer(v.collected))return farmFresh();
+  return {...v,animals:v.animals.map(a=>({...a,name:animalName(a.name)})),bag:{...v.bag}};
+}
+export function farmOffer(s,kind){
+  const count=k=>s.animals.filter(a=>a.kind===k).length;
+  if(kind==='coop')return {price:s.coop===0?20:40,reason:s.coop>=2?'Your coop is as big as it needs to be!':!count('chicken')?'Welcome a chicken first.':null,capacity:2+(s.coop+1)*2};
+  if(!['chicken','cow'].includes(kind))return {price:0,reason:'Choose an animal.'};
+  const reason=kind==='chicken'&&count(kind)>=2+s.coop*2?'Make your coop bigger first.':kind==='cow'&&s.coop<1?'Build your first coop before welcoming a cow.':kind==='cow'&&count(kind)>=2?'Your two cows have a lovely home here.':null;
+  return {price:FARM_PRICES[kind],reason};
+}
+export function farmBuy(s,kind,name,now){
+  const offer=farmOffer(s,kind);if(offer.reason||s.coins<offer.price||!Number.isFinite(now))return s;
+  if(kind==='coop')return {...s,coins:s.coins-offer.price,coop:s.coop+1};
+  const clean=animalName(name);if(!clean)return s;
+  const animal={id:`living-farm-${s.nextId}`,kind,name:clean,ready:0,nextAt:now+(s.animals.length===0?FIRST_EGG_MS:FARM_CYCLE_MS)};
+  return {...s,coins:s.coins-offer.price,nextId:s.nextId+1,animals:[...s.animals,animal]};
+}
+export function farmAdvance(s,now){
+  let changed=false;
+  const animals=s.animals.map(a=>{
+    if(now<a.nextAt||a.ready>=PRODUCE_CAP)return a;
+    const cycles=1+Math.floor((now-a.nextAt)/FARM_CYCLE_MS);changed=true;
+    return {...a,ready:Math.min(PRODUCE_CAP,a.ready+cycles),nextAt:a.nextAt+cycles*FARM_CYCLE_MS};
+  });return changed?{...s,animals}:s;
+}
+export function farmCollect(s,id,now){
+  const animal=s.animals.find(a=>a.id===id);if(!animal?.ready)return s;
+  const item=animal.kind==='chicken'?'egg':'milk';
+  return {...s,collected:s.collected+animal.ready,bag:{...s.bag,[item]:s.bag[item]+animal.ready},animals:s.animals.map(a=>a===animal?{...a,ready:0,nextAt:a.ready>=PRODUCE_CAP?now+FARM_CYCLE_MS:a.nextAt}:a)};
+}
+export function farmUse(s,item,action){
+  if(!['egg','milk'].includes(item)||!['eat','sell'].includes(action)||s.bag[item]<1)return s;
+  return {...s,bag:{...s.bag,[item]:s.bag[item]-1},coins:s.coins+(action==='sell'?FARM_PRICES[item]:0)};
+}

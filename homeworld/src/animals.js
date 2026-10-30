@@ -72,6 +72,7 @@ export class Animals {
 
   /** Livestock with no closed pen wander. Sheep range the farthest. A stable home follows stableRoutine instead (pasture by day, stall by night). */
   roaming(inst) {
+    if(this.game.livingTestMode&&inst.id.startsWith('living-farm-'))return false;
     if (!LIVESTOCK.has(inst.kind) || inst.record?.wild) return false;
     const home = inst.home || inst;
     if (nearStable(this.game.world, this.game.store.state, home.x, home.y)) return false;

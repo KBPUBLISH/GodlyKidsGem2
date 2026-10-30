@@ -44,5 +44,7 @@ export function livingTestLayout(world, state) {
     ['carrot-1','carrot',2,2],['carrot-2','carrot',3,2],['carrot-3','carrot',2,3],['carrot-4','carrot',3,3],
   ]) points.push({ id, type, ...find({x:start.x+dx,y:start.y+dy}) });
   const kitchen = find({x:start.x+5,y:start.y+1},2);
-  return { home, camp, kitchen, points };
+  const farmPad=find({x:start.x+2,y:start.y-2},2);
+  const farmSpots=Array.from({length:8},(_,i)=>find({x:farmPad.x+(i%4-1.5)*1.5,y:farmPad.y+Math.floor(i/4)*2},1.3));
+  return { home, camp, kitchen, points, farmPad, farmSpots };
 }

@@ -1,0 +1,39 @@
+# Small animal loop in the living-island test
+
+Branch: `codex/living-world-player-test`. Open `/#/my-home?livingTest=1` after `npm run living-test:build`. The island, character assets and illustrated UI stay in the existing world.
+
+A fresh farm starts with 10 island-test coins and no owned animals. The first goal is to buy a chicken and give it a name. The confirmation shows the price and remaining balance. Canceling spends nothing. The child then continues the personal camp task and first-friend story onboarding.
+
+The first chicken produces an egg after about 20 seconds. Later production repeats every three minutes in this prototype (wall-clock time, including time away). Up to three items wait per animal; there is no starvation or missed-day penalty. Timing is centralized in `living-farm-rules.mjs` so this can be tuned after playtesting. This is a short test cadence, not three real calendar days.
+
+Walk near an animal's nest/collection spot to pick up its produce. The farm drawer offers a Collect button that walks there using the original navigation. Eggs and milk go into My bag, with separate Eat/Drink and Sell choices. Eating celebrates a snack; it does not introduce a hunger meter. Selling changes the private farm coin balance.
+
+| Choice | Cost or reward |
+| --- | --- |
+| Chicken | 10 coins |
+| Sell one egg | +5 coins |
+| First coop (room for four chickens) | 20 coins |
+| Bigger coop (room for six chickens) | 40 coins |
+| Cow, after first coop | 40 coins |
+| Sell one milk | +10 coins |
+
+The small test supports up to six chickens and two cows. Additional story friends still come from reading; farm purchases do not bypass that unlock. Coops are simple visual upgrades at a fixed island spot. Chickens and cows reuse the island's original animated GLB models.
+
+All available major decisions are confirmed: animal purchase and name, coop upgrades, and using logs to build the camp or home. Delivering build supplies waits for confirmation. Ordinary pickup and individual eat/sell actions stay direct.
+
+Tapping Adam or choosing Say hello walks the child over. Approaching him produces a greeting using the profile's player name (for example, Sarah), with a wave pose and optional device speech when sound is on. Friendly proximity greetings do not interrupt walks to other tasks. Friends remain autonomous and cannot be possessed.
+
+Watch island life rotates the camera among Adam and owned animals. It can be selected from Friends, and begins automatically after 30 seconds without activity once the camp is complete. Dialogs, walking, building confirmations and interiors prevent automatic entry. Back to me resumes the player's camera. Watching never changes the controlled character or moves the player.
+
+Farm receipts use `gk_living_farm_v1:<private-test-profile>`; they never spend the main app's account coins. Purchases persist before animals are reconciled into the original island renderer. Existing test-world and normal-world progress is preserved.
+
+Checks:
+
+```sh
+node --test homeworld/tests/*.test.mjs tests/*.test.mjs
+npm run living-test:build
+python homeworld/tests/living-test-browser.py
+python homeworld/tests/living-farm-browser.py
+```
+
+The first browser test creates `/tmp/kids-polished-completed.json`; the second uses that earned story/home state and tests a fresh farm. `FARM_TEST_SAVE` can select another Playwright storage-state fixture. Production timers are accelerated only inside the second disposable browser. CMS fixtures exercise the existing reader, not the live content service. Phone performance and device speech need device testing.

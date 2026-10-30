@@ -1,5 +1,6 @@
 import {useLocalizedString, getLanguage} from '../../localization/LocalizedText';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PREVIEW_SHIP_ART } from '../../utils/previewAssets.mjs';
 import { createPortal } from 'react-dom';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import { useUser } from '../../context/UserContext';
@@ -18,7 +19,7 @@ import {
   buildTapRewardGuideBeats,
 } from '../../utils/onboardingJourney';
 
-const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+const WOOD_TEX = PREVIEW_SHIP_ART.wood;
 const BUBBLE_BG = 'rgba(255, 252, 240, 0.96)';
 const BUBBLE_BORDER = '#C9A86A';
 

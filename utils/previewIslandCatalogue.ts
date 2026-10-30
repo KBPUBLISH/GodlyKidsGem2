@@ -38,15 +38,9 @@ export async function fetchPreviewIslandRows(): Promise<ApiIslandRow[]> {
   return refresh();
 }
 
-let firstArt: HTMLImageElement | undefined;
-/** Start the first destination while the child is still on the splash. */
-export async function warmFirstStoryIsland() {
-  try {
-    const rows = await fetchPreviewIslandRows();
-    const src = rows[0]?.previewArtUrl;
-    if (!src || firstArt?.getAttribute('src') === src) return;
-    firstArt = new Image();
-    firstArt.fetchPriority = 'low';
-    firstArt.src = src;
-  } catch { /* The ship's normal retry UI handles a missing catalogue. */ }
+/** Read the packaged destination without waiting for a cold content server. */
+export async function getFirstStoryIslandArt(): Promise<string | undefined> {
+  const built = await loadSnapshot();
+  void refresh().catch(() => {});
+  return built?.islands[0]?.previewArtUrl;
 }

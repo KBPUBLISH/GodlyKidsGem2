@@ -27,13 +27,16 @@ loads. Compressed copies preserve the same artwork; the language background and
 globe total 158,414 bytes instead of 3,578,971 (96% smaller). Original sources stay
 unchanged. Returning families keep their existing route into the island.
 
-Splash warmup prioritizes language artwork, then hands/Perry, ship artwork and
-the six playable island models. This bounded queue is under 8 MiB, sequential,
+Splash warmup prioritizes language artwork, hands/family artwork, then the
+first destination and all 16 ship images before Perry and the six playable
+island models. Static warmup is under 8 MiB plus the first destination (at most
+250 KB); the complete ship artwork is 1,047,314 bytes. This queue is sequential,
 low priority, and survives early screen changes. It saves completed media in the
 existing service-worker cache so entering the island reuses those downloads.
 Each transfer has a 15-second timeout; errors never disable Continue. Entering
 the island stops remaining speculative work so actual gameplay takes priority.
-Save-data/2G/3G connections warm only the small language artwork. The whole
+Save-data/2G/3G connections still warm the upcoming screen's essential artwork;
+only speculative 3D models are skipped. The whole
 adventure, videos and uncollected friends are never part of this queue.
 The preview models use a stable `mobile-1` cache revision; increment it in
 `world.js` and `previewAssets.mjs` if regenerating these assets. Perry uses `v=1`.
@@ -135,3 +138,25 @@ neighbor follows, originals/alpha-copy requests are absent, and the story
 still opens. In the initial 8 Mbps / 100 ms simulated run the first island
 appeared in 1.83 seconds; this is local browser QA, not a live-phone measurement.
 Splash, retry and cold-island startup regressions also passed without JS errors.
+
+## Preload the complete crew screen before arrival
+
+`PREVIEW_SHIP_ART` now supplies the same URLs to the crew UI and the splash
+queue, covering the panorama, hull, bow, wheel, four buttons, clouds, horizon
+art, hatch and wood/plank textures. The clouds keep their existing artwork in
+smaller WebP copies (546,958 → 42,666 bytes combined). Guide cards also reuse the
+preloaded 26 KB wood texture instead of its 313 KB PNG.
+
+The first CMS island is downloaded through the same persistent media cache,
+ahead of models. While its packaged catalogue is being read, only small image
+downloads proceed. Navigation cancels stale catalogue callbacks so they cannot
+restart background work after the child enters the world. Essential ship
+artwork still preloads when a cellular connection is classified as 3G.
+
+`crew-preload-browser.py` verifies all 16 ship images and the first island are
+cached on the splash, then blocks their network URLs and goes through language
+selection and child creation to the ship. The rendered art uses the cache;
+first-run guidance intentionally keeps bottom buttons hidden until needed.
+The 3G-class run made no speculative model requests. The build, 22 Node test
+files, cold-crew check, and world-model cache regression passed. These use local
+fixtures and Chromium, not a live Netlify or physical-phone measurement.

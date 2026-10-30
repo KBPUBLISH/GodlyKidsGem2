@@ -6,7 +6,7 @@ import type { UnlockedCharacter } from '../../services/rewardsService';
 import { ApiService, getApiBaseUrl } from '../../services/apiService';
 import type { TourBeat } from '../../utils/adamTour';
 
-const WOOD_TEX = '/assets/images/wheel-background-wood.png';
+const WOOD_TEX = '/assets/images/wheel-background-wood.webp';
 const BUBBLE_BG = 'rgba(255, 252, 240, 0.96)';
 const BUBBLE_BORDER = '#C9A86A';
 const CARVED_TEXT_SHADOW =

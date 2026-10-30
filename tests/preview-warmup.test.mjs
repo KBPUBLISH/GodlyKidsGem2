@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createAssetWarmupQueue} from '../utils/assetWarmupQueue.mjs';
-import {PREVIEW_ART, previewWarmupAssets} from '../utils/previewAssets.mjs';
+import {PREVIEW_ART, PREVIEW_SHIP_ART, previewWarmupAssets} from '../utils/previewAssets.mjs';
 import {stat} from 'node:fs/promises';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -13,8 +13,20 @@ test('splash warms language first and includes the playable island within a smal
   const bytes = await Promise.all(assets.map(url => stat(new URL(`../public${url.split('?')[0]}`, import.meta.url)).then(s => s.size)));
   assert.ok(bytes.reduce((sum, n) => sum+n, 0) < 8*1024*1024);
   assert.ok(bytes[0]+bytes[1] < 170000);
+  const modelsBegin = assets.findIndex(url => url.includes('.glb'));
+  for (const url of Object.values(PREVIEW_SHIP_ART)) {
+    assert.ok(assets.includes(url), `Missing ship art: ${url}`);
+    assert.ok(assets.indexOf(url) < modelsBegin, `Model would block ship art: ${url}`);
+  }
+  const firstIsland = '/assets/preview-islands/first.webp';
+  assert.ok(previewWarmupAssets('onboarding', {}, firstIsland).indexOf(firstIsland) < modelsBegin);
   for (const connection of [{saveData:true}, {effectiveType:'2g'}, {effectiveType:'3g'}]) {
-    assert.deepEqual(previewWarmupAssets('onboarding', connection), assets.slice(0, 2));
+    const critical=previewWarmupAssets('onboarding', connection, firstIsland);
+    assert.deepEqual(critical.slice(0, 2), assets.slice(0, 2));
+    assert.ok(critical.includes(firstIsland));
+    for (const url of Object.values(PREVIEW_SHIP_ART)) assert.ok(critical.includes(url));
+    assert.ok(!critical.some(url => url.includes('.glb')));
+    assert.ok(previewWarmupAssets('ship', connection, firstIsland).includes(firstIsland));
     assert.deepEqual(previewWarmupAssets('island', connection), []);
   }
 });

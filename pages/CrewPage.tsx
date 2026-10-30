@@ -1,4 +1,5 @@
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
+import { PREVIEW_SHIP_ART } from '../utils/previewAssets.mjs';
 import { stopPreviewWarmup, warmPreviewNextScreen } from '../utils/previewWarmup';
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -69,8 +70,8 @@ const ShopModal = React.lazy(() => import('../components/features/ShopModal'));
  * PANO_HORIZON_PCT, slid so it sits on the shore line). It pans with the wheel
  * so the islands feel like the ship is turning.
  */
-const CREW_VOYAGE_SKY = '/assets/images/crew-voyage-sea-pano.webp?v=1';
-const CREW_VOYAGE_HULL = '/assets/images/sail-voyage-hull.webp?v=1';
+const CREW_VOYAGE_SKY = PREVIEW_SHIP_ART.sky;
+const CREW_VOYAGE_HULL = PREVIEW_SHIP_ART.hull;
 /**
  * Scene stage: the hull art frame. It is fitted by HEIGHT and centered, so
  * the same fractions hold on phones (edges crop a little) and tablets
@@ -231,8 +232,8 @@ const SHIP_ART_HAS_SKY = true;
  * pattern as MainMapPage's cloud marquee). Ocean colors match the sail map
  * ocean art (map-ocean-bg.png blues).
  * ------------------------------------------------------------------------ */
-const MAP_SKY_CLOUD_A = '/assets/images/map-sky-cloud-a.png';
-const MAP_SKY_CLOUD_B = '/assets/images/map-sky-cloud-b.png';
+const MAP_SKY_CLOUD_A = PREVIEW_SHIP_ART.cloudA;
+const MAP_SKY_CLOUD_B = PREVIEW_SHIP_ART.cloudB;
 
 /**
  * Viewport % of the horizon line — sky above, ocean below. Kept HIGH so the
@@ -245,8 +246,8 @@ const CREW_SKY_GRADIENT =
   `linear-gradient(180deg, #6fbdf0 0%, #9fdcf8 ${CREW_SEA_HORIZON_PCT - 12}%, #c9ecfa ${CREW_SEA_HORIZON_PCT - 5}%, #eef9fd ${CREW_SEA_HORIZON_PCT}%, #2eb8e6 ${CREW_SEA_HORIZON_PCT}%, #0d9bd8 34%, #0674b6 55%, #0a568e 78%, #0d4674 100%)`;
 
 /** Distant palm islands on the horizon — cropped from the sail-page bg art. */
-const CREW_HORIZON_ISLAND_A = '/assets/images/crew-horizon-island-a.webp?v=1';
-const CREW_HORIZON_ISLAND_B = '/assets/images/crew-horizon-island-b.webp?v=1';
+const CREW_HORIZON_ISLAND_A = PREVIEW_SHIP_ART.horizonA;
+const CREW_HORIZON_ISLAND_B = PREVIEW_SHIP_ART.horizonB;
 
 type CrewSkyCloudSpec = {
   id: string;
@@ -293,8 +294,8 @@ const CREW_SEA_WAVES = [
   { id: 'wave-deep', fill: '#0A70AF', topPct: 46, tilePct: 10, driftSec: 19, bobSec: 10, reverse: true, opacity: 1 },
   { id: 'wave-hull', fill: '#0A5A96', topPct: 84, tilePct: 12.5, driftSec: 18, bobSec: 8, reverse: false, opacity: 1 },
 ] as const;
-const SAIL_STEERING_WHEEL = '/assets/images/sail-voyage-wheel.webp?v=1';
-const CREW_TAB_BAR = '/assets/images/crew-voyage-bow.webp?v=1';
+const SAIL_STEERING_WHEEL = PREVIEW_SHIP_ART.wheel;
+const CREW_TAB_BAR = PREVIEW_SHIP_ART.bow;
 /**
  * Bow art (2048×1360): curved rails, lanterns, and ropes. The full-width
  * plank behind the wheel (61.3%–88.5% of the art) is transparent. Those
@@ -306,16 +307,16 @@ const BOW_STRIP_TOP = 0.613;
 const BOW_STRIP_BOTTOM = 0.885;
 /** Word-free tiles; the label is live text so it can be translated. All four share one icon size. */
 const CREW_TAB_ART: Record<string, string> = {
-  crew: '/assets/images/sail-voyage-tab-crew.webp?v=1',
-  profile: '/assets/images/sail-voyage-tab-profile.webp?v=1',
-  home: '/assets/images/sail-voyage-tab-home.webp?v=2',
-  library: '/assets/images/sail-voyage-tab-library.webp?v=1',
+  crew: PREVIEW_SHIP_ART.crew,
+  profile: PREVIEW_SHIP_ART.profile,
+  home: PREVIEW_SHIP_ART.home,
+  library: PREVIEW_SHIP_ART.library,
 };
-const SHIP_TAB_WOOD = '/assets/images/sail-tab-wood.webp?v=1';
+const SHIP_TAB_WOOD = PREVIEW_SHIP_ART.tabWood;
 /** Shared wood texture — matches Sail “Travel Here” plaque. */
-const WOOD_TEX = '/assets/images/wheel-background-wood.webp';
+const WOOD_TEX = PREVIEW_SHIP_ART.wood;
 /** Dark rounded plank behind the four bow buttons. Matches the headboard. */
-const CREW_BUTTON_PLANK = '/assets/images/crew-button-plank.webp?v=1';
+const CREW_BUTTON_PLANK = PREVIEW_SHIP_ART.plank;
 
 const DECK_NAV_BOTTOM = 'max(14px, calc(var(--safe-area-bottom, 0px) + 10px))';
 /** Adam's tour card sits just above the wheel, clear of the button bow. */
@@ -336,7 +337,7 @@ const JUKEBOX_BOX: React.CSSProperties = {
   height: '19%',
 };
 /** Hatch sprite (drawn by us, not the hull art) — just below the cabin stairs. */
-const CREW_HATCH_SPRITE = '/assets/images/crew-voyage-hatch.webp?v=1';
+const CREW_HATCH_SPRITE = PREVIEW_SHIP_ART.hatch;
 /** Left-rail barrels stand in for the cannon tap on this deck. */
 const CANNON_BOX: React.CSSProperties = {
   left: '3%',
@@ -528,7 +529,7 @@ type VoyageIsland = {
 };
 
 const toVoyageIsland = (island: OceanMapIsland): VoyageIsland | null => {
-  const src = getSailIslandArtSrc(island) || (LIVING_TEST_BUILD ? '/assets/images/crew-horizon-island-a.webp?v=1' : undefined);
+  const src = getSailIslandArtSrc(island) || (LIVING_TEST_BUILD ? PREVIEW_SHIP_ART.horizonA : undefined);
   if (!src) return null;
   const title = (island.book && island.book.trim()) || island.title;
   return {
@@ -2025,7 +2026,7 @@ const CrewPage: React.FC = () => {
                   if (fit) setIslandFits(previous => ({...previous, [island.src]:fit}));
                   setLoadedIslandArt(previous => new Set(previous).add(island.src));
                 }}
-                onError={event => { const img = event.currentTarget; if (LIVING_TEST_BUILD && !img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/assets/images/crew-horizon-island-a.webp?v=1"; } }}
+                onError={event => { const img = event.currentTarget; if (LIVING_TEST_BUILD && !img.dataset.fallback) { img.dataset.fallback = "1"; img.src = PREVIEW_SHIP_ART.horizonA; } }}
                 alt=""
                 draggable={false}
                 className="absolute bottom-0 h-auto max-w-none select-none"

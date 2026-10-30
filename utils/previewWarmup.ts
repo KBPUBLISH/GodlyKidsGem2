@@ -1,6 +1,6 @@
 import { createAssetWarmupQueue } from './assetWarmupQueue.mjs';
 import { previewWarmupAssets } from './previewAssets.mjs';
-import { warmFirstStoryIsland } from './previewIslandCatalogue';
+import { getFirstStoryIslandArt } from './previewIslandCatalogue';
 
 const queue = createAssetWarmupQueue(async (url: string, signal: AbortSignal) => {
   // Share the existing media cache even if the service worker has not taken control yet.
@@ -12,16 +12,29 @@ const queue = createAssetWarmupQueue(async (url: string, signal: AbortSignal) =>
   await response.arrayBuffer();
   if (!signal.aborted) await cache?.put(url, copy).catch(() => {});
 });
+let generation = 0;
 
 /** Start on the splash; keep useful downloads running through language and onboarding. */
 export function warmPreviewNextScreen(screen: 'onboarding' | 'ship' | 'island'): () => void {
   const connection = (navigator as Navigator & {connection?: {saveData?: boolean; effectiveType?: string}}).connection;
-  queue.start(previewWarmupAssets(screen, connection));
-  if (screen !== 'island') void warmFirstStoryIsland();
+  const current = ++generation;
+  if (screen === 'island') queue.start(previewWarmupAssets(screen, connection));
+  else {
+    // Begin small screen artwork immediately. Do not let models get ahead of
+    // the destination image while its tiny manifest is still arriving.
+    queue.start(previewWarmupAssets(screen, connection).filter(url => !url.includes('.glb')));
+    void getFirstStoryIslandArt().then(firstIslandArt => {
+      if (generation !== current) return;
+      queue.start(previewWarmupAssets(screen, connection, firstIslandArt));
+    });
+  }
   // Screen changes must not throw away an in-flight island download.
   return () => {};
 }
 
 export const subscribePreviewWarmup = queue.subscribe;
 /** The real island takes priority once the child enters it. */
-export const stopPreviewWarmup = queue.stop;
+export function stopPreviewWarmup() {
+  generation++;
+  queue.stop();
+}

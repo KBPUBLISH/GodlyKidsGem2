@@ -1,6 +1,6 @@
 // Quick "who is this friend" profiles shown when a story friend is dropped off on the island
 // (and later from About on their card). Named friends read their card from the skill they carry
-// (character-skills.mjs); every other collected friend is a general helper whose card is written
+// (character-skills.mjs) and the character canon (characters.mjs); every other collected friend is a general helper whose card is written
 // from the practice XP the living village keeps (settlement.mjs), so it changes as they grow.
 //
 // Shape (set by the user): strengths and weaknesses are one or two short skill areas, tasks are a
@@ -9,38 +9,15 @@
 // usually gets.
 import {skillFor} from './character-skills.mjs';
 import {ACTIVITIES,LEVELS,skillLevel} from './settlement.mjs';
+import {CHARACTERS} from './characters.mjs';
 
-/** Per-skill cards for the named friends. `tasks` icons are names from ui.jsx ICONS. */
-export const SKILL_PROFILES={
-  cook:{
-    strengths:['Cooking','Fishing'],
-    weaknesses:['Chopping wood'],
-    tasks:[{icon:'rawfish',text:'Fishing'},{icon:'cookedfish',text:'Cooking'},{icon:'food',text:'Ringing the dinner bell (loudly)',silly:true}],
-    foreman:'The foreman picks the day’s jobs — Eve usually gets the fishing and the kitchen.',
-  },
-  gardener:{
-    strengths:['Gardening'],
-    weaknesses:['Building'],
-    tasks:[{icon:'hoe',text:'Weeding'},{icon:'water',text:'Watering'},{icon:'wheat',text:'Scarecrow conversations',silly:true}],
-    foreman:'The foreman picks the day’s jobs — Abel usually gets the garden.',
-  },
-  woodcutter:{
-    strengths:['Building'],
-    weaknesses:['Gardening'],
-    tasks:[{icon:'axe',text:'Cut trees'},{icon:'build',text:'Building'},{icon:'rest',text:'Back scratches',silly:true}],
-    foreman:'The foreman picks the day’s jobs — Noah usually gets the wood and the grill.',
-  },
-  farmer:{
-    strengths:['Farming','Mining'],
-    weaknesses:['Cooking'],
-    tasks:[{icon:'hoe',text:'Plowing'},{icon:'mine',text:'Breaking rock'},{icon:'walk',text:'Naming the chickens',silly:true}],
-    foreman:'The foreman picks the day’s jobs — Adam usually gets the farm and the stone.',
-  },
-};
+/** Per-skill cards for the named friends, read from the character canon (characters.mjs). `tasks` icons are names from ui.jsx ICONS. */
+const cardLine=c=>`The foreman picks the day’s jobs — ${c.name} usually gets ${c.usually}.`;
+export const SKILL_PROFILES=Object.fromEntries(Object.values(CHARACTERS).filter(c=>c.roleId).map(c=>[c.roleId,{strengths:c.strengths,weaknesses:c.weaknesses,tasks:c.tasks,foreman:cardLine(c)}]));
 
 /** Skill-area names for a general helper's practice activities (settlement.mjs ACTIVITIES). */
 const ACTIVITY_AREA={wood:'Chopping wood',stone:'Mining',fishing:'Fishing',garden:'Gardening',cooking:'Cooking',building:'Building'};
-const HELPER_TASKS=[{icon:'walk',text:'Pitching in'},{icon:'wood',text:'Carrying things'},{icon:'energy',text:'High-fives',silly:true}];
+const HELPER_TASKS=CHARACTERS.generic.tasks;
 
 /**
  * Card for one friend: {kind:'named'|'helper', name, role:{name,icon,levelName?}, strengths[], weaknesses[], tasks[{icon,text,silly?}], foreman, learned}.

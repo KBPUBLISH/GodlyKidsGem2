@@ -12,3 +12,11 @@
 .explorer-settings{max-width:620px}.explorer-section{background:#fffaf0;border:1px solid #fff8;border-radius:24px;box-shadow:0 12px 36px #002a4438;padding:20px 20px 18px}.explorer-section-title{font-family:Fredoka,Nunito,sans-serif;font-weight:500;font-size:20px;line-height:1.2;color:#244750;letter-spacing:-.2px}
 .explorer-teal{background:#287b68;border-color:#1f6354;color:#fff;box-shadow:0 3px 0 #1a5547}.explorer-settings .explorer-action{min-height:50px}
 @media(max-width:580px){.explorer-section{padding:18px 16px 16px;border-radius:20px}}
+
+/* Per-kid edit and delete on the picker. The card itself is not a button, so these don't open the island. */
+.explorer-card-open{position:relative;width:100%;display:flex;flex-direction:column;align-items:center;gap:13px;padding:0;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.explorer-card-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+.explorer-card-tool{min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;min-height:36px;padding:6px 4px;border-radius:12px;border:1px solid #b7d9d0;background:#e7f4f1;color:#1f6354;font-family:Fredoka,Nunito,sans-serif;font-size:12px;font-weight:600;line-height:1.15;cursor:pointer;box-shadow:0 2px 0 #b7d9d0}
+.explorer-card-tool span{min-width:0;text-align:center}
+.explorer-card-tool.is-delete{background:#fff4f2;border-color:#f0c9c3;color:#a4382b;box-shadow:0 2px 0 #f0c9c3}
+.explorer-card-tool:active{transform:translateY(1px)}

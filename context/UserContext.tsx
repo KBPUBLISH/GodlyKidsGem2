@@ -964,16 +964,51 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const removeKid = (id: string) => {
+    const removingActive = currentProfileId === id;
     setKids(prev => prev.filter(k => k.id !== id));
     // The deleted kid's island (save, residents, crew, onboarding) goes with them.
+    // Scoped keys only — auth, coins, and every other kid stay put.
     try {
       removeProfileScopedKeys(profileScopeKeyFor(id));
     } catch {
       /* storage unavailable */
     }
-    // If we're removing the currently active profile, switch back to parent
-    if (currentProfileId === id) {
+    // Leave the deleted kid before the debounced wallet save runs, or their
+    // coins would be written onto the parent. Other kids are not switched to.
+    if (removingActive) {
       setCurrentProfileId(null);
+      if (parentEconomyData) {
+        setCoins(parentEconomyData.coins);
+        setCoinTransactions(parentEconomyData.coinTransactions);
+        setOwnedItems(parentEconomyData.ownedItems);
+        setUnlockedVoices(parentEconomyData.unlockedVoices);
+        setRedeemedCodes(parentEconomyData.redeemedCodes);
+      }
+      if (parentAvatarData) {
+        setEquippedAvatar(parentAvatarData.avatar);
+        setEquippedFrame(parentAvatarData.frame);
+        setEquippedHat(parentAvatarData.hat);
+        setEquippedBody(parentAvatarData.body);
+        setEquippedLeftArm(parentAvatarData.leftArm);
+        setEquippedRightArm(parentAvatarData.rightArm);
+        setEquippedLegs(parentAvatarData.legs);
+        setEquippedAnimation(parentAvatarData.animation);
+        setEquippedLeftArmRotation(parentAvatarData.leftArmRotation);
+        setEquippedRightArmRotation(parentAvatarData.rightArmRotation);
+        setEquippedLegsRotation(parentAvatarData.legsRotation);
+        setLeftArmOffset(parentAvatarData.leftArmOffset);
+        setRightArmOffset(parentAvatarData.rightArmOffset);
+        setLegsOffset(parentAvatarData.legsOffset);
+        setHeadOffset(parentAvatarData.headOffset);
+        setBodyOffset(parentAvatarData.bodyOffset);
+        setHatOffset(parentAvatarData.hatOffset);
+        setLeftArmScale(parentAvatarData.leftArmScale);
+        setRightArmScale(parentAvatarData.rightArmScale);
+        setLegsScale(parentAvatarData.legsScale);
+        setHeadScale(parentAvatarData.headScale);
+        setBodyScale(parentAvatarData.bodyScale);
+        setHatScale(parentAvatarData.hatScale);
+      }
     }
   };
 

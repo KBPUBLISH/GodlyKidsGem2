@@ -473,7 +473,7 @@ const NewUserWelcomePage: React.FC = () => {
         }}
         onSignIn={() => {
           setShowAccountModal(false);
-          navigate('/signin', { state: { returnTo: '/home' } });
+          navigate('/signin', { state: { returnTo: '/crew' } });
         }}
       />
     </div>

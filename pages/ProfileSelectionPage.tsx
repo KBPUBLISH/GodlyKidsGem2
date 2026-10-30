@@ -56,7 +56,7 @@ const ProfileSelectionPage: React.FC = () => {
             <p>{t('whosPlayingToday')}</p>
           </div>
           <div className="explorer-grid">
-            {kids.map((profile,index)=><button type="button" key={profile.id} className="explorer-card" onClick={()=>{switchProfile(profile.id);navigate(returnTo || '/home');}}>
+            {kids.map((profile,index)=><button type="button" key={profile.id} className="explorer-card" onClick={()=>{switchProfile(profile.id);navigate(returnTo || '/crew');}}>
               <PortholeAvatar avatarSrc={profile.characterAvatar || profile.avatar || profile.avatarSeed} fallbackInitial={profile.name?.charAt(0)} glassClassName={getKidColor(index)} className="explorer-avatar"/>
               <span className="explorer-name" data-no-localize="true">{profile.name}</span>
               <span className="explorer-play" aria-hidden="true"><ChevronRight size={18}/></span>

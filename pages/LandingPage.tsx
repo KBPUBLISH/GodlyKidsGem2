@@ -81,7 +81,7 @@ const LandingPage: React.FC = () => {
 
         if (hasCompletedOnboarding) {
           const hasKids = userData.kids && userData.kids.length > 0;
-          goWithLanguage(hasKids ? '/profile' : '/world');
+          goWithLanguage(hasKids ? '/profile' : '/crew');
           setIsChecking(false);
           return;
         }

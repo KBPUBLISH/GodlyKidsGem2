@@ -1626,8 +1626,8 @@ const App: React.FC = () => {
                   {/* Games are playable without an account — do not wrap in ProtectedRoute
                       (that showed Create Account when Island Scene / Games opened a URL). */}
                   <Route path="/game" element={<GameWebViewPage />} />
-                  {/* Catch-all route - redirect to landing if not authenticated, world (explore) if authenticated */}
-                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/world" replace /> : <Navigate to="/" replace />} />
+                  {/* Catch-all route - redirect to landing if not authenticated, crew (ship deck hub) if authenticated */}
+                  <Route path="*" element={isUserAuthenticated() ? <Navigate to="/crew" replace /> : <Navigate to="/" replace />} />
                 </Routes>
               </Layout>
               </ReferralPromptWrapper>

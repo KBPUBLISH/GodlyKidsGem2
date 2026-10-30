@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Mail, Lock, Eye, EyeOff, X, Loader2, Sparkles } from 'lucide-react';
 import WoodButton from '../components/ui/WoodButton';
 import { ApiService, getApiBaseUrl } from '../services/apiService';
@@ -59,9 +59,20 @@ const hydrateProfileFromCloud = async (email: string): Promise<boolean> => {
   }
 };
 
+// Where a signed-in user lands when the caller didn't ask for a specific page:
+// the ship deck hub (not the Explore map).
+const DEFAULT_POST_LOGIN_ROUTE = '/crew';
+
 const SignInPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { subscribe } = useUser();
+  /** In-app path to return to after signing in (passed by callers via navigation state). */
+  const returnTo: string | undefined = (() => {
+    const v = (location.state as { returnTo?: unknown } | null)?.returnTo;
+    return typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') ? v : undefined;
+  })();
+  const postLoginRoute = returnTo || DEFAULT_POST_LOGIN_ROUTE;
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -175,15 +186,15 @@ const SignInPage: React.FC = () => {
         // Pull existing profile from the cloud before routing so we don't drop a
         // returning user into first-time setup on a fresh device.
         const emailForCloud = (legacyEmail || '').toLowerCase().trim();
-        let routeTarget = '/world';
+        let routeTarget = postLoginRoute;
         if (emailForCloud) {
           const cloudHasKids = await hydrateProfileFromCloud(emailForCloud);
           if (cloudHasKids) routeTarget = '/profile';
         }
 
-        // Navigate to home/profile
+        // Navigate to crew/profile (profile picker carries returnTo so it lands where the caller asked)
         window.dispatchEvent(new Event('authTokenUpdated'));
-        setTimeout(() => navigate(routeTarget), 100);
+        setTimeout(() => navigate(routeTarget, routeTarget === '/profile' && returnTo ? { state: { returnTo } } : undefined), 100);
       } else {
         setLegacyError(data.msg || data.message || 'Migration failed. Please try again.');
       }
@@ -278,12 +289,13 @@ const SignInPage: React.FC = () => {
           // Pull the account's profile from the cloud BEFORE routing so a fresh
           // device doesn't fall into first-time setup (which would overwrite the
           // kids set up on another device). Route to profile selection if the
-          // account already has kids, otherwise continue to the world.
+          // account already has kids, otherwise continue to the ship deck (/crew)
+          // or wherever the caller asked us to return to.
           const emailForCloud =
             (provider === 'email' ? (emailValue || email) : (result as any).email) ||
             localStorage.getItem('godlykids_user_email') ||
             '';
-          let routeTarget = '/world';
+          let routeTarget = postLoginRoute;
           if (emailForCloud) {
             const cloudHasKids = await hydrateProfileFromCloud(
               emailForCloud.toLowerCase().trim()
@@ -295,7 +307,8 @@ const SignInPage: React.FC = () => {
           window.dispatchEvent(new Event('authTokenUpdated'));
           // Small delay to ensure token is stored before navigation
           setTimeout(() => {
-            navigate(routeTarget);
+            // Profile picker carries returnTo so picking a kid lands where the caller asked.
+            navigate(routeTarget, routeTarget === '/profile' && returnTo ? { state: { returnTo } } : undefined);
             // Force a page refresh to ensure data reloads
             window.location.hash = `#${routeTarget}`;
           }, 100);

@@ -574,7 +574,7 @@ const OnboardingTutorial: React.FC = () => {
         }}
         onSignIn={() => {
           setShowAccountCreation(false);
-          navigate('/signin', { state: { returnTo: '/world' } });
+          navigate('/signin', { state: { returnTo: '/crew' } });
         }}
       />
     </>

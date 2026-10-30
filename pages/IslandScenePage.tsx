@@ -572,9 +572,9 @@ const IslandScenePage: React.FC = () => {
   );
   const [sourcesReady, setSourcesReady] = useState(false);
   const [backgroundReady, setBackgroundReady] = useState(false);
-  const [backgroundLoadFailed, setBackgroundLoadFailed] = useState(false);
+  /** Don't hold the arrival for a slow video: reveal over the hero still after this. */
+  const [backgroundGraceOver, setBackgroundGraceOver] = useState(false);
   const retryBackgroundRef = useRef<(() => void) | null>(null);
-  const [skipBackground, setSkipBackground] = useState(false);
   const [sceneLayoutPhone, setSceneLayoutPhone] = useState<SceneDeviceLayout | null>(
     null,
   );
@@ -646,9 +646,8 @@ const IslandScenePage: React.FC = () => {
     const controller = new AbortController();
 
     setSourcesReady(false);
-    setSkipBackground(false);
     setBackgroundReady(false);
-    setBackgroundLoadFailed(false);
+    setBackgroundGraceOver(false);
     setBgSrc(SCENE_BG_VIDEO);
     setCmsTitle(null);
     setQuizContent({ available: false });
@@ -978,13 +977,13 @@ const IslandScenePage: React.FC = () => {
   // click handler, rather than remounting later and losing user activation.
   useEffect(() => {
     setBackgroundReady(false);
-    setBackgroundLoadFailed(false);
     const video = bgVideoRef.current;
     if (!sourcesReady || !video) return;
     const loader = prepareSceneVideo(video, {
-      onLoading: () => { setBackgroundReady(false); setBackgroundLoadFailed(false); },
-      onReady: () => { setBackgroundReady(true); setBackgroundLoadFailed(false); },
-      onFailure: () => setBackgroundLoadFailed(true),
+      onLoading: () => setBackgroundReady(false),
+      onReady: () => setBackgroundReady(true),
+      // The loader keeps retrying on the next tap; the hero still covers until then.
+      onFailure: () => {},
     });
     sceneSoundOnRef.current = false;
     setSceneSoundOn(false);
@@ -995,10 +994,19 @@ const IslandScenePage: React.FC = () => {
     };
   }, [sourcesReady, bgSrc]);
 
-  // Arrival reveal — once the background has a decoded frame, fade in.
+  // iPhone (WKWebView) often refuses the gesture-less play() on the first
+  // visit; the hero still carries the scene until the video gets a frame.
+  useEffect(() => {
+    if (!sourcesReady || backgroundReady) return;
+    const id = window.setTimeout(() => setBackgroundGraceOver(true), 1500);
+    return () => window.clearTimeout(id);
+  }, [sourcesReady, backgroundReady]);
+
+  // Arrival reveal — once the background has a decoded frame (or the grace
+  // period passes with the hero still in place), fade in.
 
   useEffect(() => {
-    if (arrivalDone || !sourcesReady || (!backgroundReady && !skipBackground)) return;
+    if (arrivalDone || !sourcesReady || (!backgroundReady && !backgroundGraceOver)) return;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => setWhiteOpacity(0));
     });
@@ -1009,7 +1017,7 @@ const IslandScenePage: React.FC = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(doneId);
     };
-  }, [arrivalDone, sourcesReady, backgroundReady, skipBackground]);
+  }, [arrivalDone, sourcesReady, backgroundReady, backgroundGraceOver]);
 
   // Keep all scene videos in sync with the sound toggle
   useEffect(() => {
@@ -1097,7 +1105,7 @@ const IslandScenePage: React.FC = () => {
 
   const showWhite = !arrivalDone || triggerFade !== 'idle';
   const showScene = sourcesReady;
-  const sceneInteractive = arrivalDone && (backgroundReady || skipBackground);
+  const sceneInteractive = arrivalDone;
 
   const goHub = useCallback(() => {
     const storyId = storyIdParam || activeStoryId;
@@ -1544,22 +1552,22 @@ const IslandScenePage: React.FC = () => {
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#1a4a28]">
-      {(!sourcesReady || (!backgroundReady && !skipBackground)) && (
-        <div className="absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 px-8 text-center bg-[#103e50] text-[#fff4d9]" aria-busy={!backgroundLoadFailed}>
+      {!sourcesReady && (
+        <div className="absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 px-8 text-center bg-[#103e50] text-[#fff4d9]" aria-busy>
           <img src="/assets/images/language/language-globe-v1.png" alt="" width={110} height={110}/>
           <div role="status" aria-live="polite">
-            <h2 className="font-display text-2xl">{backgroundLoadFailed ? 'The scene is taking longer to load' : 'Getting your adventure ready…'}</h2>
-            <p className="mt-2 text-sm text-white/80">{backgroundLoadFailed ? 'Tap to start the video, or continue without it.' : 'Preparing the story background.'}</p>
+            <h2 className="font-display text-2xl">Getting your adventure ready…</h2>
+            <p className="mt-2 text-sm text-white/80">Preparing the story background.</p>
           </div>
-          {backgroundLoadFailed && <button className="rounded-xl bg-[#ffce70] px-8 py-3 font-bold text-[#513a17]" onClick={()=>retryBackgroundRef.current?.()}>Try again</button>}
-          {backgroundLoadFailed && <button className="rounded-xl border border-white/40 px-6 py-3 text-sm" onClick={() => { bgVideoRef.current?.pause(); setSkipBackground(true); }}>Continue without video</button>}
           <button className="rounded-xl border border-white/40 px-6 py-3 text-sm" onClick={()=>navigate('/crew')}>Back to ship</button>
         </div>
       )}
 
       {showScene && (
         <>
-          {skipBackground && storyHeroUrl && <img src={storyHeroUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          {/* Hero still sits under the video so the scene is never blank while
+              iPhone waits for a tap to start the stream. */}
+          {storyHeroUrl && <img src={storyHeroUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           {/* Looping garden scene video */}
           <div className="absolute inset-0" aria-hidden>
             <video
@@ -1567,7 +1575,8 @@ const IslandScenePage: React.FC = () => {
               key={bgSrc}
               poster={storyHeroUrl || undefined}
               src={bgSrc}
-              className={`absolute inset-0 w-full h-full object-cover ${skipBackground ? 'hidden' : ''}`}
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+              style={{ opacity: backgroundReady ? 1 : 0 }}
               muted={!backgroundReady || !sceneSoundOn}
               volume={0.5}
               loop

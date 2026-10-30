@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { UnlockedCharacter } from '../../services/rewardsService';
 import type { PlayersWorldResident } from '../../utils/playersWorld';
-import { resolveFirstStoryPackDestination } from '../../utils/onboardingJourney';
+import { isOnboardingJourneyActive, markSailForStoryPending, resolveFirstStoryPackDestination } from '../../utils/onboardingJourney';
+import { hasSeenAdamTour, markShipTourPending } from '../../utils/adamTour';
 import { scopedKey } from '../../utils/profileScope';
 
 /**
@@ -141,6 +142,7 @@ const HomeOnboarding: React.FC<Props> = ({ ready, collected, residents, placing,
     const before = prevResidents.current;
     prevResidents.current = residents.length;
     if (before === 0 && residents.length === 1 && !record?.done) {
+      if (!hasSeenAdamTour()) markShipTourPending();
       const name = residents[0]?.name || 'Your friend';
       setCelebrating(name);
       const id = window.setTimeout(() => setCelebrating(null), CELEBRATE_MS);
@@ -197,6 +199,11 @@ const HomeOnboarding: React.FC<Props> = ({ ready, collected, residents, placing,
     post({ type: 'gk-onboarding', phase: 'tour' });
   }, [phase, ready, post]);
 
+  const goGetACharacter = () => {
+    markSailForStoryPending();
+    navigate('/crew', { replace: true, state: { onboardingJourney: true, sailForStory: true } });
+  };
+
   const readStory = async () => {
     if (opening) return;
     setOpening(true);
@@ -215,6 +222,7 @@ const HomeOnboarding: React.FC<Props> = ({ ready, collected, residents, placing,
   const lookAround = () => save({ step: 'story', done: false, dismissedAt: Date.now() });
   const skipAll = () => {
     save({ step: 'done', done: true, skipped: true, dismissedAt: Date.now() });
+    if (!hasSeenAdamTour() && collected.length > 0) markShipTourPending();
     post({ type: 'gk-onboarding', phase: 'skip' });
   };
 
@@ -224,6 +232,35 @@ const HomeOnboarding: React.FC<Props> = ({ ready, collected, residents, placing,
   const friendName = nextFriend?.name || 'your friend';
   const safeBottom = 'max(18px, calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 18px))';
   const safeTop = 'max(14px, calc(var(--safe-area-top, env(safe-area-inset-top, 0px)) + 14px))';
+
+  if (phase === 'story' && isOnboardingJourneyActive()) {
+    return (
+      <div
+        className="fixed inset-0 z-[90] flex flex-col items-center justify-center px-6"
+        style={{ background: 'linear-gradient(180deg, rgba(10,40,60,0.55) 0%, rgba(10,40,60,0.72) 100%)', paddingTop: safeTop, paddingBottom: safeBottom }}
+        role="dialog"
+        aria-label="You need a character"
+      >
+        <Plaque className="w-[min(88vw,360px)]">
+          <span
+            className="rounded-full px-3 py-0.5 text-[12px] font-black uppercase tracking-[0.12em] text-[#7A3E12]"
+            style={{ background: 'linear-gradient(180deg, #FFD36A 0%, #FFB23D 100%)', boxShadow: '0 3px 0 #E09020', fontFamily: FONT }}
+          >
+            Your island
+          </span>
+          <p className="mt-3 text-[26px] font-black leading-[1.1] text-[#F5E6C8]" style={{ fontFamily: FONT, textShadow: CARVED }}>
+            You need a character.
+          </p>
+          <p className="mt-2 text-[17px] font-bold leading-snug text-[#F5E6C8]" style={{ fontFamily: FONT, textShadow: '0 1px 0 #3E1F07' }}>
+            You wanna go get one?
+          </p>
+          <GoldButton className="mt-5 w-full" onClick={goGetACharacter}>
+            Yeah, let’s go!
+          </GoldButton>
+        </Plaque>
+      </div>
+    );
+  }
 
   if (phase === 'story') {
     return (

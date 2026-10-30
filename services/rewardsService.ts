@@ -1021,7 +1021,35 @@ export function getOnDeckCrew(): UnlockedCharacter[] {
   if (debugModelUrl && onDeck.length > 0 && !onDeck.some((c) => c.modelUrl)) {
     onDeck = onDeck.map((c, i) => (i === 0 ? { ...c, modelUrl: debugModelUrl } : c));
   }
+  // The ship tour happens after Adam has moved to the island. Bring him back
+  // aboard for that visit only (utils/adamTour.ts SHIP_TOUR_PENDING_KEY).
+  if (adamAboardForShipTour()) {
+    const adam = rewardsService
+      .getUnlockedCharacters()
+      .find((c) => c.id === ONBOARDING_ADAM_ID || /^adam$/i.test(String(c.name || '').trim()));
+    if (adam && !onDeck.some((c) => c.id === adam.id)) {
+      onDeck = [adam, ...onDeck].slice(0, MAX_CREW);
+    }
+  }
   return onDeck;
+}
+
+/** Keep in sync with SHIP_TOUR_PENDING_KEY and TOUR_KEY in utils/adamTour.ts. */
+function adamAboardForShipTour(): boolean {
+  try {
+    if (
+      localStorage.getItem('godlykids_adam_tour_v1') === '1' ||
+      sessionStorage.getItem('godlykids_adam_tour_v1') === '1'
+    ) {
+      return false;
+    }
+    return (
+      localStorage.getItem('godlykids_ship_tour_pending_v1') === '1' ||
+      sessionStorage.getItem('godlykids_ship_tour_pending_v1') === '1'
+    );
+  } catch {
+    return false;
+  }
 }
 
 const isAdamCharacter = (name?: string, id?: string) =>

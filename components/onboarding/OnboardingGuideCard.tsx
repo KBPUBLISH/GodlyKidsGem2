@@ -13,6 +13,7 @@ import {
   buildQuizCompleteGuideBeats,
   buildCrewShipGuideBeats,
   buildDiscoverShipGuideBeats,
+  buildSailForStoryBeats,
   buildLibraryGuideBeats,
   buildTapRewardGuideBeats,
 } from '../../utils/onboardingJourney';
@@ -33,6 +34,7 @@ export type GuideCardVariant =
   | 'tapReward'
   | 'quizComplete'
   | 'discoverShip'
+  | 'sailForStory'
   | 'crewShip'
   | 'library';
 
@@ -79,6 +81,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
     if (variant === 'tapReward') return buildTapRewardGuideBeats(kidName);
     if (variant === 'quizComplete') return buildQuizCompleteGuideBeats(kidName);
     if (variant === 'discoverShip') return buildDiscoverShipGuideBeats();
+    if (variant === 'sailForStory') return buildSailForStoryBeats();
     if (variant === 'crewShip') return buildCrewShipGuideBeats();
     if (variant === 'library') return buildLibraryGuideBeats();
     return [buildOnboardingGuideCopy(kidName)];
@@ -253,7 +256,7 @@ const OnboardingGuideCard: React.FC<Props> = ({
       }}
       role="dialog"
       aria-label={
-        variant === 'discoverShip' || variant === 'crewShip'
+        variant === 'discoverShip' || variant === 'sailForStory' || variant === 'crewShip'
           ? 'Crew ship guide'
           : variant === 'library'
             ? 'Library guide'

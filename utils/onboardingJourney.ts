@@ -1,4 +1,4 @@
-/** First-time voyage: crew ship → first story pack → treasure → meet Adam. */
+/** First-time voyage: ship → empty island → sail → story → treasure → drop Adam off. The ship tour waits until they come back. */
 
 import { islandStoryProgressService } from '../services/islandStoryProgressService';
 import { rewardsService } from '../services/rewardsService';
@@ -130,8 +130,8 @@ export function buildTapRewardGuideBeats(kidName?: string | null): GuideBeat[] {
 export function buildQuizCompleteGuideBeats(_kidName?: string | null): GuideBeat[] {
   return [
     {
-      line: `Woah! That was a good find! A game, some coins to spend in the build shop, and a new Character! You wanna go meet him? Let's go!`,
-      tts: `[excitedly] Woah! [happily] That was a good find! [giggles] A game, some coins to spend in the build shop, and a new Character! [pause] You wanna go meet him? [excitedly] Let's go!`,
+      line: `Woah! That was a good find! A game, some coins to spend in the build shop, and Adam! Let's take him to your island.`,
+      tts: `[excitedly] Woah! [happily] That was a good find! [giggles] A game, some coins to spend in the build shop, and Adam! [pause] Let's take him to your island.`,
     },
   ];
 }
@@ -168,20 +168,62 @@ export function clearDiscoverShipPending(): void {
   }
 }
 
-/** Opening lines on the crew ship, before the first story pack. */
+/** Opening lines on the crew ship. The island comes before any story. */
 export function buildDiscoverShipGuideBeats(): GuideBeat[] {
   return [
     {
-      line: `This is your crew ship.`,
-      tts: `[excitedly] This is your crew ship.`,
+      line: `Here's your ship.`,
+      tts: `[excitedly] Here's your ship.`,
     },
     {
-      line: `You unlock characters.`,
-      tts: `[happily] You unlock characters.`,
+      line: `Check out your own island.`,
+      tts: `[happily] Check out your own island.`,
+    },
+  ];
+}
+
+const SAIL_FOR_STORY_KEY = 'godlykids_sail_for_story_pending';
+
+/** Set when they leave the empty island to go get a character. */
+export function markSailForStoryPending(): void {
+  try {
+    sessionStorage.setItem(SAIL_FOR_STORY_KEY, '1');
+    localStorage.setItem(SAIL_FOR_STORY_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+}
+
+export function isSailForStoryPending(): boolean {
+  try {
+    return (
+      sessionStorage.getItem(SAIL_FOR_STORY_KEY) === '1' ||
+      localStorage.getItem(SAIL_FOR_STORY_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function clearSailForStoryPending(): void {
+  try {
+    sessionStorage.removeItem(SAIL_FOR_STORY_KEY);
+    localStorage.removeItem(SAIL_FOR_STORY_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Back on the ship after the empty island: board, sail, then the story. */
+export function buildSailForStoryBeats(): GuideBeat[] {
+  return [
+    {
+      line: `Jump back on the boat.`,
+      tts: `[happily] Jump back on the boat.`,
     },
     {
-      line: `Let me show you how.`,
-      tts: `[warmly] Let me show you how.`,
+      line: `Let's sail, and read a story.`,
+      tts: `[excitedly] Let's sail, and read a story.`,
     },
   ];
 }
@@ -279,6 +321,10 @@ function resetGuestPlayProgress(): void {
     sessionStorage.removeItem(STORY_PACK_RUNDOWN_KEY);
     localStorage.removeItem(DISCOVER_SHIP_KEY);
     sessionStorage.removeItem(DISCOVER_SHIP_KEY);
+    localStorage.removeItem(SAIL_FOR_STORY_KEY);
+    sessionStorage.removeItem(SAIL_FOR_STORY_KEY);
+    localStorage.removeItem('godlykids_ship_tour_pending_v1');
+    sessionStorage.removeItem('godlykids_ship_tour_pending_v1');
     localStorage.removeItem('godlykids_ships_library_paywall_seen');
     sessionStorage.removeItem('godlykids_ships_library_paywall_seen');
     localStorage.removeItem('godlykids_free_library_story_id');

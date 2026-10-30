@@ -11,7 +11,7 @@ import {
 import { useUser } from '../context/UserContext';
 import WoodBackButton from '../components/WoodBackButton';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
-import { isOnboardingJourneyActive } from '../utils/onboardingJourney';
+import { completeOnboardingJourney, isOnboardingJourneyActive } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { safeAppReturnPath } from '../utils/treasureNav';
 
@@ -175,7 +175,8 @@ const BuriedTreasurePage: React.FC = () => {
   );
 
   const goMeetCrew = useCallback(() => {
-    navigate('/crew', { replace: true, state: { onboardingJourney: true } });
+    completeOnboardingJourney();
+    navigate('/my-home', { replace: true, state: { onboardingJourney: true } });
   }, [navigate]);
 
   // Reward bridge: game says the chest opened → send back what was inside.

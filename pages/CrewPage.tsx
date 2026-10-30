@@ -18,9 +18,11 @@ import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
   clearDiscoverShipPending,
+  clearSailForStoryPending,
   completeOnboardingJourney,
   isDiscoverShipPending,
   isOnboardingJourneyActive,
+  isSailForStoryPending,
   resolveFirstStoryPackDestination,
 } from '../utils/onboardingJourney';
 import { noteBoatSession, noteJourneyStep } from '../utils/journeyStudy';
@@ -40,6 +42,7 @@ import {
   buildAdamDeckTour,
   hasSeenAdamTour,
   isAdamCharacter,
+  isShipTourPending,
   dismissLegacyTutorialForChallenge,
   markAdamTourSeen,
   markTourWrapDone,
@@ -851,6 +854,13 @@ const CrewPage: React.FC = () => {
     isDiscoverShipPending();
   const discoverShipRef = useRef(discoverShip);
   discoverShipRef.current = discoverShip;
+  const sailForStory =
+    Boolean((location.state as { sailForStory?: boolean } | null)?.sailForStory) ||
+    isSailForStoryPending();
+  const sailForStoryRef = useRef(sailForStory);
+  sailForStoryRef.current = sailForStory;
+  const shipTourNow = isShipTourPending() && !hasSeenAdamTour();
+  const tapAdamRequested = Boolean((location.state as { tapAdam?: boolean } | null)?.tapAdam);
 
   useEffect(() => {
     if (arrivingOnboarding) noteJourneyStep('crew');
@@ -860,7 +870,9 @@ const CrewPage: React.FC = () => {
     noteBoatSession();
   }, []);
 
-  const [crewGuide, setCrewGuide] = useState(arrivingOnboarding);
+  const [crewGuide, setCrewGuide] = useState(
+    () => discoverShip || sailForStory || (shipTourNow && !tapAdamRequested),
+  );
   const [tapAdam, setTapAdam] = useState(
     () => Boolean((location.state as { tapAdam?: boolean } | null)?.tapAdam),
   );
@@ -893,9 +905,15 @@ const CrewPage: React.FC = () => {
 
   const finishCrewGuide = useCallback(() => {
     if (discoverShipRef.current) {
+      clearDiscoverShipPending();
+      setCrewGuide(false);
+      navigate('/my-home', { replace: true, state: { onboardingJourney: true } });
+      return;
+    }
+    if (sailForStoryRef.current) {
       if (enteringRef.current) return;
       enteringRef.current = true;
-      clearDiscoverShipPending();
+      clearSailForStoryPending();
       setCrewGuide(false);
       void resolveFirstStoryPackDestination()
         .then((dest) => {
@@ -2467,7 +2485,7 @@ const CrewPage: React.FC = () => {
 
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard
-        variant={discoverShip ? 'discoverShip' : 'crewShip'}
+        variant={discoverShip ? 'discoverShip' : sailForStory ? 'sailForStory' : 'crewShip'}
         active={crewGuide && !chatCharacter}
         onFinished={finishCrewGuide}
       />

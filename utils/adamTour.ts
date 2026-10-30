@@ -8,6 +8,8 @@
 import { ONBOARDING_ADAM_ID, type UnlockedCharacter } from '../services/rewardsService';
 
 const TOUR_KEY = 'godlykids_adam_tour_v1';
+/** Armed when Adam is dropped on the island. The ship tour plays the next time they board. */
+export const SHIP_TOUR_PENDING_KEY = 'godlykids_ship_tour_pending_v1';
 
 /** Onboarding Adam voice — used when a CMS Adam has no voice of his own. */
 export const ADAM_TOUR_FALLBACK_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';
@@ -37,8 +39,33 @@ export function markAdamTourSeen(): void {
   try {
     localStorage.setItem(TOUR_KEY, '1');
     sessionStorage.setItem(TOUR_KEY, '1');
+    localStorage.removeItem(SHIP_TOUR_PENDING_KEY);
+    sessionStorage.removeItem(SHIP_TOUR_PENDING_KEY);
   } catch {
     /* private mode */
+  }
+}
+
+/** Adam lives on the island now. The next ordinary visit to the ship plays his tour. */
+export function markShipTourPending(): void {
+  try {
+    if (localStorage.getItem(TOUR_KEY) === '1' || sessionStorage.getItem(TOUR_KEY) === '1') return;
+    localStorage.setItem(SHIP_TOUR_PENDING_KEY, '1');
+    sessionStorage.setItem(SHIP_TOUR_PENDING_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+}
+
+export function isShipTourPending(): boolean {
+  try {
+    if (localStorage.getItem(TOUR_KEY) === '1' || sessionStorage.getItem(TOUR_KEY) === '1') return false;
+    return (
+      localStorage.getItem(SHIP_TOUR_PENDING_KEY) === '1' ||
+      sessionStorage.getItem(SHIP_TOUR_PENDING_KEY) === '1'
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -46,6 +73,8 @@ export function clearAdamTourSeen(): void {
   try {
     localStorage.removeItem(TOUR_KEY);
     sessionStorage.removeItem(TOUR_KEY);
+    localStorage.removeItem(SHIP_TOUR_PENDING_KEY);
+    sessionStorage.removeItem(SHIP_TOUR_PENDING_KEY);
     localStorage.removeItem(TOUR_WRAP_PENDING_KEY);
     localStorage.removeItem(TOUR_WRAP_DONE_KEY);
     localStorage.removeItem(TOUR_FINALE_KEY);

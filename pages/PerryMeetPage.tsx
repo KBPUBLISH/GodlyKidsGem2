@@ -7,6 +7,8 @@ import WoodBackButton from '../components/WoodBackButton';
 import { useUser } from '../context/UserContext';
 import { activityTrackingService } from '../services/activityTrackingService';
 import { noteJourneyStep } from '../utils/journeyStudy';
+import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
+import { warmPreviewNextScreen } from '../utils/previewWarmup';
 import {
   ONBOARDING_FAMILY_BG_POSTER,
   ONBOARDING_FAMILY_BG_VIDEO,
@@ -64,6 +66,7 @@ const GoldButton: React.FC<{
 );
 
 const PerryMeetPage: React.FC = () => {
+  useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('ship') : undefined, []);
   const navigate = useNavigate();
   const { addKid, kids, switchProfile, updateKid, setEquippedAvatar } = useUser();
   const [phase, setPhase] = useState<Phase>('handoff');
@@ -79,6 +82,7 @@ const PerryMeetPage: React.FC = () => {
   const readyCopy = useMemo(() => buildPerryReadyCopy(savedName), [savedName]);
 
   useEffect(() => {
+    if (LIVING_TEST_BUILD) return; // Speak the current line only; don't queue the entire tour.
     preloadPerrySpeech(PERRY_HELLO_TTS);
     preloadPerrySpeech(PERRY_ASK_TTS);
     preloadPerrySpeech(PERRY_ASK_KID_TTS);
@@ -200,7 +204,7 @@ const PerryMeetPage: React.FC = () => {
         aria-hidden
         className="absolute inset-0 z-0 w-full h-full object-cover pointer-events-none select-none"
       />
-      <video
+      {!LIVING_TEST_BUILD && <video
         src={ONBOARDING_FAMILY_BG_VIDEO}
         poster={ONBOARDING_FAMILY_BG_POSTER}
         autoPlay
@@ -210,7 +214,7 @@ const PerryMeetPage: React.FC = () => {
         preload="auto"
         className="absolute inset-0 z-0 w-full h-full object-cover pointer-events-none select-none"
         aria-hidden
-      />
+      />}
 
       {!departing && (
         <WoodBackButton

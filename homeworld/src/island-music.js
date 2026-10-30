@@ -22,7 +22,7 @@ export class IslandMusic {
     this.on = wanted();
     this.index = 0;
     this.audio = new Audio();
-    this.audio.preload = 'auto';
+    this.audio.preload = 'none';
     this.audio.volume = HALF;
     this.ctx = null;
     this.gain = null;
@@ -79,7 +79,7 @@ export class IslandMusic {
   /** First tap on the island, or coming back to the page. */
   unlock() {
     this.sfx?.unlock();
-    if (this.on) this.play();
+    if (this.on) this.start();
   }
 
   setOn(on) {

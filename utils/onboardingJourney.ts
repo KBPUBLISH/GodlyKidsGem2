@@ -8,6 +8,7 @@ import { getBibleMapApiRoot, resolveBibleMapMediaUrl } from './bibleMapApi';
 import { beginJourneyStudy } from './journeyStudy';
 import { isPlayableMainMapStory } from './mainMapStoryUnlock';
 import { fetchOceanMapIslands } from './oceanMapIslands';
+import { LIVING_TEST_BUILD } from './livingTestMode';
 
 const STORAGE_KEY = 'godlykids_onboarding_journey';
 export const ONBOARDING_JOURNEY_EVENT = 'gk-onboarding-journey';
@@ -381,12 +382,14 @@ export async function resolveFirstStoryPackDestination(): Promise<{
   const islands = await fetchOceanMapIslands().catch(() => null);
   const first = islands?.find((island) => island.status !== 'locked') || islands?.[0];
   if (!first) {
+    if (LIVING_TEST_BUILD) throw new Error('Stories are taking a moment. Please try again.');
     return { path: '/map', state: { onboardingJourney: true } };
   }
 
   try {
     const res = await fetch(
       `${getBibleMapApiRoot()}/bible-map/islands/${encodeURIComponent(first.id)}`,
+      { signal: AbortSignal.timeout(15000) },
     );
     if (res.ok) {
       const data = (await res.json()) as { stories?: PackStory[] };
@@ -397,7 +400,7 @@ export async function resolveFirstStoryPackDestination(): Promise<{
       if (pack?._id) {
         const title = pack.displayTitle || pack.title || first.title;
         return {
-          path: `/sail/${encodeURIComponent(first.id)}/lesson?storyId=${encodeURIComponent(pack._id)}`,
+          path: `/sail/${encodeURIComponent(first.id)}/lesson${LIVING_TEST_BUILD ? '/hub' : ''}?storyId=${encodeURIComponent(pack._id)}`,
           state: {
             onboardingJourney: true,
             title,
@@ -410,6 +413,7 @@ export async function resolveFirstStoryPackDestination(): Promise<{
     /* sail deck still gets them onto the island */
   }
 
+  if (LIVING_TEST_BUILD) throw new Error('The first story pack is not ready. Please try again.');
   return {
     path: `/sail/${encodeURIComponent(first.id)}`,
     state: {

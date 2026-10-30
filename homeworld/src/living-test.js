@@ -75,10 +75,11 @@ export class LivingIslandTest {
   }
   save(){try{localStorage.setItem(KEY,JSON.stringify(this.state));}catch{this.g.toast('This test can play, but progress could not be saved.');}}
   site(){const task=currentRequest(this.state);return !task?null:this.state.stage<2?this.layout.camp.pad:this.layout.home.pad;}
-  reservedFriends(){return Object.keys(this.g.community.actors).filter(id=>!this.state.adamUnlocked||id!=='adam'||this.builder?.id===id||id===this.greetTarget||id===this.greeting?.id&&this.elapsed<this.greeting.until);}
+  reservedFriends(){return ['adam','eve','noah'].filter(id=>!this.state.adamUnlocked||id!=='adam'||this.builder?.id===id||id===this.greetTarget||id===this.greeting?.id&&this.elapsed<this.greeting.until);}
   syncFirstFriend(){
     const receipt=readFirstFriend(localStorage,FRIEND_KEY);
-    this.state.adamUnlocked=this.state.stage>=1&&receipt?.phase==='unlocked';
+    this.friendEarned=this.state.stage>=1&&receipt?.phase==='unlocked';
+    this.state.adamUnlocked=this.friendEarned&&this.g.community.actors.adam.modelReady!==false;
     if(this.state.adamUnlocked&&!this.state.adamArrived){
       const g=this.g,s=g.store.state,position=g.nav.nearest({x:g.player.x+1.5,y:g.player.y+1},4)||s.community.members.adam.position;
       g.store.save({...s,community:{...s.community,members:{...s.community.members,adam:{...s.community.members.adam,position,job:null,readyAt:gameTime(s)}}}});
@@ -94,6 +95,7 @@ export class LivingIslandTest {
     }
   }
   requestFirstFriend(){
+    if(this.friendEarned){void this.g.loadAdamInBackground();return;}
     if(this.state.stage<1||this.state.adamUnlocked||this.openingStory)return;
     this.storyError='';
     if(window.parent===window){this.storyError='Open your island in the app to read Adam’s story.';this.g.notify();return;}
@@ -228,7 +230,7 @@ export class LivingIslandTest {
   snapshot(){
     const task=currentRequest(this.state),site=this.site();
     const target=this.nextTarget();
-    return {task,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:typeof window.speechSynthesis!=='undefined',insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
+    return {task,friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:typeof window.speechSynthesis!=='undefined',insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
       adamUnlocked:this.state.adamUnlocked,inviteVisible:this.state.stage>=1&&!this.state.adamUnlocked&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
       openingStory:this.openingStory,storyError:this.storyError,
       site:site?this.project(site,1.3):null,

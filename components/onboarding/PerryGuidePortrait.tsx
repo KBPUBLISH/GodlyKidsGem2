@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {
   PERRY_INTRO_MODEL,
   PERRY_PORTRAIT_CLIP,
@@ -71,6 +72,8 @@ const PerryGuidePortrait: React.FC = () => {
     resize();
 
     const loader = new GLTFLoader();
+    const draco = new DRACOLoader().setDecoderPath('/draco/');
+    loader.setDRACOLoader(draco);
     loader.load(PERRY_INTRO_MODEL, (gltf) => {
       if (disposed) return;
       const model = gltf.scene;
@@ -120,6 +123,7 @@ const PerryGuidePortrait: React.FC = () => {
       cancelAnimationFrame(frame);
       mixer?.stopAllAction();
       renderer.dispose();
+      draco.dispose();
       renderer.domElement.remove();
     };
   }, []);

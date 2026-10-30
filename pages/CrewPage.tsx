@@ -1,3 +1,5 @@
+import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
+import { warmPreviewNextScreen } from '../utils/previewWarmup';
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
@@ -566,7 +568,7 @@ type VoyageIsland = {
 };
 
 const toVoyageIsland = (island: OceanMapIsland): VoyageIsland | null => {
-  const src = getSailIslandArtSrc(island);
+  const src = getSailIslandArtSrc(island) || (LIVING_TEST_BUILD ? '/assets/images/crew-horizon-island-a.webp?v=1' : undefined);
   if (!src) return null;
   const title = (island.book && island.book.trim()) || island.title;
   return {
@@ -921,7 +923,8 @@ const CrewPage: React.FC = () => {
         })
         .catch(() => {
           enteringRef.current = false;
-          navigate('/map', { replace: true, state: { onboardingJourney: true } });
+          if (LIVING_TEST_BUILD) setStoryError('Stories are taking a moment. Please try again.');
+          else navigate('/map', { replace: true, state: { onboardingJourney: true } });
         });
       return;
     }
@@ -1082,6 +1085,11 @@ const CrewPage: React.FC = () => {
   // plus islandStoryProgressService (what the reader / quiz pages write)
   // give the real "N/M stories complete" count on the horizon pill.
   const [oceanIslands, setOceanIslands] = useState<OceanMapIsland[]>([]);
+  const [storyError, setStoryError] = useState('');
+  const [storyLoading, setStoryLoading] = useState(true);
+  const [storyRetry, setStoryRetry] = useState(0);
+  useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('island') : undefined, []);
+
   const [mapStories, setMapStories] = useState<OceanMapStoryRow[] | null>(null);
   const [progressTick, setProgressTick] = useState(0);
 
@@ -1089,16 +1097,18 @@ const CrewPage: React.FC = () => {
     let cancelled = false;
     const controller = new AbortController();
     const failSafe = window.setTimeout(() => controller.abort(), CMS_ISLANDS_TIMEOUT_MS);
+    setStoryLoading(true);setStoryError('');
     void fetchOceanMapIslands(controller.signal)
       .then((mapped) => {
-        if (cancelled || !mapped) return;
+        if (cancelled) return;
+        if (!mapped?.length) throw new Error('No story islands available');
         if (mapped.length) setOceanIslands(mapped);
       })
       .catch(() => {
-        /* horizon stays open water */
+        if (!cancelled) setStoryError('Stories are taking a moment. Please try again.');
       })
-      .finally(() => window.clearTimeout(failSafe));
-    void fetchPublishedMapStories()
+      .finally(() => { window.clearTimeout(failSafe); if (!cancelled) setStoryLoading(false); });
+    void fetchPublishedMapStories(controller.signal)
       .then((stories) => {
         if (!cancelled && stories) setMapStories(stories);
       })
@@ -1110,7 +1120,7 @@ const CrewPage: React.FC = () => {
       controller.abort();
       window.clearTimeout(failSafe);
     };
-  }, []);
+  }, [storyRetry]);
 
   // Re-count after a story completes in another tab / cloud hydrate / profile switch.
   useEffect(() => {
@@ -1352,6 +1362,18 @@ const CrewPage: React.FC = () => {
 
   const openVoyageIsland = useCallback((island: VoyageIsland) => {
     if (sailingRef.current) return;
+    if (LIVING_TEST_BUILD && voyageRef.current[0]?.id === island.id) {
+      sailingRef.current = true; setSailingIsland(true); setStoryError('');
+      void resolveFirstStoryPackDestination().then(dest => {
+        const state: Record<string, unknown> = {...dest.state, fromSail: true};
+        delete state.onboardingJourney;
+        navigate(dest.path, {state});
+      }).catch(() => {
+        sailingRef.current = false; setSailingIsland(false);
+        setStoryError('Stories are taking a moment. Please try again.');
+      });
+      return;
+    }
     const islands = voyageRef.current;
     const unlocked = islands[0]?.id === island.id || firstIslandDone(islands);
     if (!unlocked) {
@@ -1445,7 +1467,7 @@ const CrewPage: React.FC = () => {
   const goMyHome = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
     const go = () => navigate('/my-home', { state: { from: '/crew' } });
-    if (reduceMotion) {
+    if (reduceMotion || LIVING_TEST_BUILD) {
       go();
       return;
     }
@@ -2034,6 +2056,7 @@ const CrewPage: React.FC = () => {
                 data-voyage-index={i}
                 data-voyage-sink={sinkPct}
                 src={island.src}
+                onError={event => { const img = event.currentTarget; if (LIVING_TEST_BUILD && !img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/assets/images/crew-horizon-island-a.webp?v=1"; } }}
                 alt=""
                 draggable={false}
                 className="absolute bottom-0 h-auto max-w-none select-none"
@@ -2061,6 +2084,12 @@ const CrewPage: React.FC = () => {
         </div>
       </div>
       </div>
+      {LIVING_TEST_BUILD && !crewGuide && !tour && (storyError || !voyageIslands.length) && <section
+        role="status" className="absolute z-[7] left-1/2 -translate-x-1/2 rounded-2xl bg-[#fff8e8] px-5 py-3 text-center text-[#3e2414] shadow-lg"
+        style={{top: 'max(80px, calc(var(--safe-area-top, 0px) + 60px))', width: 'min(85vw, 340px)'}}>
+        <p className="font-bold">{storyError || (storyLoading ? 'Finding your story islands…' : 'Your stories are ready to explore.')}</p>
+        {storyError && <button className="mt-2 rounded-full bg-[#ffc43d] px-5 py-2 font-bold" onClick={() => setStoryRetry(n => n + 1)}>Try stories again</button>}
+      </section>}
       {/* Tap layer over the islands (above the 3D canvas): the whole island
           is the target, its name floats centered above it. Tapping the
           island you are looking at sails there; a neighbor turns to it. */}

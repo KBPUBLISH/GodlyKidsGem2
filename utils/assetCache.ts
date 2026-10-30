@@ -4,6 +4,7 @@ import {
   ONBOARDING_GENESIS_VIDEO,
 } from './onboardingJourney';
 import { fetchOceanMapIslands, getOceanIslandArtSrc } from './oceanMapIslands';
+import { LIVING_TEST_BUILD } from './livingTestMode';
 
 /** Same bucket the media service worker serves from. */
 export const ASSET_CACHE_NAME = 'godlykids-images-v1';
@@ -345,5 +346,6 @@ export function startAdventurePreload(): Promise<void> {
 
 /** Warm the shell art, sail backgrounds, parrot models, and island art immediately. */
 export function startAssetCache(): void {
+  if (LIVING_TEST_BUILD) return;
   void startAdventurePreload();
 }

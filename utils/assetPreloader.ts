@@ -17,6 +17,7 @@
  * save-data / 2g / 3g connections.
  */
 import { ASSET_CACHE_NAME } from './assetCache';
+import { LIVING_TEST_BUILD } from './livingTestMode';
 import { getOnDeckCrew } from '../services/rewardsService';
 import { fetchOceanMapIslands, getSailIslandArtSrc } from './oceanMapIslands';
 
@@ -295,6 +296,7 @@ async function preload(): Promise<Summary | null> {
  * rest join it. Never rejects.
  */
 export function preloadCrewPageAssets(): Promise<Summary | null> {
+  if (LIVING_TEST_BUILD) return Promise.resolve(null);
   if (!run) {
     run = preload().catch((err) => {
       log('aborted', err);

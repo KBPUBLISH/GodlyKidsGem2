@@ -3,6 +3,7 @@ import path from 'path';
 import {existsSync,readFileSync} from 'node:fs';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import previewStyles from './scripts/preview-styles.mjs';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -23,7 +24,7 @@ export default defineConfig(({ mode }) => {
         host: '127.0.0.1',
         strictPort: true,
       },
-      plugins: [localization(__dirname), react(), {
+      plugins: [localization(__dirname), react(), previewStyles(env.VITE_LIVING_TEST === '1'), {
         name:'living-island-test-build',
         configureServer(server){
           server.middlewares.use((req,res,next)=>{

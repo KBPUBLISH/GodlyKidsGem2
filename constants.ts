@@ -1,3 +1,4 @@
+import { resolveApiEndpoint } from './utils/apiEndpoint.mjs';
 import { Book } from './types';
 
 export const MOCK_BOOKS: Book[] = [
@@ -127,10 +128,8 @@ export const FEATURE_CREATE_YOUR_STORY =
     : true;
 
 // API Base URL - can be overridden with VITE_API_BASE_URL environment variable
-export const API_BASE_URL =
-  typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL
-    ? (import.meta as any).env.VITE_API_BASE_URL
-    : "http://localhost:5001/api/";
+export const API_BASE_URL = resolveApiEndpoint(import.meta.env.VITE_API_BASE_URL,
+  typeof window === 'undefined' ? 'localhost' : window.location.hostname);
 
 /** Build karaoke share URL for a recording. Uses production URL when origin is opaque (WebView/Despia). */
 export const getKaraokeShareUrl = (recordingId: string): string => {

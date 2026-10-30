@@ -592,6 +592,8 @@ import GamesPage from './pages/GamesPage';
 import MapPage from './pages/MapPage';
 import { startAssetCache } from './utils/assetCache';
 import { preloadCrewPageAssets } from './utils/assetPreloader';
+import { LIVING_TEST_BUILD } from './utils/livingTestMode';
+import QuickStartPage from './pages/QuickStartPage';
 import MainMapPage from './pages/MainMapPage';
 import SailScenePage from './pages/SailScenePage';
 import IslandScenePage from './pages/IslandScenePage';
@@ -1032,6 +1034,7 @@ const PRELOAD_IMAGES = [
 
 const AssetPreloader: React.FC = () => {
   useEffect(() => {
+    if (LIVING_TEST_BUILD) return;
     PRELOAD_IMAGES.forEach(src => {
       const img = new Image();
       img.src = src;
@@ -1382,7 +1385,7 @@ const App: React.FC = () => {
   // First launch: warm the crew ship deck's art + models in the background
   // (once per install, after the first screen has painted; see utils/assetPreloader).
   useEffect(() => {
-    void preloadCrewPageAssets();
+    if (!LIVING_TEST_BUILD) void preloadCrewPageAssets();
   }, []);
 
   // DESPIA FIX: Handle focus restoration to prevent race conditions with React Router
@@ -1546,7 +1549,7 @@ const App: React.FC = () => {
               <PostPurchaseAccountPrompt />
               <Layout>
                 <Routes>
-                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/" element={LIVING_TEST_BUILD ? <QuickStartPage /> : <LandingPage />} />
                   <Route path="/language" element={<LanguagePage />} />
                   {/* Parent Quiz Funnel - web-to-app conversion */}
                   <Route path="/parentquiz" element={<ParentQuizPage />} />
@@ -1619,7 +1622,7 @@ const App: React.FC = () => {
                   <Route path="/games/library" element={<Navigate to="/sail/basement/arcade" replace />} />
                   <Route path="/games" element={<GamesPage />} />
                   <Route path="/map/:islandId/main" element={<MainMapPage />} />
-                  <Route path="/map" element={<MapPage />} />
+                  <Route path="/map" element={LIVING_TEST_BUILD ? <Navigate to="/crew" replace /> : <MapPage />} />
                   <Route path="/music-videos" element={<MusicVideosPage />} />
                   <Route path="/karaoke" element={<KaraokePage />} />
                   <Route path="/karaoke/share/:recordingId" element={<KaraokeSharePage />} />

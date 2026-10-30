@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate,useLocation } from 'react-router-dom';
 import {openLivingFirstFriendStory} from '../utils/livingFirstFriend';
+import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import { rewardsService, type UnlockedCharacter } from '../services/rewardsService';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
@@ -201,7 +202,7 @@ type DropCharacter = {
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
   const routeLocation=useLocation();
-  const livingTestMode=new URLSearchParams(routeLocation.search).get('livingTest')==='1';
+  const livingTestMode=LIVING_TEST_BUILD || new URLSearchParams(routeLocation.search).get('livingTest')==='1';
   const openingFirstFriend=useRef(false);
   const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
   const playerName = useMemo(() => {
@@ -267,9 +268,8 @@ const MyHomePage: React.FC = () => {
       }),
     [],
   );
-  // The island reads saved resident models the moment it boots. Wait until
-  // the CMS model refresh has copied a newly uploaded GLB onto those saves.
-  const [modelsReady, setModelsReady] = useState(false);
+  // Enter using the saved roster; newer CMS models sync in the background.
+  const [modelsReady, setModelsReady] = useState(true);
   const [chatCharacter, setChatCharacter] = useState<UnlockedCharacter | null>(null);
   const [chatWorld, setChatWorld] = useState<WorldBrief | null>(null);
 
@@ -331,7 +331,6 @@ const MyHomePage: React.FC = () => {
     if(livingTestMode){setModelsReady(true);return;}
     let cancel = false;
     const refresh = rewardsService.refreshUnlockedCharactersFromCms().catch(() => false);
-    const cap = new Promise((resolve) => window.setTimeout(resolve, 8000));
     const apply = () => {
       if (cancel) return;
       setCollected(rewardsService.getUnlockedCharacters());
@@ -339,7 +338,6 @@ const MyHomePage: React.FC = () => {
       setModelsReady(true);
       post({ type: 'gk-residents-sync' });
     };
-    void Promise.race([refresh, cap]).finally(apply);
     void refresh.finally(apply);
     return () => {
       cancel = true;
@@ -611,14 +609,14 @@ const MyHomePage: React.FC = () => {
   }, [ready]);
 
   useEffect(() => {
-    if (ready) {
+    if (ready || (livingTestMode && frameLoaded)) {
       setLoading(false);
       return;
     }
     if (!frameLoaded) return;
     const id = window.setTimeout(() => setLoading(false), LOADING_FALLBACK_MS);
     return () => window.clearTimeout(id);
-  }, [frameLoaded, ready]);
+  }, [frameLoaded, ready, livingTestMode]);
 
   useEffect(() => {
     if (loading) return;
@@ -822,7 +820,8 @@ const MyHomePage: React.FC = () => {
         </div>
       )}
 
-      {overlayMounted && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
+      {livingTestMode && !frameLoaded && <div className="absolute inset-0 z-[80] flex items-center justify-center bg-[#99b9b0]" role="status"><div className="rounded-3xl bg-[#fff8e8] px-8 py-6 text-center text-[#3e2414]"><strong>Rowing ashore…</strong><p>Getting your island ready.</p></div></div>}
+      {overlayMounted && !livingTestMode && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
       {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
           Nothing pops up until the island has reported ready — loading screens stay clear. */}

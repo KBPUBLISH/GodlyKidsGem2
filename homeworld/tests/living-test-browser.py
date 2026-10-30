@@ -85,7 +85,8 @@ async def main():
         frame=page.frames[-1]
         await frame.wait_for_function('window.__hw?.loaded',timeout=90000)
         await quality(frame)
-        assert await frame.evaluate('window.__hw.community.actors.adam.actor.visible&&!window.__hw.community.actors.eve.actor.visible&&!window.__hw.community.actors.noah.actor.visible')
+        await frame.wait_for_function('window.__hw.community.actors.adam.modelReady',timeout=60000)
+        assert await frame.evaluate('window.__hw.community.actors.adam.actor.visible&&!window.__hw.community.actors.eve?.actor.visible&&!window.__hw.community.actors.noah?.actor.visible')
         assert await frame.evaluate('window.__hw.store.state.activeCharacter')=='you'
         assert await frame.evaluate('window.__hw.selectCharacter("adam")') is False
         await page.screenshot(path='/tmp/solo-adam-arrival.png')
@@ -118,4 +119,5 @@ async def main():
         print('ERRORS:',errors,flush=True)
         await b.close()
 
-asyncio.run(main())
+if __name__ == '__main__':
+    asyncio.run(main())

@@ -14,7 +14,7 @@ export class Community {
   this.g=game;this.idlePose=game.idlePose||createRelaxedIdle(models.eve.animations);this.actors={};this.lastStep=0;this.lastInput=Date.now();this.pendingInput=false;
   // Players World has no built-in villagers: only the story friends you drop off live here.
   if(game.playersOnly){this.hideBuiltIns();this.step({offline:true});this.activity();return;}
-  for(const info of MEMBERS.filter(m=>m.id!=='adam')){
+  for(const info of MEMBERS.filter(m=>m.id!=='adam'&&!game.livingTestMode)){
    const data=models[info.id],actor=new THREE.Group(),model=data.scene;actor.add(model);game.scene.add(actor);
    normalizeCharacterModel(model);
    const bones={},restPose=[];model.traverse(o=>{if(o.isBone){bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);}}});
@@ -32,6 +32,21 @@ export class Community {
   // Catch-up is calculated once on return, before new input starts the idle timer.
   this.step({offline:true});this.bindActive(game.store.state.activeCharacter);this.activity();
   if(game.playersOnly)this.hideBuiltIns();
+ }
+ /** Attach the earned friend's model after the child can already play. */
+ attachAdam(data){
+  const g=this.g,h=this.actors.adam;if(!h||g.disposed)return;
+  h.actor.remove(h.model);h.model=data.scene;h.actor.add(h.model);normalizeCharacterModel(h.model);
+  h.bones={};h.restPose=[];h.clips={};
+  h.model.traverse(o=>{
+   if(o.isBone){h.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;h.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}
+   if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.metalness=0;m.roughness=.85;}}
+  });
+  h.mixer=new THREE.AnimationMixer(h.model);
+  for(const original of data.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name))for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}h.clips[original.name]=h.mixer.clipAction(clip);}
+  h.rig.bones=h.bones;h.modelReady=true;
+  g.idlePose=this.idlePose=createRelaxedIdle(data.animations);
+  g.livingTest?.syncFirstFriend();g.notify();
  }
  /** Players World: hidden villagers must not hold homes or chores (they would block the tent for the friends you can see). */
  clearBuiltInJobs(){
@@ -76,7 +91,7 @@ export class Community {
   if(g.store.state.night||g.playersOnly){for(const h of Object.values(this.actors)){if(h.actor)h.actor.visible=false;for(const key of ['hammer','bench','can'])if(h[key])h[key].visible=false;h.fishing?.clear();}if(this.selectionRing)this.selectionRing.visible=false;return;}
   const snapshot=Community.prototype.snapshot.call(this,now);if(!snapshot)return;
   for(const m of snapshot.members){
-   const h=this.actors[m.id],j=m.job;if(!h?.actor||m.selected)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
+   const h=this.actors[m.id],j=m.job;if(!h?.actor||m.selected||h.modelReady===false)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
    if(m.walking){
     const ahead=(m.project?projectAssignments(g.store.state,now+250).find(x=>x.id===m.id):communitySnapshot(g.store.state,gameTime(g.store.state,now+250)).members.find(x=>x.id===m.id))?.position||m.position;
     const dx=ahead.x-m.position.x,dy=ahead.y-m.position.y,speed=Math.hypot(dx,dy)/.25;

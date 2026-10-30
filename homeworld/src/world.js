@@ -6,6 +6,7 @@ import {dayPhase,islandLight} from './island-clock.mjs';
 import * as THREE from 'three';
 import {normalizeCharacterModel} from './character-model.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {scopeKey,migrateLegacyKeys} from './storage-scope.mjs';
 /** Build goal, per kid profile (storage-scope.mjs). */
@@ -64,7 +65,7 @@ const nativePosition=p=>V(p[0],p[2],-p[1]);
 const stageName={seeded:'Seed planted',seedling:'Seedling',growing:'Growing',ready:'Ready'};
 /** Cache-busting for map/model files: the service worker is cache-first for .glb, so each build gets its own URL. */
 import {BAKE_FRAME,WATER_RIPPLE} from './blender-look.js';
-const assetUrl=p=>`${p}?v=${typeof __HW_BUILD__!=='undefined'?__HW_BUILD__:'dev'}`;
+const assetUrl=p=>`${p}?v=${LIVING_TEST?'mobile-1':typeof __HW_BUILD__!=='undefined'?__HW_BUILD__:'dev'}`;
 
 /**
  * Sun shadow box. The sun sits at a fixed offset from the player (placeSun), so the light-space axes
@@ -145,17 +146,41 @@ export class HomeWorld {
     this.music=new IslandMusic();this.clock=new THREE.Clock();this.tick=this.tick.bind(this);this.ready=this.load().catch(e=>{console.error(e);this.error=e.message;this.status='The island could not load. Reload to try again.';this.notify();});this.resize();this.raf=requestAnimationFrame(this.tick);
   }
   async load() {
-    const loader=new GLTFLoader();const [world,env,library,adam,construction,houses,woodStores,eve,noah,church]=await Promise.all([fetch(assetUrl('/assets/world.json')).then(r=>{if(!r.ok)throw Error('Map data is unavailable');return r.json();}),loader.loadAsync(assetUrl('/assets/environment.glb')),loader.loadAsync(assetUrl('/assets/library.glb')),loader.loadAsync(assetUrl('/assets/adam.glb')),loader.loadAsync(assetUrl('/assets/construction.glb')),loader.loadAsync(assetUrl('/assets/house-upgrades.glb')),loader.loadAsync(assetUrl('/assets/wood-storage.glb')),loader.loadAsync(assetUrl('/assets/eve.glb')),loader.loadAsync(assetUrl('/assets/noah.glb')),loader.loadAsync(assetUrl('/assets/church.glb'))]);if(this.disposed)return;
-    this.idlePose=createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
+    const loader=new GLTFLoader();
+    this.assetAbort=new AbortController();
+    this.draco=new DRACOLoader().setDecoderPath('/draco/');loader.setDRACOLoader(this.draco);
+    const loadModel=async name=>{
+      const url=assetUrl(`/assets/${this.livingTestMode?'mobile/':''}${name}.glb`);
+      const response=await fetch(url,{signal:AbortSignal.any([this.assetAbort.signal,AbortSignal.timeout(60000)])});
+      if(!response.ok)throw Error('The island download needs another try.');
+      return loader.parseAsync(await response.arrayBuffer(),'/homeworld/assets/');
+    };
+    this.loadFriendModel=()=>loadModel('adam');
+    const empty={scene:new THREE.Group(),animations:[]};
+    const [world,env,library,adam,construction,houses,woodStores,eve,noah,church]=await Promise.all([
+      fetch(assetUrl('/assets/world.json'),{signal:AbortSignal.any([this.assetAbort.signal,AbortSignal.timeout(60000)])}).then(r=>{if(!r.ok)throw Error('Map data is unavailable');return r.json();}),
+      ...['environment','library'].map(loadModel),this.livingTestMode?empty:loadModel('adam'),
+      ...['construction','house-upgrades','wood-storage'].map(loadModel),
+      this.livingTestMode?empty:loadModel('eve'),this.livingTestMode?empty:loadModel('noah'),loadModel('church')
+    ]);if(this.disposed)return;
+    this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
-    this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
+    this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
     this.restPose=[];this.model.traverse(o=>{if(o.isBone)this.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});if(o.isMesh){o.castShadow=true;o.receiveShadow=false;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);if(m.map&&m.map.anisotropy<4)m.map.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());m.needsUpdate=true;}}});
     this.mixer=new THREE.AnimationMixer(this.model);this.clips={};
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
     this.bones={};this.model.traverse(o=>{if(o.isBone)this.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
     this.tools={};for(const id of ['axe','hoe','pickaxe','seed_pouch','watering_can','sickle']){const obj=this.asset(`tool_${id}`);this.tools[id]=obj;obj.visible=false;this.scene.add(obj);}this.mining.prepareTools();
-    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.gardenPlan=new GardenPlan(this);this.buildAsk=new BuildAsk(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();if(this.livingTestMode)this.livingTest=new LivingIslandTest(this);this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
+    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});if(this.livingTestMode)this.community.actors.adam.modelReady=false;this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.gardenPlan=new GardenPlan(this);this.buildAsk=new BuildAsk(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();if(this.livingTestMode)this.livingTest=new LivingIslandTest(this);this.loaded=true;if(!this.livingTestMode)this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
+    if(this.livingTestMode)this.friendTimer=setTimeout(()=>this.loadAdamInBackground(),1000);
+  }
+  async loadAdamInBackground(){
+    if(this.disposed||this.friendLoading||this.community.actors.adam.modelReady)return;
+    this.friendLoading=true;this.friendError=false;this.notify();
+    try{const data=await this.loadFriendModel();if(!this.disposed)this.community.attachAdam(data);}
+    catch{if(!this.disposed)this.friendError=true;}
+    finally{this.friendLoading=false;this.notify();}
   }
   asset(id) {
     const source=this.library[id];if(!source)throw Error(`Missing asset: ${id}`);
@@ -1100,5 +1125,5 @@ export class HomeWorld {
     }
     this.renderer.render(this.scene,this.fishing?.firstPerson?this.fishing.camera:this.camera);
   }
-  dispose(){this.livingTest?.dispose();this.disposed=true;this.music?.dispose();this.buildAsk?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
+  dispose(){this.livingTest?.dispose();this.disposed=true;clearTimeout(this.friendTimer);this.assetAbort?.abort();this.draco?.dispose();this.music?.dispose();this.buildAsk?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
 }

@@ -138,7 +138,9 @@ export const mapApiIslandToOceanIsland = (
 export const fetchOceanMapIslands = async (
   signal?: AbortSignal,
 ): Promise<OceanMapIsland[] | null> => {
-  const res = await fetch(`${getBibleMapApiRoot()}/bible-map/islands?status=all`, { signal });
+  const res = await fetch(`${getBibleMapApiRoot()}/bible-map/islands?status=all`, {
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(CMS_ISLANDS_TIMEOUT_MS)]) : AbortSignal.timeout(CMS_ISLANDS_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as ApiIslandRow[];
   if (!Array.isArray(data) || data.length === 0) return null;

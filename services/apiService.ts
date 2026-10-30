@@ -68,8 +68,7 @@ const clearCacheByPattern = (pattern: string): void => {
 // Get API base URL from environment or use default
 export const getApiBaseUrl = (): string => {
   // Check for environment variable (Vite uses import.meta.env)
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
-  const baseUrl = envUrl || API_BASE_URL;
+  const baseUrl = API_BASE_URL;
 
   // Auth and most routes mount under /api (e.g. /api/authentication/sign-in).
   // Accept host-only VITE_API_BASE_URL values like http://127.0.0.1:5001.

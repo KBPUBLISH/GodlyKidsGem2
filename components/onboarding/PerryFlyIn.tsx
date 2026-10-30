@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { LIVING_TEST_BUILD } from '../../utils/livingTestMode';
 import { fetchPerrySpeech } from '../../utils/perrySpeech';
 
 /** Flight-only Perry: sideways fly-in, dive-and-hover, and a flapping hover. */
-export const PERRY_MODEL = '/models/perry-flight-essentials.glb?v=flight-3';
+export const PERRY_MODEL = LIVING_TEST_BUILD ? '/models/mobile/perry-flight.glb?v=1' : '/models/perry-flight-essentials.glb?v=flight-3';
 export const PERRY_INTRO_MODEL = PERRY_MODEL;
 /** 30 s clip: dive, turn, then an authored hover until the end. */
 export const PERRY_DIVE_MODEL = PERRY_MODEL;
@@ -187,6 +189,18 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
   motionRef.current = motion;
   departingRef.current = departing || selfDeparting;
 
+  // The next screen must work even while the decorative bird is downloading.
+  useEffect(() => {
+    if (!departing && !selfDeparting) return;
+    const timer = window.setTimeout(() => {
+      if (flyOutRef.current.done) return;
+      flyOutRef.current.done = true;
+      onDepartedRef.current?.();
+      onContinueRef.current?.();
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [departing, selfDeparting]);
+
   useEffect(() => {
     if (tts) void fetchPerrySpeech(tts);
   }, [tts]);
@@ -279,6 +293,8 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
     window.addEventListener('resize', resize);
 
     const loader = new GLTFLoader();
+    const draco = new DRACOLoader().setDecoderPath('/draco/');
+    loader.setDRACOLoader(draco);
     const src =
       modelUrl || (motion === 'dive' ? PERRY_DIVE_MODEL : PERRY_INTRO_MODEL);
     let clipFinished = false;
@@ -441,6 +457,7 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
       window.removeEventListener('resize', resize);
       mixer?.stopAllAction();
       renderer.dispose();
+      draco.dispose();
       renderer.domElement.remove();
       scene.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
@@ -476,7 +493,7 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
         </div>
       )}
 
-      {ready && bubble && bubbleNearBird ? (
+      {bubble && bubbleNearBird ? (
         <div
           className="absolute left-1/2 z-20 w-full max-w-sm px-6 -translate-x-1/2 pointer-events-none transition-opacity duration-200"
           style={{ top: 'max(4.75rem, calc(var(--safe-area-top, env(safe-area-inset-top, 0px)) + 3.75rem))', opacity: hideChrome ? 0 : 1 }}
@@ -499,7 +516,7 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
         className="relative z-20 mt-auto flex flex-col items-center px-6 pointer-events-none transition-opacity duration-200"
         style={{ opacity: hideChrome ? 0 : 1 }}
       >
-        {ready && bubble && !bubbleNearBird ? (
+        {bubble && !bubbleNearBird ? (
           <div
             className="w-full max-w-sm mb-3 px-5 py-3 rounded-3xl text-center font-extrabold text-[1.15rem] leading-snug"
             style={{

@@ -1,5 +1,4 @@
 // Separate from the real game's storage, economy, and character selection.
-export const SAVE_KEY = 'godlykids_living_world_playtest_v1';
 export const PLAYER_ID = 'you';
 export const REQUESTS = [
   { id: 'home-wood', friend: 'noah', name: 'Noah', item: 'wood', count: 3,
@@ -7,16 +6,11 @@ export const REQUESTS = [
     action: 'Walk near the fallen logs', delivery: 'Step onto the home circle', thanks: 'Just what I needed! I’ll get started on our home.' },
   { id: 'garden-carrots', friend: 'eve', name: 'Eve', item: 'carrot', count: 4,
     title: 'Something good to share', ask: 'Will you pick 4 carrots? Let’s make a meal for everyone.',
-    action: 'Walk near the ripe carrots', delivery: 'Step onto the kitchen circle', thanks: 'Thank you! A meal tastes even better with friends. Someone new is here!' },
-  { id: 'welcome-flowers', friend: 'ruth', name: 'Ruth', item: 'flower', count: 3,
-    title: 'Make yourself at home', ask: 'Let’s add a porch and flowers. Bring 3 flowers to the home circle, and I’ll make it cozy.',
+    action: 'Walk near the ripe carrots', delivery: 'Step onto the kitchen circle', thanks: 'Thank you! A meal tastes even better with friends. Adam has a little idea for our home.' },
+  { id: 'welcome-flowers', friend: 'adam', name: 'Adam', item: 'flower', count: 3,
+    title: 'Make yourself at home', ask: 'Bring 3 flowers to the home circle. Let’s make our little home feel even cozier.',
     action: 'Walk near the yellow flowers', delivery: 'Step onto the home circle', thanks: 'Now it feels like home. I’m so glad we live here together.' },
 ];
-export const DELIVERY_SITES = Object.freeze({
-  noah: { x: -1.3, z: -1.6, label: 'Home' },
-  eve: { x: 2.6, z: 1.6, label: 'Kitchen' },
-  ruth: { x: -1.3, z: -1.6, label: 'Home' },
-});
 export const RESOURCE_IDS = Object.freeze({
   'log-1': 'wood', 'log-2': 'wood', 'log-3': 'wood',
   'carrot-1': 'carrot', 'carrot-2': 'carrot', 'carrot-3': 'carrot', 'carrot-4': 'carrot',
@@ -24,7 +18,7 @@ export const RESOURCE_IDS = Object.freeze({
 });
 
 export function freshState() {
-  return { version: 1, player: { id: PLAYER_ID, x: 0, z: 2.8 }, stage: 0, homeWork: 0,
+  return { version: 1, player: { id: PLAYER_ID }, stage: 0, homeWork: 0,
     inventory: { wood: 0, carrot: 0, flower: 0 }, deposits: { wood: 0, carrot: 0, flower: 0 }, gathered: [] };
 }
 
@@ -49,10 +43,6 @@ export function restoreState(value) {
     clean.deposits[task.item] = amount;
   }
   if (clean.stage >= 1 && Number.isFinite(value.homeWork)) clean.homeWork = Math.max(0, Math.min(1, value.homeWork));
-  if (Number.isFinite(value.player?.x) && Number.isFinite(value.player?.z)) {
-    clean.player.x = Math.max(-5.3, Math.min(5.3, value.player.x));
-    clean.player.z = Math.max(-4.8, Math.min(5.3, value.player.z));
-  }
   return clean;
 }
 

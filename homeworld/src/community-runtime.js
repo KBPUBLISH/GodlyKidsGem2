@@ -57,6 +57,14 @@ export class Community {
  activity(){if(this.g.store.state.night)return;this.lastInput=Date.now();this.pendingInput=true;this.focusUntil=0;this.g.projectAdamWalking=false;if(this.hidAdam&&!this.g.nutrition?.sleep&&!this.g.playersOnly){this.g.actor.visible=true;this.hidAdam=false;}}
  step(options={}){
   const g=this.g;if(g.store.locked)return;
+  if(g.livingTestMode&&g.livingTest?.builder)options={...options,reservedMembers:['noah']};
+  if(g.livingTestMode){
+    options={...options,active:false,activity:false};
+    const s=g.store.state,minutes=gameTime(s),members={...s.community?.members};let changed=false;
+    // The short test loop keeps neighbors roaming between chores instead of a minute-long wait.
+    for(const [id,m] of Object.entries(members))if(!m.job&&m.readyAt>minutes+6&&!options.reservedMembers?.includes(id)){members[id]={...m,readyAt:minutes+6};changed=true;}
+    if(changed)g.store.save({...s,community:{...s.community,members}});
+  }
   // Players World: the hidden built-in villagers never do chores; the story friends you see do the helping.
   try{const before=JSON.stringify(g.store.state.cells);g.store.communityStep(g.playersOnly?{...options,active:true,reservedMembers:Object.keys(g.store.state.community?.members||{})}:options);if(g.playersOnly)this.clearBuiltInJobs();g.syncNight?.();if(JSON.stringify(g.store.state.cells)!==before)g.refreshDynamic();if(options.offline)g.player={...g.store.state.player};this.error=null;}
   catch(e){if(this.error!==e.message){this.error=e.message;g.toast(e.message);}}

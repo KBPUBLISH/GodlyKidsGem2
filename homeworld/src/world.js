@@ -55,6 +55,8 @@ import {registerDockAssets} from './dock-model.js';
 import {StageTracker} from './stage-tracker.js';
 import {registerFarmAssets} from './fencing.mjs';
 import {IslandMusic} from './island-music.js';
+import {LIVING_TEST} from './storage-scope.mjs';
+import {LivingIslandTest} from './living-test.js';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z), Q=()=>new THREE.Quaternion();
 const smooth=t=>{t=THREE.MathUtils.clamp(t,0,1);return t*t*(3-2*t);};
@@ -92,6 +94,7 @@ function isIpadClass(){
 
 export class HomeWorld {
   constructor(container,onUpdate) {
+    this.livingTestMode=LIVING_TEST;
     this.container=container;this.onUpdate=onUpdate;this.disposed=false;this.tool='walk';this.seed='carrot_seed';this.path=[];this.order=null;this.action=null;this.status='Loading your island…';this.toasts=[];this.labels=[];this.lastRefresh=0;this.lastSave=0;this.animationRate=1;this.keys=new Set();
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#99b9b0');this.scene.fog=new THREE.Fog('#99b9b0',110,420);
     // Start iPads sharper, then adapt resolution to sustained frame time. MSAA stays on everywhere: on Apple's
@@ -143,7 +146,7 @@ export class HomeWorld {
   }
   async load() {
     const loader=new GLTFLoader();const [world,env,library,adam,construction,houses,woodStores,eve,noah,church]=await Promise.all([fetch(assetUrl('/assets/world.json')).then(r=>{if(!r.ok)throw Error('Map data is unavailable');return r.json();}),loader.loadAsync(assetUrl('/assets/environment.glb')),loader.loadAsync(assetUrl('/assets/library.glb')),loader.loadAsync(assetUrl('/assets/adam.glb')),loader.loadAsync(assetUrl('/assets/construction.glb')),loader.loadAsync(assetUrl('/assets/house-upgrades.glb')),loader.loadAsync(assetUrl('/assets/wood-storage.glb')),loader.loadAsync(assetUrl('/assets/eve.glb')),loader.loadAsync(assetUrl('/assets/noah.glb')),loader.loadAsync(assetUrl('/assets/church.glb'))]);if(this.disposed)return;
-    this.idlePose=createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(!this.store.locked)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
+    this.idlePose=createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
     this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
@@ -152,7 +155,7 @@ export class HomeWorld {
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
     this.bones={};this.model.traverse(o=>{if(o.isBone)this.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
     this.tools={};for(const id of ['axe','hoe','pickaxe','seed_pouch','watering_can','sickle']){const obj=this.asset(`tool_${id}`);this.tools[id]=obj;obj.visible=false;this.scene.add(obj);}this.mining.prepareTools();
-    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.gardenPlan=new GardenPlan(this);this.buildAsk=new BuildAsk(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
+    this.nutrition=new Nutrition(this);this.fishing=new Fishing(this);this.autoWork=new AutoWork(this);this.building=new Construction(this);this.createTreeBatches();this.refreshDynamic();this.drawGardenGrid();this.community=new Community(this,{eve,noah});this.residents=new Residents(this);this.arrivals=new Arrivals(this);this.dining=new Dining(this);this.kitchen=new RecipeKitchen(this);this.village=new Village(this);this.gardenKeeper=new GardenKeeper(this);this.gardenPlan=new GardenPlan(this);this.buildAsk=new BuildAsk(this);this.stages=new StageTracker(this);this.animals=new Animals(this);this.farmer=new Farmer(this);this.stall=new Stall(this);this.nightSky=new NightSky(this);if(this.playersOnly)this.community.hideBuiltIns();if(this.livingTestMode)this.livingTest=new LivingIslandTest(this);this.loaded=true;this.music?.start();this.status=this.ambient?'Drop off a story friend to start playing.':'Tap land to walk. Open Actions to choose a tool.';if(this.store.error)this.toast(this.store.error);else this.persist();this.notify();
   }
   asset(id) {
     const source=this.library[id];if(!source)throw Error(`Missing asset: ${id}`);
@@ -387,6 +390,7 @@ export class HomeWorld {
   }
   setSeed(seed){this.seed=seed;this.setTool('plant');}
   selectCharacter(id){
+    if(this.livingTestMode)return false;
     if(!this.loaded||this.store.state.night||!this.community?.actors[id])return false;if(id===this.store.state.activeCharacter){this.revealCharacterVitals();return true;}
     if(this.action||this.nutrition.sleep){this.toast('Finish this action or wake up before switching characters.');return false;}
     try{
@@ -414,6 +418,10 @@ export class HomeWorld {
   }
   allCharacterVitalsSnapshots(wall=Date.now()){return Object.keys(this.store?.state.characters||{}).map(id=>this.characterVitalsSnapshot(wall,id)).filter(Boolean);}
   click(e) {
+    if(this.livingTestMode){
+      if(!this.loaded||!this.livingTest)return;
+      const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);this.livingTest.click(this.ray);return;
+    }
     if(!this.loaded||this.mapOnly||this.fishing?.active)return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);if(this.buildAsk?.picking){this.buildAsk.takeTap(e);return;}if(this.residents?.consumeTap(e))return;
     if(this.store?.state.night||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep){if(!this.interior)this.animals?.roundUp(this.animals.pick(this.ray));return;}
     if(this.interior){if(this.interior.phase!=='exit') this.lookInside(e,r);return;}
@@ -660,7 +668,7 @@ export class HomeWorld {
   burst(target,kind,height) {
     for(let i=0;i<12;i++){const mesh=new THREE.Mesh(this.particleGeometry,this.particleMaterials[kind]);mesh.position.set(target.x,heightAt(this.world,target.x,target.y)+height,-target.y);mesh.scale.setScalar(.7+Math.random());this.scene.add(mesh);this.particles.push({mesh,life:.8,v:V((Math.random()-.5)*2,1+Math.random()*2,(Math.random()-.5)*2)});}
   }
-  persist(){if(!this.store||this.store.locked)return;try{this.store.persistPlayer(this.player);}catch(e){this.toast(e.message);}}
+  persist(){if(!this.store||this.store.locked)return;this.livingTest?.save();try{this.store.persistPlayer(this.player);}catch(e){this.toast(e.message);}}
   toast(text,ms){if(!text)return;const item={text,id:Date.now()+Math.random(),...(ms?{ms}:{})};this.toastQueue??=[];if(this.toasts?.length)this.toastQueue.push(item);else{this.toasts=[item];this.toastUntil=performance.now()+(item.ms||2800);}this.notify();}
   drainToasts(){if(!this.toasts?.length||performance.now()<(this.toastUntil||0))return;const next=this.toastQueue?.shift();this.toasts=next?[next]:[];if(next)this.toastUntil=performance.now()+(next.ms||2800);this.notify();}
   pullFarmToasts(){this.feedMorning();const pending=this.store?.state?.farm?.pendingToasts;if(!pending?.length||!this.store||this.store.locked)return;const next=structuredClone(this.store.state),lines=next.farm.pendingToasts.splice(0,next.farm.pendingToasts.length);try{this.store.save(next);}catch(e){this.toast(e.message);return;}for(const line of lines)this.toast(line);}
@@ -1047,7 +1055,7 @@ export class HomeWorld {
     return card;
   }
   setMusic(on){this.music?.setOn(!!on);this.notify();}
-  notify(){if(this.disposed)return;this.onUpdate(this.snapshot());}
+  notify(){if(this.disposed)return;this.onUpdate({...this.snapshot(),livingTest:this.livingTest?.snapshot()||null});}
   snapshot(){
     if(!this.store)return {loaded:false,status:this.status,error:this.error};const s=this.store.state,minutes=gameTime(s),clock=timeLabel(minutes),phase=s.clock.cycle===1?dayPhase(s.clock,Date.now()):null;const plants=Object.entries(s.cells).filter(([,c])=>c.seed).map(([key,c])=>({key,...growth(c,minutes)}));
     return {loaded:!!this.loaded,playersOnly:!!this.playersOnly,ambient:this.ambient,music:this.music?this.music.on:true,status:this.status,error:this.error,saveError:this.store.error,savedAt:this.store.savedAt,tool:this.tool,seed:this.seed,state:s,clock,night:phase?{...phase,sleeping:!!s.night,remaining:s.night&&!phase.night?0:Math.max(0,Math.ceil(phase.remainingMs/1000))}:null,minutes,plants,wood:Object.entries(s.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0),busy:!!this.action||!!this.order||!!s.characters[s.activeCharacter]?.sleep,toasts:this.toasts,overview:this.overview,sitePicking:!!this.siteView,animationRate:this.animationRate,labels:this.labels,mining:this.mining?.snapshot(),nutrition:this.nutrition?.snapshot(),report:this.store.state.reports?.at(-1)||null,unreadReport:this.store.state.reports?.findLast(r=>!r.read)||null,community:this.playersOnly?null:this.community?.snapshot(),building:this.building?.snapshot(),dining:this.dining?.snapshot()||null,reel:this.residents?.reelSnapshot?.()||null,diningCard:this.building?.openMenu?.id==='dining'?this.dining?.preview?.(this.building.openMenu.hallId)||null:null,fishing:this.fishing?.snapshot()||null,fishPrompt:this.playersOnly&&!this.ambient?this.fishing?.prompt?.()||null:null,harvestPrompts:this.harvestPrompts(),snakePrompts:this.snakePrompts(),firePrompts:this.nutrition?.firePrompts?.()||[],prompt:this.promptSnapshot(),prayer:this.prayerSnapshot(),work:this.autoWork?.snapshot()||null,animals:this.animals?.snapshot()||null,friendsWaiting:this.residents?.waiting||null,arrival:this.arrivals?.snapshot()||null,stages:this.stages?.snapshot()||null,beds:this.residents?.bedStatus?.()||null,friends:this.residents?.roster?.()||[],recentTools:this.recentTools,campfire:this.nutrition?.campfireCard?.(this.building?.openMenu?.fireId)||null,oven:this.nutrition?.ovenCard?.(this.building?.openMenu?.ovenId)||null,well:this.nutrition?.wellCard?.(this.building?.openMenu?.wellId)||null,inside:this.interior?{name:this.interior.name,phase:this.interior.phase}:null,ui:this.ui||null,goal:this.goal,coins:Number.isFinite(this.coins)?this.coins:null,garden:this.gardenKeeper?.card()||null,farm:this.farmer?.snapshot()||null,market:this.stall?.card()||null,recipeBubble:this.kitchen?.card()||null,morning:s.farm?.morning&&!s.farm.morning.dismissed?s.farm.morning:null};
@@ -1072,6 +1080,7 @@ export class HomeWorld {
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
       this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}
+      this.livingTest?.update(dt,speed);
       if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
       else if(this.siteView){this.camera.up.set(0,0,-1);this.camera.position.set(this.focus.x,80,this.focus.z);this.camera.lookAt(this.focus.x,0,this.focus.z);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}

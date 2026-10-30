@@ -47,6 +47,8 @@ import {FarmCard,FarmBubble} from './farm-ui.jsx';
 import {MarketPanel} from './market-ui.jsx';
 import LoadingTips from './loading-tips.jsx';
 import './style.css';
+import {LIVING_TEST} from './storage-scope.mjs';
+import {LivingTestUI} from './living-test-ui.jsx';
 
 /** Kid profile name from the parent app (`?player=` or a `gk-player-name` message). */
 function readPlayerName(value){
@@ -358,6 +360,7 @@ function App(){
   const activeTool=TOOLS.find(t=>t.id===view.tool);
   const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
+  if(LIVING_TEST)return <LivingTestUI host={host} engine={engine} view={view}/>;
   return <main className={`game-shell ${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
     <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>

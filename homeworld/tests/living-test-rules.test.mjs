@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshState, restoreState, collect, deliver, readyToDeliver, REQUESTS, PLAYER_ID } from '../src/quests.mjs';
+import { freshState, restoreState, collect, deliver, readyToDeliver, REQUESTS, PLAYER_ID } from '../src/living-test-rules.mjs';
 
 test('only the player can gather or complete a friend request', () => {
   const state = freshState();
@@ -53,7 +53,7 @@ test('the earlier prototype save retains completed construction and supplies', (
   assert.equal(state.deposits.wood, 3);
   assert.equal(state.inventory.carrot, 1);
   assert.equal(state.homeWork, .6);
-  assert.deepEqual(state.player, { id: PLAYER_ID, x: 1, z: 2 });
+  assert.deepEqual(state.player, { id: PLAYER_ID });
 });
 
 test('invalid saves cannot inject inventory, control a friend, or skip milestones', () => {
@@ -61,6 +61,5 @@ test('invalid saves cannot inject inventory, control a friend, or skip milestone
   assert.deepEqual(state.gathered, ['log-1']);
   assert.equal(state.inventory.wood, 1);
   assert.equal(state.player.id, PLAYER_ID);
-  assert.equal(state.player.x, 5.3);
   assert.deepEqual(restoreState({ version: 1, stage: 3, gathered: [] }), freshState());
 });

@@ -81,6 +81,7 @@ export class Residents {
       if (pruned !== game.store.state) { try { game.store.save(pruned); } catch { /* reported by the store */ } }
     }
     this.onMessage = (event) => {
+      if (game.livingTestMode) return; // Test worlds never sync real profiles or take remote character control.
       if (event.origin !== location.origin || !event.data) return;
       const { type } = event.data;
       if (type === 'gk-profile') { if (ensureFrameScope(event.data.scope)) return; }
@@ -244,6 +245,7 @@ export class Residents {
    */
   possess(actor) {
     const game = this.game;
+    if (game.livingTestMode) return false;
     const home = actor.userData;
     if (!home.bones || !home.mixer) return;
     const previous = this.models.get(this.activeId);
@@ -1141,6 +1143,7 @@ export class Residents {
 
   /** Become this friend and bring the camera to them. */
   playAs(id) {
+    if (this.game.livingTestMode) return false;
     const game = this.game, actor = this.models.get(id);
     if (!actor || !actor.userData.bones) return false;
     this.closeMenu();

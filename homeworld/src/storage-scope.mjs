@@ -14,6 +14,7 @@
  */
 
 const MIGRATION_KEY = 'godlykids_profile_scope_migrated_v1';
+export const LIVING_TEST = typeof location !== 'undefined' && new URLSearchParams(location.search).get('livingTest') === '1';
 
 /** Legacy keys the island may have to inherit. Keep in sync with utils/profileScope.ts. */
 export const LEGACY_KEYS = [
@@ -27,7 +28,8 @@ export const LEGACY_KEYS = [
 function readScope() {
   try {
     if (typeof location === 'undefined') return '';
-    return String(new URLSearchParams(location.search).get('profile') || '').trim();
+    const profile = String(new URLSearchParams(location.search).get('profile') || '').trim();
+    return LIVING_TEST ? `living-test:${profile || 'local'}` : profile;
   } catch {
     return '';
   }
@@ -55,7 +57,7 @@ function defaultStorage() {
  */
 export function migrateLegacyKeys(bases = LEGACY_KEYS, storage = defaultStorage(), scope = PROFILE_SCOPE) {
   const copied = [];
-  if (!scope || !storage) return copied;
+  if (!scope || !storage || scope.startsWith('living-test:')) return copied;
   try {
     let marker = storage.getItem(MIGRATION_KEY);
     if (!marker) {
@@ -84,7 +86,7 @@ export function migrateLegacyKeys(bases = LEGACY_KEYS, storage = defaultStorage(
  * decides; a missing scoped value always adopts. Returns true when copied.
  */
 export function adoptNewerLegacy(base, newer, storage = defaultStorage(), scope = PROFILE_SCOPE) {
-  if (!scope || !storage) return false;
+  if (!scope || !storage || scope.startsWith('living-test:')) return false;
   try {
     if (storage.getItem(MIGRATION_KEY) !== scope) return false;
     const legacy = storage.getItem(base);
@@ -101,7 +103,7 @@ export function adoptNewerLegacy(base, newer, storage = defaultStorage(), scope 
 /** Posted by the parent (`gk-profile {scope}`): a frame showing another profile reloads under the right one. */
 export function ensureFrameScope(scope) {
   const wanted = String(scope || '').trim();
-  if (!wanted || wanted === PROFILE_SCOPE) return false;
+  if (!wanted || (LIVING_TEST ? `living-test:${wanted}` : wanted) === PROFILE_SCOPE) return false;
   try {
     const url = new URL(location.href);
     url.searchParams.set('profile', wanted);

@@ -699,7 +699,8 @@ export class Residents {
     if (!village || !game.playersOnly) return [];
     const options = [], free = (key) => !this.claims.has(key), busyId = game.order?.id || game.action?.id || null;
     const site = village.openBuild(s);
-    if (site && skillFor(home.name)?.id !== 'gardener' && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
+    // A garden fence, gate, or scarecrow (id starts with garden-) is Abel's job. Noah and Adam leave it alone.
+    if (site && !String(site.id).startsWith('garden-') && skillFor(home.name)?.id !== 'gardener' && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
       const def = buildingById(site.kind);
       options.push({ kind: 'build', key: `build:${site.id}`, buildingId: site.id, target: workPoint(game.world, site), reach: .6, label: `Building the ${def?.name || 'building'}`, rank: 1 });
     }

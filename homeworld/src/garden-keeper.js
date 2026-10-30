@@ -99,7 +99,7 @@ export class GardenKeeper {
     for (const r of requests) if (!oldIds.has(r.id) && r.priority >= 60 && !['wood'].includes(r.kind)) this.feed(name, 'garden', `${name} wants ${describe(r)} — ${r.reason}`);
     for (const r of old) {
       if (newIds.has(r.id) || !r.fulfilled) continue;
-      const by = r.fulfilled.by || 'A friend';
+      const by = this.keeperName();
       this.feed(by, 'build', `${by} finished ${describe(r, true)}!`);
       this.game.toast?.(`${by} finished ${describe(r, true)}!`);
     }
@@ -107,7 +107,7 @@ export class GardenKeeper {
     this.patch({ requests: kept });
   }
 
-  /** A builder finished the last tile of a request: mark it so the next sync can celebrate it. */
+  /** Abel finished the last tile of a request: mark it so the next sync can say he did. */
   markFulfilled(requestId, by) {
     const list = (this.garden().requests || []).map((r) => (r.id === requestId ? { ...r, fulfilled: { by, at: Date.now() } } : r));
     this.patch({ requests: list });
@@ -226,7 +226,7 @@ export class GardenKeeper {
     if (energyFor(s, home.id) < 12) return [];
     const game = this.game, world = this.world, out = [], free = (key) => !claims?.has(key);
     const busyId = game.order?.id || game.action?.id || null;
-    // A gate stone the keeper's builders started (timed piece) is finished first — it would otherwise block every other placement.
+    // A gate stone Abel started (timed piece) is finished by him first — it would otherwise block every other placement.
     const ours = activeBuildings(s).find((b) => b.status !== 'complete' && !b.project && /^garden-/.test(b.id));
     if (ours && free(`build:${ours.id}`)) return [{ kind: 'build', key: `build:${ours.id}`, buildingId: ours.id, target: workPoint(world, ours), reach: .6, label: 'Making the garden gate', rank: 1 }];
     // One stroke piece at a time: the reducer refuses a new placement while another unfinished non-project building exists.
@@ -289,7 +289,7 @@ export class GardenKeeper {
 
   /** Abel is beside the tile: he places (or takes down) the piece himself, then tells everyone. */
   finishWork(actor, c, residents) {
-    const game = this.game, home = actor.userData, who = home.name || 'A friend', s = game.store.state;
+    const game = this.game, home = actor.userData, s = game.store.state;
     const centre = cellFromKey(this.world, c.tileKey), here = { x: home.x, y: home.y };
     // Stand one tile out along the nearest side (not a diagonal) so the "leave space to stand" rule is happy.
     const dx = here.x - centre.x, dy = here.y - centre.y;
@@ -303,7 +303,7 @@ export class GardenKeeper {
         game.store.commitAs(home.id, home.name, stand, { type: 'place_building', id, kind: c.place.kind, key: c.place.key, rotation: 0, stroke: c.place.stroke, actionId: `helper:${home.id}:garden:${Date.now()}` });
         const placed = game.store.state.buildings?.find((b) => b.id === id);
         if (placed && placed.status !== 'complete') {
-          // Timed pieces (a path stone) run through the normal begin/finish flow: hand the builder the site.
+          // Timed pieces (the gate stone) run through the normal begin/finish flow, and Abel stays on the site.
           residents.claims?.set(`build:${id}`, home.id);
           home.chore = { kind: 'build', key: `build:${id}`, buildingId: id, target: workPoint(this.world, placed), reach: .6, label: c.label, rank: 1, path: [] };
         }
@@ -319,11 +319,12 @@ export class GardenKeeper {
     game.music?.sfx?.play('chop');
     game.burst?.(centre, 'wood', .6);
     residents.reelEvent?.(actor);
-    // Last tile of the ask? Rescan now so the request disappears and the feed says who did it.
+    // Last tile of the ask? Rescan now so the request disappears and the feed says Abel finished it.
     this.lastScan = 0;
     const r = c.request, left = r.tiles.filter((k) => k !== c.tileKey && !this.tileDone(after, r, k));
-    if (!left.length) { this.markFulfilled(r.id, who); this.lastRevision = -1; this.update(); }
-    else game.toast?.(`${who} put up ${c.remove ? 'the old fence piece' : pieceName(c.place.kind)} for the garden.`);
+    const keeper = this.keeperName();
+    if (!left.length) { this.markFulfilled(r.id, keeper); this.lastRevision = -1; this.update(); }
+    else game.toast?.(`${keeper} put up ${c.remove ? 'the old fence piece' : pieceName(c.place.kind)} for the garden.`);
   }
   tileDone(s, r, key) {
     if (r.kind === 'unfence') return !activeBuildings(s).some((b) => b.status === 'complete' && footprint(this.world, b)?.keys.includes(key));

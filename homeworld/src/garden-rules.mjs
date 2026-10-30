@@ -254,7 +254,7 @@ export function currentPlan(state,primary){
 const sideWord={north:'north side',south:'south side',east:'east side',west:'west side'};
 const title=s=>s.charAt(0).toUpperCase()+s.slice(1);
 /**
- * The keeper's asks, highest priority first. Each one is something a builder can walk over and do:
+ * Abel's own plan, highest priority first. He walks over and does each one himself:
  *  { id, kind:'fence'|'brick_fence'|'gate'|'unfence'|'clear'|'wood'|'scarecrow'|'path', side?, tiles[], need{}, reason, priority, rule }
  * Safety first (sides coyotes came through), then the gate and posts, then crows, then comfort.
  */
@@ -276,7 +276,7 @@ export function deriveRequests(status,state,world){
     const blocked=c.gaps.filter(t=>t.status==='blocked'&&!t.corner&&t.obstacle&&['stump','tree','rock'].includes(t.obstacle.what));
     for(const t of blocked){
       const ob=t.obstacle,word={stump:'A stump',tree:'A tree',rock:'A rock'}[ob.what];
-      out.push({id:`clear${tag}:${t.key}`,kind:'clear',side:t.side,tiles:[t.key],obstacle:ob,need:{},reason:`${word} is in the way of the fence on the ${sideWord[t.side]}. ${ob.what==='stump'?'Someone with a shovel could dig it out.':ob.what==='tree'?'Someone could cut it down.':'Someone could break it up.'}`,rule:'clear_perimeter',priority:70+(hot.has(t.side)?15:0),cluster:c.id});
+      out.push({id:`clear${tag}:${t.key}`,kind:'clear',side:t.side,tiles:[t.key],obstacle:ob,need:{},reason:`${word} is in the way of the fence on the ${sideWord[t.side]}. ${ob.what==='stump'?'Abel will dig it out.':ob.what==='tree'?'Abel will cut it down.':'Abel will break it up.'}`,rule:'clear_perimeter',priority:70+(hot.has(t.side)?15:0),cluster:c.id});
     }
     if(c.inner.length)out.push({id:`unfence${tag}`,kind:'unfence',tiles:c.inner.map(x=>x.key),need:{},reason:'The garden grew past the old fence. Those inner pieces block the walkway — let’s take them down and use them on the outside.',rule:'move_fence',priority:85,cluster:c.id});
     const sidesOpen=SIDES.some(s=>c.gapsBySide[s]>0);
@@ -346,7 +346,7 @@ export function pathFromGate(state,world,c,minutes=gameTime(state)){
 /**
  * Where the next plots go. Returns { blocked:string|null, tiles:[{key,role,seed}], block:{col,row,w,h,shape}|null }.
  *  - under FENCE_BEFORE_PLOTS plots: grow the rectangle a full row or column at a time (aspect ≤ 2:1);
- *  - past that, a closed ring is required first (the keeper asks the builders);
+ *  - past that, a closed ring is required first (Abel finishes the fence himself);
  *  - then new blocks start one tile away (a walkway) — a rectangle block, or the chosen shape's mask.
  */
 export function planNextPlots(state,world,status,shape=currentPlan(state,status?.primary).shape,minutes=gameTime(state)){
@@ -386,7 +386,7 @@ export function blockTiles(block){
 }
 /** How far from the garden the next block may sit (walkway tiles between). */
 export const BLOCK_REACH=8;
-/** Trees, stumps or rocks the builders may clear to make room for a block. */
+/** Trees, stumps or rocks Abel may clear to make room for a block. */
 export const BLOCK_CLEARABLE=3;
 /**
  * The nearest spot beside the garden (one walkway tile away, up to BLOCK_REACH) where every tile of the block is plowable.

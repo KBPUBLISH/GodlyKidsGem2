@@ -14,6 +14,7 @@
  */
 
 const MIGRATION_KEY = 'godlykids_profile_scope_migrated_v1';
+import {testScopeFor} from './living-first-friend.mjs';
 export const LIVING_TEST = typeof location !== 'undefined' && new URLSearchParams(location.search).get('livingTest') === '1';
 
 /** Legacy keys the island may have to inherit. Keep in sync with utils/profileScope.ts. */
@@ -29,7 +30,7 @@ function readScope() {
   try {
     if (typeof location === 'undefined') return '';
     const profile = String(new URLSearchParams(location.search).get('profile') || '').trim();
-    return LIVING_TEST ? `living-test:${profile || 'local'}` : profile;
+    return LIVING_TEST ? testScopeFor(profile) : profile;
   } catch {
     return '';
   }
@@ -57,7 +58,7 @@ function defaultStorage() {
  */
 export function migrateLegacyKeys(bases = LEGACY_KEYS, storage = defaultStorage(), scope = PROFILE_SCOPE) {
   const copied = [];
-  if (!scope || !storage || scope.startsWith('living-test:')) return copied;
+  if (!scope || !storage || scope.startsWith('living-test:') || scope.startsWith('living-test-solo:')) return copied;
   try {
     let marker = storage.getItem(MIGRATION_KEY);
     if (!marker) {
@@ -86,7 +87,7 @@ export function migrateLegacyKeys(bases = LEGACY_KEYS, storage = defaultStorage(
  * decides; a missing scoped value always adopts. Returns true when copied.
  */
 export function adoptNewerLegacy(base, newer, storage = defaultStorage(), scope = PROFILE_SCOPE) {
-  if (!scope || !storage || scope.startsWith('living-test:')) return false;
+  if (!scope || !storage || scope.startsWith('living-test:') || scope.startsWith('living-test-solo:')) return false;
   try {
     if (storage.getItem(MIGRATION_KEY) !== scope) return false;
     const legacy = storage.getItem(base);
@@ -103,7 +104,7 @@ export function adoptNewerLegacy(base, newer, storage = defaultStorage(), scope 
 /** Posted by the parent (`gk-profile {scope}`): a frame showing another profile reloads under the right one. */
 export function ensureFrameScope(scope) {
   const wanted = String(scope || '').trim();
-  if (!wanted || (LIVING_TEST ? `living-test:${wanted}` : wanted) === PROFILE_SCOPE) return false;
+  if (!wanted || (LIVING_TEST ? testScopeFor(wanted) : wanted) === PROFILE_SCOPE) return false;
   try {
     const url = new URL(location.href);
     url.searchParams.set('profile', wanted);

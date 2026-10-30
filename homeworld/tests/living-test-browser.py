@@ -1,113 +1,84 @@
-"""Play the opt-in behavior through the original island's real navigation/render loop."""
-import asyncio
-import os
-import shutil
+"""Full-app solo onboarding with CMS fixtures; requires the built island and app dev server."""
+import asyncio,json,os,shutil
+from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 
-BASE = os.environ.get('LIVING_ISLAND_TEST_URL', 'http://127.0.0.1:5190/')
-URL = BASE + ('&' if '?' in BASE else '?') + 'livingTest=1'
+BOOK='111111111111111111111111'
+STORY='222222222222222222222222'
+ISLAND={'_id':'333333333333333333333333','slug':'genesis','title':'Genesis','bookLabel':'Genesis','status':'published','storyCounts':{'published':1},'order':0}
+PACK={'_id':STORY,'title':'God Makes a World','displayTitle':'God Makes a World','islandId':'genesis','status':'published','order':0,'bookId':BOOK,'quizMode':'none','heroImageUrl':'/assets/images/splash-adventure.jpg'}
+BOOK_DATA={'_id':BOOK,'title':'God Makes a World','bookType':'bible_map','orientation':'portrait','coverImage':'/assets/images/splash-adventure.jpg','isMembersOnly':False,'status':'published','description':'Browser test fixture'}
+PAGES=[{'_id':f'{i+4:024d}','bookId':BOOK,'pageNumber':i+1,'backgroundUrl':'/assets/images/splash-adventure.jpg','backgroundType':'image','textBoxes':[{'id':f'text-{i}','text':text,'x':5,'y':65,'width':90,'height':25,'fontSize':24,'color':'#172b24'}]} for i,text in enumerate(['God made a beautiful world.','God made Adam. The world was full of good things.'])]
+
+async def api(route):
+    path=urlparse(route.request.url).path
+    if '/bible-map/islands/genesis' in path:body={**ISLAND,'stories':[PACK]}
+    elif path.endswith('/bible-map/islands'):body=[ISLAND]
+    elif path.endswith('/bible-map/stories'):body=[PACK]
+    elif f'/pages/book/{BOOK}' in path:body=PAGES
+    elif path.endswith(f'/books/{BOOK}'):body=BOOK_DATA
+    elif '/tts' in path:body={'audioUrl':None}
+    else:body=[]
+    await route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS'},body=json.dumps(body))
+
+async def quality(frame):
+    await frame.evaluate('''()=>{const g=window.__hw;g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;g.sun.castShadow=false;g.resize();const render=g.renderer.render.bind(g.renderer);let n=0;g.renderer.render=(...args)=>{g.camera.updateMatrixWorld();if(++n%8===0)render(...args);};}''')
 
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(executable_path=shutil.which('chromium'), headless=True, args=['--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-swiftshader'])
-        page = await browser.new_page(viewport={'width': 430, 'height': 932}, device_scale_factor=1)
-        await page.add_init_script("""
-          for (const key of ['godlykids_homeworld_playtest_v1','godlykids_players_world_residents_v1','godly_kids_data_v6']) localStorage.setItem(key,'original-save-sentinel');
-          localStorage.setItem('godlykids_profile_scope_migrated_v1','real-kid');
-        """)
-        errors, requests = [], []
-        page.on('pageerror', lambda e: errors.append(str(e)))
-        page.on('request', lambda r: requests.append(r.url))
-        await page.goto(URL, wait_until='domcontentloaded')
-        await page.wait_for_function('window.__hw?.loaded || window.__hw?.error', timeout=90000)
-        assert await page.evaluate('window.__hw.loaded'), await page.evaluate('window.__hw.error')
-        assert any('/assets/environment.glb' in url for url in requests)
-        assert any('/assets/adam.glb' in url for url in requests)
-        assert await page.evaluate('window.__hw.store.state.activeCharacter') == 'you'
-        assert await page.evaluate("window.__hw.selectCharacter('eve')") is False
-        assert await page.evaluate("window.__hw.residents.playAs('noah')") is False
-        assert await page.locator('[aria-label*="joystick" i]').count() == 0
-        await page.wait_for_timeout(1200)
-        await page.screenshot(path='/tmp/original-island-living-test.png')
-        async def software_quality():
-            # Software Chromium cannot establish device performance. Reduce rendering
-            # cost only; keep the real simulation, navigation, assets, and assertions.
-            await page.evaluate('''() => {
-              const g=window.__hw;
-              g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;
-              g.sun.castShadow=false;g.resize();
-              // Render periodically while the actual game loop continues on every RAF.
-              // This is a functional test, not a device frame-rate benchmark.
-              const render=g.renderer.render.bind(g.renderer);let frame=0;
-              g.renderer.render=(...args)=>{
-                g.camera.updateMatrixWorld();
-                if(++frame%8===0)render(...args);
-              };
-            }''')
-        await software_quality()
-        async def state():
-            return await page.evaluate('window.__hw.livingTest.state')
-        before = await page.evaluate('({player:{...window.__hw.player},friends:Object.values(window.__hw.community.actors).map(h=>[h.actor.position.x,h.actor.position.z])})')
-        for _ in range(15):
-            await page.wait_for_timeout(1000)
-            after = await page.evaluate('({player:{...window.__hw.player},friends:Object.values(window.__hw.community.actors).map(h=>[h.actor.position.x,h.actor.position.z])})')
-            if before['friends'] != after['friends']:
-                break
-        assert before['player'] == after['player']
-        assert before['friends'] != after['friends']
-        print('PASS: original island GLBs, autonomous Bible friends, fixed player, no joystick', flush=True)
-        # Use the same public walk action as the UI; do not teleport or edit progress.
-        async def walk_to_supply(resource_id):
-            if resource_id in (await state())['gathered']:
-                return
-            print('Walking to',resource_id,flush=True)
-            await page.evaluate('(id)=>{const t=window.__hw.livingTest;t.walk(t.resources.find(r=>r.id===id));}', resource_id)
-            await page.wait_for_function('(id)=>window.__hw.livingTest.state.gathered.includes(id)', arg=resource_id, timeout=60000)
-        async def walk_to_circle():
-            print('Walking to delivery circle',flush=True)
-            await page.evaluate('window.__hw.livingTest.walk(window.__hw.livingTest.site())')
-        await walk_to_supply('log-1')
-        await walk_to_circle()
-        await page.wait_for_function('window.__hw.livingTest.state.deposits.wood===1', timeout=60000)
-        assert (await state())['stage'] == 0
-        await page.reload(wait_until='domcontentloaded')
-        await page.wait_for_function('window.__hw?.loaded || window.__hw?.error', timeout=90000)
-        await software_quality()
-        assert (await state())['deposits']['wood'] == 1
-        print('PASS: partial delivery and reload on the original island', flush=True)
-        for stage, prefix, count in [(0, 'log', 3), (1, 'carrot', 4), (2, 'flower', 3)]:
-            for i in range(1, count + 1):
-                await walk_to_supply(f'{prefix}-{i}')
-            if stage == 1:
-                await page.screenshot(path='/tmp/original-island-carrying.png')
-            await walk_to_circle()
-            await page.wait_for_function('(stage)=>window.__hw.livingTest.state.stage===stage', arg=stage + 1, timeout=60000)
-            assert await page.evaluate('window.__hw.store.state.activeCharacter') == 'you'
-            print('PASS: real navigation, auto pickup and delivery for', prefix, flush=True)
-        await page.wait_for_function('window.__hw.livingTest.state.homeWork===1', timeout=90000)
-        assert await page.evaluate('window.__hw.store.state.buildings.some(b=>b.id==="living-test-home"&&b.kind==="hut"&&b.status==="complete")')
-        assert await page.evaluate('window.__hw.building.nodes.has("living-test-home")')
-        await page.reload(wait_until='domcontentloaded')
-        await page.wait_for_function('window.__hw?.loaded || window.__hw?.error', timeout=90000)
-        await software_quality()
-        assert (await state())['stage'] == 3
-        for name in ['Open the island to-do list', 'Open my bag', 'Open build', 'Friends']:
-            await page.get_by_role('button', name=name, exact=True).click()
-            assert await page.get_by_role('dialog').is_visible()
-            assert await page.get_by_role('button', name='Play as', exact=False).count() == 0
-            await page.get_by_role('button', name='Back to island', exact=True).click()
-        for width, height in [(320, 740), (820, 1180), (1366, 900)]:
-            await page.set_viewport_size({'width': width, 'height': height})
-            await page.wait_for_timeout(250)
-            assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-        await page.set_viewport_size({'width':430,'height':932})
-        await page.wait_for_timeout(700)
-        await page.screenshot(path='/tmp/original-island-completed.png')
-        for key in ['godlykids_homeworld_playtest_v1', 'godlykids_players_world_residents_v1', 'godly_kids_data_v6']:
-            assert await page.evaluate('(k)=>localStorage.getItem(k)', key) == 'original-save-sentinel'
-        assert await page.evaluate('localStorage.getItem("godlykids_profile_scope_migrated_v1")') == 'real-kid'
-        assert not errors, errors
-        print('PASS: original hut, retained button artwork, drawers, responsive sizes, reload, original save isolation, zero browser errors', flush=True)
-        await browser.close()
+        b=await p.chromium.launch(executable_path=shutil.which('chromium'),headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader'])
+        page=await b.new_page(viewport={'width':430,'height':932});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        await page.route('**/api/**',api)
+        css=os.environ.get('LIVING_TEST_CSS','/tmp/godlykids-current.css')
+        if os.path.isfile(css):
+            await page.route('https://cdn.tailwindcss.com/**',lambda r:r.fulfill(content_type='application/javascript',body='window.tailwind={config:{}}'))
+        await page.route('https://fonts.googleapis.com/**',lambda r:r.abort())
+        await page.goto(os.environ.get('LIVING_ISLAND_TEST_URL','http://127.0.0.1:3000/')+'#/my-home?livingTest=1',wait_until='domcontentloaded')
+        if os.path.isfile(css): await page.add_style_tag(path=css)
+        await page.wait_for_selector('iframe[title="Players World"]',timeout=30000)
+        frame=page.frames[-1]
+        await frame.wait_for_function('window.__hw?.loaded||window.__hw?.error',timeout=90000)
+        assert await frame.evaluate('window.__hw.loaded'),await frame.evaluate('window.__hw.error')
+        assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
+        assert 'Noah' not in await frame.locator('body').inner_text()
+        await quality(frame)
+        await page.wait_for_timeout(1000)
+        await page.screenshot(path='/tmp/solo-island-start.png')
+        print('PASS: child starts alone with a personal task in the original island',flush=True)
+        for i in [1,2,3]:
+            rid=f'log-{i}'
+            if await frame.evaluate('(id)=>window.__hw.livingTest.state.gathered.includes(id)',rid):continue
+            await frame.evaluate('(id)=>{const t=window.__hw.livingTest;t.walk(t.resources.find(r=>r.id===id));}',rid)
+            await frame.wait_for_function('(id)=>window.__hw.livingTest.state.gathered.includes(id)',arg=rid,timeout=60000)
+        await frame.evaluate('window.__hw.livingTest.walk(window.__hw.livingTest.site())')
+        await frame.wait_for_function('window.__hw.livingTest.state.stage===1',timeout=60000)
+        assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
+        assert await frame.evaluate('window.__hw.store.state.buildings.some(b=>b.id==="living-test-camp")')
+        await page.screenshot(path='/tmp/solo-first-friend-invite.png')
+        print('PASS: solo camp completed; invitation appears with no friend granted',flush=True)
+        await frame.get_by_role('button',name='Let’s read a story',exact=True).click()
+        await page.wait_for_url('**/#/sail/genesis/lesson?storyId='+STORY,timeout=20000)
+        print('PASS: actual app bridge opens the first CMS story pack',flush=True)
+        await page.wait_for_timeout(2000)
+        await page.get_by_role('button',name='READ STORY',exact=True).click()
+        await page.get_by_role('button',name='Start',exact=True).click()
+        await page.get_by_role('button',name='3–5',exact=False).click()
+        await page.wait_for_timeout(4000)
+        assert await page.evaluate('Object.keys(localStorage).filter(k=>k.startsWith("gk_living_first_friend_v1:")).every(k=>JSON.parse(localStorage[k]).phase==="reading")')
+        for i in range(2):
+            await page.get_by_role('button',name='Next page',exact=True).click()
+            await page.wait_for_timeout(1200)
+        await page.wait_for_url('**/#/my-home?livingTest=1',timeout=20000)
+        frame=page.frames[-1]
+        await frame.wait_for_function('window.__hw?.loaded',timeout=90000)
+        await quality(frame)
+        assert await frame.evaluate('window.__hw.community.actors.adam.actor.visible&&!window.__hw.community.actors.eve.actor.visible&&!window.__hw.community.actors.noah.actor.visible')
+        assert await frame.evaluate('window.__hw.store.state.activeCharacter')=='you'
+        assert await frame.evaluate('window.__hw.selectCharacter("adam")') is False
+        await page.screenshot(path='/tmp/solo-adam-arrival.png')
+        print('PASS: finishing the real reader returns to the island with only Adam and fixed player control',flush=True)
+        assert not errors,errors
+        print('ERRORS:',errors,flush=True)
+        await b.close()
 
 asyncio.run(main())

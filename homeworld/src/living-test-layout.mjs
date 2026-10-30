@@ -3,8 +3,16 @@ import { buildSiteStatus, cellAt, Navigation } from './core.mjs';
 // Uses the actual map's placement and navigation rules; never clears scenery to fit a test.
 export function livingTestLayout(world, state) {
   const nav = new Navigation(world, state), start = state.player;
+  let camp=null;
   let home = null;
   const origin = cellAt(world, start.x, start.y);
+  for(let radius=1;radius<=16&&!camp;radius++)for(let dx=-radius;dx<=radius&&!camp;dx++)for(const dy of [-radius,radius]){
+    const plan={kind:'campfire',key:`${origin.col+dx}:${origin.row+dy}`,rotation:0},site=buildSiteStatus(world,state,plan);
+    if(!site.ok)continue;
+    const pad=nav.nearest({x:site.footprint.center.x,y:site.footprint.y-1},2);
+    if(pad&&nav.path(start,pad)){camp={plan,baseHeight:site.baseHeight,pad};break;}
+  }
+  if(!camp)throw new Error('No clear camp site was found on this island.');
   for (let radius = 3; radius <= 32 && !home; radius++) {
     for (let dx = -radius; dx <= radius && !home; dx++) {
       for (const dy of [-radius, radius]) {
@@ -32,9 +40,9 @@ export function livingTestLayout(world, state) {
   };
   for (const [id, type, dx, dy] of [
     ['log-1','wood',-3,-1],['log-2','wood',-4,1],['log-3','wood',-2,2],
+    ['log-4','wood',4,4],['log-5','wood',5,4],['log-6','wood',6,4],
     ['carrot-1','carrot',2,2],['carrot-2','carrot',3,2],['carrot-3','carrot',2,3],['carrot-4','carrot',3,3],
-    ['flower-1','flower',-1,4],['flower-2','flower',1,4],['flower-3','flower',3,4],
   ]) points.push({ id, type, ...find({x:start.x+dx,y:start.y+dy}) });
   const kitchen = find({x:start.x+5,y:start.y+1},2);
-  return { home, kitchen, points };
+  return { home, camp, kitchen, points };
 }

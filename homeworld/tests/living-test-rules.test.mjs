@@ -1,65 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshState, restoreState, collect, deliver, readyToDeliver, REQUESTS, PLAYER_ID } from '../src/living-test-rules.mjs';
+import {freshState,restoreState,collect,deliver,currentRequest,REQUESTS} from '../src/living-test-rules.mjs';
 
-test('only the player can gather or complete a friend request', () => {
-  const state = freshState();
-  assert.equal(collect(state, 'log-1', 'noah'), state);
-  assert.equal(collect(state, 'carrot-1'), state);
-  assert.equal(deliver(state, 'noah'), state);
-  assert.equal(state.player.id, PLAYER_ID);
+test('a new child has a personal camp task, not a request from a Bible character',()=>{
+  const state=freshState();assert.equal(currentRequest(state).friend,'you');
+  assert.equal(state.adamUnlocked,false);
+  assert.equal(collect(state,'log-1','adam'),state);
+  assert.equal(collect(state,'log-4'),state);
+  assert.equal(collect(state,'carrot-1'),state);
 });
-
-test('three logs are unique and must be handed to Noah before the next request', () => {
-  let state = freshState();
-  for (const id of ['log-1', 'log-2', 'log-3']) state = collect(state, id);
-  assert.equal(collect(state, 'log-1'), state);
-  assert.equal(readyToDeliver(state), true);
-  assert.equal(deliver(state, 'eve'), state);
-  assert.equal(deliver(state, 'noah', 'eve'), state);
-  for(let i=0;i<3;i++) state = deliver(state, 'noah');
-  assert.equal(state.stage, 1);
-  assert.equal(state.inventory.wood, 0);
-  assert.equal(deliver(state, 'noah'), state);
+test('the solo task supports partial deliveries and then pauses for the story invitation',()=>{
+  let s=freshState();s=deliver(collect(s,'log-1'),'you');
+  assert.equal(s.deposits['first-camp'],1);assert.equal(s.inventory.wood,0);
+  assert.deepEqual(restoreState(JSON.parse(JSON.stringify(s))),s);
+  for(const id of ['log-2','log-3'])s=deliver(collect(s,id),'you');
+  assert.equal(s.stage,1);assert.equal(currentRequest(s),null);
+  assert.equal(collect(s,'carrot-1'),s);
 });
-
-test('the complete sequence consumes supplies once and preserves player identity', () => {
-  let state = freshState();
-  const groups = [['log-1', 'log-2', 'log-3'], ['carrot-1', 'carrot-2', 'carrot-3', 'carrot-4'], ['flower-1', 'flower-2', 'flower-3']];
-  for (const [i, ids] of groups.entries()) {
-    ids.forEach(id => { state = collect(state, id); });
-    ids.forEach(() => { state = deliver(state, REQUESTS[i].friend); });
-  }
-  assert.equal(state.stage, 3);
-  assert.equal(state.player.id, PLAYER_ID);
-  assert.deepEqual(state.inventory, { wood: 0, carrot: 0, flower: 0 });
-  assert.deepEqual(restoreState(JSON.parse(JSON.stringify(state))), state);
+test('Adam requests and home building unlock only after a verified story receipt is applied',()=>{
+  let s=freshState();
+  for(const id of ['log-1','log-2','log-3'])s=deliver(collect(s,id),'you');
+  s.adamUnlocked=true;assert.equal(currentRequest(s).friend,'adam');
+  for(const id of ['carrot-1','carrot-2','carrot-3','carrot-4'])s=deliver(collect(s,id),'adam');
+  assert.equal(s.stage,2);
+  for(const id of ['log-4','log-5','log-6'])s=deliver(collect(s,id),'adam');
+  assert.equal(s.stage,3);assert.deepEqual(s.inventory,{wood:0,carrot:0});
+  assert.equal(restoreState({...s,adamUnlocked:true}).adamUnlocked,false,'Stored request state cannot grant a friend');
 });
-
-test('one carried log can be deposited early and partial delivery survives reload', () => {
-  let state = collect(freshState(), 'log-1');
-  state = deliver(state, 'noah');
-  assert.equal(state.stage, 0);
-  assert.equal(state.deposits.wood, 1);
-  assert.equal(state.inventory.wood, 0);
-  assert.equal(deliver(state, 'noah'), state);
-  assert.deepEqual(restoreState(JSON.parse(JSON.stringify(state))), state);
-});
-
-test('the earlier prototype save retains completed construction and supplies', () => {
-  const old = { version: 1, stage: 1, homeWork: .6, gathered: ['log-1','log-2','log-3','carrot-1'], player: { x: 1, z: 2 } };
-  const state = restoreState(old);
-  assert.equal(state.stage, 1);
-  assert.equal(state.deposits.wood, 3);
-  assert.equal(state.inventory.carrot, 1);
-  assert.equal(state.homeWork, .6);
-  assert.deepEqual(state.player, { id: PLAYER_ID });
-});
-
-test('invalid saves cannot inject inventory, control a friend, or skip milestones', () => {
-  const state = restoreState({ version: 1, stage: 0, gathered: ['log-1', 'log-1', '__proto__', 'unknown'], inventory: { wood: 999 }, player: { id: 'noah', x: 900, z: -900 } });
-  assert.deepEqual(state.gathered, ['log-1']);
-  assert.equal(state.inventory.wood, 1);
-  assert.equal(state.player.id, PLAYER_ID);
-  assert.deepEqual(restoreState({ version: 1, stage: 3, gathered: [] }), freshState());
+test('older prototype data and invalid delivery records cannot skip the solo opening',()=>{
+  assert.deepEqual(restoreState({version:1,stage:3,adamUnlocked:true}),freshState());
+  assert.deepEqual(restoreState({version:2,stage:3,gathered:[]}),freshState());
+  const s=restoreState({version:2,stage:0,gathered:['log-1','log-1','__proto__'],inventory:{wood:999},adamUnlocked:true});
+  assert.deepEqual(s.gathered,['log-1']);assert.equal(s.inventory.wood,1);assert.equal(s.adamUnlocked,false);
 });

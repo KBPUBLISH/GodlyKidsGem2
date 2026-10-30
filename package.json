@@ -8,6 +8,7 @@
     "main": "vite --port 3000",
     "build": "vite build",
     "homeworld:build": "vite build --config homeworld/vite.config.js",
+    "living-test:build": "npm run build && npm run homeworld:build && node scripts/build-living-test.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "portal": "cd projects-portal && npm run dev",
     "bookstore": "cd bookstore && npm run dev",

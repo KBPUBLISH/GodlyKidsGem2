@@ -8,8 +8,9 @@ test('the play test uses reachable places and a valid home site on the original 
   const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
   const state=initialState(world),layout=livingTestLayout(world,state),nav=new Navigation(world,state);
   assert.equal(buildSiteStatus(world,state,layout.home.plan).ok,true);
+  assert.equal(buildSiteStatus(world,state,layout.camp.plan).ok,true);
   assert.equal(layout.points.length,10);
-  for(const point of [layout.home.pad,layout.kitchen,...layout.points])assert.ok(nav.path(state.player,point));
+  for(const point of [layout.home.pad,layout.camp.pad,layout.kitchen,...layout.points])assert.ok(nav.path(state.player,point));
   assert.equal(state.buildings.length,0);
   assert.equal(layout.points.filter(p=>p.type==='carrot').length,4);
 });
@@ -20,7 +21,7 @@ test('the opt-in island cannot migrate or adopt original profile saves',async()=
     globalThis.location={search:'?livingTest=1&profile=family:kid',replace:()=>{throw Error('Unexpected profile redirect');}};
     const scope=await import('../src/storage-scope.mjs?living-test-isolation');
     assert.equal(scope.LIVING_TEST,true);
-    assert.equal(scope.PROFILE_SCOPE,'living-test:family:kid');
+    assert.equal(scope.PROFILE_SCOPE,'living-test-solo:family:kid');
     const entries=new Map([['godlykids_homeworld_playtest_v1','original-world'],['godlykids_profile_scope_migrated_v1','family:kid']]);
     const before=new Map(entries),storage={getItem:k=>entries.get(k)??null,setItem:(k,v)=>entries.set(k,v)};
     assert.deepEqual(scope.migrateLegacyKeys(undefined,storage),[]);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate,useLocation } from 'react-router-dom';
+import {openLivingFirstFriendStory} from '../utils/livingFirstFriend';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import { rewardsService, type UnlockedCharacter } from '../services/rewardsService';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
@@ -15,8 +16,8 @@ import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRI
 
 const HOMEWORLD_URL = '/homeworld/index.html?v=players190&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
-const homeworldUrlFor = (scope: string, playerName: string) =>
-  `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}`;
+const homeworldUrlFor = (scope: string, playerName: string, livingTest = false) =>
+  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
@@ -199,6 +200,9 @@ type DropCharacter = {
  */
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
+  const routeLocation=useLocation();
+  const livingTestMode=new URLSearchParams(routeLocation.search).get('livingTest')==='1';
+  const openingFirstFriend=useRef(false);
   const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
   const playerName = useMemo(() => {
     const kid = currentProfileId ? kids.find((k) => k.id === currentProfileId) : null;
@@ -324,6 +328,7 @@ const MyHomePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if(livingTestMode){setModelsReady(true);return;}
     let cancel = false;
     const refresh = rewardsService.refreshUnlockedCharactersFromCms().catch(() => false);
     const cap = new Promise((resolve) => window.setTimeout(resolve, 8000));
@@ -339,7 +344,7 @@ const MyHomePage: React.FC = () => {
     return () => {
       cancel = true;
     };
-  }, [post]);
+  }, [post,livingTestMode]);
 
   const stopPrayerAudio = useCallback((id?: string) => {
     const current = prayerAudioRef.current;
@@ -416,6 +421,14 @@ const MyHomePage: React.FC = () => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
+      if(data.type==='gk-living-collect-first-friend'){
+        if(!livingTestMode||event.source!==frameRef.current?.contentWindow||openingFirstFriend.current)return;
+        openingFirstFriend.current=true;
+        void openLivingFirstFriendStory(profileScope).then(destination=>navigate(destination.path,{state:destination.state})).catch(()=>{
+          post({type:'gk-living-first-friend-error'});
+        }).finally(()=>{openingFirstFriend.current=false;});
+        return;
+      }
       if (data.type === 'gk-back-to-ship') navigate('/crew');
       if (data.type === 'gk-character-profile-please') {
         // A story friend the island's canon does not know: fetch a Gemini-written profile and hand it back
@@ -561,7 +574,7 @@ const MyHomePage: React.FC = () => {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [navigate, speakPrayer, stopPrayerAudio]);
+  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post]);
 
   useEffect(() => {
     if (!ready) return;
@@ -813,7 +826,7 @@ const MyHomePage: React.FC = () => {
 
       {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
           Nothing pops up until the island has reported ready — loading screens stay clear. */}
-      {modelsReady && ready && (
+      {modelsReady && ready && !livingTestMode && (
         <HomeOnboarding
           ready={ready}
           collected={collected}
@@ -833,7 +846,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={homeworldUrlFor(profileScope, playerName)}
+          src={homeworldUrlFor(profileScope, playerName,livingTestMode)}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

@@ -57,7 +57,7 @@ export class Community {
  activity(){if(this.g.store.state.night)return;this.lastInput=Date.now();this.pendingInput=true;this.focusUntil=0;this.g.projectAdamWalking=false;if(this.hidAdam&&!this.g.nutrition?.sleep&&!this.g.playersOnly){this.g.actor.visible=true;this.hidAdam=false;}}
  step(options={}){
   const g=this.g;if(g.store.locked)return;
-  if(g.livingTestMode&&g.livingTest?.builder)options={...options,reservedMembers:['noah']};
+  if(g.livingTestMode)options={...options,reservedMembers:g.livingTest?.reservedFriends()||['adam','eve','noah']};
   if(g.livingTestMode){
     options={...options,active:false,activity:false};
     const s=g.store.state,minutes=gameTime(s),members={...s.community?.members};let changed=false;

@@ -51,6 +51,7 @@ async def main():
   await page.get_by_role('textbox',name='Your name').fill('Sarah')
   await page.get_by_role('spinbutton',name='Your age').fill('8')
   await page.get_by_role('button',name="That's me!",exact=True).click()
+  await page.get_by_role('button',name='This is me!',exact=True).click()
   started=time.monotonic()
   await page.get_by_role('button',name='Take a Tour',exact=True).click()
   await page.wait_for_url('**/#/crew')

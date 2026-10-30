@@ -160,3 +160,38 @@ first-run guidance intentionally keeps bottom buttons hidden until needed.
 The 3G-class run made no speculative model requests. The build, 22 Node test
 files, cold-crew check, and world-model cache regression passed. These use local
 fixtures and Chromium, not a live Netlify or physical-phone measurement.
+
+## Choose a child avatar during onboarding
+
+In the testing build, name/age entry now leads to a six-design avatar carousel
+before the existing tour/trial choice. One 3D adventurer rotates in the center;
+touch swipes, arrows and keyboard navigation select a design. Reduced motion
+keeps the preview still. The family button explains that another profile can
+be added later. Back preserves the name, age and selected design. The child is
+saved once, on confirmation, and then selected after it exists in profile state.
+
+The carousel and the island use `createLivingPlayer` and the same small design
+catalogue in `shared/livingAvatars.mjs`. This adds no character-model downloads.
+Perry releases its renderer while the carousel is visible, and the existing
+ship/world preloads continue. If the preview cannot create WebGL, its matching
+portrait keeps the choice and Continue usable. The parrot's setup also catches
+context-creation failure so the earlier form can still be reached.
+
+The selected profile stores `worldAvatarId` and its matching `avatarSeed` path.
+The latter already syncs through the existing backend, allowing the design to
+be recovered on another device without a backend schema rollout. My Home sends
+the selected design to the island in its frame URL. Unknown IDs use the original
+Trail Scout design; other profiles keep their own choices and island progress.
+
+The six PNG/WebP profile portraits are rendered from these same models. To
+regenerate them, run `VITE_LIVING_TEST=1 npm run dev -- --port 3001`, then
+`python scripts/render-living-avatar-portraits.py`. This authoring step is not
+part of ordinary Netlify builds. Each WebP portrait is about 7 KB.
+
+Run `python homeworld/tests/avatar-onboarding-browser.py` against the built
+preview. It checks six designs, rotation/reduced motion, touch/keyboard/back,
+small-phone layout, the family note, model downloads during selection, one
+saved child, the selected model in the actual island, and seed-based recovery
+after reload. `tests/living-avatars.test.mjs` checks all six models' scale and
+geometry budget and independent profile resolution. These tests use fixtures
+and disposable saves.

@@ -9,6 +9,8 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { warmPreviewNextScreen } from '../utils/previewWarmup';
+import ChooseAvatar from '../components/onboarding/ChooseAvatar';
+import {getLivingAvatar,livingAvatarForProfile} from '../shared/livingAvatars.mjs';
 import {
   ONBOARDING_FAMILY_BG_POSTER,
   ONBOARDING_FAMILY_BG_VIDEO,
@@ -34,7 +36,7 @@ const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 const DEFAULT_HEAD = '/avatars/heads/head-1.png';
 
-type Phase = 'handoff' | 'ask' | 'paywall' | 'ready' | 'depart';
+type Phase = 'handoff' | 'ask' | 'avatar' | 'paywall' | 'ready' | 'depart';
 type Holder = 'parent' | 'kid';
 
 const FIELD =
@@ -68,7 +70,12 @@ const GoldButton: React.FC<{
 const PerryMeetPage: React.FC = () => {
   useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('ship') : undefined, []);
   const navigate = useNavigate();
-  const { addKid, kids, switchProfile, updateKid, setEquippedAvatar } = useUser();
+  const { addKid, kids, currentProfileId, switchProfile, updateKid, setEquippedAvatar } = useUser();
+  const initialKid = useRef(kids.find(kid=>kid.id===currentProfileId) || kids[0]);
+  const targetKidId = useRef(initialKid.current?.id || crypto.randomUUID?.() || Date.now().toString());
+  const [selectedAvatarId,setSelectedAvatarId] = useState(()=>livingAvatarForProfile(initialKid.current).id);
+  const [pendingProfile,setPendingProfile] = useState<string|null>(null);
+  const savedKid = useRef(false);
   const [phase, setPhase] = useState<Phase>('handoff');
   const [holder, setHolder] = useState<Holder | null>(null);
   const [ready, setReady] = useState(false);
@@ -80,6 +87,14 @@ const PerryMeetPage: React.FC = () => {
   const [formVisible, setFormVisible] = useState(false);
 
   const readyCopy = useMemo(() => buildPerryReadyCopy(savedName), [savedName]);
+
+  useEffect(()=>{
+    if(!pendingProfile || !kids.some(kid=>kid.id===pendingProfile))return;
+    // Switch after the new profile exists; a timeout would capture the old kids array.
+    if(currentProfileId!==pendingProfile) switchProfile(pendingProfile);
+    else if(LIVING_TEST_BUILD) setEquippedAvatar(getLivingAvatar(selectedAvatarId).portrait);
+    setPendingProfile(null);
+  },[pendingProfile,kids,currentProfileId,switchProfile,setEquippedAvatar,selectedAvatarId]);
 
   useEffect(() => {
     if (LIVING_TEST_BUILD) return; // Speak the current line only; don't queue the entire tour.
@@ -128,21 +143,25 @@ const PerryMeetPage: React.FC = () => {
 
   const saveKid = () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!canSubmit || savedKid.current) return;
+    savedKid.current=true;
     const parsedAge = parseInt(age, 10);
-    const existing = kids[0];
-    const id = existing?.id || Date.now().toString();
+    const existing = kids.find(kid=>kid.id===targetKidId.current);
+    const id = targetKidId.current;
+    const chosen = getLivingAvatar(selectedAvatarId);
+    const portrait = LIVING_TEST_BUILD ? chosen.portrait : DEFAULT_HEAD;
     if (!existing) {
       addKid({
         id,
         name: trimmed,
         age: Number.isFinite(parsedAge) ? parsedAge : undefined,
-        avatarSeed: DEFAULT_HEAD,
+        avatarSeed: portrait,
+        ...(LIVING_TEST_BUILD ? {worldAvatarId:chosen.id} : {}),
         coins: 500,
         coinTransactions: [],
         ownedItems: ['f1', 'anim1'],
         unlockedVoices: [],
-        avatar: DEFAULT_HEAD,
+        avatar: portrait,
         frame: 'border-[#8B4513]',
         hat: null,
         body: null,
@@ -151,21 +170,27 @@ const PerryMeetPage: React.FC = () => {
         legs: null,
         animation: 'anim-breathe',
       });
-      window.setTimeout(() => switchProfile(id), 80);
-    } else if (existing.name !== trimmed || existing.age !== parsedAge) {
+    } else {
       updateKid(id, {
         name: trimmed,
         age: Number.isFinite(parsedAge) ? parsedAge : existing.age,
+        ...(LIVING_TEST_BUILD ? {worldAvatarId:chosen.id,avatarSeed:portrait,avatar:portrait} : {}),
       });
     }
     setSavedName(trimmed);
-    if (!existing) setEquippedAvatar(DEFAULT_HEAD);
+    setPendingProfile(id);
     preloadPerrySpeech(buildPerryReadyCopy(trimmed).tts);
     preloadPerrySpeech(buildPerryIslandCopy(trimmed).tts);
     activityTrackingService.trackOnboardingEvent('perry_name_entered', {
       kidsCount: 1,
     });
     setPhase('paywall');
+  };
+
+  const submitDetails = () => {
+    if(!canSubmit)return;
+    if(LIVING_TEST_BUILD) setPhase('avatar');
+    else saveKid();
   };
 
   const flyToMap = () => {
@@ -195,6 +220,8 @@ const PerryMeetPage: React.FC = () => {
       },
     });
   };
+
+  if(phase==='avatar') return <ChooseAvatar selectedId={selectedAvatarId} onSelect={setSelectedAvatarId} onBack={()=>setPhase('ask')} onConfirm={saveKid}/>;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#7EC8E8]">
@@ -265,7 +292,7 @@ const PerryMeetPage: React.FC = () => {
                 }}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (canSubmit) saveKid();
+                  submitDetails();
                 }}
               >
                 <input
@@ -292,7 +319,7 @@ const PerryMeetPage: React.FC = () => {
                   style={{ fontFamily: BUBBLE }}
                   onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, '').slice(0, 2))}
                 />
-                <GoldButton onClick={saveKid} disabled={!canSubmit}>
+                <GoldButton onClick={submitDetails} disabled={!canSubmit}>
                   {holder === 'kid' ? "That's me!" : 'Continue →'}
                 </GoldButton>
               </form>

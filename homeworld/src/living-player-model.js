@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import {getLivingAvatar} from '../../shared/livingAvatars.mjs';
 
 /** A lightweight child adventurer, built for the same rounded, warm island style. */
-export function createLivingPlayer() {
-  const model=new THREE.Group();model.name='Child adventurer';
-  const palette={skin:'#c88f68',cheek:'#bb775d',hair:'#493125',hairLight:'#61402d',shirt:'#368e88',trim:'#f1d7a0',pants:'#77704d',boots:'#74513b',sole:'#513e30',bag:'#ac784a',white:'#fff3dd',eyes:'#302922'};
+export function createLivingPlayer(avatarId) {
+  const avatar=getLivingAvatar(avatarId);
+  const model=new THREE.Group();model.name='Child adventurer';model.userData.avatarId=avatar.id;
+  const palette={skin:avatar.skin,cheek:new THREE.Color(avatar.skin).lerp(new THREE.Color('#cd735d'),.3),hair:avatar.hair,hairLight:avatar.hairLight,shirt:avatar.shirt,trim:avatar.accent,pants:avatar.pants,boots:'#74513b',sole:'#513e30',bag:'#ac784a',white:'#fff3dd',eyes:'#302922'};
   const materials=Object.fromEntries(Object.entries(palette).map(([k,color])=>[k,new THREE.MeshStandardMaterial({color,roughness:.86,metalness:0})]));
   const mesh=(geo,key,parent,x=0,y=0,z=0)=>{const m=new THREE.Mesh(geo,materials[key]);m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;};
   const oval=(key,parent,x,y,z,sx,sy,sz)=>{const m=mesh(new THREE.SphereGeometry(1,20,14),key,parent,x,y,z);m.scale.set(sx,sy,sz);return m;};
@@ -49,8 +51,30 @@ export function createLivingPlayer() {
   oval('hair',head,0,.18,-.065,.312,.20,.25);
   for(const [x,y,z,sx,sy,sz] of [[-.17,.20,.12,.15,.12,.13],[.02,.25,.10,.20,.12,.16],[.17,.22,.08,.14,.11,.14],[-.255,.075,-.005,.07,.14,.12],[.255,.09,-.03,.07,.13,.12]])oval('hair',head,x,y,z,sx,sy,sz);
   const lock=oval('hairLight',head,-.11,.23,.19,.13,.045,.055);lock.rotation.z=.25;
+  if(avatar.hairStyle==='puffs'){
+    for(const side of [-1,1]){
+      oval('hair',head,side*.31,.16,-.025,.19,.18,.17);
+      for(let i=0;i<5;i++){const a=i*Math.PI*2/5;oval('hair',head,side*.31+Math.cos(a)*.11,.16+Math.sin(a)*.11,.04,.085,.09,.10);}
+      oval('trim',head,side*.285,.09,.14,.075,.04,.04);
+    }
+  }else if(avatar.hairStyle==='bob'){
+    oval('hair',head,0,-.025,-.17,.315,.30,.16);
+    for(const side of [-1,1])oval('hair',head,side*.275,-.08,.025,.082,.23,.17);
+    oval('trim',head,.265,.13,.16,.045,.025,.025);
+  }else if(avatar.hairStyle==='crop'){
+    for(const [x,y] of [[-.14,.28],[0,.32],[.14,.28]])oval('hair',head,x,y,-.015,.105,.10,.16);
+  }else if(avatar.hairStyle==='curls'){
+    for(let i=0;i<10;i++){const a=i*Math.PI*2/10;oval(i%3?'hair':'hairLight',head,Math.cos(a)*.235,.20+Math.sin(a)*.10,Math.sin(a)*.19-.035,.115,.12,.11);}
+  }else if(avatar.hairStyle==='ponytail'){
+    oval('trim',head,0,.15,-.30,.105,.065,.055);
+    const tail=oval('hair',head,0,-.04,-.36,.16,.27,.125);tail.rotation.x=-.25;
+    for(const side of [-1,1])oval('hair',head,side*.26,-.04,.02,.06,.16,.10);
+  }
   let phase=0,stride=0;
-  return {model,update(dt,speed,time,{celebrating=false,carrying=false}={}){
+  return {model,dispose(){
+    const geometries=new Set();model.traverse(object=>{if(object.geometry)geometries.add(object.geometry);});
+    geometries.forEach(geometry=>geometry.dispose());Object.values(materials).forEach(material=>material.dispose());
+  },update(dt,speed,time,{celebrating=false,carrying=false}={}){
     stride=THREE.MathUtils.damp(stride,speed>.05?1:0,10,dt);phase+=dt*(speed>.05?9:0);
     legs.forEach((leg,i)=>leg.rotation.x=Math.sin(phase+i*Math.PI)*.5*stride);
     arms.forEach((arm,i)=>{arm.rotation.x=carrying?-.28:Math.sin(phase+i*Math.PI)*-.38*stride;arm.rotation.z=(i===0?1:-1)*(.08+(celebrating?.6:0));});

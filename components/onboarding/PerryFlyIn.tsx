@@ -236,11 +236,15 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
     let mixer: THREE.AnimationMixer | null = null;
     const clock = new THREE.Clock();
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+    } catch {
+      // Keep the handoff/name form usable when a phone cannot create a 3D context.
+      setFailed(true);
+      onReadyRef.current?.();
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -457,6 +461,7 @@ const PerryFlyIn: React.FC<PerryFlyInProps> = ({
       window.removeEventListener('resize', resize);
       mixer?.stopAllAction();
       renderer.dispose();
+      renderer.forceContextLoss();
       draco.dispose();
       renderer.domElement.remove();
       scene.traverse((obj) => {

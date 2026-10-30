@@ -62,7 +62,7 @@ export class LivingIslandTest {
     game.zoom=13;game.focus.copy(game.actor.position);game.resize();
   }
   makePlayer(){
-    const g=this.g,actor=new THREE.Group();this.playerVisual=createLivingPlayer();const body=this.playerVisual.model;actor.add(body);
+    const g=this.g,actor=new THREE.Group();this.playerVisual=createLivingPlayer(new URLSearchParams(location.search).get('avatar'));const body=this.playerVisual.model;actor.add(body);
     this.body=body;actor.userData={id:'you',name:'You'};
     actor.position.copy(g.actor.position);g.scene.add(actor);
     // The old Adam model stays in the original community and becomes autonomous too.

@@ -3,6 +3,7 @@ import { useNavigate,useLocation } from 'react-router-dom';
 import {openLivingFirstFriendStory} from '../utils/livingFirstFriend';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { stopPreviewWarmup } from '../utils/previewWarmup';
+import { livingAvatarForProfile } from '../shared/livingAvatars.mjs';
 import { usePreventPullToRefresh } from '../hooks/usePreventPullToRefresh';
 import { rewardsService, type UnlockedCharacter } from '../services/rewardsService';
 import { fetchTtsAudioUrl } from '../services/characterChatService';
@@ -18,8 +19,8 @@ import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRI
 
 const HOMEWORLD_URL = '/homeworld/index.html?v=players190&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
-const homeworldUrlFor = (scope: string, playerName: string, livingTest = false) =>
-  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}`;
+const homeworldUrlFor = (scope: string, playerName: string, livingTest = false, avatarId = 'trail') =>
+  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}${livingTest ? `&avatar=${encodeURIComponent(avatarId)}` : ''}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
@@ -207,6 +208,7 @@ const MyHomePage: React.FC = () => {
   useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
   const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
+  const playerAvatarId = livingAvatarForProfile(kids.find(kid=>kid.id===currentProfileId)).id;
   const playerName = useMemo(() => {
     const kid = currentProfileId ? kids.find((k) => k.id === currentProfileId) : null;
     const raw = String(kid?.name || (currentProfileId ? '' : parentName) || '').trim();
@@ -847,7 +849,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={homeworldUrlFor(profileScope, playerName,livingTestMode)}
+          src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId)}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

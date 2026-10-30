@@ -294,6 +294,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     age?: number;
     avatarSeed?: string; // Initial head selection
+    worldAvatarId?: string; // 3D adventurer; avatarSeed also preserves this choice through cloud sync.
     
     // Per-profile economy data
     coins?: number;

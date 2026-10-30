@@ -34,7 +34,7 @@ import {Fishing} from './fishing.js';
 import {Animals} from './animals.js';
 import {NightSky} from './night-sky.js';
 import {planFor} from './island-plan.js';
-import {todayBag,withToday,displayGoal,optionsFor,addChoices,dismissOverride,setOverride,assignExtra,clearExtra,displayCoins,GOALS,defaultGoalId} from './today-goals.mjs';
+import {todayBag,withToday,displayGoal,optionsFor,addChoices,dismissOverride,setOverride,assignExtra,clearExtra,displayCoins,journeyMeter,GOALS,defaultGoalId} from './today-goals.mjs';
 import {characterKey} from './characters.mjs';
 import {registerWellAssets} from './well-model.js';
 import {registerOvenAssets} from './oven-model.js';
@@ -775,15 +775,36 @@ export class HomeWorld {
   clearGoal(){localStorage.removeItem(GOAL_KEY);this.notify();}
   /** Gold the island shop spends (parent `gk-coins`, or the same profile wallet when the parent has not posted). */
   coinBalance(){return displayCoins(this.coins);}
+  /** Green-dot work: a live chore, a job, building duty, or a meal. Asleep and idle stay quiet. */
+  friendActivity(actor){
+    const home=actor?.userData||{};
+    const id=home.residentId;
+    const s=this.store?.state;
+    const asleep=!!(s?.night||s?.characters?.[id]?.sleep);
+    if(asleep)return {working:false,asleep:true};
+    const dining=this.dining;
+    const atMeal=!!(dining&&(dining.grill?.actor===actor||dining.owns?.(actor)));
+    const playing=actor===this.actor&&(!!this.action||!!this.order||!!this.autoWork?.active);
+    const working=!!(home.chore||home.job||home.onDuty||atMeal||playing);
+    return {working,asleep:false};
+  }
+  /** Fence and plots from the garden keeper when it has read the garden. */
+  gardenSnap(){
+    const st=this.gardenKeeper?.status;
+    if(st)return {fencedPct:st.fencedPct||0,plots:st.plots||0,planted:st.planted||0};
+    return null;
+  }
   /** One large goal per friend ashore, plus the single extra the kid may have added today. */
   todayCard(){
-    const s=this.store?.state;if(!s)return {day:1,friends:[],extra:null,choices:[]};
+    const s=this.store?.state;if(!s)return {day:1,friends:[],extra:null,choices:[],meter:null};
     const project=this.village?.plan()?.goal||null;
     const order={eve:0,noah:1,adam:2,abel:3};
-    const friends=this.crew().map(c=>({...c,goal:displayGoal(s,c.id,c.name),options:optionsFor(c.name,project)}))
-      .sort((a,b)=>(order[characterKey(a.name)]??50)-(order[characterKey(b.name)]??50)||a.name.localeCompare(b.name));
+    const friends=this.crew().map(c=>{
+      const actor=this.residents?.models?.get(c.id);
+      return {...c,...(actor?this.friendActivity(actor):{working:false,asleep:false}),goal:displayGoal(s,c.id,c.name),options:optionsFor(c.name,project)};
+    }).sort((a,b)=>(order[characterKey(a.name)]??50)-(order[characterKey(b.name)]??50)||a.name.localeCompare(b.name));
     const bag=todayBag(s);
-    return {day:bag.day,friends,extra:bag.extra,choices:addChoices(project)};
+    return {day:bag.day,friends,extra:bag.extra,choices:addChoices(project),meter:journeyMeter(s,this.gardenSnap(),project)};
   }
   /** Write today's goals into the island save and, when the extra is a building, point the settlement at it. */
   _saveGoals(bag,pinKind,unpinKind){

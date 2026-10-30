@@ -173,6 +173,8 @@ function App(){
   const [plan,setPlan]=useState(null),planShown=useRef(false);
   const openPlan=()=>{const g=engine.current;if(!g?.loaded)return;setActionsOpen(false);setPanel(null);try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'gk-coins-please'},location.origin);}catch{/* standalone island */}setPlan({today:g.todayCard(),village:g.village?.plan()||null,coins:g.coinBalance()});};
   const refreshPlan=()=>{const g=engine.current;if(!g?.loaded)return;setPlan(p=>p?{today:g.todayCard(),village:g.village?.plan()||null,coins:g.coinBalance()}:p);};
+  const planOpen=!!plan;
+  useEffect(()=>{if(!planOpen)return;const t=setInterval(refreshPlan,1000);return()=>clearInterval(t);},[planOpen]);
   useEffect(()=>{if(view.ui?.openPlan)openPlan();},[view.ui?.openPlan]);
   // First-visit tour (onboarding.jsx): while it is pending the to-do sheet waits; the tour's "Homes" step opens it by hand.
   const [tourActive,setTourActive]=useState(false);

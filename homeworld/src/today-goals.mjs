@@ -10,19 +10,19 @@
  */
 import {characterFor,characterKey} from './characters.mjs';
 import {skillFor} from './character-skills.mjs';
-import {POPULATION,STAGE_LADDER,population} from './stages.mjs';
+import {POPULATION,STAGE_LADDER,foodProduced,islandJourney,population,stageDone} from './stages.mjs';
 import {gameTime,timeLabel} from './core.mjs';
 
 /** Large goals. `chores` are kinds the autopilot already knows how to do. */
 export const GOALS={
-  garden:{id:'garden',title:'Expand the garden',icon:'water',chores:['guard','weeds','harvest','plow','water','plant','pickup','gardenWork']},
-  buildings:{id:'buildings',title:'Expand the buildings',icon:'build',chores:['chop','stump','mine','build']},
-  flock:{id:'flock',title:'Tend the flock',icon:'walk',chores:['farm','guard','chop']},
-  feed:{id:'feed',title:'Feed the island',icon:'cookedfish',chores:['fish','plant','pickup','harvest','stoke','water']},
-  guard:{id:'guard',title:'Stand guard',icon:'fence',chores:['guard']},
-  kitchen:{id:'kitchen',title:'Help the kitchen',icon:'food',chores:['fish','plant','pickup','harvest','stoke']},
-  wood:{id:'wood',title:'Stock wood',icon:'axe',chores:['chop','stump']},
-  raise:{id:'raise',title:'Raise a building',icon:'build',chores:['chop','stump','mine','build']},
+  garden:{id:'garden',title:'Expanding the garden',icon:'water',chores:['guard','weeds','harvest','plow','water','plant','pickup','gardenWork']},
+  buildings:{id:'buildings',title:'Raising buildings',icon:'build',chores:['chop','stump','mine','build']},
+  flock:{id:'flock',title:'Tending the flock',icon:'walk',chores:['farm','guard','chop']},
+  feed:{id:'feed',title:'Feeding the island',icon:'cookedfish',chores:['fish','plant','pickup','harvest','stoke','water']},
+  guard:{id:'guard',title:'Standing guard',icon:'fence',chores:['guard']},
+  kitchen:{id:'kitchen',title:'Helping the kitchen',icon:'food',chores:['fish','plant','pickup','harvest','stoke']},
+  wood:{id:'wood',title:'Stocking wood',icon:'axe',chores:['chop','stump']},
+  raise:{id:'raise',title:'Raising a building',icon:'build',chores:['chop','stump','mine','build']},
 };
 
 /** Canon defaults the user set for the first four friends. */
@@ -61,11 +61,11 @@ export function fitsFor(name){
   return (FITS[id]||FITS.feed).map(gid=>GOALS[gid]).filter(Boolean);
 }
 
-/** Title for the settlement project as ONE goal ("Raise the Small Hut"), not its material list. */
+/** Title for the settlement project as ONE goal ("Raising the Small Hut"), not its material list. */
 export function projectTitle(project){
   if(!project?.name)return null;
-  if(project.upgradeFrom||project.upgradeId)return `Upgrade to the ${project.name}`;
-  return `Raise the ${project.name}`;
+  if(project.upgradeFrom||project.upgradeId)return `Upgrading to the ${project.name}`;
+  return `Raising the ${project.name}`;
 }
 
 export function optionsFor(name,project){
@@ -79,10 +79,10 @@ export function optionsFor(name,project){
 /** The add-a-goal list: four large goals, plus the current settlement project when there is one. */
 export function addChoices(project){
   const list=[
-    {id:'garden',title:'Expand the garden',kind:null},
-    {id:'raise',title:'Raise a building',kind:null},
-    {id:'flock',title:'Tend the flock',kind:null},
-    {id:'feed',title:'Feed the island',kind:null},
+    {id:'garden',title:'Expanding the garden',kind:null},
+    {id:'raise',title:'Raising a building',kind:null},
+    {id:'flock',title:'Tending the flock',kind:null},
+    {id:'feed',title:'Feeding the island',kind:null},
   ];
   const titled=projectTitle(project);
   if(titled&&project?.kind)list.splice(2,0,{id:'raise',title:titled,kind:project.kind});
@@ -210,29 +210,83 @@ export function clearExtra(bag){
   return {...bag,overrides,extra:null};
 }
 
+const NEED_LINE={people:'more friends',buildings:'more buildings',garden:'a bigger garden',food:'more food'};
+
+function joinNeeds(name,bits){
+  if(!bits.length)return `${name} has what it needs.`;
+  if(bits.length===1)return `${name} needs ${bits[0]}.`;
+  if(bits.length===2)return `${name} needs ${bits[0]} and ${bits[1]}.`;
+  return `${name} needs ${bits.slice(0,-1).join(', ')}, and ${bits.at(-1)}.`;
+}
+
 /**
- * People meter for the real ladder (stages.mjs). People are the headline.
- * The bar fills toward the next population milestone the island has not reached
- * (Camp 10, Homestead 20, Village 40, Harbour Town 60). Current and next are the
- * journey stages, not a second ladder.
+ * Stage meter for the real ladder (stages.mjs). People stay the headline number
+ * (Camp 10, then Homestead 20, Village 40, Harbour Town 60+), and the bar fills
+ * from how many of the next stage's tracks are finished: people, buildings,
+ * the garden fence, and food produced. Not a second ladder.
+ *
+ * `garden` is the keeper's live status `{fencedPct, plots, planted}` when present.
+ * `project` is the settlement building being raised, counted once if the stage
+ * does not already list that kind.
  */
-export function peopleMeter(stages,state){
-  const counted=stages?.island?.people;
-  const people=Math.max(0,Number.isFinite(counted)?counted:(population(state)||0));
-  const index=stages?.index||0;
-  const here=stages?.stage?.name?stages.stage:STAGE_LADDER[0];
-  const next=STAGE_LADDER[index+1]||null;
+export function journeyMeter(state,garden,project){
+  const journey=state?islandJourney(state):null;
+  const index=journey?.index||0;
+  const here=journey?.stage?.name?journey.stage:STAGE_LADDER[0];
+  const nextDef=STAGE_LADDER[index+1]||null;
+  const dest=nextDef||STAGE_LADDER[index];
+  const people=Math.max(0,population(state)||0);
   let gate=null;
   for(const s of STAGE_LADDER){if(people<POPULATION[s.id]){gate=s;break;}}
   const need=gate?POPULATION[gate.id]:POPULATION.harbour_town;
-  const gap=Math.max(0,need-people);
+  const gap=Math.max(0,gate?need-people:0);
   const full=!gate;
-  const pct=need>0?Math.max(0,Math.min(1,people/need)):1;
+  const tracks=[];
+  tracks.push({id:'people',label:'People',value:full?`${people}/60+`:`${people}/${need}`,met:people>=need});
+  // Homes already standing, plus whatever this stage still asks for, plus the
+  // building the settlement is raising when it is not already in that list.
+  // A tent plus a Small Hut still to raise reads "Buildings 1/2".
+  const buildingReqs=(dest.requirements||[]).filter(r=>!['people','food','animals','garden'].includes(r.id));
+  const homeKinds=new Set(['tent','hut','cottage','townhouse']);
+  const homesHave=(state?.buildings||[]).filter(b=>b&&b.status==='complete'&&homeKinds.has(b.kind)).length;
+  if(buildingReqs.length||homesHave||(project?.kind&&project.kind!=='garden')){
+    let have=homesHave,total=homesHave;
+    for(const r of buildingReqs){
+      const got=Math.max(0,r.have(state)|0);
+      if(r.id==='hut'||r.id==='tent'){if(got<r.need)total+=r.need-got;}
+      else{total+=r.need;have+=Math.min(got,r.need);}
+    }
+    if(project?.kind&&project.kind!=='garden'&&!buildingReqs.some(r=>r.id===project.kind)&&!homeKinds.has(project.kind)){
+      const standing=(state?.buildings||[]).some(b=>b&&b.status==='complete'&&b.kind===project.kind);
+      if(!standing)total+=1;
+    }
+    if(total>0)tracks.push({id:'buildings',label:'Buildings',value:`${Math.min(have,total)}/${total}`,met:have>=total});
+  }
+  const fenced=Number(garden?.fencedPct);
+  if(garden&&(Number.isFinite(fenced)||(garden.plots|0)>0)){
+    const pct=Math.max(0,Math.min(100,Math.round(Number.isFinite(fenced)?fenced:0)));
+    tracks.push({id:'garden',label:'Garden fenced',value:`${pct}%`,met:pct>=100});
+  }else{
+    const bed=(dest.requirements||[]).find(r=>r.id==='garden');
+    if(bed){
+      const got=Math.max(0,bed.have(state)|0);
+      tracks.push({id:'garden',label:'Garden',value:`${Math.min(got,bed.need)}/${bed.need}`,met:got>=bed.need});
+    }
+  }
+  const foodReq=(dest.requirements||[]).find(r=>r.id==='food');
+  if(foodReq){
+    const produced=Math.max(0,foodProduced(state)||0);
+    tracks.push({id:'food',label:'Food',value:`${produced}/${foodReq.need}`,met:produced>=foodReq.need});
+  }
+  const met=tracks.filter(t=>t.met).length;
+  const finished=!nextDef&&stageDone(state,dest);
+  const line=finished?`${dest.name} has what it needs.`:joinNeeds(dest.name,tracks.filter(t=>!t.met).map(t=>NEED_LINE[t.id]));
+  const pct=tracks.length?met/tracks.length:1;
   return {
-    people,need,gap,full,pct,
+    people,need,gap,full,pct,met,total:tracks.length,line,tracks,
     current:{id:here.id,name:here.name,icon:here.icon||'camp'},
-    next:next?{id:next.id,name:next.name,icon:next.icon}:null,
-    gateName:gate?.name||'Harbour Town',
+    next:nextDef?{id:nextDef.id,name:nextDef.name,icon:nextDef.icon}:null,
+    destName:dest.name,
   };
 }
 

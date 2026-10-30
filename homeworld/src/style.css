@@ -531,7 +531,11 @@
 .plan-meter-end b{line-height:1.1}
 .plan-meter-bar{height:12px;margin-top:8px;border-radius:999px;background:#fff;border:2px solid #86b268;overflow:hidden}
 .plan-meter-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8fc45f,#3f8f34)}
-.plan-meter>small{display:block;margin-top:4px;text-align:center;font-size:12px;font-weight:800;color:#3d5230}
+.plan-tracks{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:3px}
+.plan-tracks li{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:14px;font-weight:800;color:#24391c}
+.plan-tracks li.met{color:#2f7a32}
+.plan-tracks b{font-variant-numeric:tabular-nums;font-size:14px}
+.plan-meter-line{margin:8px 0 0;text-align:center;font-size:13.5px;font-weight:800;line-height:1.35;color:#2c4a22}
 .plan-friends{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .plan-friends>li{display:grid;grid-template-columns:44px 1fr 40px;align-items:center;gap:8px;padding:8px 8px 8px 8px;border-radius:14px;background:#f4f6e8;border:2px solid #e2e8cf}
 .plan-friends>li.open{grid-template-rows:auto auto}
@@ -540,8 +544,13 @@
 .plan-face{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;overflow:hidden;background:#d7e4c4;color:#2f4a28;font-weight:900;font-size:18px}
 .plan-face img{width:100%;height:100%;object-fit:cover;object-position:center top}
 .plan-friend-body{min-width:0}
-.plan-friend-name{display:block;font-size:12px;font-weight:800;color:#4e7a2c}
+.plan-friend-name{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#4e7a2c}
+.plan-dot{width:9px;height:9px;border-radius:50%;background:#c5cbb8;box-shadow:0 0 0 2px #fff;flex:none}
+.plan-dot.live{background:#2f9d3a;box-shadow:0 0 0 2px #e5f6df;animation:plan-dot-blink 1.15s ease-in-out infinite}
+@keyframes plan-dot-blink{0%,100%{opacity:1}50%{opacity:.28}}
+@media(prefers-reduced-motion:reduce){.plan-dot.live{animation:none;opacity:1}}
 .plan-friend-goal{display:block;font-size:17px;line-height:1.15;color:#243018}
+.plan-friends>li.idle .plan-friend-goal{color:#7d8a76}
 .plan-friend-body small{display:block;margin-top:2px;font-size:11px;font-weight:800;color:#9a7a1f}
 .plan-x{min-height:40px;width:40px;padding:0;border-radius:12px;font-size:16px;line-height:1;color:#5c6b55;background:#fff;justify-self:end}
 .plan-picks{grid-column:1/-1;display:grid;gap:6px;margin-top:2px}

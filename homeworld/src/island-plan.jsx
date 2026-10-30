@@ -1,6 +1,5 @@
 import React,{useState} from 'react';
 import {StageIcon} from './stage-journey.jsx';
-import {peopleMeter} from './today-goals.mjs';
 
 /**
  * "Today on the island": the stage the island is growing through, one large goal for each
@@ -11,33 +10,34 @@ function Face({friend}){
   return <span className="plan-face">{friend.imageUrl?<img src={friend.imageUrl} alt=""/>:friend.name.slice(0,1)}</span>;
 }
 
-function Meter({stages}){
-  const m=peopleMeter(stages);
-  const nextName=m.next?.name||m.gateName;
-  const label=m.full
-    ?`${m.people} people. The island is a ${m.current.name}.`
-    :`${m.people} of ${m.need} people. ${m.current.name}, next ${nextName}.`;
+function Meter({meter}){
+  if(!meter)return null;
+  const max=Math.max(1,meter.total||1),now=meter.met||0;
   return <div className="plan-meter">
-    <div className="plan-meter-count"><b>{m.people}</b><span>{m.full?'people · 60+':'people'}</span></div>
     <div className="plan-meter-ends">
-      <span className="plan-meter-end"><StageIcon id={m.current.icon} size={28}/><b>{m.current.name}</b></span>
-      {m.next&&<span className="plan-meter-end next"><b>{m.next.name}</b><StageIcon id={m.next.icon} size={28}/></span>}
+      <span className="plan-meter-end"><StageIcon id={meter.current.icon} size={28}/><b>{meter.current.name}</b></span>
+      {meter.next&&<span className="plan-meter-end next"><b>{meter.next.name}</b><StageIcon id={meter.next.icon} size={28}/></span>}
     </div>
-    <div className="plan-meter-bar" role="meter" aria-valuemin={0} aria-valuemax={m.need} aria-valuenow={Math.min(m.people,m.need)} aria-label={label}>
-      <i style={{width:`${Math.round(m.pct*100)}%`}}/>
+    <div className="plan-meter-bar" role="meter" aria-valuemin={0} aria-valuemax={max} aria-valuenow={now} aria-label={meter.line}>
+      <i style={{width:`${Math.round((meter.pct||0)*100)}%`}}/>
     </div>
-    <small>{m.full?`${m.people} people ashore`:`${m.people} / ${m.need}`}</small>
+    <ul className="plan-tracks">
+      {meter.tracks.map(t=><li key={t.id} className={t.met?'met':''}><span>{t.label}</span><b>{t.value}</b></li>)}
+    </ul>
+    <p className="plan-meter-line">{meter.line}</p>
   </div>;
 }
 
 function FriendRow({friend,open,onToggle,onAssign}){
   const g=friend.goal;
-  return <li className={`${open?'open':''} ${g.dismissed?'waiting':''} ${g.yours?'yours':''}`}>
+  const live=!!friend.working&&!g.dismissed;
+  const line=g.dismissed?g.title:live?g.title:(friend.asleep?'Sleeping':'Resting');
+  return <li className={`${open?'open':''} ${g.dismissed?'waiting':''} ${g.yours?'yours':''} ${live?'busy':'idle'}`}>
     <Face friend={friend}/>
     <div className="plan-friend-body">
-      <span className="plan-friend-name">{friend.name}</span>
-      <strong className="plan-friend-goal">{g.title}</strong>
-      {g.yours&&<small>Your pick for today</small>}
+      <span className="plan-friend-name"><i className={live?'plan-dot live':'plan-dot'} aria-hidden="true"/>{friend.name}</span>
+      <strong className="plan-friend-goal">{line}</strong>
+      {g.yours&&live&&<small>Your pick for today</small>}
     </div>
     <button type="button" className="plan-x" aria-expanded={open} aria-label={open?`Close ${friend.name}'s goals`:`Change ${friend.name}'s goal`} onClick={onToggle}>✕</button>
     {open&&<div className="plan-picks" role="group" aria-label={`A new goal for ${friend.name}`}>
@@ -50,8 +50,8 @@ function FriendRow({friend,open,onToggle,onAssign}){
 export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssign,onAdd,onClearExtra}){
   const [openId,setOpenId]=useState(null);
   const [adding,setAdding]=useState(false);
-  if(!today)return null;
-  const meter=peopleMeter(stages);
+  if(!today?.meter)return null;
+  const meter=today.meter;
   const friends=today.friends||[];
   const many=friends.length>1;
   const name=friends[0]?.name||'your friend';
@@ -70,7 +70,7 @@ export function IslandPlan({today,village,stages,coins,onClose,onDismiss,onAssig
         <div><div className="eyebrow">TODAY ON THE ISLAND</div><h2 id="plan-title">{many?'What the crew could\u00a0do':friends.length?`What ${name} could\u00a0do`:'What the island could\u00a0do'}</h2></div>
         <button type="button" className="close" onClick={onClose} aria-label="Close today's goals">Later</button>
       </div>
-      <Meter stages={stages}/>
+      <Meter meter={meter}/>
       <div className="eyebrow plan-kicker">THE CREW</div>
       {friends.length?<ul className="plan-friends">
         {friends.map(f=><FriendRow key={f.id} friend={f} open={openId===f.id} onToggle={()=>toggle(f)} onAssign={(id,choice)=>{setOpenId(null);onAssign(id,choice);}}/>)}

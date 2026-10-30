@@ -25,6 +25,9 @@ export class MapGesture {
   for(const [type,handler]of Object.entries(this.handlers))surface.addEventListener(type,handler);
  }
  begin(e,tap=null){
+  // UI sheets (the friends roster) sit above the canvas. A touch that starts there must
+  // scroll that sheet, never orbit the island, even if the event is retargeted here.
+  if(e.composedPath?.().some(n=>n.classList?.contains?.('friends-menu')||n.classList?.contains?.('friends-menu-scroll')))return;
   // A second finger cancels the gesture, so it cannot accidentally become a tap.
   if(e.isPrimary===false){this.cancel();return;}
   if(e.button!==0||this.down)return;

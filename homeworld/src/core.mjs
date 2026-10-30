@@ -306,9 +306,9 @@ export function canPlow(world,state,key) {
 }
 export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
-  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge'].includes(a.type))return state;
+  if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge','remove_building'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
   if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge'].includes(a.type))return state;
@@ -381,6 +381,23 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(b.upgradeFrom){const old=b.upgradeFrom;for(const [id,n]of Object.entries(b.paidMaterials)){const refund=n-(old.paidMaterials[id]||0);if(refund)add(id,refund);}delete b.upgradeFrom;delete b.jobId;delete b.project;Object.assign(b,old);}
     else{for(const [id,n]of Object.entries(b.paidMaterials))add(id,n);b.status='cancelled';}
     setEnergy(next,energyFor(next)+BUILD_ENERGY);
+  } else if(a.type==='remove_building') {
+    const b=next.buildings?.find(x=>x.id===a.id),def=b&&buildingById(b.kind);
+    if(!b||b.status!=='complete'||!def)return state;
+    if(homeReserved(state,b.id)||Object.values(state.characters||{}).some(c=>c.sleep?.homeId===b.id))return state;
+    const paid=b.paidMaterials&&Object.keys(b.paidMaterials).length?b.paidMaterials:null;
+    if(paid){for(const [id,n] of Object.entries(paid))if(n>0)add(id,n);}
+    else{
+      const woodId=Object.values(world.species||{}).map(s=>s.wood_item).find(Boolean);
+      if(woodId&&def.wood)add(woodId,def.wood);
+      if(def.stone)add('stone',def.stone);
+      if(def.clay)add('clay',def.clay);
+      for(const [id,n] of Object.entries(def.bundle||{}))if(n)add(id,n);
+    }
+    if(b.kind==='garden'){const fp=footprint(world,b);if(fp)for(const key of fp.keys)delete next.cells[key];}
+    for(const [key,cell] of Object.entries(next.cells||{}))if(cell?.buildingId===b.id)delete next.cells[key];
+    b.status='cancelled';
+    if(next.farm?.integrity)delete next.farm.integrity[b.id];
   } else if(a.type==='remove_fence') {
     // Take down one finished fence piece (or a lone path stone) and get the materials back: Abel moves
     // the ring outward when the garden grows. Needs him standing beside it.

@@ -8,6 +8,10 @@ import {TABLE_TOP_Y,BENCH_TOP_Y} from './dining.mjs';
 const MAT={
   stone:new THREE.MeshStandardMaterial({color:'#8d8a80',roughness:.95}),
   stoneDark:new THREE.MeshStandardMaterial({color:'#6f6a60',roughness:.95}),
+  // Slab only: its top (y=.14) can land exactly on the flat grass (ground is y≈.14) when a hall is saved
+  // with baseHeight 0 or sits on an uneven site, so the two faces z-fought and the rim shimmered as the
+  // camera moved. A small negative polygon offset pulls the slab in front of coplanar terrain.
+  slab:new THREE.MeshStandardMaterial({color:'#6f6a60',roughness:.95,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}),
   wood:new THREE.MeshStandardMaterial({color:'#9a6b3c',roughness:.85}),
   woodDark:new THREE.MeshStandardMaterial({color:'#74502c',roughness:.85}),
   plank:new THREE.MeshStandardMaterial({color:'#b98853',roughness:.9}),
@@ -22,7 +26,7 @@ const POSTS=[-3.1,0,3.1].flatMap(x=>[[x,-2.1],[x,2.1]]);
 function mesh(geometry,material,phase){const m=new THREE.Mesh(geometry,material);m.castShadow=true;m.receiveShadow=true;if(phase)m.userData.assembly_phase=phase;return m;}
 function foundation(){
   const g=new THREE.Group();
-  const slab=mesh(new THREE.BoxGeometry(6.9,.14,4.9),MAT.stoneDark);slab.position.y=.07;g.add(slab);
+  const slab=mesh(new THREE.BoxGeometry(6.9,.14,4.9),MAT.slab);slab.position.y=.07;g.add(slab);
   for(const [x,z] of POSTS){const plinth=mesh(new THREE.BoxGeometry(.5,.3,.5),MAT.stone);plinth.position.set(x,.29,z);g.add(plinth);}
   const floor=mesh(new THREE.BoxGeometry(6.5,.08,4.5),MAT.plank);floor.position.y=.18;g.add(floor);
   return g;

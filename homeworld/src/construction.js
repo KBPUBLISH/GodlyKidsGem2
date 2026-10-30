@@ -268,6 +268,35 @@ export class Construction {
  setCrew(ids){if(!this.preview)return;this.preview.crew=ids;this.updatePreview();this.g.notify();}
  pauseProject(id,paused){try{this.g.store.commit({type:'pause_project',id,paused,actionId:crypto.randomUUID()});this.g.refreshDynamic();this.g.notify();}catch(e){this.g.toast(e.message);}}
  cancelQueued(id){const g=this.g,b=g.store.state.buildings.find(b=>b.id===id);if(g.action||!b)return;try{g.store.commit({type:'cancel_building',id,actionId:jobToken('cancel',b)});if(g.order?.id===id){g.order=null;g.path=[];}g.refreshDynamic();g.toast('Building cancelled. Your materials and energy are back.');}catch(e){g.toast(e.message);}}
+ /** Ask before a finished building comes down. The wood and stone go back into the bag. */
+ askRemove(id){
+  const g=this.g,b=g.store.state.buildings.find(x=>x.id===id);
+  if(!b||b.status!=='complete'){g.toast('That building is already gone.');return false;}
+  if(Object.values(g.store.state.characters||{}).some(c=>c.sleep?.homeId===id)){g.toast('Someone is sleeping there. Wait until they wake up.');return false;}
+  this.pendingRemove={id,name:buildingById(b.kind)?.name||'building'};
+  g.notify();
+  return true;
+ }
+ cancelRemove(){this.pendingRemove=null;this.g.notify();}
+ /** Take a finished building down and return what it cost. The list already asked; the tent prompt uses askRemove first. */
+ confirmRemove(){const id=this.pendingRemove?.id;this.pendingRemove=null;return id?this.removeNow(id):false;}
+ removeNow(id){
+  const g=this.g;
+  const b=g.store.state.buildings.find(x=>x.id===id);
+  if(!b||b.status!=='complete'){g.toast('That building is already gone.');g.notify();return false;}
+  if(Object.values(g.store.state.characters||{}).some(c=>c.sleep?.homeId===id)){g.toast('Someone is sleeping there. Wait until they wake up.');g.notify();return false;}
+  if(g.interior?.id===id)this.leaveHome();
+  const name=buildingById(b.kind)?.name||'Building';
+  const before=g.store.state;
+  try{g.store.commit({type:'remove_building',id,actionId:crypto.randomUUID()});}
+  catch(e){g.toast(e.message);g.notify();return false;}
+  if(g.store.state===before){g.toast(`${name} could not be taken down.`);g.notify();return false;}
+  if(g.order?.id===id){g.order=null;g.path=[];}
+  g.refreshDynamic();
+  g.toast(`${name} taken down. The materials are back in the bag.`);
+  g.notify();
+  return true;
+ }
  begin(a){
   const g=this.g;let b=g.store.state.buildings.find(b=>b.id===a.id);if(b?.status==='queued'){g.store.commit({type:'begin_building',id:b.id,actionId:jobToken('begin',b)});b=g.store.state.buildings.find(b=>b.id===a.id);}
   if(!b||b.status!=='building'){a.failed=true;return;}
@@ -307,7 +336,7 @@ export class Construction {
   const rig=this.rigHome(n,b),p=V(0,1.25,rig.doorZ);
   n.root.updateWorldMatrix(true,true);n.root.localToWorld(p);
   const x=p.x,y=-p.z,h=p.y-heightAt(this.g.world,x,y);
-  this.g.showPrompt('home',b.id,{x,y},h,[{id:'enter',label:'Go in',icon:'walk'}]);
+  this.g.showPrompt('home',b.id,{x,y},h,[{id:'enter',label:'Go in',icon:'walk'},{id:'remove',label:'Take down',icon:'build'}]);
  }
  enterHome(id){
   const g=this.g;if(g.interior) return;
@@ -423,6 +452,6 @@ export class Construction {
  snapshot(){
   const g=this.g,state=g.store.state,live=activeBuildings(state),ob=this.preview?this.obstacles(this.preview):null,clearAction=/^(Chop the tree|Smash the rock|Pick up the seeds|Dig out the stump)/.test(this.previewStatus?.reason||'')?(ob?.trees.length?'Chop a tree here':ob?.rocks.length?'Smash a rock here':ob?.stumps.length?'Dig out a stump here':ob?.seeds.length?'Pick up these seeds':null):null;
   const old=this.preview?.upgradingId&&state.buildings.find(b=>b.id===this.preview.upgradingId),definition=this.preview?{...buildingById(this.preview.kind),...(old?upgradeCost(old):{})}:null;
-  return {preview:this.preview?{...this.preview,definition,crew:this.preview.crew,crewRequired:projectPlan(this.preview.kind)?.crew,crewCandidates:Object.entries(state.characters).map(([id,c])=>({id,name:c.name,energy:Math.floor(c.energy),asleep:!!c.sleep,assigned:!!assignedProject(state,id)})),duration:projectDuration(this.preview.kind),siteValid:this.siteValid,canPlace:!!this.previewStatus?.ok,reason:this.previewStatus?.reason,clearAction,have:{wood:woodTotal(state),stone:state.inventory.stone||0,brick:state.inventory.concrete_brick||0},needsClear:!!clearAction,needsMaterials:!this.preview.movingId&&(woodTotal(state)<(definition?.wood||0)||(state.inventory.stone||0)<(definition?.stone||0)||Object.entries(definition?.bundle||{}).some(([id,n])=>(state.inventory[id]||0)<n)),workers:g.playersOnly&&g.crew?g.crew():null,obstacleCount:ob?ob.trees.length+ob.rocks.length+ob.seeds.length+ob.stumps.length:0}:null,items:live.map(b=>({...b,name:buildingById(b.kind).name,projectLabel:b.project?projectTimeLeft(b):null,crewNames:b.project?.crew.map(id=>state.characters[id]?.name||id),woodCapacity:buildingById(b.kind).woodCapacity,progress:buildingProgress(b),remaining:Math.max(0,Math.ceil((1-buildingProgress(b))*buildingById(b.kind).seconds))})),wood:woodTotal(state),openMenu:this.openMenu};
+  return {preview:this.preview?{...this.preview,definition,crew:this.preview.crew,crewRequired:projectPlan(this.preview.kind)?.crew,crewCandidates:Object.entries(state.characters).map(([id,c])=>({id,name:c.name,energy:Math.floor(c.energy),asleep:!!c.sleep,assigned:!!assignedProject(state,id)})),duration:projectDuration(this.preview.kind),siteValid:this.siteValid,canPlace:!!this.previewStatus?.ok,reason:this.previewStatus?.reason,clearAction,have:{wood:woodTotal(state),stone:state.inventory.stone||0,brick:state.inventory.concrete_brick||0},needsClear:!!clearAction,needsMaterials:!this.preview.movingId&&(woodTotal(state)<(definition?.wood||0)||(state.inventory.stone||0)<(definition?.stone||0)||Object.entries(definition?.bundle||{}).some(([id,n])=>(state.inventory[id]||0)<n)),workers:g.playersOnly&&g.crew?g.crew():null,obstacleCount:ob?ob.trees.length+ob.rocks.length+ob.seeds.length+ob.stumps.length:0}:null,pendingRemove:this.pendingRemove||null,items:live.map(b=>({...b,name:buildingById(b.kind).name,projectLabel:b.project?projectTimeLeft(b):null,crewNames:b.project?.crew.map(id=>state.characters[id]?.name||id),woodCapacity:buildingById(b.kind).woodCapacity,progress:buildingProgress(b),remaining:Math.max(0,Math.ceil((1-buildingProgress(b))*buildingById(b.kind).seconds))})),wood:woodTotal(state),openMenu:this.openMenu};
  }
 }

@@ -210,7 +210,9 @@ function isHomeScopedBase(base: string): boolean {
     base.startsWith('godlykids_homeworld_playtest_v1') ||
     base.startsWith('crewChatHistory:') ||
     base.startsWith('crewChatAsked:') ||
-    base === 'gk_island_greetings_v1'
+    base === 'gk_island_greetings_v1' ||
+    base === 'godlykids_island_feed' ||
+    base === 'godlykids_island_feed_seen'
   );
 }
 

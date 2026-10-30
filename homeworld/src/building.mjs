@@ -1,5 +1,6 @@
 // Building catalogue and deterministic placement rules. Coordinates use the saved one-metre grid.
 import {projectProgress,validProject} from './project-rules.mjs';
+import {FARM_BUILDINGS} from './farm-rules.mjs';
 export const BUILD_ENERGY=5;
 export const BUILDINGS=[
   {id:'hut',name:'Small Hut',category:'Homes',size:[3,3],height:3.2,wood:10,stone:5,seconds:15,solid:true,level:1,beds:2,upgradeTo:'cottage',description:'A cozy little home with two beds. Upgrade it as your island grows!'},
@@ -26,6 +27,7 @@ export const BUILDINGS=[
   {id:'forge',name:'Forge',category:'Decorations',size:[2,2],height:1.8,wood:12,stone:16,seconds:18,solid:true,description:'A stone forge with a hot hearth. Copper, iron, and diamond tools, and metal shovels, are made here.'},
   {id:'oven',name:'Clay Oven',category:'Decorations',size:[2,2],height:1.7,wood:0,stone:20,clay:6,seconds:600,solid:true,description:'A stone oven lined with clay bricks. Light it with a log, let it heat up, then bake wheat and water into manna.'},
   {id:'well',name:'Water Well',category:'Gardens',size:[2,2],height:2.3,wood:8,stone:14,seconds:14,solid:true,requiresShovel:1,description:'Dig down to fresh water. With a well on the island, watering the garden costs no energy.'},
+  ...FARM_BUILDINGS, // Adam's water trough and feed pile (farm-rules.mjs)
 ];
 export const buildingById=id=>BUILDINGS.find(b=>b.id===id);
 export const woodTotal=state=>Object.entries(state.inventory).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+v,0);

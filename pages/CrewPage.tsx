@@ -46,6 +46,7 @@ import {
   resetAdamTourWrap,
 } from '../utils/adamTour';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
+import IslandNotices from '../components/features/IslandNotices';
 
 // three.js deck is lazy-loaded so the ~600KB 3D chunk only downloads when a
 // crew character has a GLB or a still image that can walk as a billboard.
@@ -2459,6 +2460,10 @@ const CrewPage: React.FC = () => {
           onClose={() => setChatCharacter(null)}
         />
       )}
+
+      {/* Top-left island news: what the friends did on the island map since
+          the last visit (fed by homeworld/src/island-feed.mjs). */}
+      <IslandNotices />
 
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard

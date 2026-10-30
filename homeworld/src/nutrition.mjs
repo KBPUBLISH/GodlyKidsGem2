@@ -11,6 +11,8 @@ export const FOODS={
   cooked_fish:{name:'Grilled fish',icon:'🐟',energy:40,source:'Catch a fish, then grill it on a campfire.'},
   bread:{name:'Bread',icon:'🍞',energy:40,source:'An old loaf from before the oven was built.'},
   manna:{name:'Manna',icon:'🍞',energy:50,source:'Bake wheat and water in a hot clay oven.'},
+  egg:{name:'Egg',icon:'🥚',energy:20,source:'Adam gathers eggs from well-fed chickens in the morning.'},
+  milk:{name:'Milk',icon:'🥛',energy:25,source:'Adam milks the cows and goats he feeds and waters.'},
   garden_salad:{name:'Garden salad',icon:'🥗',energy:72,source:'A cook mixes a carrot and a pumpkin.'},
   seed_crackers:{name:'Seed crackers',icon:'🌾',energy:48,source:'A cook bakes a wheat seed and a sunflower seed.'},
   nut_butter_greens:{name:'Nut butter on greens',icon:'🌻',energy:56,source:'A cook spreads an acorn on sunflower greens.'},

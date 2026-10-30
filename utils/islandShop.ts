@@ -14,3 +14,17 @@ export const ISLAND_ANIMAL_PRICES: Record<string, number> = {
   donkey: 600,
   goat: 700,
 };
+
+/**
+ * Prices when Adam (the island's farmer) asks the kid for animals once his paddock is ready.
+ * Cheaper than the shop because the farm has done the work. A gk-buy-animal is accepted only
+ * when `price` equals FARM_ANIMAL_PRICES[kind] × qty (qty 1..FARM_MAX_QTY).
+ * Keep in sync with FARM_PRICES in homeworld/src/farm-rules.mjs.
+ */
+export const FARM_ANIMAL_PRICES: Record<string, number> = {
+  chicken: 60,
+  sheep: 150,
+  goat: 200,
+  cow: 300,
+};
+export const FARM_MAX_QTY = 2;

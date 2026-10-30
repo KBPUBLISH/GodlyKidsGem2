@@ -9,8 +9,9 @@
  * lives in village.js; chores that answer the needs live in residents.js.
  */
 import {buildingById,activeBuildings,woodTotal,materialStatus,upgradeCost} from './building.mjs';
-import {projectPlan,assignedProject} from './project-rules.mjs';
+import {projectPlan,assignedProject,projectProgress} from './project-rules.mjs';
 import {completedHomes,FOODS} from './nutrition.mjs';
+import {characterFor,ROLES} from './characters.mjs';
 
 const HOME_RANK={tent:0,hut:1,cottage:2,townhouse:3};
 
@@ -54,13 +55,33 @@ export function creditSkill(village,characterId,actionType){
 }
 export const skillXp=(state,id,activity)=>state?.village?.xp?.[id]?.[activity]||0;
 export function skillLevel(xp){let level=0;for(let i=0;i<LEVELS.length;i++)if(xp>=LEVELS[i].at)level=i;return level;}
-/** What a friend has become from the work they do most: {activity,name,level,levelName,xp,next}. */
+/** Canon role (characters.mjs ROLES) → the practice activity it ranks in. Roles without a matching activity rank on all practice. */
+export const ROLE_ACTIVITY={cook:'cooking',gardener:'garden',woodcutter:'wood',farmer:'garden',builder:'building',fisher:'fishing',shepherd:null,teacher:null,leader:null,healer:null};
+/**
+ * The role a friend shows on cards and the village strip: {activity,name,icon,level,levelName,xp,next,title,fixed}.
+ * Named base friends (Eve, Noah, Adam, Abel) carry the fixed `rankTitle` from characters.mjs — Eve is the Master Chef
+ * however much she plants between meals. Friends with a canon role rank in that role's activity only (a Bible builder is
+ * never an "apprentice gardener"); collected friends with no role grow into whatever they practise most.
+ */
 export function learnedRole(state,id){
-  const mine=state?.village?.xp?.[id]||{};
-  const top=Object.entries(mine).sort((a,b)=>b[1]-a[1])[0];
-  if(!top||top[1]<10)return null;
-  const [activity,xp]=top,level=skillLevel(xp),next=LEVELS[level+1]?.at??null;
-  return {activity,name:ACTIVITIES[activity].name,icon:ACTIVITIES[activity].icon,level,levelName:LEVELS[level].name,xp,next};
+  const mine=state?.village?.xp?.[id]||{},canon=characterFor(state?.characters?.[id]?.name||id);
+  const total=Object.values(mine).reduce((a,b)=>a+b,0);
+  if(canon.rankTitle){
+    const activity=ROLE_ACTIVITY[canon.roleId]||null,[levelName,...rest]=canon.rankTitle.split(' ');
+    return {activity,name:rest.join(' ')||canon.roleName,icon:canon.icon,level:LEVELS.length-1,levelName,xp:activity?mine[activity]||0:total,next:null,title:canon.rankTitle,fixed:true};
+  }
+  let activity,xp,name,icon;
+  if(canon.roleId){
+    activity=ROLE_ACTIVITY[canon.roleId]||null;xp=activity?mine[activity]||0:total;
+    const role=ROLES[canon.roleId];name=role?.name||canon.roleName;icon=canon.icon||role?.icon;
+  }else{
+    const top=Object.entries(mine).sort((a,b)=>b[1]-a[1])[0];
+    if(!top)return null;
+    [activity,xp]=top;name=ACTIVITIES[activity].name;icon=ACTIVITIES[activity].icon;
+  }
+  if(xp<10)return null;
+  const level=skillLevel(xp),next=LEVELS[level+1]?.at??null,levelName=LEVELS[level].name;
+  return {activity,name,icon,level,levelName,xp,next,title:`${levelName} ${name}`,fixed:false};
 }
 /** Work-speed bonus from practice: up to +24% at Master. */
 export const practiceRate=(state,id,activity)=>1+skillLevel(skillXp(state,id,activity))*.08;
@@ -106,17 +127,26 @@ export function settlementStage(state){
   const last=STAGES.at(-1);return {index:STAGES.length-1,stage:last,done:last.goals.length,total:last.goals.length,left:[]};
 }
 
+/** True when the pinned build is already satisfied, so the village must not raise another one. */
+export function focusSatisfied(state,kind){
+  if(!kind||!buildingById(kind))return false;
+  const match=STAGES.flatMap(s=>s.goals).find(g=>g.kind===kind);
+  if(match)return goalDone(state,match);
+  return countFor(state,{kind})>=1;
+}
+
 /**
  * The next thing the village should raise. `focus` (a building kind the kid asked for)
- * jumps the queue when it is possible; otherwise the stage order decides. Returns the first
- * goal that is not blocked, or the first blocked one so the plan can say what it is waiting for.
+ * jumps the queue when it is still unfinished; a pin that is already done is ignored.
+ * Returns the first goal that is not blocked, or the first blocked one so the plan can say what it is waiting for.
  */
 export function nextGoal(state,focus=null){
   const here=settlementStage(state);
   const queue=[];
-  if(focus&&buildingById(focus)){
+  if(focus&&buildingById(focus)&&!focusSatisfied(state,focus)){
     const inStage=STAGES.flatMap(s=>s.goals.map(g=>({goal:g,stage:s}))).find(x=>x.goal.kind===focus&&!goalDone(state,x.goal));
-    queue.push(inStage||{goal:{kind:focus},stage:here.stage,focus:true});
+    if(inStage)queue.push({...inStage,focus:true});
+    else queue.push({goal:{kind:focus},stage:here.stage,focus:true});
   }
   for(const g of here.left)if(!queue.some(q=>q.goal.kind===g.kind))queue.push({goal:g,stage:here.stage});
   const described=queue.map(q=>{const d=describe(state,q.goal,q.stage);return d&&{...d,focus:!!q.focus||q.goal.kind===focus};}).filter(Boolean);
@@ -136,9 +166,15 @@ export function villageNeeds(state,focus=null){
 /** Everything the plan card shows. */
 export function villagePlan(state,focus=null){
   const here=settlementStage(state),goal=nextGoal(state,focus);
+  // Honest status for the strip: what is actually under construction right now (which day of how many), versus the
+  // next goal that is only planned (gathering) or ready for a builder.
+  const siteOf=b=>{const plan=projectPlan(b.kind),progress=projectProgress(b);return {id:b.id,kind:b.kind,name:buildingById(b.kind)?.name||b.kind,status:b.status,days:plan?.days||null,day:plan&&progress!==null?Math.min(plan.days,Math.floor(progress*plan.days)+1):null,percent:progress!==null?Math.round(progress*100):null,started:b.status==='building'||(progress||0)>0};};
+  const sites=activeBuildings(state).filter(b=>b.status!=='complete'&&b.status!=='cancelled').map(siteOf);
+  const building=sites.find(s=>s.started)||sites[0]||null;
+  if(goal)goal.phase=sites.some(s=>s.kind===goal.kind)?'building':goal.blocked?'blocked':goal.ready?'ready':'gathering';
   const roster=Object.entries(state.characters||{}).map(([id,c])=>({id,name:c.name||id,role:learnedRole(state,id),busy:!!assignedProject(state,id)}));
   return {stage:{id:here.stage.id,name:here.stage.name,motto:here.stage.motto,index:here.index,total:STAGES.length,done:here.done,goals:here.total},
-    goal,needs:villageNeeds(state,focus),
+    goal,building,needs:villageNeeds(state,focus),
     upcoming:here.left.map(g=>({kind:g.kind,name:buildingById(g.kind)?.name||g.kind,done:goalDone(state,g),upgrade:g.upgrade||null,count:g.count||1,have:countFor(state,g)})),
     later:STAGES.slice(here.index+1).map(s=>s.name),roster};
 }

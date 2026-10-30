@@ -29,7 +29,8 @@ export function profileFor(resident,state){
   if(c.roleId){
     // Base islander or Bible friend (characters.mjs): the card is their canon entry. 'fence' has no picture icon in ui.jsx; the farmer shows the build hammer instead.
     const icon=skill?.icon||c.icon;
-    return {kind:'named',name,role:{name:skill?.name||c.roleName,icon:icon==='fence'?'build':icon},strengths:c.strengths,weaknesses:c.weaknesses,tasks:c.tasks,foreman:cardLine(c),learned:null,
+    // Base friends show their fixed canon rank (characters.mjs rankTitle: "Master Chef"), never a practised rank.
+    return {kind:'named',name,role:{name:c.rankTitle||skill?.name||c.roleName,icon:icon==='fence'?'build':icon},strengths:c.strengths,weaknesses:c.weaknesses,tasks:c.tasks,foreman:cardLine(c),learned:null,
       story:c.storyLine||null,bibleRef:c.bibleRef||null,leadership:c.leadership??1};
   }
   const xp=state?.village?.xp?.[resident?.id]||{};

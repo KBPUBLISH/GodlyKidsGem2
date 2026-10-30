@@ -13,6 +13,13 @@
 /* Stage icon on the to-do card's village strip (island-plan.jsx). */
 .plan-village-head .plan-village-icon{flex:none;padding:3px;border-radius:12px;background:#fff;border:2px solid #a9cf8f}
 .plan-village-head>div{flex:1;min-width:0}
+/* "Other things we could build": the rest of the build plan, folded away so the strip reads as ONE next thing. */
+.plan-village-more{margin-top:8px}
+.plan-village-more summary{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;border:1.5px solid #c6dcb4;background:#fff;font-size:11.5px;font-weight:800;color:#3d5230;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
+.plan-village-more summary::-webkit-details-marker{display:none}
+.plan-village-more summary::before{content:'';width:0;height:0;border:5px solid transparent;border-left:7px solid #4e7a2c;border-right:0;transition:transform .15s}
+.plan-village-more[open] summary::before{transform:rotate(90deg)}
+.plan-village-more .plan-village-goals{margin-top:6px}
 
 .journey-shade{position:absolute;inset:0;z-index:42;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:#1d3d2833;backdrop-filter:blur(2px);animation:plan-in .25s ease-out;pointer-events:auto}
 .journey-card{width:min(100%,440px);max-height:min(82dvh,640px);overflow:auto;scrollbar-width:none;padding:14px 14px 12px;margin-bottom:max(8px,env(safe-area-inset-bottom,0px));display:grid;gap:12px;border-color:#e7c25a;background:#fff8e9fa}

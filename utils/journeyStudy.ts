@@ -154,7 +154,13 @@ export function noteJourneyStep(step: JourneyStep, metadata?: { source?: string 
   send(session, step, metadata?.source);
 }
 
-export type JourneyActivity = 'boat_session' | 'character_talk' | 'story_pack_done';
+export type JourneyActivity =
+  | 'boat_session'
+  | 'character_talk'
+  | 'story_pack_done'
+  | 'friends_session'
+  | 'friends_time'
+  | 'friends_action';
 
 const ACTIVITY_KEY = 'gk_journey_activity_v1';
 const BOAT_GAP_MS = 30 * 60 * 1000;
@@ -184,7 +190,7 @@ function writeActivityIds(ids: string[]): void {
  */
 export function noteJourneyActivity(
   step: JourneyActivity,
-  metadata?: { source?: string; label?: string; eventId?: string },
+  metadata?: { source?: string; label?: string; eventId?: string; elapsedMs?: number },
   onFail?: () => void,
 ): void {
   const eventId = (metadata?.eventId || `${step}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`).slice(0, 120);
@@ -202,8 +208,9 @@ export function noteJourneyActivity(
 async function postActivity(
   step: JourneyActivity,
   eventId: string,
-  metadata?: { source?: string; label?: string },
+  metadata?: { source?: string; label?: string; elapsedMs?: number },
 ): Promise<void> {
+  const elapsed = Number(metadata?.elapsedMs);
   const response = await fetch(apiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -211,15 +218,37 @@ async function postActivity(
       userId: currentUserId(),
       sessionId: eventId,
       step,
-      elapsedMs: 0,
+      elapsedMs: Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0,
       metadata: {
         platform: platform(),
         ...(metadata?.source ? { source: metadata.source } : {}),
         ...(metadata?.label ? { label: metadata.label } : {}),
       },
     }),
+    keepalive: true,
   });
   if (!response.ok) throw new Error(`journey activity ${response.status}`);
+}
+
+/** One Friends-game visit. Call when the island is ready, and again when they leave. */
+export function noteFriendsVisit(kind: 'open' | 'close', visitId: string, elapsedMs = 0): void {
+  if (kind === 'open') {
+    noteJourneyActivity('friends_session', { eventId: visitId, source: 'open' });
+    return;
+  }
+  noteJourneyActivity('friends_time', {
+    eventId: `${visitId}_time`,
+    source: 'close',
+    elapsedMs,
+  });
+}
+
+/** Something a child did inside the Friends game. */
+export function noteFriendsAction(source: string, label?: string): void {
+  noteJourneyActivity('friends_action', {
+    source,
+    ...(label ? { label } : {}),
+  });
 }
 
 /** One boat session per half hour, whether they land on the deck or the crew. */

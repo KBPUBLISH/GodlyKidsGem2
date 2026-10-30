@@ -8,11 +8,12 @@ import CrewChatPopup from '../components/crew/CrewChatPopup';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
+import { noteFriendsAction, noteFriendsVisit } from '../utils/journeyStudy';
 import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from '../utils/profileScope';
 import { useUser } from '../context/UserContext';
-import { ISLAND_ANIMAL_PRICES } from '../utils/islandShop';
+import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players172&players=1';
+const HOMEWORLD_URL = '/homeworld/index.html?v=players174&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string) => `${HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}`;
 
@@ -202,6 +203,7 @@ const MyHomePage: React.FC = () => {
   const spendRef = useRef(spendCoins);
   const addRef = useRef(addCoins);
   const pendingBuyRef = useRef<{ id: string; cost: number; at: number } | null>(null);
+  const pendingFarmRef = useRef<{ requestId: string; kind: string; unit: number; qty: number; at: number } | null>(null);
   coinsRef.current = coins;
   spendRef.current = spendCoins;
   addRef.current = addCoins;
@@ -233,6 +235,7 @@ const MyHomePage: React.FC = () => {
   const [overlayMounted, setOverlayMounted] = useState(true);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [placing, setPlacing] = useState<DropCharacter | null>(null);
+  const placingRef = useRef<DropCharacter | null>(null);
   /** Beds on the island vs friends living there (posted by the island as `gk-beds`). */
   const [beds, setBeds] = useState<{ beds: number; residents: number; canDrop: boolean; need: number } | null>(null);
   const [bedNotice, setBedNotice] = useState<string | null>(null);
@@ -432,10 +435,12 @@ const MyHomePage: React.FC = () => {
         }
       }
       if (data.type === 'gk-open-friends') {
+        noteFriendsAction('list');
         setCollected(rewardsService.getUnlockedCharacters());
         setFriendsOpen(true);
       }
       if (data.type === 'gk-resident-talk' && data.character?.id && data.character.name) {
+        noteFriendsAction('talk', data.character.name);
         setChatWorld(data.world ?? null);
         const known = rewardsService.getUnlockedCharacters().find((c) => c.id === data.character?.id);
         setChatCharacter(known || {
@@ -448,7 +453,11 @@ const MyHomePage: React.FC = () => {
       if (data.type === 'gk-players-ready' || data.type === 'gk-resident-placed') {
         setReady(true);
         setResidents(Array.isArray(data.residents) ? data.residents : readPlayersWorldResidents());
-        if (data.type === 'gk-resident-placed') setPlacing(null);
+        if (data.type === 'gk-resident-placed') {
+          noteFriendsAction('drop', placingRef.current?.name);
+          placingRef.current = null;
+          setPlacing(null);
+        }
         post({ type: 'gk-coins', balance: coinsRef.current });
       }
       if (data.type === 'gk-coins-please') post({ type: 'gk-coins', balance: coinsRef.current });
@@ -466,6 +475,7 @@ const MyHomePage: React.FC = () => {
           return;
         }
         pendingBuyRef.current = { id, cost: price, at: Date.now() };
+        noteFriendsAction('buy', id);
         post({ type: 'gk-buy-result', ok: true, id, balance: coinsRef.current - price });
       }
       if (data.type === 'gk-refund') {
@@ -478,6 +488,45 @@ const MyHomePage: React.FC = () => {
         }
       }
       if (data.type === 'gk-buy-commit') pendingBuyRef.current = null;
+      // Adam's farm: he asks for animals, the kid pays with earned gold coins (UserContext spendCoins —
+      // the same balance games and quizzes fill). Two steps so coins are never lost on a failed landing:
+      //   gk-buy-animal   → check the price and balance, approve (gk-animal-purchased), nothing spent yet
+      //   gk-animal-received {qty} → the island placed the animals: spend unit × qty now
+      //   gk-animal-refund → the boat could not land anything: drop the approval, nothing to give back
+      if (data.type === 'gk-buy-animal') {
+        const buy = data as { requestId?: unknown; kind?: unknown; qty?: unknown; price?: unknown };
+        const requestId = typeof buy.requestId === 'string' ? buy.requestId : '';
+        const kind = typeof buy.kind === 'string' ? buy.kind : '';
+        const qty = Math.floor(Number(buy.qty) || 0);
+        const unit = FARM_ANIMAL_PRICES[kind];
+        const price = unit == null ? NaN : unit * qty;
+        if (!requestId || unit == null || qty < 1 || qty > FARM_MAX_QTY || Number(buy.price) !== price) {
+          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, reason: 'Those animals are not for sale right now.' });
+          return;
+        }
+        if (coinsRef.current < price) {
+          const short = price - coinsRef.current;
+          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, short, reason: `Need ${short} more coins. Play games to earn some!` });
+          return;
+        }
+        pendingFarmRef.current = { requestId, kind, unit, qty, at: Date.now() };
+        post({ type: 'gk-animal-purchased', requestId, kind, qty, balance: coinsRef.current });
+      }
+      if (data.type === 'gk-animal-received') {
+        const got = data as { requestId?: unknown; qty?: unknown };
+        const pending = pendingFarmRef.current;
+        const qty = Math.floor(Number(got.qty) || 0);
+        if (!pending || pending.requestId !== got.requestId || qty < 1 || Date.now() - pending.at < 0) return;
+        pendingFarmRef.current = null;
+        const charged = Math.min(qty, pending.qty) * pending.unit;
+        const spent = spendRef.current(charged, `Farm: ${Math.min(qty, pending.qty)} ${pending.kind}`);
+        post({ type: 'gk-coins', balance: spent ? coinsRef.current - charged : coinsRef.current });
+      }
+      if (data.type === 'gk-animal-refund') {
+        const pending = pendingFarmRef.current;
+        if (pending && pending.requestId === (data as { requestId?: unknown }).requestId) pendingFarmRef.current = null;
+      }
+      if (data.type === 'gk-earn-coins') navigate('/games');
       if (data.type === 'gk-dev-grant') {
         const host = window.location.hostname;
         if (host !== 'localhost' && host !== '127.0.0.1') return;
@@ -501,6 +550,26 @@ const MyHomePage: React.FC = () => {
     if (!ready) return;
     post({ type: 'gk-coins', balance: coins });
   }, [post, ready, coins]);
+
+  const visitRef = useRef<{ id: string; started: number; ended: boolean } | null>(null);
+  useEffect(() => {
+    if (!ready || visitRef.current) return;
+    const started = Date.now();
+    const id = `friends_${started}`;
+    visitRef.current = { id, started, ended: false };
+    noteFriendsVisit('open', id);
+    const finish = () => {
+      const visit = visitRef.current;
+      if (!visit || visit.ended) return;
+      visit.ended = true;
+      noteFriendsVisit('close', visit.id, Date.now() - visit.started);
+    };
+    window.addEventListener('pagehide', finish);
+    return () => {
+      window.removeEventListener('pagehide', finish);
+      finish();
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (ready) {
@@ -538,20 +607,27 @@ const MyHomePage: React.FC = () => {
       story: true,
     };
     setFriendsOpen(false);
+    placingRef.current = payload;
     setPlacing(payload);
     post({ type: 'gk-resident-drop', character: payload });
   };
 
   const cancelDrop = () => {
+    placingRef.current = null;
     setPlacing(null);
     post({ type: 'gk-resident-drop', character: null });
   };
 
   const bringBack = (id: string) => {
+    const name = residents.find((resident) => resident.id === id)?.name;
+    noteFriendsAction('return', name);
     post({ type: 'gk-resident-remove', id });
   };
 
   const goToFriend = (id: string) => {
+    const name = residents.find((resident) => resident.id === id)?.name
+      || collected.find((character) => character.id === id)?.name;
+    noteFriendsAction('play', name);
     post({ type: 'gk-resident-select', id });
     setFriendsOpen(false);
   };

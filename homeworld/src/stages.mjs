@@ -28,7 +28,7 @@ export const population=state=>Object.keys(state?.characters||{}).length;
 /** Beds in finished homes (building.mjs `beds`): the ceiling for population until more homes go up. */
 export const bedsFor=state=>bedCount(state);
 /** Lifetime pieces of food the island produced: a harvest yields three, every fish and every cooked dish counts one, apples picked count one. */
-export const foodProduced=state=>{const t=state?.stats||{};return (t.harvested||0)*3+(t.fishCaught||0)+(t.foodPrepared||0)+(t.applesPicked||0);};
+export const foodProduced=state=>{const t=state?.stats||{};return (t.harvested||0)*3+(t.fishCaught||0)+(t.foodPrepared||0)+(t.applesPicked||0)+(t.farmProduce||0);};
 /** Farm animals living on the island (placed, not wild visitors like rabbits, crows and snakes). */
 export const livestock=state=>(state?.animals||[]).filter(a=>a&&!a.wild&&!String(a.id||'').startsWith('ambient-')).length;
 

@@ -11,6 +11,7 @@ import {servesMeal} from './today-goals.mjs';
 import {turnToward,resetAnimatedPose} from './character-motion.js';
 import {fishModel} from './nutrition.js';
 import {noteEvent} from './island-feed.mjs';
+import {ASK_AGAIN_MINUTES,kidFirstName,mealAskLine,playedCookStep} from './meal-ask.mjs';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const ease=t=>t<0?0:t>1?1:t*t*(3-2*t);
@@ -42,7 +43,7 @@ export function sitPose(rig,bones,eat=0,t=0){
 const walkClip=(g,home,speed,dt)=>{const walk=home.clips?.Walking;if(!walk)return;if(!walk.isRunning()||home.idling||home.flourish){home.mixer.stopAllAction();walk.reset().setLoop(THREE.LoopRepeat,Infinity).play();walk.setEffectiveTimeScale(speed/1.5);home.idling=false;home.flourish=null;}g.stepMixer(home.mixer,dt);};
 
 export class Dining {
-  constructor(game){this.g=game;this.meal=null;this.owned=new Map();this.props=[];this.bell=null;this.routine={key:null,meal:null,stage:'idle',grill:'idle',noted:false,woodTried:false};this.grill=null;}
+  constructor(game){this.g=game;this.meal=null;this.owned=new Map();this.props=[];this.bell=null;this.routine={key:null,meal:null,stage:'idle',grill:'idle',noted:false,woodTried:false,ask:null,released:false};this.grill=null;}
   hall(id){const s=this.g.store?.state;return s?hallById(s,id):null;}
   halls(){const s=this.g.store?.state;return s?completedHalls(s):[];}
   /** True while this scene drives a friend (seated, walking in, or grilling) — Residents.update then leaves them alone. */
@@ -188,17 +189,64 @@ export class Dining {
   cooking(){const r=this.routine;return r.meal&&r.stage!=='done'&&r.stage!=='idle'?r.meal:null;}
   /** True while a friend is grilling or fetching a log for the fire — their own chores wait. */
   grilling(actor){const r=this.routine;return this.grill?.actor===actor||(r.grill==='wood'&&actor.userData.job?.type==='chop'&&!actor.userData.job.explicit);}
+  /**
+   * Being played: Play as calls Residents.possess, which sets `game.actor` to that body
+   * and saves the same id on `state.activeCharacter`. The live check is the body.
+   */
+  isPlayed(actor){return !!actor&&actor===this.g.actor;}
+  /** Chat card while the kid is playing the cook and a meal is due. Null when she is not asking. */
+  askCard(){
+    const a=this.routine?.ask;
+    if(!a?.open||!a.text)return null;
+    const name=a.name||'Eve';
+    return {name,text:a.text,goLabel:`Go on, ${name}`};
+  }
+  /** "Not yet": she stays under the kid. Ask again in about 10 island minutes. */
+  declineAsk(){
+    const r=this.routine,a=r.ask;if(!a?.open||!this.g.store)return;
+    r.ask={...a,open:false,againAt:gameTime(this.g.store.state)+ASK_AGAIN_MINUTES};
+    this.g.notify?.();
+  }
+  /** "Go on": let go of her body so the meal routine can fish, pick, and ring. */
+  acceptAsk(){
+    const g=this.g,r=this.routine,eve=this.cookActor();
+    r.ask=null;r.released=true;
+    let handed=false;
+    if(eve){
+      for(const [,actor] of g.residents?.models||[]){
+        if(actor===eve||!actor.userData?.bones)continue;
+        if(g.residents.playAs(actor.userData.id)){handed=true;break;}
+      }
+    }
+    if(!handed){
+      g.autoWork?.stop?.(true);
+      if(g.action)g.finishAction?.();
+      g.keys?.clear?.();g.path=[];g.order=null;if(g.marker)g.marker.visible=false;
+    }
+    g.notify?.();
+  }
   routineUpdate(){
     const g=this.g,s=g.store.state;if(!g.playersOnly||s.night||g.ambient)return;
     const minutes=gameTime(s),{day,hour}=timeLabel(minutes),r=this.routine,meal=mealAt(hour);
     const key=meal?`${day}:${meal.id}`:null;
-    if(r.key!==key){r.key=key;r.meal=meal;r.stage='idle';r.grill='idle';r.noted=false;r.woodTried=false;if(this.grill)this.stopGrill();}
+    if(r.key!==key){r.key=key;r.meal=meal;r.stage='idle';r.grill='idle';r.noted=false;r.woodTried=false;r.ask=null;r.released=false;if(this.grill)this.stopGrill();}
     if(!meal)return;
     const eve=this.cookActor();
     if(this.grill&&this.grill.actor===g.actor)this.stopGrill();
     if(hour<meal.hour&&!this.meal)this.grillUpdate(eve,meal);
-    if(!eve)return;const home=eve.userData,isMe=eve===g.actor,when=hourLabel(meal.hour),what=meal.name.toLowerCase();
-    if(r.stage==='done')return;
+    if(!eve)return;const home=eve.userData,isMe=this.isPlayed(eve),when=hourLabel(meal.hour),what=meal.name.toLowerCase();
+    if(r.stage==='done'){if(r.ask)r.ask=null;return;}
+    // Her body is the one the kid is playing: she does not fish, pick, or ring until they say go.
+    if(isMe){
+      const step=playedCookStep({hour,mealHour:meal.hour,minutes,mealId:meal.id,ask:r.ask,released:r.released});
+      if(step.kind==='hold'||step.kind==='showing'||step.kind==='snooze')return;
+      if(step.kind==='skip'){r.stage='done';r.ask=null;r.released=false;return;}
+      if(step.kind==='ask'){
+        const who=home.name||'Eve';
+        r.ask={mealId:meal.id,variant:step.variant,open:true,againAt:0,text:mealAskLine(meal.id,kidFirstName(),step.variant),name:who};
+        g.notify?.();return;
+      }
+    }
     if(hour>=meal.hour){
       if(this.meal)return;
       // Opened the island well after mealtime: skip this one instead of ringing a stale bell.
@@ -207,7 +255,6 @@ export class Dining {
       if(home.job&&!home.job.explicit)g.residents.stopJob(eve,false);
       const hall=this.halls()[0];
       if(!hall){if(!r.noted){r.noted=true;g.toast(`${home.name} has ${what} ready, but there is nowhere to serve it. Build a Dining Hall (Community) and she will ring the bell at ${when}.`);}r.stage='done';return;}
-      if(isMe){if(!r.noted){r.noted=true;g.toast(`It is ${when} · ${what} time. Tap the Dining Hall to ring the bell.`);}r.stage='done';return;}
       r.stage='done';if(!this.ring(hall.id,{cook:home.name,quiet:true}))g.toast(`${home.name} looked at the shelf at ${when}: ${Object.keys(FOODS).some(id=>s.inventory[id]>0)?`everyone is full, so ${what} can wait.`:'nothing to serve yet. Grill some fish or gather food, then tap the hall to ring the bell.'}`);return;
     }
     if(isMe||this.meal)return;

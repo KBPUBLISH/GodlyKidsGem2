@@ -11,7 +11,7 @@ import { gameTime, buildSiteStatus, timeLabel } from './core.mjs';
 import { buildingById, activeBuildings, footprint, workPoint, BUILD_ENERGY } from './building.mjs';
 import { projectPlan, assignedProject } from './project-rules.mjs';
 import { energyFor } from './nutrition.mjs';
-import { villagePlan, villageNeeds, skillXp } from './settlement.mjs';
+import { villagePlan, villageNeeds, skillXp, focusSatisfied } from './settlement.mjs';
 
 const SCAN_MS = 4500, ATTEMPTS_PER_TICK = 2, RING_CELLS = 16;
 
@@ -47,13 +47,18 @@ export class Village {
     if (now - this.lastScan < SCAN_MS) return;
     this.lastScan = now;
     const s = g.store.state, min = gameTime(s), { hour } = timeLabel(min);
+    // A finished pin (one Prayer Tent is the whole camp goal) must not keep placing copies.
+    if (focusSatisfied(s, this.focus())) g.clearGoal?.();
     this.lastNeeds = villageNeeds(s, this.focus());
     const goal = this.lastNeeds.goal;
     this.announce(s);
     if (!goal || hour < 6.5 || hour >= 20) return;
     if (goal.blocked) { this.tellOnce(`blocked:${goal.kind}`, `${goal.name}: ${goal.blocked}`); return; }
     if (goal.underway) return;
+    if ((goal.have || 0) >= (goal.count || 1)) return;
     if (!goal.ready) { this.candidates = null; return; }
+    // The one small-build slot stays with Adam until the stable has a fence. A new hut can wait.
+    if (this.paddockWaiting(s)) return;
     if (activeBuildings(s).some((b) => b.status !== 'complete' && !b.project)) return; // one small build at a time, like the player
     if (goal.upgradeId) { this.tryUpgrade(s, goal); return; }
     this.tryPlace(s, goal);
@@ -179,6 +184,14 @@ export class Village {
     g.residents?.reelEvent?.(helpers[0]);
     g.toast(`${home.name} is upgrading the ${buildingById(goal.upgradeFrom)?.name || 'home'} into a ${goal.name}.`, 4500);
     g.notify?.();
+  }
+
+  /** A stable is up and the paddock ring is still open, so Adam should be fencing, not starting a house. */
+  paddockWaiting(s) {
+    const farmer = this.g.farmer;
+    if (!farmer?.stables?.(s)?.length) return false;
+    const st = farmer.status?.(s);
+    return !!(st && !st.fenced);
   }
 
   /** A queued or half-built small building that no one (and not the kid) is on. */

@@ -15,7 +15,7 @@ import { advancePath, turnToward, resetAnimatedPose } from './character-motion.j
 import { projectAssignments } from './construction-projects.mjs';
 import { normalizeCharacterModel } from './character-model.js';
 import { emitWorkSweat } from './work-sweat.js';
-import { gatherSample } from './gather-animation.js';
+import { gatherSample, applyGatherPose, chopHandWeight, emitChopChips, shakeTreeInstance } from './gather-animation.js';
 import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.mjs';
 import { noteEvent } from './island-feed.mjs';
 import { practiceRate, learnedRole } from './settlement.mjs';
@@ -578,6 +578,8 @@ export class Residents {
     // Abel's garden fences and scarecrows. builderChores returns nothing for Noah, Adam, and everyone else.
     // A friend sent off the garden (or onto a different goal) leaves the fences for another day.
     if (game.gardenKeeper && game.playersOnly && allow('gardenWork')) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
+    // Adam's farm brain: paddock fence, trough, feed pile, daily feed/water, arrivals (farmer.js).
+    if (game.farmer && game.playersOnly && allow('farm')) options.push(...game.farmer.chores(home, s, min, here).filter((c) => !this.claims.has(c.key)));
     if (focus) {
       const allowed = new Set(focus.chores);
       for (let i = options.length - 1; i >= 0; i--) if (!allowed.has(options[i].kind)) options.splice(i, 1);
@@ -715,7 +717,11 @@ export class Residents {
     const options = [], free = (key) => !this.claims.has(key), busyId = game.order?.id || game.action?.id || null;
     const site = village.openBuild(s);
     // A garden fence, gate, or scarecrow (id starts with garden-) is Abel's job. Noah and Adam leave it alone.
-    if (site && !String(site.id).startsWith('garden-') && skillFor(home.name)?.id !== 'gardener' && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
+    const trade = skillFor(home.name)?.id;
+    // Abel keeps the garden. Eve plants between meals instead of hammering houses.
+    // Adam fences an open paddock instead of joining the next village build.
+    const adamFencing = trade === 'farmer' && game.farmer?.stables?.(s)?.length && !game.farmer.status?.(s)?.fenced;
+    if (site && !String(site.id).startsWith('garden-') && trade !== 'gardener' && trade !== 'cook' && !adamFencing && free(`build:${site.id}`) && energyFor(s, home.id) >= 12) {
       const def = buildingById(site.kind);
       options.push({ kind: 'build', key: `build:${site.id}`, buildingId: site.id, target: workPoint(game.world, site), reach: .6, label: `Building the ${def?.name || 'building'}`, rank: 1 });
     }
@@ -782,6 +788,7 @@ export class Residents {
     try {
       if (c.kind === 'build') { this.buildStep(actor, c); return; }
       if (c.kind === 'gardenWork') { game.gardenKeeper?.finishWork(actor, c, this); game.notify?.(); return; }
+      if (c.kind === 'farm') { game.farmer?.finish(actor, c); return; }
       if (c.kind === 'water') {
         const cell = s.cells[c.cellKey], g = growth(cell, min);
         if (!g?.thirsty) return;
@@ -855,10 +862,11 @@ export class Residents {
           return;
         }
         game.music?.sfx?.play(c.kind === 'chop' ? 'chop' : 'rock');
-        game.burst?.(c.target, c.kind === 'chop' ? 'wood' : 'dirt', .9);
+        if (c.kind === 'chop' && c.impactPoint) emitChopChips(game, c.impactPoint);
+        else game.burst?.(c.target, c.kind === 'chop' ? 'wood' : 'dirt', .9);
         const gone = c.kind === 'chop' ? after.removedTrees.includes(c.treeId) : (after.removedRocks || []).includes(c.rockId);
         if (gone) { this.reelEvent(actor); if (c.kind === 'mine' && profile) game.toast(rockFindLine(profile), 2000); this.feed(home, c.kind, c.kind === 'chop' ? `${who} felled a tree.` : `${who} broke up a rock.`); if (home.job) this.creditJob(actor); else { if (c.auto && home.auto) home.auto[c.auto] = (home.auto[c.auto] || 0) + 1; game.toast(c.kind === 'chop' ? `${who} felled a tree.` : `${who} broke up a rock.`); } }
-        else { home.chore = { ...c, path: [], dwell: c.baseDwell ?? 1 }; this.claims.set(c.key, home.id); }
+        else { home.chore = { ...c, path: [], dwell: c.baseDwell ?? 1, ...(c.kind === 'chop' ? { shakeT: 0 } : {}) }; this.claims.set(c.key, home.id); }
       }
     } catch (e) {
       game.toast?.(e.message);
@@ -1387,32 +1395,47 @@ export class Residents {
     home.idling = false;
     home.flourish = null;
     if (c.target) actor.rotation.y = Math.atan2(c.target.x - home.x, -(c.target.y - home.y));
+    const chopping = c.kind === 'chop';
     const rate = workRate(game.store.state, gameTime(game.store.state), home.id) * practiceRate(game.store.state, home.id, c.kind === 'mine' ? 'stone' : hoe ? 'garden' : 'wood');
     c.swingT = (c.swingT || 0) + dt * Math.max(0.45, rate || 1);
-    const pose = gatherSample(hoe ? 'plow' : 'chop', c.swingT, 1, 0.95);
-    const bones = home.bones;
+    if (chopping && c.shakeT != null) {
+      c.shakeT += dt;
+      if (c.shakeT > 0.55) c.shakeT = null;
+      else shakeTreeInstance(game, c.treeId, c.shakeT, { x: home.x, y: home.y });
+    }
+    const tree = chopping ? (game.allTrees || game.trees || []).find((tr) => tr.id === c.treeId) : null;
+    const distance = c.target ? Math.hypot(c.target.x - home.x, c.target.y - home.y) : 1;
+    const reach = chopping ? THREE.MathUtils.clamp(distance - ((tree?.radius || 0.1) * 0.3), 0.6, 1.4) : 0.95;
+    const pose = gatherSample(hoe ? 'plow' : chopping ? 'chop' : 'mine', c.swingT, 1, reach);
     actor.updateMatrixWorld(true);
-    if (bones.mixamorigHips) bones.mixamorigHips.position.y -= pose.dip;
-    bones.mixamorigSpine?.rotateX(pose.bend);
-    bones.mixamorigSpine?.rotateY(pose.twist);
-    actor.updateMatrixWorld(true);
-    rig.ik('Right', rig.localPoint(pose.h));
-    actor.updateMatrixWorld(true);
-    const grip = bones.mixamorigRightHand.localToWorld(new THREE.Vector3(0, 0.065, 0));
-    const contact = tool.userData.contact_local || [0.3, 0.72, 0];
-    const local = new THREE.Vector3(contact[0], contact[2], -contact[1]);
-    const head = rig.localPoint(pose.h);
-    tool.visible = true;
-    tool.position.copy(grip);
-    tool.quaternion.setFromUnitVectors(local.normalize(), head.clone().sub(grip).normalize());
-    rig.ik('Left', rig.localPoint(pose.w));
+    let struck = null;
+    if (chopping) struck = applyGatherPose(rig, pose, tool, { hoe: false, supportWeight: chopHandWeight(c.swingT, pose.duration) });
+    else {
+      const bones = home.bones;
+      if (bones.mixamorigHips) bones.mixamorigHips.position.y -= pose.dip;
+      bones.mixamorigSpine?.rotateX(pose.bend);
+      bones.mixamorigSpine?.rotateY(pose.twist);
+      actor.updateMatrixWorld(true);
+      rig.ik('Right', rig.localPoint(pose.h));
+      actor.updateMatrixWorld(true);
+      const grip = bones.mixamorigRightHand.localToWorld(new THREE.Vector3(0, 0.065, 0));
+      const contact = tool.userData.contact_local || [0.3, 0.72, 0];
+      const local = new THREE.Vector3(contact[0], contact[2], -contact[1]);
+      const head = rig.localPoint(pose.h);
+      tool.visible = true;
+      tool.position.copy(grip);
+      tool.quaternion.setFromUnitVectors(local.normalize(), head.clone().sub(grip).normalize());
+      rig.ik('Left', rig.localPoint(pose.w));
+    }
     if ((c.swung || 0) < pose.due && dist({ x: home.x, y: home.y }, c.target) <= (c.reach || 1.2) + 0.55) {
       c.swung = pose.due;
+      if (chopping && struck?.head) c.impactPoint = struck.head.clone();
       this.finishChore(actor);
     }
     const live = home.chore;
     if (!live) { if (home.workTool) home.workTool.visible = false; return; }
     if (live !== c || (live.swingT || 0) >= pose.duration) { live.swingT = 0; live.swung = 0; }
+    if (chopping && live !== c && live.shakeT != null) shakeTreeInstance(game, live.treeId, live.shakeT, { x: home.x, y: home.y });
   }
 
   /** Friends who aren't being played wander a little between idles, so the island feels lived in. */

@@ -81,7 +81,13 @@ const WoodTabBar: React.FC = () => {
   const activeTab = getActiveTab(location.pathname);
 
   const handleNav = (id: string, path: string) => {
-    if (activeTab === id && location.pathname === path) return;
+    const onLibrary =
+      location.pathname === '/listen' ||
+      location.pathname === '/read' ||
+      location.pathname === '/library';
+    // Home from the library returns to the ship, not the old world screen.
+    const dest = id === 'home' && onLibrary ? '/crew' : path;
+    if (activeTab === id && location.pathname === dest) return;
 
     if (
       isTutorialActive &&
@@ -94,7 +100,7 @@ const WoodTabBar: React.FC = () => {
     }
 
     playTab();
-    navigate(path);
+    navigate(dest);
   };
 
   return (

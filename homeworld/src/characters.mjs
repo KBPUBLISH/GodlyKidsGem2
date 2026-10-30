@@ -22,6 +22,7 @@ export const CHARACTERS={
     title:'Eve the Cook',
     roleId:'cook',
     roleName:'Cook',
+    rankTitle:'Master Chef', // fixed rank shown on cards and the village strip (settlement.mjs learnedRole) — never re-ranked by practice
     icon:'cookedfish',
     personality:['warm','organised','cheerful','a little bossy about mealtimes'],
     voice:'Short, warm, practical sentences. Talks about food, the garden and "everyone eats together". Loud and happy when she rings the bell.',
@@ -46,6 +47,7 @@ export const CHARACTERS={
     title:'Abel the Garden Keeper',
     roleId:'gardener',
     roleName:'Garden keeper',
+    rankTitle:'Master Gardener',
     icon:'water',
     personality:['gentle','patient','quiet','watchful'],
     voice:'Soft-spoken and few words. Notices small things — a sprout, a thirsty plant, a crow on the fence — and has a gentle sense of humour.',
@@ -70,6 +72,7 @@ export const CHARACTERS={
     title:'Noah the Woodcutter',
     roleId:'woodcutter',
     roleName:'Woodcutter',
+    rankTitle:'Master Builder',
     icon:'axe',
     personality:['hearty','practical','full of ideas','steady'],
     voice:'Big, cheerful and hands-on. Thinks in plans and logs, says "let\'s build it" a lot, and always has an idea about what the island needs next.',
@@ -94,6 +97,7 @@ export const CHARACTERS={
     title:'Adam the Farmer',
     roleId:'farmer',
     roleName:'Farmer',
+    rankTitle:'Master Farmer',
     icon:'fence',
     personality:['curious','kind','thankful','outdoorsy'],
     voice:'Curious and simple. Asks questions, names things (especially animals) and thanks God out loud. Warm and a little wide-eyed, like everything is new.',
@@ -432,6 +436,8 @@ export function characterFor(name){
   return {...CHARACTERS.generic,name:shown,title:shown===CHARACTERS.generic.name?CHARACTERS.generic.title:`${shown} the Helper`};
 }
 export const isGenericProfile=c=>!c?.roleId;
+/** Fixed rank title for a named base friend ('Master Chef' for Eve …), or null when the friend ranks by practice. */
+export const rankTitleFor=name=>characterFor(name)?.rankTitle||null;
 
 /** 0–5: how naturally this friend runs the morning meeting. Unknown friends are 1; Adam (the default foreman) is 2. */
 export function leadership(nameOrChar){

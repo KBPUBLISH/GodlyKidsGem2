@@ -5,7 +5,7 @@ import {FARM_ACTION_SECONDS} from './living-action-motion.mjs';
 
 export class LivingGarden {
  constructor(test){
-  this.test=test;this.g=test.g;this.work=null;this.animating=false;
+  this.test=test;this.g=test.g;this.work=null;this.animating=false;this.promptNodes=new Map();
   this.group=new THREE.Group();this.g.scene.add(this.group);this.plots=[];
   const slots=this.g.world.gardenSlots,cols=[...new Set(slots.map(p=>p.col))].sort((a,b)=>a-b),rows=[...new Set(slots.map(p=>p.row))].sort((a,b)=>a-b);
   for(const row of [rows[1],rows[0]])for(const col of cols.slice(0,3))this.plots.push({...cellFromKey(this.g.world,`${col}:${row}`),crop:GARDEN_CROPS[this.plots.length]});
@@ -89,6 +89,23 @@ export class LivingGarden {
   this.go(i);
   return true;
  }
+ bindPrompt(index,node){
+  if(node)this.promptNodes.set(index,node);else this.promptNodes.delete(index);
+  this.updatePrompts();
+ }
+ updatePrompts(){
+  if(!this.promptNodes.size)return;
+  const g=this.g;g.camera.updateMatrixWorld(true);
+  // Read layout once before writing any styles; never drive React at frame rate.
+  const rect=g.renderer.domElement.getBoundingClientRect(),point=new THREE.Vector3();
+  for(const [index,node] of this.promptNodes){
+   const plot=this.plots[index],near=Math.hypot(g.player.x-plot.x,g.player.y-plot.y)<=3.2;
+   point.set(plot.x,heightAt(g.world,plot.x,plot.y)+.4,-plot.y).project(g.camera);
+   const visible=near&&point.z>=-1&&point.z<=1&&Math.abs(point.x)<.95&&Math.abs(point.y)<.85&&!g.overview&&!g.siteView&&!g.interior;
+   node.style.display=visible?'':'none';
+   node.style.left=`${(point.x+1)*rect.width/2}px`;node.style.top=`${(1-point.y)*rect.height/2}px`;
+  }
+ }
  snapshot(){
   const s=this.state,now=Date.now(),next=gardenNext(s,now),phase=next?.kind||'wait',target=next?this.plots[next.index]:null;
   const seconds=phase==='wait'?Math.ceil(next.remaining/1000):0,format=ms=>{const n=Math.ceil(ms/1000);return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;};
@@ -104,5 +121,5 @@ export class LivingGarden {
    target:target?this.test.project(target,.1):null,crops};
  }
 
- dispose(){this.g.scene.remove(this.group);this.highlights?.forEach(h=>h.tile.traverse(o=>{o.geometry?.dispose();o.material?.dispose();}));this.marker?.geometry.dispose();this.marker?.material.dispose();this.ownedGeometry?.dispose();this.ownedMaterials?.forEach(m=>m.dispose());}
+ dispose(){this.promptNodes.clear();this.g.scene.remove(this.group);this.highlights?.forEach(h=>h.tile.traverse(o=>{o.geometry?.dispose();o.material?.dispose();}));this.marker?.geometry.dispose();this.marker?.material.dispose();this.ownedGeometry?.dispose();this.ownedMaterials?.forEach(m=>m.dispose());}
 }

@@ -114,3 +114,6 @@
 @media(max-height:520px){.living-sheet-tasks{max-height:88dvh}.living-task-row{min-height:52px;padding:7px 10px}.living-task-row strong{font-size:14px}.living-task-hear{margin-top:0}}
 
 .living-garden-timer{position:absolute;z-index:7;transform:translate(-50%,-50%);display:flex;align-items:center;gap:3px;pointer-events:none;color:#fff8df;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px #203e20,1px 0 2px #203e20}
+
+.living-island-test .living-garden-spot:active:not(:disabled){transform:translate(-50%,-50%)}
+.living-task-hear{display:flex;align-items:center;gap:8px;font-weight:800}.living-task-hear>b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e64a2f;color:#fff9e5;border:2px solid #fff0c8;font-size:19px}

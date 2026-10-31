@@ -46,7 +46,7 @@ async def main():
    layout=await frame.evaluate("""()=>({overflow:document.documentElement.scrollWidth>innerWidth,covered:[...document.querySelectorAll('.living-guide,.living-round,.living-target,.living-pocket')].reduce((n,e)=>{const b=e.getBoundingClientRect();return n+b.width*b.height;},0)/(innerWidth*innerHeight),smallTargets:[...document.querySelectorAll('button')].filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.width<44||b.height<44);}).map(e=>e.getAttribute('aria-label'))})""")
    assert not layout['overflow'] and layout['covered']<.15,layout
    assert not [x for x in layout['smallTargets'] if x not in ['Sound is on. Turn music off','Sound is off. Turn music on']],layout
-   assert await frame.locator('.living-guide').evaluate("e=>getComputedStyle(e).backgroundColor==='rgba(0, 0, 0, 0)'")
+   assert await frame.locator('.living-guide').evaluate("e=>getComputedStyle(e).backgroundImage.includes('linear-gradient')")
    rail=await frame.locator('.side-buttons>button').evaluate_all('es=>es.map(e=>{const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y};})')
    assert len({round(r['x']) for r in rail})==1 and all(rail[i]['y']<rail[i+1]['y'] for i in range(len(rail)-1)),rail
    await page.screenshot(path=f'/tmp/tent-ui-{width}.png')
@@ -54,7 +54,7 @@ async def main():
   await frame.get_by_role('button',name='Hear this task',exact=True).click()
   await page.wait_for_timeout(500)
   assert any(v['voiceId']=='MF3mGyEYCl7XYWbV9V6O' and 'carrot' in v['text'] for v in voices),voices
-  print('PASS: original vertical controls, transparent garden prompt, Perry ElevenLabs voice request',flush=True)
+  print('PASS: original vertical controls, compact parchment garden task, Perry ElevenLabs voice request',flush=True)
   await page.screenshot(path='/tmp/garden-first-task.png')
   await frame.get_by_role('button',name='Plant carrot spot 6',exact=True).click()
   await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.planted===1',timeout=90000)

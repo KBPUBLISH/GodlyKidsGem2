@@ -2,6 +2,7 @@
 export const PREVIEW_ART = {
   splash: '/assets/images/splash-island-friends-v1.webp',
   logo: '/assets/images/avatar-harbor/logo-v1.webp',
+  islandBoat: '/assets/images/island-sailboat-v1.webp',
   languageOcean: '/assets/images/language/language-ocean-mobile-v1.webp',
   languageGlobe: '/assets/images/language/language-globe-mobile-v1.webp',
 };
@@ -15,6 +16,7 @@ export const WELCOME_ART = {
 const onboarding = [
   ...Object.values(WELCOME_ART),
   PREVIEW_ART.logo,
+  PREVIEW_ART.islandBoat,
   '/assets/images/avatar-harbor/harbor-phone-v1.webp',
   ...['heading','caption','confirm','arrow'].map(name=>`/assets/images/avatar-harbor/${name}-v1.webp`),
   '/assets/fonts/fredoka-latin-700.woff2',

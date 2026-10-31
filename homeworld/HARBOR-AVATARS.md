@@ -37,3 +37,5 @@ python homeworld/tests/player-actions-browser.py
 ```
 
 Browser tests use Chromium and API fixtures. They check responsive layouts, real touch/drag/keyboard selection, reduced motion, continued world warmup, saved-profile compatibility, the selected island model, and the no-WebGL fallback. They do not measure frame rates on physical Apple hardware.
+
+The testing island HUD shows the chosen profile portrait beside the day/time, a separate bedtime crescent, and a compact parchment task card. Its red ! reads the task aloud through Perry; the separate Sound button still controls island audio. The bottom-left sailboat is generated transparent WebP artwork (160px, about 11 KB, warmed during onboarding). Garden prompt elements are positioned after each camera update without rerendering React each frame. They only appear within 3.2 world units of their plot and are hidden in map/interior views. `python homeworld/tests/living-hud-browser.py` checks mobile/iPad layouts, actual icon loading, task voice requests, marker alignment through camera turns, distance hiding, and first planting.

@@ -1,3 +1,5 @@
+import ChooseAvatar from '../components/onboarding/ChooseAvatar';
+import {getLivingAvatar,livingAvatarForProfile,livingAvatarPortraitUrl} from '../shared/livingAvatars.mjs';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Trash2, Pencil, Check } from 'lucide-react';
@@ -5,32 +7,6 @@ import './ProfileSelectionPage.css';
 import { AVATAR_ASSETS } from '../components/avatar/AvatarAssets';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
-
-// PNG-based heads from /public/avatars/heads/
-const FUNNY_HEADS = [
-  '/avatars/heads/head-1.png',
-  '/avatars/heads/head-2.png',
-  '/avatars/heads/head-3.png',
-  '/avatars/heads/head-4.png',
-  '/avatars/heads/head-5.png',
-  '/avatars/heads/head-6.png',
-  '/avatars/heads/head-7.png',
-  '/avatars/heads/head-8.png',
-  '/avatars/heads/head-9.png',
-  '/avatars/heads/head-11.png',
-  '/avatars/heads/head-12.png',
-  '/avatars/heads/head-13.png',
-  '/avatars/heads/head-14.png',
-  '/avatars/heads/head-15.png',
-  '/avatars/heads/head-16.png',
-  '/avatars/heads/head-17.png',
-  '/avatars/heads/head-18.png',
-  '/avatars/heads/head-19.png',
-  '/avatars/heads/head-20.png',
-  '/avatars/heads/head-21.png',
-  '/avatars/heads/head-22.png',
-  '/avatars/heads/head-23.png',
-];
 
 const EditProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +31,10 @@ const EditProfilePage: React.FC = () => {
   // Form state
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
-  const [selectedHead, setSelectedHead] = useState(FUNNY_HEADS[0]);
+  const [selectedHead, setSelectedHead] = useState('/avatars/adventurers/trail.png');
+  const [choosingAvatar,setChoosingAvatar]=useState(false);
+  const [avatarId,setAvatarId]=useState('trail');
+  const [worldAvatarId,setWorldAvatarId]=useState<string|undefined>();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const loadedFor = useRef<string | null>(null);
 
@@ -68,7 +47,9 @@ const EditProfilePage: React.FC = () => {
     loadedFor.current = currentKid.id;
     setName(currentKid.name || '');
     setAge(currentKid.age?.toString() || '');
-    setSelectedHead(currentKid.avatar || currentKid.avatarSeed || FUNNY_HEADS[0]);
+    setSelectedHead(currentKid.avatar || currentKid.avatarSeed || getLivingAvatar('trail').portrait);
+    setAvatarId(livingAvatarForProfile(currentKid).id);
+    setWorldAvatarId(currentKid.worldAvatarId);
   }
 
   const handleSave = () => {
@@ -78,7 +59,8 @@ const EditProfilePage: React.FC = () => {
       name: name.trim(),
       age: age ? parseInt(age, 10) : currentKid.age,
       avatar: selectedHead,
-      avatarSeed: selectedHead
+      avatarSeed: selectedHead,
+      ...(worldAvatarId ? {worldAvatarId} : {})
     });
     // The active kid's look is also stored on the live avatar. Keep them together
     // so the save doesn't write the old head back over this edit.
@@ -98,7 +80,7 @@ const EditProfilePage: React.FC = () => {
 
   const renderHead = (head: string) => AVATAR_ASSETS[head]
     ? <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">{AVATAR_ASSETS[head]}</svg>
-    : <img src={head} alt="" className="w-full h-full object-cover" />;
+    : <img src={livingAvatarPortraitUrl(head)} alt="" className="w-full h-full object-cover" />;
 
   if (!kidId || !currentKid) {
     return (
@@ -122,6 +104,8 @@ const EditProfilePage: React.FC = () => {
       </main>
     );
   }
+
+  if(choosingAvatar)return <ChooseAvatar selectedId={avatarId} onSelect={setAvatarId} onBack={()=>setChoosingAvatar(false)} onConfirm={()=>{const avatar=getLivingAvatar(avatarId);setSelectedHead(avatar.portrait);setWorldAvatarId(avatar.id);setChoosingAvatar(false);}}/>;
 
   return (
     <main className="explorer-page">
@@ -149,13 +133,7 @@ const EditProfilePage: React.FC = () => {
             </label>
             <div className="explorer-field">
               <span>{t('chooseALook')}</span>
-              <div className="explorer-heads" role="radiogroup" aria-label={t('chooseALook')}>
-                {FUNNY_HEADS.map((head, i) => (
-                  <button key={head} type="button" role="radio" aria-checked={selectedHead === head} aria-label={`Look ${i + 1}`} onClick={() => setSelectedHead(head)} className={`explorer-head${selectedHead === head ? ' is-selected' : ''}`}>
-                    {renderHead(head)}
-                  </button>
-                ))}
-              </div>
+              <button type="button" className="explorer-action explorer-teal" onClick={()=>{setAvatarId(livingAvatarForProfile({worldAvatarId,avatarSeed:selectedHead}).id);setChoosingAvatar(true);}}>Choose your avatar</button>
             </div>
           </div>
           <div className="explorer-actions">

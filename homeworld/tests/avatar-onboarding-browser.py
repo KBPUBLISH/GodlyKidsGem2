@@ -79,6 +79,15 @@ async def main():
   for width,height in [(390,844),(768,1024),(1024,768),(1366,1024),(844,390),(320,568)]:
    await page.set_viewport_size({'width':width,'height':height});await page.wait_for_timeout(150)
    assert await page.locator('.choose-avatar').evaluate('e=>e.scrollWidth<=e.clientWidth+1&&e.scrollHeight<=e.clientHeight+1'),(width,height)
+   grounded=await page.locator('.choose-avatar').evaluate("""root=>{
+    const art=root.querySelector('.avatar-harbor img').getBoundingClientRect();
+    const stage=root.querySelector('.avatar-viewport').getBoundingClientRect();
+    const screen=root.getBoundingClientRect();
+    const feet={x:stage.left+stage.width/2,y:stage.top+stage.height*.959341567};
+    return Math.abs(art.left+art.width*.5-feet.x)<2 && Math.abs(art.top+art.height*.66-feet.y)<2
+      && art.left<=screen.left+1 && art.right>=screen.right-1 && art.top<=screen.top+1 && art.bottom>=screen.bottom-1;
+   }""")
+   assert grounded,('Feet must align with the stone dock and scenery must cover the screen',width,height)
    targets=await page.locator('.choose-avatar button').evaluate_all('es=>es.map(e=>{const b=e.getBoundingClientRect();return {label:e.getAttribute("aria-label"),w:b.width,h:b.height};})')
    assert all(t['w']>=44 and t['h']>=44 for t in targets),targets
    await page.screenshot(path=f'/tmp/avatar-final-{width}-{height}.png')

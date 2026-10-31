@@ -25,6 +25,30 @@ export default function ChooseAvatar({selectedId,onSelect,onConfirm,onBack}:Prop
     return ()=>{element.removeEventListener('webglcontextlost',lost,true);scene.current?.dispose();scene.current=null;};
   },[]);
   useEffect(()=>{scene.current?.select(selectedId);},[selectedId]);
+  useEffect(()=>{
+    const element=host.current,root=element?.closest<HTMLElement>('.choose-avatar');
+    const harbor=root?.querySelector<HTMLElement>('.avatar-harbor');
+    if(!element||!root||!harbor)return;
+    const placeDock=()=>{
+      const bounds=element.parentElement!.getBoundingClientRect(),screen=harbor.getBoundingClientRect();
+      const anchor=scene.current?.groundAnchor()||{x:.5,y:.95934};
+      let x=bounds.left+bounds.width*anchor.x-screen.left,y=bounds.top+bounds.height*anchor.y-screen.top;
+      if(fallback){
+        // The full-body fallback is 400×600 and uses object-fit:contain.
+        const height=Math.min(bounds.height,bounds.width*1.5);
+        y=bounds.top+(bounds.height-height)/2+height*.953-screen.top;
+      }
+      // The center of the illustrated stone's top is at 50%, 66% in the art.
+      // Align that point to the actual soles, covering every viewport edge.
+      const width=Math.max(screen.width,2*x,2*(screen.width-x));
+      const height=Math.max(screen.height,y/.66,(screen.height-y)/.34);
+      harbor.style.setProperty('--dock-width',`${width}px`);harbor.style.setProperty('--dock-height',`${height}px`);
+      harbor.style.setProperty('--dock-left',`${x-width*.5}px`);harbor.style.setProperty('--dock-top',`${y-height*.66}px`);
+    };
+    const observer=new ResizeObserver(placeDock);observer.observe(element.parentElement!);observer.observe(root);
+    window.addEventListener('resize',placeDock);placeDock();
+    return()=>{observer.disconnect();window.removeEventListener('resize',placeDock);};
+  },[fallback]);
   return <main className="choose-avatar">
     <picture className="avatar-harbor" aria-hidden="true"><source media="(min-width:768px)" srcSet={`${ART}/harbor-tablet-v1.webp`}/><img src={`${ART}/harbor-phone-v1.webp`} alt="" fetchPriority="high" decoding="async"/></picture>
     <button className="avatar-back" aria-label="Back to name and age" onClick={onBack}><ChevronLeft size={24}/></button>

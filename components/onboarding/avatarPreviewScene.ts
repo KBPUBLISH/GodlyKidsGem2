@@ -30,8 +30,11 @@ export function createAvatarPreview(host: HTMLElement, avatarId: string, portrai
   const fill=new THREE.DirectionalLight('#d6edff',.48);fill.position.set(3,1.5,4);scene.add(fill);
   const rim = new THREE.DirectionalLight('#c8efff',1.4);rim.position.set(3,2,-2);scene.add(rim);
   const shadow=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.ShadowMaterial({opacity:.16}));
-  shadow.rotation.x=-Math.PI/2;shadow.position.y=-.01;shadow.receiveShadow=true;shadow.visible=!portrait;scene.add(shadow);
+  shadow.rotation.x=-Math.PI/2;shadow.position.y=0;shadow.receiveShadow=true;shadow.visible=!portrait;scene.add(shadow);
   let player = createLivingPlayer(avatarId);scene.add(player.model);player.model.rotation.y=.3;
+  let soleHeight=new THREE.Box3().setFromObject(player.model).min.y;
+  const groundPlayer=()=>{if(!portrait)player.model.position.y=-soleHeight-player.bones.mixamorigHips.position.y;};
+  groundPlayer();
   let stopped=false,paused=false,dragging=false,frame=0,last=0,elapsed=0,resumeAt=0;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const draw = () => renderer.render(scene,camera);
@@ -46,7 +49,7 @@ export function createAvatarPreview(host: HTMLElement, avatarId: string, portrai
     if(now-last<1000/30)return;
     const dt=Math.min((now-last)/1000,.05);last=now;elapsed+=dt;
     if(!dragging&&elapsed>resumeAt)player.model.rotation.y+=dt*.38;
-    player.update(dt,0,elapsed);draw();
+    player.update(dt,0,elapsed);groundPlayer();draw();
   }
   function activity(){cancelAnimationFrame(frame);frame=0;last=performance.now();if(!stopped&&!paused&&!document.hidden&&!reduced.matches&&!portrait)frame=requestAnimationFrame(animate);}
   document.addEventListener('visibilitychange',activity);reduced.addEventListener('change',activity);activity();
@@ -54,8 +57,9 @@ export function createAvatarPreview(host: HTMLElement, avatarId: string, portrai
     select(id: string) {
       if(player.model.userData.avatarId===id)return;
       scene.remove(player.model);player.dispose();player=createLivingPlayer(id);scene.add(player.model);
-      player.model.rotation.y=.3;elapsed=0;resumeAt=1.5;draw();
+      player.model.rotation.y=.3;soleHeight=new THREE.Box3().setFromObject(player.model).min.y;groundPlayer();elapsed=0;resumeAt=1.5;draw();
     },
+    groundAnchor(){camera.updateMatrixWorld();const point=new THREE.Vector3(0,0,0).project(camera);return {x:(point.x+1)/2,y:(1-point.y)/2};},
     turn(radians:number){player.model.rotation.y+=radians;resumeAt=elapsed+2;draw();},
     setDragging(value:boolean){dragging=value;resumeAt=elapsed+2;},
     pause(){paused=true;activity();},

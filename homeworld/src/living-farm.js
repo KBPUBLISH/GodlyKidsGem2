@@ -28,9 +28,9 @@ export class LivingFarm{
   const next=farmBuy(this.state,pending.kind,name,Date.now());
   if(next===this.state){this.error=farmPurchaseError(this.state,pending.kind,name,Date.now())||'Please try again.';this.g.notify();return false;}
   if(!this.commit(next))return false;
-  this.pending=null;this.test.celebrate(pending.kind==='coop'?'Your coop is bigger!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
+  this.pending=null;this.test.celebrate(pending.kind==='coop'?'Coop ready!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
  }
- use(item,action){if(this.commit(farmUse(this.state,item,action))){this.test.activity();if(action==='eat')this.test.celebrate(item==='egg'?'A tasty egg snack!':'A lovely drink of milk!');else this.g.toast(`Sold ${item==='egg'?'an egg':'milk'} for ${FARM_PRICES[item]} coins!`);}}
+ use(item,action){if(this.commit(farmUse(this.state,item,action))){this.test.activity();if(action==='eat')this.test.celebrate('Yum!');else this.g.toast(`+${FARM_PRICES[item]} coins`);}}
  walkTo(id){const i=this.state.animals.findIndex(a=>a.id===id);if(i>=0)this.test.walk(this.ground(i));}
  ground(i){return this.test.layout.farmSpots[i];}
  sync(){
@@ -62,11 +62,11 @@ export class LivingFarm{
  update(){
   const now=Date.now();if(now<this.checkAt)return;this.checkAt=now+500;
   const next=farmAdvance(this.state,now),newlyReady=next.animals.find((a,i)=>a.ready>0&&!this.state.animals[i].ready);
-  if(this.commit(next)&&newlyReady)this.g.toast(`${newlyReady.name} has ${newlyReady.kind==='chicken'?'an egg':'milk'} ready! Open your farm to collect it.`);
+  if(this.commit(next)&&newlyReady)this.g.toast(`${newlyReady.name}: ${newlyReady.kind==='chicken'?'egg':'milk'} ready!`);
   if(this.test.watching||this.test.dialogOpen)return;
   for(const [i,a] of this.state.animals.entries()){
    const p=this.ground(i);if(a.ready&&Math.hypot(this.g.player.x-p.x,this.g.player.y-p.y)<1.15){
-    const amount=a.ready;if(this.commit(farmCollect(this.state,a.id,now))){this.test.pickupNotice={label:`+${amount} ${a.kind==='chicken'?'egg'+(amount>1?'s':''):'milk'}`,until:this.test.elapsed+2};this.g.toast(`${a.name} has something for you! Check your bag to eat or sell it.`);}
+    const amount=a.ready;if(this.commit(farmCollect(this.state,a.id,now))){this.test.pickupNotice={label:`+${amount} ${a.kind==='chicken'?'egg'+(amount>1?'s':''):'milk'}`,until:this.test.elapsed+2};}
    }
   }
  }

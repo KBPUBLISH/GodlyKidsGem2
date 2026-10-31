@@ -24,13 +24,26 @@ async def main():
   assert await frame.evaluate('window.__hw.livingTest.garden.plots.filter(p=>p.cropObject.visible).length')==3
   assert await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).count()==0
   await page.wait_for_timeout(2000)
+  for width,height in [(390,844),(320,740),(844,390)]:
+   await page.set_viewport_size({'width':width,'height':height})
+   await page.wait_for_timeout(300)
+   layout=await frame.evaluate("""()=>({overflow:document.documentElement.scrollWidth>innerWidth,covered:[...document.querySelectorAll('.living-guide,.living-round,.living-target,.living-pocket')].reduce((n,e)=>{const b=e.getBoundingClientRect();return n+b.width*b.height;},0)/(innerWidth*innerHeight),smallTargets:[...document.querySelectorAll('button')].filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.width<44||b.height<44);}).map(e=>e.getAttribute('aria-label'))})""")
+   assert not layout['overflow'] and layout['covered']<.15,layout
+   assert not layout['smallTargets'],layout
+   await page.screenshot(path=f'/tmp/action-ui-{width}.png')
+  await page.set_viewport_size({'width':390,'height':844})
+  await frame.evaluate("()=>{window.spokenTask='';speechSynthesis.speak=words=>{window.spokenTask=words.text;};}")
+  await frame.get_by_role('button',name='Hear this task',exact=True).click()
+  assert 'garden' in await frame.evaluate('window.spokenTask')
+  print('PASS: compact controls cover under 15% on portrait and landscape phones; 44px targets and correct spoken garden prompt',flush=True)
   await page.screenshot(path='/tmp/garden-first-task.png')
   await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
   await frame.get_by_role('button',name='Not now',exact=True).click()
   assert not await frame.evaluate('window.__hw.livingTest.farm.state.garden.approved')
   await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
+  await page.screenshot(path='/tmp/action-ui-confirmation.png')
   await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
-  await frame.get_by_role('button',name='Dig a spot',exact=True).click()
+  await frame.get_by_role('button',name='Go to the garden spot',exact=True).click()
   try:await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.dug===1',timeout=90000)
   except Exception:
    print('DIG DEBUG',await frame.evaluate('({p:window.__hw.player,path:window.__hw.path,work:window.__hw.livingTest.garden.work,dialog:window.__hw.livingTest.dialogOpen,garden:window.__hw.livingTest.garden.snapshot()})'),flush=True)
@@ -52,7 +65,7 @@ async def main():
   print('PASS: camp task progresses with no chicken purchased',flush=True)
   # Reproduce an old, stranded wallet. The app purse is deliberately different.
   await frame.evaluate('''()=>{const f=window.__hw.livingTest.farm;f.commit({...f.state,coins:3,chickenDismissed:false});window.__hw.coins=500;}''')
-  await expect(frame.locator('.living-request')).to_contain_text('You have 3 coins')
+  await expect(frame.locator('.living-farm .living-coins b')).to_have_text('3')
   assert await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).count()==0
   await frame.get_by_role('button',name='Open my farm',exact=True).click()
   assert await frame.get_by_role('button',name='Buy a chicken',exact=False).is_disabled()
@@ -66,6 +79,7 @@ async def main():
   await frame.get_by_role('textbox',name='Animal’s name').fill('<>')
   assert await frame.get_by_role('button',name='Buy <> · 10 coins',exact=True).is_disabled()
   await frame.get_by_role('textbox',name='Animal’s name').fill('Sunny')
+  await page.screenshot(path='/tmp/action-ui-purchase.png')
   # A failed save must leave both the wallet and animal ownership untouched, with retry available.
   await frame.evaluate('''()=>{window.originalGardenSet=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('gk_living_farm_v1'))throw Error('Test storage full');return window.originalGardenSet.call(this,k,v);};}''')
   await frame.get_by_role('button',name='Buy Sunny · 10 coins',exact=True).click()

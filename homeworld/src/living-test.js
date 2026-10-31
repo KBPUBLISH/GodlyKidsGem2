@@ -125,7 +125,7 @@ export class LivingIslandTest {
     if(!this.state.adamUnlocked||!this.state.welcomeSeen||this.watching||this.dialogOpen||this.builder)return;
     const distance=Math.hypot(g.player.x-h.actor.position.x,g.player.y+h.actor.position.z);
     if(distance<2.2&&(this.greetTarget||this.elapsed>(this.greetAgain||0))){
-      const approached=!!this.greetTarget;this.greetTarget=null;this.greetAgain=this.elapsed+30;this.greeting={id:'adam',text:`Hello, ${this.playerName}! It’s lovely to see you.`,until:this.elapsed+5};if(approached)g.path=[];if(g.music?.on&&window.speechSynthesis){window.speechSynthesis.cancel();const words=new SpeechSynthesisUtterance(this.greeting.text);words.rate=.9;window.speechSynthesis.speak(words);}g.notify();
+      const approached=!!this.greetTarget;this.greetTarget=null;this.greetAgain=this.elapsed+30;this.greeting={id:'adam',text:`Hi, ${this.playerName}!`,until:this.elapsed+5};if(approached)g.path=[];if(g.music?.on&&window.speechSynthesis){window.speechSynthesis.cancel();const words=new SpeechSynthesisUtterance(this.greeting.text);words.rate=.9;window.speechSynthesis.speak(words);}g.notify();
     }
     if(this.greeting&&this.elapsed<this.greeting.until){h.actor.rotation.y=Math.atan2(g.player.x-h.actor.position.x,-g.player.y-h.actor.position.z);h.bones.mixamorigRightArm?.rotateZ(-.6);h.bones.mixamorigRightForeArm?.rotateX(-.7+Math.sin(this.elapsed*6)*.12);}
   }
@@ -136,14 +136,16 @@ export class LivingIslandTest {
   }
   showNext(){this.declinedBuild=null;this.walk(this.nextTarget());}
   hearTask(){
-    const hint=guidance(this.state);if(!hint||!window.speechSynthesis)return;
-    window.speechSynthesis.cancel();const words=new SpeechSynthesisUtterance(`${hint.instruction} ${hint.progress}.`);words.rate=.85;window.speechSynthesis.speak(words);
+    if(!window.speechSynthesis)return;
+    const garden=this.farm.state.garden,hint=guidance(this.state);
+    const message=!garden.completed?(!garden.approved?'Tap Grow to make your garden bigger. It’s free!':garden.dug<3?'Tap the shovel. Let’s dig three spots!':'Tap the seed. Let’s plant!'):hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
+    this.activity();window.speechSynthesis.cancel();const words=new SpeechSynthesisUtterance(message);words.rate=.85;window.speechSynthesis.speak(words);
   }
   celebrate(title){this.celebration={title,until:this.elapsed+3.2};this.g.burst(this.g.player,'seed',.8);}
   visitHome(){if(this.state.homeWork===1)this.g.building.enterHome('living-test-home');}
   hello(id){
     if(!this.state.adamUnlocked||id!=='adam')return;this.activity();const h=this.g.community.actors.adam;
-    if(this.builder){this.g.toast(`Adam: Hello, ${this.playerName}! I’m making our home.`);return;}
+    if(this.builder){this.g.toast(`Hi, ${this.playerName}!`);return;}
     const pos={x:h.actor.position.x,y:-h.actor.position.z},s=this.g.store.state;
     this.greetTarget=id;this.g.store.save({...s,community:{...s.community,members:{...s.community.members,adam:{...s.community.members.adam,position:pos,job:null,readyAt:gameTime(s)+10}}}});
     const dx=this.g.player.x-pos.x,dy=this.g.player.y-pos.y,d=Math.hypot(dx,dy)||1;
@@ -209,7 +211,7 @@ export class LivingIslandTest {
         if(this.state.homeWork===1){
           const s=g.store.state,m=s.community.members.adam;
           g.store.save({...s,community:{...s.community,members:{...s.community.members,adam:{...m,position:{...b.position},job:null,readyAt:gameTime(s)}}}});
-          this.builder=null;this.save();this.sync();this.celebrate('Your home is ready!');g.toast('Adam: Come and see our new home!');
+          this.builder=null;this.save();this.sync();this.celebrate('Home ready!');
         }
       }
     }
@@ -223,7 +225,7 @@ export class LivingIslandTest {
     if(site&&readyToDeliver(this.state)&&this.elapsed>=this.depositAt&&Math.hypot(g.player.x-site.x,g.player.y-site.y)<1.05){
       if(['first-camp','home-wood'].includes(task.id)&&!this.state.approvedBuildings[task.id]){if(this.declinedBuild!==task.id&&!this.decision){this.decision={id:task.id,name:task.id==='first-camp'?'camp':'home',remaining:task.count-this.state.deposits[task.id]};g.notify();}return;}
       const before=this.state.stage,next=deliver(this.state,task.friend);
-      if(next!==this.state){this.state=next;this.depositAt=this.elapsed+.35;if(next.stage===1)offerFirstFriend(localStorage,FRIEND_KEY);this.save();this.sync();if(next.stage!==before){this.celebrate(before===0?'You made your first camp!':before===1?'A picnic to share!':'Adam is building your home!');if(before===0)this.inviteAfter=this.elapsed+3.2;g.toast(task.friend==='you'?task.thanks:`${task.name}: ${task.thanks}`,4500);}g.notify();}
+      if(next!==this.state){this.state=next;this.depositAt=this.elapsed+.35;if(next.stage===1)offerFirstFriend(localStorage,FRIEND_KEY);this.save();this.sync();if(next.stage!==before){this.celebrate(before===0?'Camp ready!':before===1?'Picnic time!':'Building!');if(before===0)this.inviteAfter=this.elapsed+3.2;}g.notify();}
     }
   }
   project(point,above=.7){

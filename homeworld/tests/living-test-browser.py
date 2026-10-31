@@ -74,7 +74,7 @@ async def main():
                 await frame.get_by_role('button',name=label,exact=True).click()
                 await frame.wait_for_function('(n)=>window.__hw.livingTest.state.gathered.length>n',arg=before,timeout=90000)
         await gather('Find a log',3)
-        assert '3 / 3' in await frame.locator('.living-progress').inner_text() or 'delivered' in await frame.locator('.living-progress').inner_text()
+        assert '3 / 3' in await frame.locator('.living-progress').get_attribute('aria-label') or 'delivered' in await frame.locator('.living-progress').get_attribute('aria-label')
         await page.screenshot(path='/tmp/kids-carrying.png')
         await frame.get_by_role('button',name='Take logs to camp',exact=True).click()
         await frame.get_by_role('button',name='Build camp',exact=True).click(timeout=90000)

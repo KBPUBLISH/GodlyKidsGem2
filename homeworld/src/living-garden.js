@@ -67,8 +67,8 @@ export class LivingGarden {
   const next=w.kind==='harvest'?gardenHarvest(s,w.index,now):gardenWork(s,w.kind,w.index,now);
   if(this.test.farm.commit(next)){
    g.burst(p,'seed',.5);
-   if(!before&&this.state.completed)this.test.celebrate('Your garden grew! +10 coins');
-   else{this.test.pickupNotice={label:w.kind==='dig'?'A new garden spot!':w.kind==='plant'?'Planted!':`+${HARVEST_COINS} coins · picked and replanted`,until:this.test.elapsed+2};}
+   if(!before&&this.state.completed)this.test.celebrate('+10 coins!');
+   else{this.test.pickupNotice={label:w.kind==='dig'?'Dug!':w.kind==='plant'?'Planted!':`+${HARVEST_COINS} coins`,until:this.test.elapsed+2};}
    g.notify();
   }
  }

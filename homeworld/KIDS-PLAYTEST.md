@@ -14,9 +14,9 @@ The opening previously taught too much through text and menus. To-do, Bag and Bu
 
 ## Changes in this pass
 
-- One current instruction, with a visible action to find the next supply or reach the delivery circle. A world marker points to that target. No joystick.
+- One compact illustrated action, with a short label and progress dots. Tap it or the world marker to dig, plant, find supplies or deliver. The persistent text card is removed. No joystick.
 - Found-item progress updates during collection, with simple progress dots and pickup feedback. Partial deliveries remain supported.
-- Bag lives in the existing bottom panel. Friends appears after Adam arrives; Home appears when home building becomes relevant. Future task placeholders are removed.
+- Bag and farm use separate pocket buttons after the first garden task. Friends appears after Adam arrives; Visit becomes the main action when the home is ready. Empty initial controls and duplicate home controls are hidden.
 - Short optional task narration uses the device’s speech feature. Availability and voice quality depend on the browser/device.
 - A brief celebration leaves the camp visible before the invitation. Invitation and welcome use a compact bottom card. Completing the carrots adds a visible picnic with the existing food props.
 - The first-friend handoff opens the reading hub directly and begins reading with the saved level or child profile’s age. If neither is available, it asks for an age. Leaving an unfinished reader returns to the island, preserving the pending friend.

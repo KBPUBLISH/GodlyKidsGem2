@@ -1,9 +1,8 @@
 [build]
-  command = "npm run build"
+  command = "npm run living-test:build"
   publish = "dist"
 
-# This isolated branch includes the rebuilt island prototype. The normal app's
-# build keeps its existing command and published island assets.
+# The live app uses the same onboarding and rebuilt island as this branch.
 [context."codex/living-world-player-test"]
   command = "npm run living-test:build"
 

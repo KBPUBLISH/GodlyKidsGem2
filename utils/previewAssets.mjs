@@ -1,6 +1,6 @@
 /** Stable URLs shared by early HTML hints, the screens, and background warmup. */
 export const PREVIEW_ART = {
-  splash: '/assets/images/splash-adventure-mobile-v1.webp',
+  splash: '/assets/images/splash-island-friends-v1.webp',
   logo: '/assets/images/avatar-harbor/logo-v1.webp',
   languageOcean: '/assets/images/language/language-ocean-mobile-v1.webp',
   languageGlobe: '/assets/images/language/language-globe-mobile-v1.webp',

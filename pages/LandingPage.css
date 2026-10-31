@@ -1,0 +1,16 @@
+/* Keep the friends visible beside the controls when a tablet is turned. */
+@media (orientation:landscape) {
+ .friends-splash .splash-art {left:auto;right:calc(29vw - min(29vw,33.333dvh));width:min(58vw,66.667dvh)!important;object-fit:contain!important;mask-image:linear-gradient(to right,transparent,black 6%,black 94%,transparent)}
+ .friends-splash .splash-brand {width:42%;right:auto;top:5vh!important}
+ .friends-splash .splash-brand img {width:min(28vw,260px,34vh)!important}
+ .friends-splash .splash-brand h1 {font-size:clamp(22px,4vh,32px)!important}
+ .friends-splash .splash-actions {left:21%;width:42%;bottom:1vh!important}
+}
+
+@media (orientation:portrait) {
+ .friends-splash .splash-art {top:auto;bottom:40px;height:min(150vw,100dvh)!important;min-height:0!important;object-fit:fill!important;mask-image:linear-gradient(to bottom,transparent,black 12%,black 90%,transparent)}
+}
+@media (orientation:portrait) and (max-height:650px) {
+ .friends-splash .splash-brand img {width:min(52vw,220px,28vh)!important}
+ .friends-splash .splash-brand h1 {font-size:24px!important}
+}

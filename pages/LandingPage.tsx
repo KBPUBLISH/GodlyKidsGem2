@@ -1,3 +1,4 @@
+import './LandingPage.css';
 import LanguagePicker from '../components/language/LanguagePicker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -185,11 +186,12 @@ const LandingPage: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden bg-[#7EC8E8]"
+      className={`fixed inset-0 overflow-hidden bg-[#7EC8E8] ${LIVING_TEST_BUILD ? 'friends-splash' : ''}`}
       style={{
         width: '100vw',
         height: '100dvh',
         minHeight: '100svh',
+        ...(LIVING_TEST_BUILD ? {background:'linear-gradient(#3b9ded,#5caef2 45%,#3cbbd7)'} : {}),
       }}
     >
       {!mediaReady && (
@@ -201,7 +203,7 @@ const LandingPage: React.FC = () => {
         fetchPriority="high"
         alt=""
         aria-hidden
-        className={`absolute inset-0 pointer-events-none select-none transition-opacity duration-500 ${mediaReady ? 'opacity-100' : 'opacity-0'}`}
+        className={`splash-art absolute inset-0 pointer-events-none select-none transition-opacity duration-500 ${mediaReady ? 'opacity-100' : 'opacity-0'}`}
         style={SPLASH_COVER}
         onLoad={() => setMediaReady(true)}
         onError={() => setMediaReady(true)}
@@ -222,7 +224,7 @@ const LandingPage: React.FC = () => {
       {!LIVING_TEST_BUILD && <video src={ONBOARDING_FAMILY_BG_VIDEO} preload="auto" muted playsInline className="hidden" aria-hidden />}
 
       <div
-        className={`absolute left-0 right-0 z-10 flex w-full min-w-0 flex-col items-center px-6 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`splash-brand absolute left-0 right-0 z-10 flex w-full min-w-0 flex-col items-center px-6 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         style={{
           top: 'max(calc(var(--safe-area-top, 0px) + 10px), 2.4vh)',
         }}
@@ -230,15 +232,19 @@ const LandingPage: React.FC = () => {
         <img
           src={PREVIEW_ART.logo}
           alt="Godly Kids"
+          width={640}
+          height={366}
+          fetchPriority="high"
+          decoding="async"
           draggable={false}
           className="m-0 block h-auto select-none"
-          style={{ width: 'min(78vw, 420px)' }}
+          style={{ width: LIVING_TEST_BUILD ? 'min(60vw, 280px, 34vh)' : 'min(78vw, 420px)' }}
         />
         <h1
           className="m-0 mt-2 text-center leading-[0.86] select-none"
           style={{
             fontFamily: "'Luckiest Guy', 'Fredoka', sans-serif",
-            fontSize: 'clamp(2.35rem, 11vw, 3.4rem)',
+            fontSize: LIVING_TEST_BUILD ? 'clamp(1.6rem, 7.2vw, 2rem)' : 'clamp(2.35rem, 11vw, 3.4rem)',
             color: '#FFB000',
             WebkitTextStroke: '7px #16325C',
             paintOrder: 'stroke fill',
@@ -252,7 +258,7 @@ const LandingPage: React.FC = () => {
       </div>
 
       <div
-        className={`absolute left-1/2 z-20 flex w-full max-w-sm -translate-x-1/2 flex-col items-center px-5 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`splash-actions absolute left-1/2 z-20 flex w-full max-w-sm -translate-x-1/2 flex-col items-center px-5 transition-opacity duration-200 ${playingContinue ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         style={{
           bottom: 'calc(var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 0.35rem)',
         }}

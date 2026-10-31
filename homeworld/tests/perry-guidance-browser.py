@@ -54,10 +54,10 @@ async def main():
   await page.get_by_role('button',name='Find a friend',exact=True).click()
   await page.wait_for_url('**/#/crew')
   await page.get_by_text('Welcome aboard, Mikey!',exact=True).wait_for()
-  await page.wait_for_selector('.ship-player-avatar[data-avatar-id="berry"] canvas')
+  await page.wait_for_selector('[data-testid="crew-deck-3d"][data-player-avatar="berry"] canvas')
   for w,h in [(390,844),(768,1024)]:
    await page.set_viewport_size({'width':w,'height':h});await page.wait_for_timeout(500)
-   box=await page.locator('.ship-player-avatar').bounding_box()
+   box=await page.locator('[data-testid="crew-deck-3d"]').bounding_box()
    assert box['x']>=0 and box['x']+box['width']<=w and box['y']>=0 and box['y']+box['height']<=h,box
    await page.screenshot(path=f'/tmp/perry-ship-{w}-{h}.png')
   await page.get_by_role('button',name='Show me!',exact=True).click()

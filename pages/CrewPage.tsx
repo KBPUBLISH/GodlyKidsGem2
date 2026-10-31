@@ -1,4 +1,3 @@
-import ShipPlayerAvatar from '../components/crew/ShipPlayerAvatar';
 import {livingAvatarForProfile} from '../shared/livingAvatars.mjs';
 import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome} from '../utils/livingFirstFriend';
 import {getProfileScopeKey} from '../utils/profileScope';
@@ -184,7 +183,8 @@ const SEA_PAN_PER_NOTCH = 0.16;
 type StageRect = { left: number; top: number; width: number; height: number; pageW: number; pageH: number };
 
 const stageFor = (w: number, h: number): StageRect => {
-  const sw = Math.max(w, h * STAGE_ASPECT);
+  // Keep the deck in view on landscape tablets; ocean fills the side margins.
+  const sw = Math.max(Math.min(w, h * .75), h * STAGE_ASPECT);
   const sh = sw / STAGE_ASPECT;
   const top = h * (sh > h + 1 ? STAGE_WIDE_TOP_PCT : STAGE_TOP_PCT);
   return { left: (w - sw) / 2, top, width: sw, height: sh, pageW: w, pageH: h };
@@ -1027,7 +1027,7 @@ const CrewPage: React.FC = () => {
   const wheelRef = useRef<HTMLButtonElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const stage = useStageRect(pageRef);
-  const playerDeckWidth=Math.max(100,Math.min(180,stage.width*.24)),playerDeckHeight=playerDeckWidth*1.5;
+
   /**
    * Live wheel drag. Everything per-move lives here (no React state per
    * pointermove — a CrewPage re-render per touch sample lagged the thumb on
@@ -1487,7 +1487,7 @@ const CrewPage: React.FC = () => {
     [clearTimers, navigate, reduceMotion],
   );
 
-  const crew3d = crew.filter(canWalkOnDeck);
+  const crew3d = crew.filter(canWalkOnDeck).map(c=>LIVING_TEST_BUILD&&isAdamCharacter(c)?{...c,modelUrl:'/homeworld/assets/mobile/adam.glb?v=mobile-1'}:c);
 
   // First boarding this session: unlock waving, then play it once models
   // are on deck. Re-entering the ship later in the same session stays idle.
@@ -1683,8 +1683,8 @@ const CrewPage: React.FC = () => {
    * on/next to the hatch, tapping him opens his action menu instead of
    * triggering the descent.
    */
-  /** Tap on a character → AI chat directly (dancing is jukebox-only now). */
-  const openChat = useCallback(
+  /** The optional Chat action preserves the existing conversation/tour flow. */
+  const startChat = useCallback(
     (character: UnlockedCharacter) => {
       if (tourRef.current) return; // taps are parked while Adam gives the tour
       if (crewGuide) finishCrewGuide();
@@ -1700,6 +1700,14 @@ const CrewPage: React.FC = () => {
     },
     [crewGuide, endParty, finishCrewGuide, startTour],
   );
+  const [deckGreeting,setDeckGreeting]=useState<UnlockedCharacter|null>(null);
+  useEffect(()=>{if(!deckGreeting)return;const timer=window.setTimeout(()=>setDeckGreeting(null),6500);return()=>window.clearTimeout(timer);},[deckGreeting]);
+  const openChat=useCallback((character:UnlockedCharacter)=>{
+    if(tourRef.current||deckBusy||sailingIsland)return;
+    deckRef.current?.wave(character.id);
+    setDeckGreeting(character.id==='ship-player'?null:character);
+  },[deckBusy,sailingIsland]);
+
 
   const onHatchTap = useCallback(
     (e: React.MouseEvent) => {
@@ -2213,20 +2221,22 @@ const CrewPage: React.FC = () => {
         }}
       />
 
-      {LIVING_TEST_BUILD&&<ShipPlayerAvatar avatarId={playerAvatar.id} name={kidName} paused={pageHidden||sailingIsland} style={{left:stage.left+stage.width*.29-playerDeckWidth/2,top:stage.top+stage.height*.58-playerDeckHeight*.95934,width:playerDeckWidth,height:playerDeckHeight}}/>}
 
-      {/* 3D crew — characters with a GLB model stand idle on the deck.
-          Tap → AI chat popup (dancing is jukebox-only). */}
-      {crew3d.length > 0 && (
+
+      {/* Shared deck paths for the child and Bible friends. Tap to wave; Chat stays optional. */}
+      {(crew3d.length > 0||LIVING_TEST_BUILD) && (
         <Suspense fallback={null}>
           <CrewDeck3D
             ref={deckRef}
             characters={crew3d}
-            paused={!!chatCharacter || deckBusy}
-            onCharacterTap={(character) => firstFriendHome?goMyHome():openChat(character)}
+            player={LIVING_TEST_BUILD?{avatarId:playerAvatar.id,name:kidName}:undefined}
+            paused={!!chatCharacter || deckBusy || pageHidden || sailingIsland}
+            onCharacterTap={openChat}
           />
         </Suspense>
       )}
+
+      {deckGreeting&&!chatCharacter&&!sailingIsland&&!deckBusy&&<div role="status" className="absolute left-1/2 -translate-x-1/2 z-[35] flex items-center gap-3 rounded-2xl border-2 border-[#d3b075] bg-[#fff5dfeF] px-4 py-2 text-[#493626] shadow-lg" style={{bottom:livingJourneyActive?145:24}}><span className="font-bold">👋 {deckGreeting.name}</span><button className="min-h-[44px] rounded-xl bg-[#d9edce] px-4 font-bold" onClick={()=>{const friend=deckGreeting;setDeckGreeting(null);startChat(friend);}}>Chat</button><button className="min-h-[44px] min-w-[44px] rounded-xl" aria-label="Keep watching the crew" onClick={()=>setDeckGreeting(null)}>×</button></div>}
 
       {tapAdam && crew3d.length > 0 && adamAnchor && (
         <div

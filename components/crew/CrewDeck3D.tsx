@@ -1,4 +1,6 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import {createLivingPlayer} from '../../homeworld/src/living-player-model.js';
+import {deckGesture,DECK_IDLE_GESTURES,DECK_WAVE_MS} from './deckGestures.mjs';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -13,8 +15,7 @@ import { getCrewLocation, setCrewLocation } from './basementCharacter';
  * scene art (ship deck or basement, selected via the `zone` prop).
  *
  * Characters with a GLB modelUrl (or a still imageUrl) alternate naturally
- * between standing idle (~4–10s, occasionally playing a one-shot variation
- * clip) and strolling 1–3 destinations. Built-in GLBs play their authored
+ * between standing idle (~3–6s, looking around, nodding or stretching) and strolling 1–3 destinations. Built-in GLBs play their authored
  * walk/idle clips. Uploaded stills (PNG or a static mesh with no walk clip)
  * use a procedural translate + bob/lean so they still look like they walk.
  * Destinations are sampled inside a walkable polygon traced
@@ -83,6 +84,7 @@ export type CrewDeckHandle = {
    * (falls back to a variation clip). Returns false if nobody is ready yet.
    */
   waveAll: () => boolean;
+  wave: (characterId: string) => boolean;
   /**
    * Tap-to-talk: this character faces the camera and loops a talking clip
    * until stopTalk(). Returns false if they aren't loaded yet.
@@ -116,6 +118,7 @@ export type CrewDeckHandle = {
 type Props = {
   /** Characters with a modelUrl and/or a still imageUrl. */
   characters: UnlockedCharacter[];
+  player?: {avatarId:string;name:string};
   /** Which painted scene this overlay sits on. Default 'deck'. */
   zone?: 'deck' | 'basement';
   /** True while the action menu or chat popup is open — stops strolling. */
@@ -295,9 +298,9 @@ const TURN_SMOOTHING = 0.12;
 /** Crossfade duration between clips (s). */
 const FADE_S = 0.3;
 /** Idle dwell between strolls (ms). */
-const IDLE_RANGE_MS: [number, number] = [4000, 10000];
+const IDLE_RANGE_MS: [number, number] = [2800, 6500];
 /** Gap between spontaneous one-shot idle-variation clips (ms). */
-const VARIATION_GAP_MS: [number, number] = [8000, 16000];
+const VARIATION_GAP_MS: [number, number] = [5000, 9500];
 /**
  * Fallback walk-cycle ground coverage when the clip has no root motion to
  * measure: a natural human stride covers ~0.6 body heights per second.
@@ -421,7 +424,7 @@ const pickDanceClip = (clips: THREE.AnimationClip[], idle: THREE.AnimationClip |
   null;
 
 const pickWaveClip = (clips: THREE.AnimationClip[]) =>
-  clips.find(isWaveClip) || null;
+  clips.find((c) => isWaveClip(c) && !/help|panic|distress/i.test(c.name)) || null;
 
 const pickTalkClip = (clips: THREE.AnimationClip[]) =>
   clips.find(isTalkClip) || null;
@@ -561,6 +564,12 @@ type Figure = {
   waveAction: THREE.AnimationAction | null;
   talkAction: THREE.AnimationAction | null;
   variationActions: THREE.AnimationAction[];
+  scout?: ReturnType<typeof createLivingPlayer>;
+  scoutBaseY?:number;
+  gesture: {kind:string;start:number;duration:number}|null;
+  gestureIndex: number;
+  gestureBones: Record<string,THREE.Object3D>;
+  poseRestore: {bone:THREE.Object3D;q:THREE.Quaternion}[];
   currentAction: THREE.AnimationAction | null;
   /** Authored walk coverage as body-heights per second (for timeScale). */
   walkStrideHeightsPerSec: number;
@@ -663,10 +672,11 @@ function loadBillboard(
 }
 
 const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
-  { characters, zone = 'deck', paused = false, onCharacterTap, onDeckTap },
+  { characters, player, zone = 'deck', paused = false, onCharacterTap, onDeckTap },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [unavailable,setUnavailable]=useState(false);
   const onTapRef = useRef(onCharacterTap);
   onTapRef.current = onCharacterTap;
   const onDeckTapRef = useRef(onDeckTap);
@@ -678,6 +688,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
   );
   const hitTestFnRef = useRef<CrewDeckHandle['characterAt'] | null>(null);
   const danceAllFnRef = useRef<((durationMs: number) => boolean) | null>(null);
+  const waveFnRef = useRef<((id:string)=>boolean)|null>(null);
   const waveAllFnRef = useRef<(() => boolean) | null>(null);
   const talkFnRef = useRef<((id: string) => boolean) | null>(null);
   const stopTalkFnRef = useRef<((id?: string) => void) | null>(null);
@@ -696,6 +707,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       characterAt: (x: number, y: number) => hitTestFnRef.current?.(x, y) ?? null,
       danceAll: (durationMs: number) => danceAllFnRef.current?.(durationMs) ?? false,
       waveAll: () => waveAllFnRef.current?.() ?? false,
+      wave: (id:string) => waveFnRef.current?.(id) ?? false,
       talk: (id: string) => talkFnRef.current?.(id) ?? false,
       stopTalk: (id?: string) => stopTalkFnRef.current?.(id),
       stopParty: () => stopPartyFnRef.current?.(),
@@ -707,18 +719,19 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
   );
 
   // Rebuild the scene only when the roster of 3D characters actually changes.
-  const signature = `${zone}:${characters.map((c) => `${c.id}|${c.modelUrl || ''}|${c.imageUrl || ''}|${c.deckScale ?? ''}|${c.flyer ? 1 : 0}`).join(',')}`;
+  const signature = `${zone}:${player?.avatarId||''}:${player?.name||''}:${characters.map((c) => `${c.id}|${c.modelUrl || ''}|${c.imageUrl || ''}|${c.deckScale ?? ''}|${c.flyer ? 1 : 0}`).join(',')}`;
   const charactersRef = useRef(characters);
   charactersRef.current = characters;
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || charactersRef.current.length === 0) return;
+    if (!container || (!player && charactersRef.current.length === 0)) return;
     const zoneCfg = ZONES[zone];
     const zoneScale = zoneCfg.characterScale ?? 1;
 
     let disposed = false;
-    let rafId = 0;
+    let rafId = 0,lastPaint=0;
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
 
     // DEV ONLY: `localStorage.debugCrewTripSeconds = '8'` shrinks both the
     // autonomous-trip delay and the basement stay to N seconds for testing.
@@ -729,8 +742,9 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const stayMs = () =>
       debugTripSec > 0 ? debugTripSec * 1000 : rand(...BASEMENT_STAY_RANGE_MS);
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    let renderer:THREE.WebGLRenderer;
+    try{renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});}catch{setUnavailable(true);return;}
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.style.width = '100%';
@@ -782,7 +796,8 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const occluderEls: HTMLDivElement[] = [];
 
     const rebuildZones = () => {
-      const scale = Math.max(viewW / zoneCfg.img.width, viewH / zoneCfg.img.height);
+      const fittedWidth=zone==='deck'?Math.min(viewW,viewH*.75):viewW;
+      const scale = Math.max(fittedWidth / zoneCfg.img.width, viewH / zoneCfg.img.height);
       const dw = zoneCfg.img.width * scale;
       const dh = zoneCfg.img.height * scale;
       const ox = (viewW - dw) / 2;
@@ -881,14 +896,16 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const isStandableMain = (p: Pt) =>
       pointInPoly(p, walkPoly) && !obstaclePolys.some((o) => pointInPoly(p, o));
 
+    const visibleDeckPoint=(p:Pt)=>p.x>=.06&&p.x<=.94&&p.y>=.2&&p.y<=.92;
+
     /** Random standable point on the MAIN deck (platforms only via stairs). */
     const sampleMainPoint = (awayFrom?: Pt): Pt | null => {
       for (let i = 0; i < 60; i++) {
         const p = P(
-          rand(walkBBox.minX, walkBBox.maxX),
-          rand(walkBBox.minY, walkBBox.maxY),
+          rand(Math.max(.06,walkBBox.minX), Math.min(.94,walkBBox.maxX)),
+          rand(Math.max(.2,walkBBox.minY), Math.min(.92,walkBBox.maxY)),
         );
-        if (!isStandableMain(p)) continue;
+        if (!visibleDeckPoint(p)||!isStandableMain(p)) continue;
         if (awayFrom && Math.hypot(p.x - awayFrom.x, p.y - awayFrom.y) < 0.1) continue;
         return p;
       }
@@ -905,7 +922,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
           rand(Math.min(...xs), Math.max(...xs)),
           rand(Math.min(...ys), Math.max(...ys)),
         );
-        if (pointInPoly(p, plat.poly)) return p;
+        if (visibleDeckPoint(p)&&pointInPoly(p, plat.poly)) return p;
       }
       return null;
     };
@@ -997,7 +1014,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       const [minX, minY, maxX, maxY] = r.bbox;
       for (let i = 0; i < 40; i++) {
         const p = P(rand(minX, maxX), rand(minY, maxY));
-        if (isStandableMain(p)) return p;
+        if (visibleDeckPoint(p)&&isStandableMain(p)) return p;
       }
       return null;
     };
@@ -1048,7 +1065,11 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       }
     };
 
+    const figures: Figure[] = [];
     const applySize = () => {
+      // Preserve positions on the painted deck when object-cover changes crop.
+      const oldOrigin=imgToScreen(P(0,0)),oldEnd=imgToScreen(P(1,1));
+      const toImage=(p:Pt):Pt=>P((p.x-oldOrigin.x)/(oldEnd.x-oldOrigin.x),(p.y-oldOrigin.y)/(oldEnd.y-oldOrigin.y));
       viewW = container.clientWidth || window.innerWidth;
       viewH = container.clientHeight || window.innerHeight;
       renderer.setSize(viewW, viewH, false);
@@ -1058,6 +1079,20 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       camera.bottom = -viewH / 2;
       camera.updateProjectionMatrix();
       rebuildZones();
+      const remap=(p:Pt)=>imgToScreen(toImage(p));
+      const remapLegs=(legs:Leg[])=>legs.forEach(l=>{l.to=remap(l.to);});
+      for(const f of figures){
+        f.pos=remap(f.pos);
+        remapLegs(f.legs);
+        if(f.guide)remapLegs(f.guide.legs);
+        if(f.exit){remapLegs(f.exit.legs);f.exit.fadeFrom=remap(f.exit.fadeFrom);if(f.exit.driftTo)f.exit.driftTo=remap(f.exit.driftTo);}
+        if(f.flightFrom)f.flightFrom=remap(f.flightFrom);
+        if(!f.flyer&&!visibleDeckPoint(f.pos)&&['idle','walking','variation','talking','dancing'].includes(f.mode)){
+          // Rotation can crop the old deck spot completely out of view.
+          const visible=sampleMainPoint();
+          if(visible){f.pos=visible;f.legs=[];f.strollStopsLeft=0;if(f.mode!=='talking')goIdle(f,performance.now());}
+        }
+      }
       rebuildDebugLines();
     };
     applySize();
@@ -1068,7 +1103,6 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
 
-    const figures: Figure[] = [];
     /** Jukebox party deadline (performance.now() ms); 0 = no party running. */
     let partyUntil = 0;
 
@@ -1115,7 +1149,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     };
 
     const goIdle = (f: Figure, now: number) => {
-      f.mode = 'idle';
+      f.gesture=null;f.mode = 'idle';
       f.stairHolding = false;
       f.idleUntil = now + rand(...IDLE_RANGE_MS);
       f.targetHeading = 0; // settle facing the camera
@@ -1213,7 +1247,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     ) => {
       const legs = buildRoute(f.pos, target) ?? [{ to: target, stair: false }];
       stopPartyFnRef.current?.(); // hatch descent cuts a running party short
-      f.mode = 'exiting';
+      f.gesture=null;f.mode = 'exiting';
       f.exit = {
         phase: 'approach',
         legs,
@@ -1258,6 +1292,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       variationActions: THREE.AnimationAction[],
       walkStrideHeightsPerSec: number,
       flightPathAction: THREE.AnimationAction | null = null,
+      scout?: ReturnType<typeof createLivingPlayer>,
     ) => {
       if (disposed) return;
       const group = new THREE.Group();
@@ -1275,7 +1310,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
 
       const now = performance.now();
       const preferred =
-        charIndex === 0 && spawnPt && isStandableMain(spawnPt) ? spawnPt : null;
+        charIndex === 0 && spawnPt && visibleDeckPoint(spawnPt) && isStandableMain(spawnPt) ? spawnPt : null;
       const spawn = preferred ?? sampleMainPoint() ?? P(0.4, 0.7);
       const f: Figure = {
         character,
@@ -1291,6 +1326,8 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         waveAction,
         talkAction,
         variationActions,
+        scout,scoutBaseY:scout?.model.position.y,gesture:null,gestureIndex:charIndex%DECK_IDLE_GESTURES.length,
+        gestureBones:scout?.bones||{},poseRestore:[],
         currentAction: null,
         walkStrideHeightsPerSec,
         usesProceduralWalk: !walkAction,
@@ -1320,18 +1357,19 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         flightPathAction,
         flightFrom: null,
       };
+      if(!scout)inner.traverse(o=>{if((o as THREE.Bone).isBone)f.gestureBones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;});
       startAction(f, idleAction, 0);
       if (character.flyer) {
         const home = parrotPerch(0);
         f.pos = { x: home.x, y: home.y };
-        f.mode = 'idle';
+        f.gesture=null;f.mode = 'idle';
         f.targetHeading = home.heading;
         f.heading = home.heading;
         if (f.walkAction) f.walkAction.paused = true;
         setCrewLocation(character.id, { loc: 'deck' });
       }
 
-      if (zone === 'deck') {
+      if (zone === 'deck' && !scout) {
         const rec = getCrewLocation(character.id);
         if (rec.loc === 'basement') {
           f.mode = 'away';
@@ -1345,14 +1383,14 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       }
 
       mixer.addEventListener('finished', () => {
-        if (f.mode !== 'variation') return;
+        if (f.mode !== 'variation'||f.gesture) return;
         const t = performance.now();
         goIdle(f, t);
         f.nextVariationAt = t + rand(...VARIATION_GAP_MS);
       });
       mixer.update(0.001);
       figures.push(f);
-      if (f.usesProceduralWalk) {
+      if (f.usesProceduralWalk && !scout) {
         console.info(
           `CrewDeck3D[${zone}]: "${character.name}" procedural bob/lean walk (no walk clip)`,
         );
@@ -1373,7 +1411,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         inner.add(mesh);
         addFigure(
           character,
-          charIndex,
+          charIndex+(player?1:0),
           inner,
           [material],
           new THREE.AnimationMixer(inner),
@@ -1387,6 +1425,13 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         );
       });
     };
+
+    if(player){
+      const scout=createLivingPlayer(player.avatarId),inner=new THREE.Group();inner.add(scout.model);
+      const box=new THREE.Box3().setFromObject(scout.model),size=box.getSize(new THREE.Vector3());
+      scout.model.position.set(-(box.min.x+size.x/2),-box.min.y,-(box.min.z+size.z/2));inner.scale.setScalar(1/size.y);
+      addFigure({id:'ship-player',name:player.name||'You',imageUrl:'',unlockedAt:Date.now(),deckScale:1.12},0,inner,[],new THREE.AnimationMixer(inner),null,null,null,null,null,[],FALLBACK_STRIDE_HEIGHTS_PER_SEC,null,scout);
+    }
 
     charactersRef.current.forEach((character, charIndex) => {
       if (!character.modelUrl) {
@@ -1478,17 +1523,15 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
                 c !== idleClip &&
                 c !== danceClip &&
                 c !== talkClip &&
-                !isLocomotion(c),
+                !isLocomotion(c) && !/help|panic|distress/i.test(c.name) && /idle|look|stretch|nod|wave|hello|greet|happy|clap/i.test(c.name),
             )
             .map((c) => mixer.clipAction(c));
           const waveAction = waveClip
             ? mixer.clipAction(waveClip)
-            : variationActions[0] || null;
+            : null;
           const talkAction = talkClip
             ? mixer.clipAction(talkClip)
-            : variationActions.find((a) => a !== waveAction) ||
-              waveAction ||
-              idleAction;
+            : idleAction;
           const flightPathAction = flightPathClip
             ? mixer.clipAction(flightPathClip)
             : null;
@@ -1557,7 +1600,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
 
           addFigure(
             character,
-            charIndex,
+            charIndex+(player?1:0),
             inner,
             materials,
             mixer,
@@ -1602,7 +1645,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         }
         f.legs = [];
         f.guide = null; // a tour walk must not resume mid-party
-        f.mode = 'dancing';
+        f.gesture=null;f.mode = 'dancing';
         f.targetHeading = 0;
         // Loop the clip so everyone keeps dancing for the whole party
         dance.setLoop(THREE.LoopRepeat, Infinity);
@@ -1617,39 +1660,15 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       return true;
     };
 
-    waveAllFnRef.current = () => {
-      const ready = figures.filter((f) => {
-        const action = f.waveAction || f.variationActions[0] || null;
-        if (!action) return false;
-        return (
-          f.mode === 'idle' ||
-          f.mode === 'variation' ||
-          f.mode === 'walking'
-        );
-      });
-      if (ready.length === 0) return false;
-      ready.forEach((f, i) => {
-        const action = f.waveAction || f.variationActions[0];
-        if (!action) return;
-        const start = () => {
-          if (
-            f.mode !== 'idle' &&
-            f.mode !== 'variation' &&
-            f.mode !== 'walking'
-          ) {
-            return;
-          }
-          f.legs = [];
-          f.mode = 'variation';
-          f.targetHeading = 0;
-          playOneShot(f, action);
-        };
-        if (i === 0) start();
-        else window.setTimeout(start, i * 180);
-      });
-      console.info(`CrewDeck3D[${zone}]: wave greeting — ${ready.length}`);
+    const beginGesture=(f:Figure,kind:string,now=performance.now())=>{
+      if(!['idle','walking','variation','dancing'].includes(f.mode)||f.flyer)return false;
+      f.legs=[];f.strollStopsLeft=0;f.mode='variation';f.targetHeading=0;
+      f.gesture={kind,start:now,duration:kind==='wave'?DECK_WAVE_MS:2400};
+      if(kind==='wave'&&f.waveAction)playOneShot(f,f.waveAction);else startAction(f,f.idleAction);
       return true;
     };
+    waveFnRef.current=(id)=>{const f=figures.find(f=>f.character.id===id);return !!f&&beginGesture(f,'wave');};
+    waveAllFnRef.current=()=>{let count=0;for(const f of figures)if(beginGesture(f,'wave'))count++;return count>0;};
 
     /** Can this figure be steered / told to talk right now? */
     const steerable = (f: Figure | undefined): f is Figure =>
@@ -1667,7 +1686,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       f.legs = [];
       f.guide = null;
       f.strollStopsLeft = 0;
-      f.mode = 'talking';
+      f.gesture=null;f.mode = 'talking';
       f.targetHeading = 0;
       if (f.walkAction) f.walkAction.timeScale = 1;
       action.setLoop(THREE.LoopRepeat, Infinity);
@@ -1709,7 +1728,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       f.legs = [];
       f.strollStopsLeft = 0;
       f.stairHolding = false;
-      f.mode = 'guided';
+      f.gesture=null;f.mode = 'guided';
       f.guide = { legs, onArrive };
       startAction(f, f.walkAction ?? f.idleAction);
       return true;
@@ -1823,6 +1842,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       (
         window as unknown as {
           __crewFeet?: () => {
+            id:string;avatarId?:string;gesture?:string;safe:boolean;h:number;strolls:number;
             x: number;
             y: number;
             r: number;
@@ -1834,6 +1854,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         figures
           .filter((f) => f.mode !== 'away' && f.mode !== 'gone')
           .map((f) => ({
+            id:f.character.id,avatarId:f.scout?.model.userData.avatarId,gesture:f.gesture?.kind,safe:isStandableMain(f.pos)||levelOf(f.pos)!=='main'||f.legs.some(l=>l.stair),h:sizedHeight(f),strolls:f.strollCount,
             x: f.pos.x * viewW,
             y: f.pos.y * viewH,
             r: radiusPx(f),
@@ -2082,7 +2103,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       const flyClip = f.walkAction;
       const path = f.flightPathAction;
       const sit = (perch: { x: number; y: number; heading: number }) => {
-        f.mode = 'idle';
+        f.gesture=null;f.mode = 'idle';
         f.pos.x += (perch.x - f.pos.x) * Math.min(1, dt * 8);
         f.pos.y += (perch.y - f.pos.y) * Math.min(1, dt * 8);
         f.flightAlt += (0 - f.flightAlt) * Math.min(1, dt * 7);
@@ -2182,10 +2203,12 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const clock = new THREE.Clock();
     const animate = () => {
       rafId = requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.1);
       const now = performance.now();
+      if(document.hidden){clock.getDelta();return;}
+      if(now-lastPaint<1000/30)return;lastPaint=now;
+      const dt = Math.min(clock.getDelta(), 0.1);
       const epochNow = Date.now();
-      const isPaused = pausedRef.current;
+      const isPaused = pausedRef.current || reduced.matches;
 
       // Jukebox party over → fade the tune and send everyone back to idle
       if (partyUntil > 0 && now >= partyUntil) endParty(now);
@@ -2306,7 +2329,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             }
           }
         } else if (f.mode === 'idle' && !isPaused) {
-          if (zone === 'deck' && hatchApproach && epochNow >= f.tripAt) {
+          if (zone === 'deck' && !f.scout && hatchApproach && epochNow >= f.tripAt) {
             // Autonomous basement trip: sink into the hatch, page stays put.
             beginExit(f, hatchApproach, hatchCenter, 1, () => {
               const returnAt = Date.now() + stayMs();
@@ -2319,19 +2342,17 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             beginExit(f, spawnPt, null, -1, () => {
               setCrewLocation(f.character.id, { loc: 'deck' });
             });
-          } else if (f.variationActions.length > 0 && now >= f.nextVariationAt) {
-            f.mode = 'variation';
-            const variation =
-              f.variationActions[
-                Math.floor(Math.random() * f.variationActions.length)
-              ];
-            playOneShot(f, variation);
+          } else if (now >= f.nextVariationAt) {
+            const kind=DECK_IDLE_GESTURES[f.gestureIndex++%DECK_IDLE_GESTURES.length];
+            beginGesture(f,kind,now);
           } else if (now >= f.idleUntil) {
             f.strollCount += 1;
             f.strollStopsLeft = Math.floor(rand(1, 4)); // 1–3 destinations
             if (!startStrollTo(f)) goIdle(f, now);
           }
         }
+
+        if(f.gesture&&now-f.gesture.start>=f.gesture.duration){f.gesture=null;goIdle(f,now);f.nextVariationAt=now+rand(...VARIATION_GAP_MS);}
 
         // Smooth heading — no snapping when direction / mode changes
         const turn = wrapAngle(f.targetHeading - f.heading);
@@ -2353,7 +2374,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         // Still uploads (no walk clip): bob + lean + sway while the scene
         // translates them. Built-in clip walkers never enter this path.
         let procBob = 0;
-        if (f.usesProceduralWalk) {
+        if (f.usesProceduralWalk&&!f.scout) {
           const locomoting =
             f.mode === 'walking' ||
             f.mode === 'guided' ||
@@ -2389,7 +2410,14 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
         );
         f.shadow.scale.set(s * 0.62 * shadowMul, s * 0.16 * shadowMul, 1);
 
-        f.mixer.update(dt);
+        for(const restore of f.poseRestore)restore.bone.quaternion.copy(restore.q);f.poseRestore=[];
+        f.mixer.update(reduced.matches&&!f.gesture?0:dt);
+        if(f.scout){const moving=f.mode==='walking'||f.mode==='guided';f.scout.update(dt,moving?1:0,reduced.matches?0:now/1000,{celebrating:f.mode==='dancing'});f.scout.model.position.y=(f.scoutBaseY||0)-f.scout.bones.mixamorigHips.position.y;}
+        if(f.gesture&&!(f.gesture.kind==='wave'&&f.waveAction)){
+          const pose=deckGesture(f.gesture.kind,(now-f.gesture.start)/f.gesture.duration);
+          for(const [name,angles] of Object.entries(pose) as [string,number[]][]){const bone=f.gestureBones[name];if(!bone)continue;f.poseRestore.push({bone,q:bone.quaternion.clone()});bone.rotateX(angles[0]);bone.rotateY(angles[1]);bone.rotateZ(angles[2]);}
+          if(!Object.keys(f.gestureBones).length)f.inner.rotation.z=Math.sin((now-f.gesture.start)/200)*.06;
+        }
       }
 
       renderer.render(scene, camera);
@@ -2400,7 +2428,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       disposed = true;
       danceMusic.stop(); // page navigation / re-mount ends any dance tune
       danceAllFnRef.current = null;
-      waveAllFnRef.current = null;
+      waveAllFnRef.current = null;waveFnRef.current=null;
       talkFnRef.current = null;
       stopTalkFnRef.current = null;
       stopPartyFnRef.current = null;
@@ -2413,7 +2441,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       occluderEls.forEach((el) => el.remove());
       figures.forEach((f) => {
-        f.mixer.stopAllAction();
+        f.mixer.stopAllAction();f.scout?.dispose();f.materials.forEach(m=>m.dispose());f.shadowMat.dispose();
         scene.remove(f.group);
         scene.remove(f.shadow);
       });
@@ -2435,7 +2463,8 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
-  if (characters.length === 0) return null;
+  if(unavailable)return player?<img src={`/avatars/adventurers/${player.avatarId}-full.webp?v=harbor-4`} alt={`${player.name||'Your avatar'} aboard the Godly Ship`} className="absolute z-[5] w-[24%] max-w-[160px] pointer-events-none" style={{left:'20%',top:'47%'}}/>:null;
+  if (!player&&characters.length === 0) return null;
 
   return (
     <div
@@ -2443,6 +2472,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       className="absolute inset-0 z-[5]"
       aria-hidden
       data-testid="crew-deck-3d"
+      data-player-avatar={player?.avatarId}
     />
   );
 });

@@ -41,7 +41,7 @@ export class Nutrition {
     this.g.status=`${name} needs ${cost} energy. Go home to sleep, eat some food, or take a breather.`;this.g.toast(this.g.status);return false;
   }
   busy(){if(this.g.ambientNudge?.())return true;if(this.g.action||this.g.order||this.sleep){this.g.toast('Let your character finish this action first.');return true;}return false;}
-  eat(item){const g=this.g;if(g.action?.type==='eat')return;if(this.busy())return;const food=FOODS[item];if(!food||!(g.store.state.inventory[item]>0)){g.toast('Gather or prepare that food first.');return;}if(mealGain(g.store.state,item,gameTime(g.store.state)).total<=0){g.toast(`${g.store.state.characters?.[activeCharacter(g.store.state)]?.name||'Adam'} is full. Save this food for later.`);return;}g.startAction({type:'eat',item,actionId:crypto.randomUUID(),target:{...g.player}});}
+  eat(item,source='inventory'){const g=this.g;if(g.action?.type==='eat')return;if(this.busy())return;const food=FOODS[item];if(!food||!((source==='farm'?g.store.state.livingFarm?.bag:g.store.state.inventory)?.[item]>0)){g.toast('Gather or prepare that food first.');return;}if(mealGain(g.store.state,item,gameTime(g.store.state)).total<=0){g.toast(`${g.store.state.characters?.[activeCharacter(g.store.state)]?.name||'Adam'} is full. Save this food for later.`);return;}g.startAction({type:'eat',item,source,actionId:crypto.randomUUID(),target:{...g.player}});}
   /** Walk to a campfire and drop a log on it (one log = 2 island hours). */
   stokeFire(fireId){
     const g=this.g;if(this.busy())return;

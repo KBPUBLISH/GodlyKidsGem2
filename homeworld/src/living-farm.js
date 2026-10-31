@@ -35,7 +35,7 @@ export class LivingFarm{
   if(!this.commit(next))return false;
   this.pending=null;this.test.celebrate(pending.kind==='coop'?'Coop ready!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
  }
- use(item,action){if(this.commit(farmUse(this.state,item,action))){this.test.activity();if(action==='eat')this.test.celebrate('Yum!');else this.g.toast(`+${FARM_PRICES[item]} coins`);}}
+ use(item,action){if(action==='eat'){this.test.activity();this.g.nutrition.eat(item,'farm');return;}if(this.commit(farmUse(this.state,item,action))){this.test.activity();this.g.toast(`+${FARM_PRICES[item]} coins`);}}
  walkTo(id){const i=this.state.animals.findIndex(a=>a.id===id);if(i>=0)this.test.walk(this.ground(i));}
  ground(i){return this.test.layout.farmSpots[i];}
  sync(){

@@ -436,9 +436,12 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(damage>=profile.maxHealth){next.removedRocks.push(rock.id);delete next.rockDamage[rock.id];for(const [id,n]of Object.entries(profile.drops))add(id,n);next.stats.rocks=(next.stats.rocks||0)+1;next.stats.gems=(next.stats.gems||0)+(profile.drops.diamond||0);}
     else next.rockDamage[rock.id]=damage;
   } else if(a.type==='eat') {
-    const food=FOODS[a.item];if(!food||!(inv[a.item]>0))return state;
+    const food=FOODS[a.item],farmFood=a.source==='farm';
+    if(a.source&&a.source!=='farm'&&a.source!=='inventory')return state;
+    const bag=farmFood&&character==='you'&&['egg','milk'].includes(a.item)?next.livingFarm?.bag:!farmFood?inv:null;
+    if(!food||!bag||!(bag[a.item]>0))return state;
     const gain=mealGain(state,a.item,minutes);if(gain.total<=0)return state;
-    inv[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;
+    bag[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;
   } else if(a.type==='serve_meal') {
     // A shared meal at the Dining Hall: every diner is fed from the bag at once (hungriest first,
     // best-fitting helpings), and whatever is not needed stays in the bag. See dining.mjs planMeal.

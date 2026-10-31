@@ -86,7 +86,7 @@ export class LivingIslandTest {
     g.community.activeId='you';g.community.adamBuilder=null;
     const s=g.store.state;
     const minutes=gameTime(s),community=!s.characters.you?{...s.community,cursor:minutes,lastInput:minutes-72,members:Object.fromEntries(Object.entries(s.community.members).map(([id,m])=>[id,{...m,job:null,readyAt:minutes}]))}:s.community;
-    g.store.save({...s,community,activeCharacter:'you',characters:{...s.characters,you:{name:'You',energy:100,hunger:100,hungerAt:minutes}}});
+    g.store.save({...s,community,activeCharacter:'you',characters:{...s.characters,you:{energy:100,hunger:100,hungerAt:minutes,...s.characters.you,name:this.playerName==='friend'?'You':this.playerName}}});
     g.community.step({active:false,activity:false});
   }
   save(){try{localStorage.setItem(KEY,JSON.stringify(this.state));}catch{this.g.toast('This test can play, but progress could not be saved.');}}
@@ -183,9 +183,11 @@ export class LivingIslandTest {
     const dx=this.g.player.x-pos.x,dy=this.g.player.y-pos.y,d=Math.hypot(dx,dy)||1;
     this.walk(this.g.nav.nearest({x:pos.x+dx/d*1.2,y:pos.y+dy/d*1.2},2)||pos,true);
   }
+  openCare(){this.activity();if(!this.g.action){this.garden.cancel();this.g.path=[];this.g.order=null;this.g.marker.visible=false;}window.dispatchEvent(new Event('gk-player-care'));this.g.notify();}
   click(ray,{walk=true}={}){
     this.activity();if(this.g.interior)return true;
     if(this.placingAdam){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p))this.placeAdam({x:p.x,y:-p.z});return true;}
+    if(ray.intersectObject(this.g.actor,true).length){this.openCare();return true;}
     if(this.garden.click(ray))return true;
     const meshes=[...Object.values(this.g.community.actors).filter(h=>h.actor.visible).map(h=>h.actor),...this.resources.filter(r=>r.object.visible).map(r=>r.object)];
     const hit=ray.intersectObjects(meshes,true)[0];

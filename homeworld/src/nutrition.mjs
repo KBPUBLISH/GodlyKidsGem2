@@ -5,6 +5,7 @@ import {hasWell,digPower} from './digging.mjs';
 export const MAX_ENERGY=100;
 export const LOW_ENERGY=20,SLEEP_SECONDS=12,SLEEP_HOURS=8;
 export const FOODS={
+  lettuce:{name:'Lettuce',icon:'🥬',energy:15,source:'Pick lettuce from your garden.'},
   apple:{name:'Apple',icon:'🍎',energy:15,source:'Pick them from an apple tree · they grow back.'},
   carrot:{name:'Carrot',icon:'🥕',energy:20,source:'Harvest carrots from your garden.'},
   pumpkin:{name:'Pumpkin',icon:'🎃',energy:35,source:'Harvest pumpkins from your garden.'},

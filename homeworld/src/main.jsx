@@ -385,6 +385,7 @@ function App(){
     {view.inside&&<div className="home-outside-bar"><button type="button" className="home-outside" onClick={()=>invoke(g=>g.building.leaveHome())}>Outside</button><span className="home-inside-status" role="status">Inside the {view.inside.name}</span></div>}
     {(view.playersOnly||LIVING_TEST)&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onPointerUp={onBackToShip} onClick={onBackToShip}><img src={SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
+      {LIVING_TEST&&<button aria-label="Open Tasks" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);invoke(g=>{g.building?.cancelPreview();g.livingTest.openTasks();});}}><Icon type="book"/><span>Tasks</span></button>}
       {LIVING_TEST&&<button aria-label="Open Market" onClick={()=>openPanel('market')} disabled={!view.loaded}><img className="picture-icon" src="/assets/build_market.png" alt=""/><span>Market</span></button>}
       {LIVING_TEST&&view.livingTest?.adamUnlocked&&<button aria-label="Friends" onClick={()=>openPanel('living-friends')}><FriendsIcon/><span>Friends</span></button>}
       {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded||view.ambient} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}

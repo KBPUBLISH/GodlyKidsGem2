@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {marketTrade} from './living-market-rules.mjs';
-import {gardenFresh} from './living-garden-rules.mjs';
+import {gardenFresh,CARROT_SPOTS,PICK_CROPS} from './living-garden-rules.mjs';
 import {heightAt} from './core.mjs';
 import {scopeKey} from './storage-scope.mjs';
 import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,farmPurchaseError,FARM_PRICES} from './living-farm-rules.mjs';
@@ -11,8 +11,10 @@ export class LivingFarm{
   this.test=test;this.g=test.g;
   try{
    const saved=this.g.store.state.livingFarm||JSON.parse(localStorage.getItem(KEY));this.initialState=farmRestore(saved);
-   // Existing adventures keep their animals, balance, and task position.
-   if(!saved?.garden&&(this.initialState.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.initialState.garden={...gardenFresh(),approved:true,dug:3,planted:3,dugSpots:[3,4,5],plantedSpots:[3,4,5],completed:true};
+   // The earlier introduction ended at the tent. Keep those earned goals complete.
+   if(saved?.garden?.version!==2&&(test.state.stage>=1||!saved?.garden&&(this.initialState.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))){
+    this.initialState.garden={...gardenFresh(),planted:4,plantedSpots:[...CARROT_SPOTS],rewarded:true,picked:Object.fromEntries(PICK_CROPS.map(c=>[c,1])),completed:true,readyAt:this.initialState.garden.readyAt};
+   }
   }catch{this.initialState=farmFresh();}
   this.pending=null;this.error='';if(JSON.stringify(this.g.store.state.livingFarm)!==JSON.stringify(this.initialState)){try{this.g.store.save({...this.g.store.state,livingFarm:this.initialState});}catch{this.error='We couldn’t save that. Please try again.';}}this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
  }

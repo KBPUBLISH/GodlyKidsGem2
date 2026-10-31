@@ -34,14 +34,12 @@ async def main():
   page=await fresh.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
   await page.route('**/api/**',ns['api']);await page.goto(BASE+'/#/my-home');await page.wait_for_selector('iframe');frame=page.frames[-1]
   await frame.wait_for_function('window.__hw?.loaded',timeout=90000);await ns['quality'](frame)
-  await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
-  await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
-  await frame.get_by_role('button',name='Dig a spot',exact=True).click()
-  await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.dug===1',timeout=90000)
+  await frame.get_by_role('button',name='Plant 4 carrot seeds. 0 of 4',exact=True).click()
+  await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.planted===1',timeout=90000)
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==0
   assert await frame.evaluate('document.documentElement.scrollWidth<=innerWidth')
   await page.screenshot(path='/tmp/garden-small-phone.png')
   assert not errors,errors
-  print('PASS: final build opens the free garden task on a 320px phone, and digging works',flush=True)
+  print('PASS: final build opens the free garden task on a 320px phone, and planting works',flush=True)
   await b.close()
 if __name__=='__main__':asyncio.run(main())

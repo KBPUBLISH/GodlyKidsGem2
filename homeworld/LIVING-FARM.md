@@ -2,7 +2,7 @@
 
 Branch: `codex/living-world-player-test`. Open `/#/my-home?livingTest=1` after `npm run living-test:build`. The island, character assets and illustrated UI stay in the existing world.
 
-A fresh island starts alone, with zero private farm coins and a small fenced garden: one carrot, pumpkin, and cabbage. The child confirms a free expansion, taps to walk and dig three spots, then plants three free seeds. The last planting saves the completion and 10-coin reward together. The next goal is wood for the prayer tent. After the tent, the Market menu offers optional animals; buying a chicken is never an onboarding requirement.
+A fresh island starts alone, with zero private farm coins and a small fenced garden. The Tasks list opens once on arrival and stays available in the vertical side buttons. The child plants four free carrot seeds in highlighted, tilled squares, then picks one carrot, one pumpkin and one lettuce. The pumpkin and lettuce begin ripe; starter carrots grow in eight seconds. The fourth planting saves the 10-coin reward atomically, and each vegetable adds 2 coins. All three crop types must be picked to unlock the tent goal. Saved task counts and checkmarks survive reload. Next, gather wood for the prayer tent. After the tent, the Market menu offers optional animals; buying a chicken is never an onboarding requirement.
 
 Ripe vegetables can be tapped, or reached with Pick vegetables in the farm panel. Picking sells one for 2 coins and replants it; it grows again after 45 seconds in this prototype. This gives a child with too few coins a reachable way to earn more. Purchases display and charge the same saved farm balance. Animal names are validated before buying, and failed saves leave both coins and ownership unchanged for retry.
 
@@ -14,7 +14,7 @@ Walk near an animal's nest/collection spot to pick up its produce. The Market dr
 
 | Choice | Cost or reward |
 | --- | --- |
-| Complete the first garden | +10 coins once |
+| Plant all four starter carrot seeds | +10 coins once |
 | Pick and sell one vegetable | +2 coins |
 | Chicken | 10 coins |
 | Sell one egg | +5 coins |
@@ -25,7 +25,7 @@ Walk near an animal's nest/collection spot to pick up its produce. The Market dr
 
 The small test supports up to six chickens and two cows. Additional story friends still come from reading; farm purchases do not bypass that unlock. Coops are simple visual upgrades at a fixed island spot. Chickens and cows reuse the island's original animated GLB models.
 
-All available major decisions are confirmed: free garden expansion, animal purchase and name, coop upgrades, and using logs to build the prayer tent or home. Delivering build supplies waits for confirmation. Ordinary pickup and individual eat/sell actions stay direct.
+Major decisions are confirmed: animal purchase and name, coop upgrades, and using logs to build the prayer tent or home. Planting the four free starter seeds stays a direct tap. Delivering build supplies waits for confirmation. Ordinary pickup and individual eat/sell actions stay direct.
 
 Tapping Adam or choosing Say hello walks the child over. Approaching him produces a greeting using the profile's player name (for example, Sarah), with a wave pose and the CMS-configured ElevenLabs voice when sound is on. Friendly proximity greetings do not interrupt walks to other tasks. Friends remain autonomous and cannot be possessed.
 
@@ -45,6 +45,6 @@ python homeworld/tests/living-test-browser.py
 
 The browser suite first earns the garden and tent using visible controls, creates `/tmp/garden-tested.json`, then checks the original world tools and story flow in disposable contexts. CMS fixtures verify routing and configured voice requests; live content, live ElevenLabs audio and phone performance still require device testing.
 
-The garden regression checks partial reloads, reward persistence, skipping the chicken, a saved low balance, harvesting to afford a chicken, rejected invalid names, failed-save recovery, and named-purchase reloads.
+The garden regression checks first-visit Tasks, four carrot seeds, each of the three vegetable types, sequential task unlocking, partial reloads, reward persistence, skipping the chicken, a saved low balance, harvesting to afford a chicken, rejected invalid names, failed-save recovery, and named-purchase reloads.
 
 Market seeds: three carrot, wheat or sunflower seeds cost 2 coins; three pumpkin seeds cost 3. Selling uses the original crop/fish/gem prices, plus 1 coin per wood or stone. Starter tutorial logs remain reserved for the tent and cannot be sold. Buy and Sell are separate tabs in the original drawer; Build retains the original catalogue, previews, material costs and placement controls.

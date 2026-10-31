@@ -99,3 +99,16 @@
 @media(max-height:520px){.living-original-controls .living-request{top:95px}.living-original-controls .side-buttons{grid-template-columns:1fr;max-height:calc(100dvh - 115px)}}
 /* Keep map markers under the finger while pressed. */
 .living-island-test .living-target:active:not(:disabled),.living-island-test .living-resource-hit:active:not(:disabled),.living-island-test .living-garden-spot:active:not(:disabled){transform:translate(-50%,calc(-50% + 2px))}
+.living-sheet-tasks{max-height:min(440px,72dvh);padding:16px 18px!important}
+.living-task-list{display:grid;gap:8px}
+.living-task-row{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;text-align:left;background:#fff4d7;border-color:#ddc58e;min-height:62px}
+.living-task-row .living-task-copy{flex:1;min-width:0;display:grid;gap:4px}
+.living-task-row strong{font-size:16px;line-height:1.2}
+.living-task-row small{font-size:13px}
+.living-task-row.done{background:#e8f4d9;color:#3c703c;border-color:#afcf88}
+.living-task-crops{display:flex;gap:14px;font-size:13px}
+.living-task-crops>span{display:flex;align-items:center;gap:4px}
+.living-task-crops>span>span{font-size:22px}
+.living-task-hear{margin-top:10px;background:transparent;border:0;min-height:44px;padding:6px 10px}
+.living-tasks-done{margin:6px 0;text-align:center;color:#397241}
+@media(max-height:520px){.living-sheet-tasks{max-height:88dvh}.living-task-row{min-height:52px;padding:7px 10px}.living-task-row strong{font-size:14px}.living-task-hear{margin-top:0}}

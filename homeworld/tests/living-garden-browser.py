@@ -26,8 +26,19 @@ async def main():
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==0
   assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
   assert await frame.evaluate('Object.keys(window.__hw.store.state.cells).length')==0
-  assert await frame.evaluate('window.__hw.livingTest.garden.plots.filter(p=>p.cropObject.visible).length')==3
+  assert await frame.evaluate('window.__hw.livingTest.garden.plots.filter(p=>p.cropObject.visible).length')==2
   assert await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).count()==0
+  await expect(frame.get_by_role('dialog',name='My first tasks')).to_be_visible()
+  await expect(frame.get_by_role('button',name='Plant 4 carrot seeds. 0 of 4',exact=True)).to_be_enabled()
+  await expect(frame.get_by_role('button',name='Pick 1 carrot, 1 pumpkin and 1 lettuce.',exact=False)).to_be_disabled()
+  await expect(frame.get_by_role('button',name='Build a tent.',exact=False)).to_be_disabled()
+  await page.screenshot(path='/tmp/starter-tasks.png')
+  await frame.get_by_role('button',name='Hear my tasks',exact=True).click()
+  await page.wait_for_timeout(500)
+  assert any(v['voiceId']=='MF3mGyEYCl7XYWbV9V6O' and 'pumpkin' in v['text'] and 'lettuce' in v['text'] for v in voices),voices
+  await frame.get_by_role('button',name='Back to island',exact=True).click()
+  assert await frame.get_by_role('button',name='Tools',exact=True).count()==0
+  assert await frame.get_by_role('button',name='Zoom in',exact=True).count()==0
   await page.wait_for_timeout(2000)
   for width,height in [(390,844),(320,740),(844,390)]:
    await page.set_viewport_size({'width':width,'height':height})
@@ -42,31 +53,45 @@ async def main():
   await page.set_viewport_size({'width':390,'height':844})
   await frame.get_by_role('button',name='Hear this task',exact=True).click()
   await page.wait_for_timeout(500)
-  assert any(v['voiceId']=='MF3mGyEYCl7XYWbV9V6O' and 'garden' in v['text'] for v in voices),voices
+  assert any(v['voiceId']=='MF3mGyEYCl7XYWbV9V6O' and 'carrot' in v['text'] for v in voices),voices
   print('PASS: original vertical controls, transparent garden prompt, Perry ElevenLabs voice request',flush=True)
   await page.screenshot(path='/tmp/garden-first-task.png')
-  await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
-  await frame.get_by_role('button',name='Not now',exact=True).click()
-  assert not await frame.evaluate('window.__hw.livingTest.farm.state.garden.approved')
-  await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
-  await page.screenshot(path='/tmp/action-ui-confirmation.png')
-  await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
-  await frame.get_by_role('button',name='Dig garden spot 3',exact=True).click()
-  try:await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.dug===1',timeout=90000)
-  except Exception:
-   print('DIG DEBUG',await frame.evaluate('({p:window.__hw.player,path:window.__hw.path,work:window.__hw.livingTest.garden.work,dialog:window.__hw.livingTest.dialogOpen,garden:window.__hw.livingTest.garden.snapshot()})'),flush=True)
-   raise
-  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.dugSpots')==[5]
-  print('PASS: solo start, three vegetable types, free confirmation and walking to dig',flush=True)
+  await frame.get_by_role('button',name='Plant carrot spot 6',exact=True).click()
+  await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.planted===1',timeout=90000)
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.plantedSpots')==[5]
   await frame.goto(frame.url);await loaded()
-  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.dug')==1
-  await ns['finish_garden'](frame)
+  assert await frame.get_by_role('dialog',name='My first tasks').count()==0
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')==1
+  await frame.get_by_role('button',name='Open Tasks',exact=True).click()
+  await frame.get_by_role('button',name='Plant 4 carrot seeds. 1 of 4',exact=True).click()
+  await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.planted===2',timeout=90000)
+  while await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')<4:
+   before=await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')
+   await frame.get_by_role('button',name='Plant a carrot seed',exact=True).click()
+   await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.garden.planted>n',arg=before,timeout=90000)
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
-  await page.screenshot(path='/tmp/garden-earned-coins.png')
+  assert await frame.get_by_role('button',name='Find a log',exact=True).count()==0
+  assert not await frame.evaluate('window.__hw.livingTest.resources.some(r=>r.object.visible)')
+  for crop in ['pumpkin','lettuce','carrot']:
+   await frame.get_by_role('button',name=f'Pick {crop} from garden spot',exact=False).first.click()
+   await frame.wait_for_function('(crop)=>window.__hw.livingTest.farm.state.garden.picked[crop]===1',arg=crop,timeout=90000)
+   if crop=='pumpkin':
+    await frame.goto(frame.url);await loaded()
+    await frame.get_by_role('button',name='Open Tasks',exact=True).click()
+    await expect(frame.get_by_role('button',name='Pick 1 carrot, 1 pumpkin and 1 lettuce. 1 of 3',exact=True)).to_be_enabled()
+    await expect(frame.get_by_role('button',name='Build a tent.',exact=False)).to_be_disabled()
+    await frame.get_by_role('button',name='Back to island',exact=True).click()
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==16
   await frame.goto(frame.url);await loaded()
-  assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==16
   assert await frame.evaluate('window.__hw.livingTest.garden.plots.filter(p=>p.cropObject.visible).length')==6
-  print('PASS: all six garden actions, partial reload, 10-coin reward paid once, six planted spots',flush=True)
+  await frame.get_by_role('button',name='Open Tasks',exact=True).click()
+  await expect(frame.get_by_role('button',name='Plant 4 carrot seeds. 4 of 4. Done',exact=True)).to_be_disabled()
+  await expect(frame.get_by_role('button',name='Pick 1 carrot, 1 pumpkin and 1 lettuce. 3 of 3. Done',exact=True)).to_be_disabled()
+  await expect(frame.get_by_role('button',name='Build a tent. 0 of 1',exact=True)).to_be_enabled()
+  await page.screenshot(path='/tmp/starter-tasks-picked.png')
+  await frame.get_by_role('button',name='Back to island',exact=True).click()
+  print('PASS: first-visit Tasks, four free seeds, each vegetable counted separately, saved progress and 16 coins paid once',flush=True)
   assert await frame.get_by_role('button',name='Find a log',exact=True).count()==1
   await frame.get_by_role('button',name='Find a log',exact=True).click()
   await frame.wait_for_function('window.__hw.livingTest.state.gathered.length>0',timeout=90000)
@@ -77,6 +102,11 @@ async def main():
   await frame.get_by_role('button',name='Take logs to tent',exact=True).click()
   await frame.get_by_role('button',name='Build prayer tent',exact=True).click(timeout=90000)
   await frame.get_by_role('button',name='No, keep exploring',exact=True).click(timeout=90000)
+  await frame.get_by_role('button',name='Open Tasks',exact=True).click()
+  await expect(frame.get_by_role('button',name='Build a tent. 1 of 1. Done',exact=True)).to_be_disabled()
+  await expect(frame.get_by_role('status').filter(has_text='All done!')).to_be_visible()
+  await page.screenshot(path='/tmp/starter-tasks-complete.png')
+  await frame.get_by_role('button',name='Back to island',exact=True).click()
   print('PASS: garden leads directly to prayer tent; first friend is optional',flush=True)
   # Reproduce an old, stranded wallet. The app purse is deliberately different.
   await frame.evaluate('''()=>{const f=window.__hw.livingTest.farm;f.commit({...f.state,coins:3,chickenDismissed:false});window.__hw.coins=500;}''')

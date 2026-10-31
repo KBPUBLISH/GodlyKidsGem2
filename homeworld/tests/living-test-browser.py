@@ -25,15 +25,17 @@ async def quality(frame):
     await frame.evaluate('''()=>{const g=window.__hw;g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;g.sun.castShadow=false;g.resize();const render=g.renderer.render.bind(g.renderer);let n=0;g.renderer.render=(...args)=>{g.camera.updateMatrixWorld();if(++n%8===0)render(...args);};}''')
 
 async def finish_garden(frame):
-    if not await frame.evaluate('window.__hw.livingTest.farm.state.garden.approved'):
-        await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
-        await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
-    for field,label in [('dug','Dig a spot'),('planted','Plant a seed')]:
-        while await frame.evaluate(f'window.__hw.livingTest.farm.state.garden.{field}')<3:
-            before=await frame.evaluate(f'window.__hw.livingTest.farm.state.garden.{field}')
-            await frame.get_by_role('button',name=label,exact=True).click()
-            await frame.wait_for_function(f'(n)=>window.__hw.livingTest.farm.state.garden.{field}>n',arg=before,timeout=90000)
-    await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.completed')
+    if await frame.get_by_role('dialog',name='My first tasks').count():
+        await frame.get_by_role('button',name='Back to island',exact=True).click()
+    while await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')<4:
+        before=await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')
+        await frame.get_by_role('button',name='Plant a carrot seed',exact=True).click()
+        await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.garden.planted>n',arg=before,timeout=90000)
+    while not await frame.evaluate('window.__hw.livingTest.farm.state.garden.completed'):
+        before=await frame.evaluate('Object.values(window.__hw.livingTest.farm.state.garden.picked).reduce((a,b)=>a+b,0)')
+        label=await frame.evaluate('window.__hw.livingTest.garden.snapshot().label')
+        await frame.get_by_role('button',name=label,exact=True).click()
+        await frame.wait_for_function('(n)=>Object.values(window.__hw.livingTest.farm.state.garden.picked).reduce((a,b)=>a+b,0)>n',arg=before,timeout=90000)
 
 async def main():
     # Each regression has disposable storage; the garden produces the earned-tent fixture.

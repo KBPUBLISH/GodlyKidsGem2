@@ -181,19 +181,6 @@ export const DespiaService = {
   },
 
   /**
-   * Save image to camera roll
-   * https://npm.despia.com/default-guide/native-features/save-to-camera-roll
-   */
-  saveImageToCameraRoll: (imageUrl: string): void => {
-    if (!isDespia()) return;
-    try {
-      despia(`savethisimage://?url=${encodeURIComponent(imageUrl)}`);
-    } catch (error) {
-      console.error('Failed to save image:', error);
-    }
-  },
-
-  /**
    * Get tracking consent status (ATT)
    * https://npm.despia.com/default-guide/native-features/privacy-compliance
    */

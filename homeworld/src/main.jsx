@@ -307,6 +307,16 @@ function App(){
     if(performance.now()-zoomTouchAt.current<700)return;
     invoke(g=>g.cycleZoom());
   };
+  // Handle dock taps directly on touch release; suppress the follow-up click.
+  const fishTapAt=useRef(-Infinity);
+  const onFishTap=event=>{
+    if(event.type==='pointerup'){
+      if(event.pointerType==='mouse'&&event.button>0)return;
+      event.preventDefault();event.stopPropagation();fishTapAt.current=performance.now();
+    }else if(performance.now()-fishTapAt.current<700)return;
+    invoke(g=>g.nutrition.goFish());
+  };
+
   // Same dual path as Zoom. The old pointerup-only handler also dropped any 'mouse' pointer whose
   // button was not 0 — an iPad trackpad tap reports pointerType 'mouse' with button -1 on pointerup,
   // so Back To Ship did nothing there. Only real secondary buttons are ignored now, click covers
@@ -424,7 +434,7 @@ function App(){
       : <div className="object-prompt" style={{left:view.prompt.x,top:view.prompt.y}} role="group" aria-label="What to do here">{view.prompt.actions.map(a=><button key={a.id} type="button" onClick={()=>invoke(g=>g.runPrompt(a.id))} aria-label={a.label}><span className="object-prompt-icon"><Icon type={a.icon} size={28}/></span><small>{a.label}</small></button>)}</div>)}
     {view.loaded&&!panel&&!view.fishing&&!view.night?.sleeping&&!view.inside&&<WellCard engine={engine} enabled/>}
     {view.loaded&&!panel&&!actionsOpen&&!view.building?.preview&&!view.fishing&&!view.night?.sleeping&&view.firePrompts?.map(f=><button key={f.id} type="button" className={`fire-prompt ${f.out?'out':''}`} style={{left:f.x,top:f.y}} aria-label={f.out?'The campfire is out. Add a log':`The campfire burns out in ${f.minutes} minutes. Add a log`} onClick={()=>invoke(g=>g.nutrition.stokeFire(f.id))}><Icon type="wood" size={26}/><b>!</b></button>)}
-    {view.fishPrompt&&!panel&&!actionsOpen&&!view.building?.preview&&<button type="button" className={`fish-prompt ${view.fishPrompt.near?'near':''}`} style={{left:view.fishPrompt.x,top:view.fishPrompt.y}} onClick={()=>invoke(g=>g.nutrition.goFish())} aria-label="Go fishing from the dock"><Icon type="fish" size={30}/><span>Fish?</span></button>}
+    {view.fishPrompt&&!panel&&!actionsOpen&&!view.building?.preview&&<button type="button" className={`fish-prompt ${view.fishPrompt.near?'near':''}`} style={{left:view.fishPrompt.x,top:view.fishPrompt.y}} onPointerUp={onFishTap} onClick={onFishTap} aria-label="Go fishing from the dock"><Icon type="fish" size={30}/><span>Fish?</span></button>}
     {toast&&<ToastLine text={toast} className={`toast${toastLife?' brief':''}`} style={toastLife?{'--toast-life':`${toastLife}ms`}:undefined}/>}
     {view.animals?.hello&&<ToastLine key={view.animals.hello.shownAt} text={view.animals.hello.text} className="toast animal-hello"/>}
     {view.loaded&&view.animals?.confirming&&!view.animals?.placing&&!panel&&<div className="animal-confirm animal-place-chip" role="dialog" aria-label={`Buy a ${view.animals.confirming.name}`}><span className="animal-place-emoji" aria-hidden="true">{view.animals.confirming.emoji}</span><span>Buy a {view.animals.confirming.name.toLowerCase()} for <b>{view.animals.confirming.price}</b> gold coins?</span><button type="button" onClick={()=>invoke(g=>g.animals?.confirmBuy())}>Buy</button><button type="button" className="plain" onClick={()=>invoke(g=>g.animals?.cancelPlace())}>Not now</button></div>}

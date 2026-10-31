@@ -143,7 +143,7 @@ export class LivingIslandTest {
   updateSocial(){
     const g=this.g,h=g.community.actors.adam;
     if(g.path.length||g.keys.size)this.lastInput=Date.now();
-    if(!this.dialogOpen&&!this.decision&&!this.farm.pending&&this.state.stage>=1&&!this.placingAdam&&!this.openingStory&&!this.greetTarget&&!g.path.length&&!g.keys.size&&!g.interior&&Date.now()-this.lastInput>30000&&!this.watching)this.startWatching();
+    if(!g.action&&!g.order&&!g.fishing?.active&&!this.dialogOpen&&!this.decision&&!this.farm.pending&&this.state.stage>=1&&!this.placingAdam&&!this.openingStory&&!this.greetTarget&&!g.path.length&&!g.keys.size&&!g.interior&&Date.now()-this.lastInput>30000&&!this.watching)this.startWatching();
     if(g.keys.size)this.activity();
     if(this.watching&&Date.now()>this.watchChange){const list=this.watchCandidates();this.watchFocus=list[++this.watchIndex%list.length];this.watchChange=Date.now()+9000;g.notify();}
     if(!this.state.adamUnlocked||!this.state.welcomeSeen||this.watching||this.dialogOpen||this.builder)return;

@@ -140,7 +140,7 @@ export class Fishing {
   leave(){
     this.active=false;this.firstPerson=false;this.phase='idle';this.a=null;if(this.pole)this.pole.visible=true;
     this.rod.visible=false;this.bobber.visible=false;this.line.visible=false;this.fish.visible=false;
-    const g=this.g;g.actor.visible=!g.store.state.characters?.[g.store.state.activeCharacter]?.sleep;
+    const g=this.g;g.livingTest?.activity();g.actor.visible=!g.store.state.characters?.[g.store.state.activeCharacter]?.sleep;
     g.actor.position.set(g.player.x,heightAt(g.world,g.player.x,g.player.y)+.015,-g.player.y);
     g.resize();g.notify();
   }

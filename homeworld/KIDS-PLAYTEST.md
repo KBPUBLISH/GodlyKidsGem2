@@ -37,3 +37,7 @@ The opening previously taught too much through text and menus. To-do, Bag and Bu
 Notice one need → choose where to walk → collect or grow → bring it back → see the island change → enjoy a response from a friend → choose another small adventure or stop.
 
 Story reading is a special milestone that brings a new friend into that loop. The child should understand who they will meet before leaving the island, and see that friend arrive when they return.
+
+## Garden and first-friend revision
+
+The opening now leads from six total garden squares to a three-log prayer tent, then an optional friend voyage. Buttons are stacked at the side, task captions have transparent backgrounds, and each eligible garden square has its own highlight and action. A new profile-scoped journey saves the ship, pack, reader, reward, return ship and deliberate placement steps. Existing children keep their garden work, structures and unlocked Adam. The regression walkthrough follows the real navigation and reader with CMS fixtures; live CMS content and real-device download times need the hosted phone check.

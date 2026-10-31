@@ -36,7 +36,8 @@ export class Community {
  /** Attach the earned friend's model after the child can already play. */
  attachAdam(data){
   const g=this.g,h=this.actors.adam;if(!h||g.disposed)return;
-  h.actor.remove(h.model);h.model=data.scene;h.actor.add(h.model);normalizeCharacterModel(h.model);
+  // Normalize in local space before parenting under a positioned island actor.
+  h.actor.remove(h.model);h.model=data.scene;normalizeCharacterModel(h.model);h.actor.add(h.model);
   h.bones={};h.restPose=[];h.clips={};
   h.model.traverse(o=>{
    if(o.isBone){h.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;h.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}

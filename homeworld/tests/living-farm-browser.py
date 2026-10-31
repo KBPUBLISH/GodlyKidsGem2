@@ -36,7 +36,8 @@ async def main():
       raise
      return
    await close()
-  await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+  await frame.get_by_role('button',name='Open my farm',exact=True).click()
+  await frame.get_by_role('button',name='Buy a chicken',exact=False).click()
   await frame.get_by_role('textbox',name='Animal’s name').fill('Sunny')
   await page.screenshot(path='/tmp/farm-chicken-confirmation.png')
   await frame.get_by_role('button',name='Not now',exact=True).click();assert (await state())['coins']==10

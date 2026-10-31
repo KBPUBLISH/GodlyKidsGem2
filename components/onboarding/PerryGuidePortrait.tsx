@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -13,6 +13,7 @@ import {
 
 /** Tiny looping Perry bust for the island guide card. */
 const PerryGuidePortrait: React.FC = () => {
+  const [ready,setReady]=useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -107,8 +108,8 @@ const PerryGuidePortrait: React.FC = () => {
       }
       const live = new THREE.Box3().setFromObject(wrapper);
       const liveCenter = live.getCenter(new THREE.Vector3());
-      wrapper.position.sub(liveCenter);
-    });
+      wrapper.position.sub(liveCenter);setReady(true);
+    },undefined,()=>{ /* The small parrot fallback remains; navigation never waits. */ });
 
     const tick = () => {
       if (disposed) return;
@@ -122,13 +123,15 @@ const PerryGuidePortrait: React.FC = () => {
       disposed = true;
       cancelAnimationFrame(frame);
       mixer?.stopAllAction();
-      renderer.dispose();
+      scene.traverse(obj=>{const mesh=obj as THREE.Mesh;if(!mesh.isMesh)return;mesh.geometry?.dispose();const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];for(const material of materials){for(const value of Object.values(material))if(value instanceof THREE.Texture)value.dispose();material.dispose();}});
+      scene.environment?.dispose();
+      renderer.dispose();renderer.forceContextLoss();
       draco.dispose();
       renderer.domElement.remove();
     };
   }, []);
 
-  return <div ref={hostRef} className="w-full h-full min-h-full" style={{ width: '100%', height: '100%' }} />;
+  return <div ref={hostRef} className="w-full h-full min-h-full" style={{ width: '100%', height: '100%',position:'relative' }}>{!ready&&<span aria-hidden="true" style={{position:'absolute',inset:0,display:'grid',placeItems:'center',fontSize:54}}>🦜</span>}</div>;
 };
 
 export default PerryGuidePortrait;

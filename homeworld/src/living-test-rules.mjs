@@ -2,11 +2,11 @@
 export const PLAYER_ID = 'you';
 export const REQUESTS = [
   { id: 'first-camp', friend: 'you', name: 'You', item: 'wood', count: 3,
-    title: 'Make your first little camp', ask: 'This is your island! Walk near 3 logs to pick them up, then bring them to the glowing circle.',
-    action: 'Walk near the fallen logs', delivery: 'Step onto your camp circle', thanks: 'You did it! Your first little camp is ready.' },
+    title: 'Build your prayer tent', ask: 'This is your island! Walk near 3 logs to pick them up, then bring them to the glowing circle.',
+    action: 'Walk near the fallen logs', delivery: 'Step onto your tent circle', thanks: 'You did it! Your prayer tent is ready.' },
   { id: 'garden-carrots', friend: 'adam', name: 'Adam', item: 'carrot', count: 4,
-    title: 'Something good to share', ask: 'I’m glad to be here! Will you pick 4 carrots? We can share a meal at your camp.',
-    action: 'Walk near the ripe carrots', delivery: 'Step onto the camp circle', thanks: 'Thank you! It’s good to have a friend beside you.' },
+    title: 'Something good to share', ask: 'I’m glad to be here! Will you pick 4 carrots? We can share a meal by your tent.',
+    action: 'Walk near the ripe carrots', delivery: 'Step onto the tent circle', thanks: 'Thank you! It’s good to have a friend beside you.' },
   { id: 'home-wood', friend: 'adam', name: 'Adam', item: 'wood', count: 3,
     title: 'A home for our adventures', ask: 'Could you bring 3 more logs to the home circle? I’ll build a little home for us.',
     action: 'Find a few more fallen logs', delivery: 'Step onto the home circle', thanks: 'Just what we needed. I’ll get started on our home!' },
@@ -80,7 +80,7 @@ export function deliver(state, friendId, actor = PLAYER_ID) {
 export function guidance(state){
   const task=currentRequest(state);if(!task)return null;
   const found=state.deposits[task.id]+state.inventory[task.item],delivery=found>=task.count;
-  const noun=task.item==='wood'?'logs':'carrots',place=state.stage<2?'camp':'home';
+  const noun=task.item==='wood'?'logs':'carrots',place=state.stage<2?'tent':'home';
   return {found,delivery,noun,label:delivery?`Take ${noun} to ${place}`:task.item==='wood'?'Find a log':'Find a carrot',
     instruction:delivery?'Tap the glowing circle. Your supplies go in by themselves.':task.item==='wood'?'Tap a log. Walk close to pick it up.':'Tap a carrot. Walk close to pick it up.',
     progress:delivery?`${state.deposits[task.id]} / ${task.count} delivered`:`${found} / ${task.count} ${noun} found`};

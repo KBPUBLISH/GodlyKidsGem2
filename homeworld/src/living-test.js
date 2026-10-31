@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { heightAt, gameTime, initialState } from './core.mjs';
 import { footprint,buildingById } from './building.mjs';
 import { scopeKey } from './storage-scope.mjs';
-import { livingTestLayout } from './living-test-layout.mjs';
+import { livingTestLayout,friendDropPoint } from './living-test-layout.mjs';
 import {advancePath,turnToward,updateLocomotion,resetAnimatedPose} from './character-motion.js';
 import { freshState, restoreState, currentRequest, readyToDeliver, collect, deliver,activeResourceIds, guidance } from './living-test-rules.mjs';
-import {FIRST_FRIEND_BASE,readFirstFriend,offerFirstFriend} from './living-first-friend.mjs';
+import {FIRST_FRIEND_BASE,readFirstFriend,offerFirstFriend,placeFirstFriend} from './living-first-friend.mjs';
 
 import {createLivingPlayer} from './living-player-model.js';
 import {LivingFarm} from './living-farm.js';
@@ -30,8 +30,10 @@ export class LivingIslandTest {
     window.addEventListener('message',this.onStoryMessage);
     // A stable map start makes supply locations independent of the saved player position.
     const seed=initialState(game.world);
-    this.layout=livingTestLayout(game.world,seed);
+    this.layout=livingTestLayout(game.world,seed,game.store.state);
     this.group=new THREE.Group();game.scene.add(this.group);this.resources=[];
+    this.dropRing=new THREE.Mesh(new THREE.RingGeometry(.65,.85,40),new THREE.MeshBasicMaterial({color:'#95eb6c',side:THREE.DoubleSide,depthWrite:false}));this.dropRing.rotation.x=-Math.PI/2;this.group.add(this.dropRing);
+    this.tentPreview=game.asset('building_tent_foundation');const tentFoot=footprint(game.world,this.layout.camp.plan);this.tentPreview.position.set(tentFoot.center.x,this.layout.camp.baseHeight,-tentFoot.center.y);this.group.add(this.tentPreview);
     for(const p of this.layout.points){
       const object=game.asset(p.type==='wood'?'wood_pickup':p.type==='carrot'?'crop_carrot_ready':'crop_sunflower_ready');
       object.position.set(p.x,heightAt(game.world,p.x,p.y)+.04,-p.y);
@@ -78,18 +80,28 @@ export class LivingIslandTest {
   }
   save(){try{localStorage.setItem(KEY,JSON.stringify(this.state));}catch{this.g.toast('This test can play, but progress could not be saved.');}}
   site(){const task=currentRequest(this.state);return !task?null:this.state.stage<2?this.layout.camp.pad:this.layout.home.pad;}
-  reservedFriends(){return ['adam','eve','noah'].filter(id=>!this.state.adamUnlocked||id!=='adam'||this.builder?.id===id||id===this.greetTarget||id===this.greeting?.id&&this.elapsed<this.greeting.until);}
+  reservedFriends(){return ['adam','eve','noah'].filter(id=>!this.state.adamUnlocked||id!=='adam'||id==='adam'&&!this.state.welcomeSeen||this.builder?.id===id||id===this.greetTarget||id===this.greeting?.id&&this.elapsed<this.greeting.until);}
   syncFirstFriend(){
     const receipt=readFirstFriend(localStorage,FRIEND_KEY);
-    this.friendEarned=this.state.stage>=1&&receipt?.phase==='unlocked';
+    this.friendPhase=receipt?.phase;this.placingAdam=this.state.stage>=1&&receipt?.phase==='placing';
+    this.friendEarned=this.state.stage>=1&&['placed','unlocked'].includes(receipt?.phase);
     this.state.adamUnlocked=this.friendEarned&&this.g.community.actors.adam.modelReady!==false;
     if(this.state.adamUnlocked&&!this.state.adamArrived){
-      const g=this.g,s=g.store.state,position=g.nav.nearest({x:g.player.x+1.5,y:g.player.y+1},4)||s.community.members.adam.position;
+      const g=this.g,s=g.store.state,position=g.nav.nearest(receipt?.position||{x:g.player.x+1.5,y:g.player.y+1},4)||s.community.members.adam.position;
       g.store.save({...s,community:{...s.community,members:{...s.community.members,adam:{...s.community.members.adam,position,job:null,readyAt:gameTime(s)}}}});
-      this.state.adamArrived=true;this.save();
+      this.g.community.actors.adam.actor.position.set(position.x,heightAt(g.world,position.x,position.y),-position.y);this.state.adamArrived=true;this.save();
     }
     this.applyFriendVisibility();
     this.sync();
+  }
+  dropSpot(){const p=this.g.player;if(this.dropNav!==this.g.nav||this.dropOrigin?.x!==p.x||this.dropOrigin?.y!==p.y){this.dropOrigin={...p};this.dropNav=this.g.nav;this.dropPoint=friendDropPoint(this.g.nav,p,this.layout.camp.pad);}return this.dropPoint;}
+  placeAdam(point){
+    if(!this.placingAdam)return false;
+    const g=this.g;let p=g.nav.nearest(point||this.dropSpot(),1);
+    if(p&&Math.hypot(p.x-g.player.x,p.y-g.player.y)<1.1)p=this.dropSpot();
+    if(!p||!g.nav.path(g.player,p)){g.toast('Tap clear land.');return false;}
+    if(!placeFirstFriend(localStorage,FRIEND_KEY,p)){g.toast('Couldn’t save. Try again.');return false;}
+    this.activity();this.syncFirstFriend();this.celebrate('Welcome, Adam!');g.notify();return true;
   }
   applyFriendVisibility(){
     for(const [id,h] of Object.entries(this.g.community.actors)){
@@ -119,7 +131,7 @@ export class LivingIslandTest {
   updateSocial(){
     const g=this.g,h=g.community.actors.adam;
     if(g.path.length||g.keys.size)this.lastInput=Date.now();
-    if(!this.dialogOpen&&!this.decision&&!this.farm.pending&&this.state.stage>=1&&!this.openingStory&&!this.greetTarget&&!g.path.length&&!g.keys.size&&!g.interior&&Date.now()-this.lastInput>30000&&!this.watching)this.startWatching();
+    if(!this.dialogOpen&&!this.decision&&!this.farm.pending&&this.state.stage>=1&&!this.placingAdam&&!this.openingStory&&!this.greetTarget&&!g.path.length&&!g.keys.size&&!g.interior&&Date.now()-this.lastInput>30000&&!this.watching)this.startWatching();
     if(g.keys.size)this.activity();
     if(this.watching&&Date.now()>this.watchChange){const list=this.watchCandidates();this.watchFocus=list[++this.watchIndex%list.length];this.watchChange=Date.now()+9000;g.notify();}
     if(!this.state.adamUnlocked||!this.state.welcomeSeen||this.watching||this.dialogOpen||this.builder)return;
@@ -138,7 +150,7 @@ export class LivingIslandTest {
   hearTask(){
     if(!window.speechSynthesis)return;
     const garden=this.farm.state.garden,hint=guidance(this.state);
-    const message=!garden.completed?(!garden.approved?'Tap Grow to make your garden bigger. It’s free!':garden.dug<3?'Tap the shovel. Let’s dig three spots!':'Tap the seed. Let’s plant!'):hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
+    const message=this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?(!garden.approved?'Tap Grow to make your garden bigger. It’s free!':garden.dug<3?'Tap the shovel. Let’s dig three spots!':'Tap the seed. Let’s plant!'):hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
     this.activity();window.speechSynthesis.cancel();const words=new SpeechSynthesisUtterance(message);words.rate=.85;window.speechSynthesis.speak(words);
   }
   celebrate(title){this.celebration={title,until:this.elapsed+3.2};this.g.burst(this.g.player,'seed',.8);}
@@ -153,6 +165,7 @@ export class LivingIslandTest {
   }
   click(ray){
     this.activity();if(this.g.interior)return;
+    if(this.placingAdam){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p))this.placeAdam({x:p.x,y:-p.z});return;}
     if(this.garden.click(ray))return;
     const meshes=[...Object.values(this.g.community.actors).filter(h=>h.actor.visible).map(h=>h.actor),...this.resources.filter(r=>r.object.visible).map(r=>r.object)];
     const hit=ray.intersectObjects(meshes,true)[0];
@@ -173,12 +186,14 @@ export class LivingIslandTest {
     const carried=Object.entries(this.state.inventory).flatMap(([type,n])=>Array(n).fill(type));
     this.slots.forEach(({slot,types},i)=>{slot.visible=i<carried.length;for(const [type,obj] of Object.entries(types))obj.visible=carried[i]===type;});
     this.picnic.visible=this.state.stage>=2;
+    this.tentPreview.visible=this.state.stage===0&&!!this.farm?.state.garden.completed;
+    this.dropRing.visible=!!this.placingAdam;const drop=this.dropSpot();this.dropRing.position.set(drop.x,heightAt(g.world,drop.x,drop.y)+.07,-drop.y);
     this.foundation.visible=this.state.adamUnlocked&&this.state.stage>=2&&this.state.homeWork<.25;this.frame.visible=this.state.homeWork>=.25&&this.state.homeWork<1;this.flowers.visible=this.state.homeWork>=1;
     this.ring.visible=!!site&&!!this.farm?.state.garden.completed;if(site)this.ring.position.set(site.x,heightAt(g.world,site.x,site.y)+.05,-site.y);
     // Reward uses the real, furnished hut and the original building/navigation systems.
     let s=g.store.state;
     if(this.state.stage>=1&&!s.buildings.some(b=>b.id==='living-test-camp')){
-      const def=buildingById('campfire'),paidMaterials={};if(def.wood)paidMaterials.pine_wood=def.wood;if(def.stone)paidMaterials.stone=def.stone;
+      const def=buildingById(this.layout.camp.plan.kind),paidMaterials={};if(def.wood)paidMaterials.pine_wood=def.wood;if(def.stone)paidMaterials.stone=def.stone;
       const b={...this.layout.camp.plan,id:'living-test-camp',status:'complete',baseHeight:this.layout.camp.baseHeight,startedAt:Date.now()-10000,paidMaterials,litAt:gameTime(s),fuelUntil:gameTime(s)+360};
       g.store.save({...s,buildings:[...s.buildings,b]});g.refreshDynamic();s=g.store.state;
     }
@@ -223,9 +238,9 @@ export class LivingIslandTest {
     const site=this.site();
     if(site&&Math.hypot(g.player.x-site.x,g.player.y-site.y)>1.5)this.declinedBuild=null;
     if(site&&readyToDeliver(this.state)&&this.elapsed>=this.depositAt&&Math.hypot(g.player.x-site.x,g.player.y-site.y)<1.05){
-      if(['first-camp','home-wood'].includes(task.id)&&!this.state.approvedBuildings[task.id]){if(this.declinedBuild!==task.id&&!this.decision){this.decision={id:task.id,name:task.id==='first-camp'?'camp':'home',remaining:task.count-this.state.deposits[task.id]};g.notify();}return;}
+      if(['first-camp','home-wood'].includes(task.id)&&!this.state.approvedBuildings[task.id]){if(this.declinedBuild!==task.id&&!this.decision){this.decision={id:task.id,name:task.id==='first-camp'?'prayer tent':'home',remaining:task.count-this.state.deposits[task.id]};g.notify();}return;}
       const before=this.state.stage,next=deliver(this.state,task.friend);
-      if(next!==this.state){this.state=next;this.depositAt=this.elapsed+.35;if(next.stage===1)offerFirstFriend(localStorage,FRIEND_KEY);this.save();this.sync();if(next.stage!==before){this.celebrate(before===0?'Camp ready!':before===1?'Picnic time!':'Building!');if(before===0)this.inviteAfter=this.elapsed+3.2;}g.notify();}
+      if(next!==this.state){this.state=next;this.depositAt=this.elapsed+.35;if(next.stage===1)offerFirstFriend(localStorage,FRIEND_KEY);this.save();this.sync();if(next.stage!==before){this.celebrate(before===0?'Tent ready!':before===1?'Picnic time!':'Building!');if(before===0)this.inviteAfter=this.elapsed+3.2;}g.notify();}
     }
   }
   project(point,above=.7){
@@ -236,8 +251,8 @@ export class LivingIslandTest {
   snapshot(){
     const task=currentRequest(this.state),site=this.site();
     const target=this.nextTarget();
-    return {task,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:typeof window.speechSynthesis!=='undefined',insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
-      adamUnlocked:this.state.adamUnlocked,inviteVisible:this.state.stage>=1&&!this.state.adamUnlocked&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
+    return {task,placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:typeof window.speechSynthesis!=='undefined',insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
+      adamUnlocked:this.state.adamUnlocked,inviteVisible:this.state.stage>=1&&!this.state.adamUnlocked&&!this.placingAdam&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
       openingStory:this.openingStory,storyError:this.storyError,
       site:site?this.project(site,1.3):null,
       resources:this.resources.filter(r=>r.object.visible).map(r=>({id:r.id,type:r.type,...this.project(r)})),

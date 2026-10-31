@@ -30,7 +30,10 @@ async def main():
    layout=await frame.evaluate("""()=>({overflow:document.documentElement.scrollWidth>innerWidth,covered:[...document.querySelectorAll('.living-guide,.living-round,.living-target,.living-pocket')].reduce((n,e)=>{const b=e.getBoundingClientRect();return n+b.width*b.height;},0)/(innerWidth*innerHeight),smallTargets:[...document.querySelectorAll('button')].filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.width<44||b.height<44);}).map(e=>e.getAttribute('aria-label'))})""")
    assert not layout['overflow'] and layout['covered']<.15,layout
    assert not layout['smallTargets'],layout
-   await page.screenshot(path=f'/tmp/action-ui-{width}.png')
+   assert await frame.locator('.living-guide').evaluate("e=>getComputedStyle(e).backgroundColor==='rgba(0, 0, 0, 0)'")
+   rail=await frame.locator('.living-pocket-actions>button').evaluate_all('es=>es.map(e=>{const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y};})')
+   assert len({round(r['x']) for r in rail})==1 and all(rail[i]['y']<rail[i+1]['y'] for i in range(len(rail)-1)),rail
+   await page.screenshot(path=f'/tmp/tent-ui-{width}.png')
   await page.set_viewport_size({'width':390,'height':844})
   await frame.evaluate("()=>{window.spokenTask='';speechSynthesis.speak=words=>{window.spokenTask=words.text;};}")
   await frame.get_by_role('button',name='Hear this task',exact=True).click()
@@ -43,11 +46,12 @@ async def main():
   await frame.get_by_role('button',name='Make my garden bigger',exact=True).click()
   await page.screenshot(path='/tmp/action-ui-confirmation.png')
   await frame.get_by_role('button',name='Yes, let’s grow!',exact=True).click()
-  await frame.get_by_role('button',name='Go to the garden spot',exact=True).click()
+  await frame.get_by_role('button',name='Dig garden spot 3',exact=True).click()
   try:await frame.wait_for_function('window.__hw.livingTest.farm.state.garden.dug===1',timeout=90000)
   except Exception:
    print('DIG DEBUG',await frame.evaluate('({p:window.__hw.player,path:window.__hw.path,work:window.__hw.livingTest.garden.work,dialog:window.__hw.livingTest.dialogOpen,garden:window.__hw.livingTest.garden.snapshot()})'),flush=True)
    raise
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.dugSpots')==[5]
   print('PASS: solo start, three vegetable types, free confirmation and walking to dig',flush=True)
   await frame.goto(frame.url);await loaded()
   assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.dug')==1
@@ -58,11 +62,17 @@ async def main():
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
   assert await frame.evaluate('window.__hw.livingTest.garden.plots.filter(p=>p.cropObject.visible).length')==6
   print('PASS: all six garden actions, partial reload, 10-coin reward paid once, six planted spots',flush=True)
-  await frame.get_by_role('button',name='Keep exploring',exact=True).click()
   assert await frame.get_by_role('button',name='Find a log',exact=True).count()==1
   await frame.get_by_role('button',name='Find a log',exact=True).click()
   await frame.wait_for_function('window.__hw.livingTest.state.gathered.length>0',timeout=90000)
-  print('PASS: camp task progresses with no chicken purchased',flush=True)
+  while await frame.evaluate('window.__hw.livingTest.state.gathered.length')<3:
+   before=await frame.evaluate('window.__hw.livingTest.state.gathered.length')
+   await frame.get_by_role('button',name='Find a log',exact=True).click()
+   await frame.wait_for_function('(n)=>window.__hw.livingTest.state.gathered.length>n',arg=before,timeout=90000)
+  await frame.get_by_role('button',name='Take logs to tent',exact=True).click()
+  await frame.get_by_role('button',name='Build prayer tent',exact=True).click(timeout=90000)
+  await frame.get_by_role('button',name='No, keep exploring',exact=True).click(timeout=90000)
+  print('PASS: garden leads directly to prayer tent; first friend is optional',flush=True)
   # Reproduce an old, stranded wallet. The app purse is deliberately different.
   await frame.evaluate('''()=>{const f=window.__hw.livingTest.farm;f.commit({...f.state,coins:3,chickenDismissed:false});window.__hw.coins=500;}''')
   await expect(frame.locator('.living-farm .living-coins b')).to_have_text('3')
@@ -72,10 +82,12 @@ async def main():
   await frame.get_by_role('button',name='Back to island',exact=True).click()
   # The ordinary tap-and-walk harvest loop recovers enough money to buy an animal.
   for i in range(4):
+   await frame.get_by_role('button',name='Open my farm',exact=True).click()
    await frame.get_by_role('button',name='Pick vegetables · +2 coins',exact=True).click(timeout=60000)
    await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.coins===n',arg=5+i*2,timeout=90000)
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==11
-  await frame.get_by_role('button',name='Choose my chicken · 10 coins',exact=True).click()
+  await frame.get_by_role('button',name='Open my farm',exact=True).click()
+  await frame.get_by_role('button',name='Buy a chicken',exact=False).click()
   await frame.get_by_role('textbox',name='Animal’s name').fill('<>')
   assert await frame.get_by_role('button',name='Buy <> · 10 coins',exact=True).is_disabled()
   await frame.get_by_role('textbox',name='Animal’s name').fill('Sunny')

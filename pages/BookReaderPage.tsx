@@ -279,7 +279,7 @@ const BookReaderPage: React.FC = () => {
     const navigateBackFromReader = useCallback(() => {
         stopBookAudioRef.current();
         if(islandSceneReturn?.storyId&&isLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId)){
-            navigate('/my-home?livingTest=1',{replace:true});
+            navigate(`/sail/${encodeURIComponent(islandSceneReturn.islandId)}/lesson/hub?storyId=${encodeURIComponent(islandSceneReturn.storyId)}&livingFirstFriend=1`,{replace:true,state:{livingFirstFriend:true}});
             return;
         }
 
@@ -2470,7 +2470,7 @@ const BookReaderPage: React.FC = () => {
         stopBookAudioRef.current();
 
         if(islandSceneReturn?.islandId&&islandSceneReturn.storyId&&completeLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId,pages.filter(p=>p._id!=='the-end-page'&&!p.isColoringPage).length)){
-            navigate('/my-home?livingTest=1',{replace:true,state:{firstFriendUnlocked:true}});
+            navigate(`/sail/${encodeURIComponent(islandSceneReturn.islandId)}/lesson/hub?storyId=${encodeURIComponent(islandSceneReturn.storyId)}&livingFirstFriend=1`,{replace:true,state:{livingFirstFriend:true}});
             return;
         }
 

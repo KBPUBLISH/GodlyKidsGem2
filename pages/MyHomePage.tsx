@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate,useLocation } from 'react-router-dom';
-import {openLivingFirstFriendStory} from '../utils/livingFirstFriend';
+import {openLivingFirstFriendVoyage} from '../utils/livingFirstFriend';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { stopPreviewWarmup } from '../utils/previewWarmup';
 import { livingAvatarForProfile } from '../shared/livingAvatars.mjs';
@@ -426,7 +426,7 @@ const MyHomePage: React.FC = () => {
       if(data.type==='gk-living-collect-first-friend'){
         if(!livingTestMode||event.source!==frameRef.current?.contentWindow||openingFirstFriend.current)return;
         openingFirstFriend.current=true;
-        void openLivingFirstFriendStory(profileScope).then(destination=>navigate(destination.path,{state:destination.state})).catch(()=>{
+        void Promise.resolve().then(()=>openLivingFirstFriendVoyage(profileScope)).then(destination=>navigate(destination.path,{state:destination.state})).catch(()=>{
           post({type:'gk-living-first-friend-error'});
         }).finally(()=>{openingFirstFriend.current=false;});
         return;

@@ -2,13 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {initialState,Navigation,buildSiteStatus,GameStore} from '../src/core.mjs';
-import {livingTestLayout} from '../src/living-test-layout.mjs';
+import {livingTestLayout,friendDropPoint} from '../src/living-test-layout.mjs';
 
 test('the play test uses reachable places and a valid home site on the original island',()=>{
   const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
   const state=initialState(world),layout=livingTestLayout(world,state),nav=new Navigation(world,state);
   assert.equal(buildSiteStatus(world,state,layout.home.plan).ok,true);
   assert.equal(buildSiteStatus(world,state,layout.camp.plan).ok,true);
+  assert.equal(layout.camp.plan.kind,'tent');
+  const built={...state,buildings:[{...layout.camp.plan,id:'living-test-camp',status:'complete',baseHeight:layout.camp.baseHeight}]};
+  assert.equal(buildSiteStatus(world,built,layout.home.plan).ok,true);
+  const builtNav=new Navigation(world,built);for(const p of [layout.camp.pad,layout.home.pad,...layout.points])assert.ok(builtNav.path(state.player,p));
+  assert.deepEqual(livingTestLayout(world,state,built).camp.plan,layout.camp.plan);
   assert.equal(layout.points.length,10);
   for(const point of [layout.home.pad,layout.camp.pad,layout.kitchen,layout.farmPad,...layout.farmSpots,...layout.points])assert.ok(nav.path(state.player,point));
   assert.equal(state.buildings.length,0);
@@ -52,4 +57,13 @@ test('community reservations keep an approached or unavailable friend from wande
   const before=structuredClone(store.state.community.members);
   store.communityStep({active:false,reservedMembers:['eve','noah']},wall+60000);
   for(const id of ['eve','noah']){assert.equal(Boolean(store.state.community.members[id].job),false);assert.deepEqual(store.state.community.members[id].position,before[id].position);}
+});
+
+test('friend placement stays near the child and leaves space for both models',()=>{
+ const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url))),s=initialState(world),layout=livingTestLayout(world,s);
+ const nav=new Navigation(world,{...s,buildings:[{...layout.camp.plan,id:'living-test-camp',status:'complete'}]});
+ for(const player of [s.player,layout.camp.pad,{x:12.25,y:8.75}]){
+  const p=friendDropPoint(nav,player,layout.camp.pad),d=Math.hypot(p.x-player.x,p.y-player.y);
+  assert.ok(d>1.1&&d<4,JSON.stringify({player,p,d}));assert.ok(nav.path(player,p));
+ }
 });

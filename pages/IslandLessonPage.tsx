@@ -1,5 +1,6 @@
+import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import {useUser} from '../context/UserContext';
-import {isLivingFirstFriendReading} from '../utils/livingFirstFriend';
+import {useLivingFriendJourney,startLivingFirstFriendReading,collectLivingFirstFriend} from '../utils/livingFirstFriend';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { BookOpen, Check, Gamepad2, Lock, MessageCircleQuestionMark, Star, Video, X } from 'lucide-react';
@@ -116,11 +117,14 @@ const resolveMediaUrl = (url: string | undefined | null): string => {
 const IslandLessonPage: React.FC = () => {
   const navigate = useNavigate();
   const {kids,currentProfileId}=useUser();
-  const firstFriendOpened=useRef(false);
+  const livingJourney=useLivingFriendJourney();
+  const [livingError,setLivingError]=useState('');
+  const [packLoading,setPackLoading]=useState(true),[packRetry,setPackRetry]=useState(0);
   const { islandId = 'genesis' } = useParams<{ islandId: string }>();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const storyIdParam = searchParams.get('storyId')?.trim() || '';
+  const livingPack=!!livingJourney&&livingJourney.islandId===islandId&&livingJourney.storyId===storyIdParam&&['pack','reading','reward'].includes(livingJourney.phase);
 
   const fallbackLesson = LESSON_BY_ISLAND[islandId] ?? {
     ...DEFAULT_LESSON,
@@ -191,6 +195,7 @@ const IslandLessonPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    setPackLoading(true);setLivingError('');
     setCmsBookId(null);
     setCmsStoryId('');
     setUnlockStories([]);
@@ -336,14 +341,14 @@ const IslandLessonPage: React.FC = () => {
         }
       } catch {
         /* keep hardcoded fallbacks */
-      }
+      }finally{if(!cancelled)setPackLoading(false);}
     };
     void load();
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [islandId, storyIdParam, navState?.heroImageUrl, fallbackLesson.title, fallbackLesson.scriptureRef, fallbackLesson.readSubtitle, fallbackLesson.verse, fallbackLesson.verseRef]);
+  }, [packRetry,islandId, storyIdParam, navState?.heroImageUrl, fallbackLesson.title, fallbackLesson.scriptureRef, fallbackLesson.readSubtitle, fallbackLesson.verse, fallbackLesson.verseRef]);
 
   // Refresh progress when hub mounts / story resolves / after returning from reader/quiz
   useEffect(() => {
@@ -450,16 +455,18 @@ const IslandLessonPage: React.FC = () => {
     ],
   );
 
-  // The island already asked to read: skip repeated Start screens for this handoff.
-  useEffect(()=>{
-    if(firstFriendOpened.current||searchParams.get('livingFirstFriend')!=='1'||!cmsBookId||!returnStoryId||!isLivingFirstFriendReading(islandId,returnStoryId))return;
-    firstFriendOpened.current=true;
-    const saved=readPersistedReadingLevel(cmsBookId);
-    const age=kids.find(k=>k.id===currentProfileId)?.age;
+  const readLivingPack=()=>{
+    if(!cmsBookId||!returnStoryId||!startLivingFirstFriendReading(islandId,returnStoryId)){setLivingError('Story unavailable. Try again.');return;}
+    setLivingError('');
+    const saved=readPersistedReadingLevel(cmsBookId),age=kids.find(k=>k.id===currentProfileId)?.age;
     if(saved)openRead(saved);
     else if(typeof age==='number'&&age>0)openRead(age<6?'ages_3_5':age<8?'ages_6_7':'ages_8_plus');
     else setShowAgePicker(true);
-  },[cmsBookId,returnStoryId,islandId,searchParams,kids,currentProfileId,openRead]);
+  };
+  const collectLivingReward=()=>{
+    if(!returnStoryId||!collectLivingFirstFriend(islandId,returnStoryId)){setLivingError('Couldn’t save. Try again.');return;}
+    navigate('/crew',{replace:true,state:{livingFirstFriend:true}});
+  };
 
   const handleRereadStory = useCallback(() => {
     if (cmsBookId) {
@@ -692,6 +699,15 @@ const IslandLessonPage: React.FC = () => {
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-[#2d6b3a]">
+      {livingPack&&!showAgePicker&&<section className="living-pack-view" aria-label="Your first story pack">
+        <button className="living-pack-back" aria-label="Back to ship" onClick={()=>navigate('/crew')}>←</button>
+        {heroSrc&&<img src={heroSrc} alt=""/>}
+        <h1>{livingJourney.phase==='reward'?'You found Adam!':navState?.title||lesson.title}</h1>
+        <div className="living-pack-icons" aria-hidden="true">{livingJourney.phase==='reward'?'🎁':'📖'} <span>→</span> {livingJourney.phase==='reward'?'👋':'🎁'}</div>
+        {livingError&&<p role="alert" className="living-pack-error">{livingError}</p>}
+        <LivingJourneyGuide line={livingJourney.phase==='reward'?'Collect your friend!':'Read a story. Meet a friend!'} spoken={livingJourney.phase==='reward'?'Great job! Your story is finished. Collect Adam, then let’s go back to the ship.':'This is a story pack. Read the story to meet Adam!'} onAction={livingJourney.phase==='reward'?collectLivingReward:!packLoading&&!cmsBookId?()=>setPackRetry(n=>n+1):readLivingPack} label={livingJourney.phase==='reward'?'Collect Adam':packLoading?'Loading…':!cmsBookId?'Try again':'Read story'} disabled={livingJourney.phase!=='reward'&&packLoading}/>
+      </section>}
+
       <style>{`
         @keyframes islandStarPop {
           0% { transform: scale(0.6); opacity: 0; }
@@ -1024,7 +1040,7 @@ const IslandLessonPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => {setShowAgePicker(false);if(searchParams.get('livingFirstFriend')==='1')navigate('/my-home?livingTest=1');}}
+                onClick={() => {setShowAgePicker(false);if(searchParams.get('livingFirstFriend')==='1')navigate('/crew');}}
                 className="w-11 h-11 rounded-full bg-[#3D2914]/90 text-white flex items-center justify-center active:scale-95"
                 aria-label="Close"
               >

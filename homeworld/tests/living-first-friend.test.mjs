@@ -1,37 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {firstFriendKey,readFirstFriend,offerFirstFriend,beginFirstFriendStory,isFirstFriendReading,finishFirstFriendStory} from '../src/living-first-friend.mjs';
-
+import {firstFriendKey,readFirstFriend,offerFirstFriend,startFirstFriendVoyage,beginFirstFriendPack,beginFirstFriendStory,finishFirstFriendStory,claimFirstFriend,prepareFirstFriendDrop,placeFirstFriend} from '../src/living-first-friend.mjs';
 const memory=()=>{const values=new Map();return {values,getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};};
-test('a first friend cannot be unlocked before the solo achievement and story handoff',()=>{
-  const s=memory(),k=firstFriendKey('family:child');
-  assert.equal(beginFirstFriendStory(s,k,'genesis','creation'),null);
-  assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),false);
-  offerFirstFriend(s,k);
-  assert.equal(readFirstFriend(s,k).phase,'offered');
-  assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),false);
+const reading=(s,k)=>{offerFirstFriend(s,k);startFirstFriendVoyage(s,k);beginFirstFriendPack(s,k,'genesis','creation');beginFirstFriendStory(s,k,'genesis','creation');};
+test('every step is explicit: tent, voyage, pack, story, reward, ship and placement',()=>{
+ const s=memory(),k=firstFriendKey('child');
+ assert.equal(startFirstFriendVoyage(s,k),null);assert.equal(beginFirstFriendStory(s,k,'genesis','creation'),null);
+ offerFirstFriend(s,k);assert.equal(beginFirstFriendStory(s,k,'genesis','creation'),null);
+ assert.equal(startFirstFriendVoyage(s,k).phase,'ship');assert.equal(beginFirstFriendPack(s,k,'genesis','creation').phase,'pack');
+ assert.equal(claimFirstFriend(s,k,'genesis','creation'),false);assert.equal(prepareFirstFriendDrop(s,k),false);
+ assert.equal(beginFirstFriendStory(s,k,'genesis','creation').phase,'reading');
+ assert.equal(finishFirstFriendStory(s,k,'other','creation'),false);
+ assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),true);assert.equal(readFirstFriend(s,k).phase,'reward');assert.equal(readFirstFriend(s,k).character,undefined);
+ assert.equal(placeFirstFriend(s,k,{x:1,y:1}),false);assert.equal(claimFirstFriend(s,k,'genesis','creation'),true);
+ assert.equal(readFirstFriend(s,k).phase,'aboard');assert.equal(prepareFirstFriendDrop(s,k),true);
+ assert.equal(placeFirstFriend(s,k,{x:NaN,y:1}),false);assert.equal(placeFirstFriend(s,k,{x:1,y:2}),true);
+ assert.deepEqual(readFirstFriend(s,k).position,{x:1,y:2});assert.equal(readFirstFriend(s,k).phase,'placed');
+ assert.equal(placeFirstFriend(s,k,{x:3,y:4}),false);assert.equal(startFirstFriendVoyage(s,k),null);
 });
-test('opening a story grants nothing; only its matching completion unlocks Adam once',()=>{
-  const s=memory(),k=firstFriendKey('family:child');offerFirstFriend(s,k);
-  beginFirstFriendStory(s,k,'genesis','creation');
-  assert.equal(readFirstFriend(s,k).phase,'reading');
-  assert.equal(isFirstFriendReading(s,k,'genesis','different'),false);
-  assert.equal(finishFirstFriendStory(s,k,'other-island','creation'),false);
-  assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),true);
-  assert.equal(readFirstFriend(s,k).character,'adam');
-  assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),false);
+test('the saved journey remains bound to one story and one child through reloads',()=>{
+ const s=memory(),a=firstFriendKey('family:a'),b=firstFriendKey('family:b');reading(s,a);
+ assert.equal(beginFirstFriendPack(s,a,'genesis','different'),null);assert.equal(beginFirstFriendStory(s,a,'other','creation'),null);
+ assert.equal(finishFirstFriendStory(s,b,'genesis','creation'),false);assert.equal(readFirstFriend(s,b),null);
+ assert.equal(offerFirstFriend(s,a).phase,'reading');assert.equal(startFirstFriendVoyage(s,a).phase,'reading');
+ assert.equal(beginFirstFriendPack(s,a,'genesis','creation').phase,'reading');
 });
-test('the handoff stays bound to one story and one child profile',()=>{
-  const s=memory(),a=firstFriendKey('family:a'),b=firstFriendKey('family:b');
-  offerFirstFriend(s,a);beginFirstFriendStory(s,a,'genesis','creation');
-  assert.equal(beginFirstFriendStory(s,a,'genesis','different'),null);
-  assert.equal(finishFirstFriendStory(s,b,'genesis','creation'),false);
-  offerFirstFriend(s,a);assert.equal(readFirstFriend(s,a).phase,'reading');
-  assert.equal(readFirstFriend(s,b),null);
+test('failed persistence never reports a reward or placement',()=>{
+ const s=memory(),k=firstFriendKey('child');reading(s,k);const write=s.setItem;s.setItem=()=>{throw Error('quota');};
+ assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),false);assert.equal(readFirstFriend(s,k).phase,'reading');
+ s.setItem=write;finishFirstFriendStory(s,k,'genesis','creation');claimFirstFriend(s,k,'genesis','creation');prepareFirstFriendDrop(s,k);
+ s.setItem=()=>{throw Error('quota');};assert.equal(placeFirstFriend(s,k,{x:1,y:2}),false);assert.equal(readFirstFriend(s,k).phase,'placing');
 });
-test('failed persistence cannot report a successful unlock',()=>{
-  const s=memory(),k=firstFriendKey('child');offerFirstFriend(s,k);beginFirstFriendStory(s,k,'genesis','creation');
-  s.setItem=()=>{throw Error('quota');};
-  assert.equal(finishFirstFriendStory(s,k,'genesis','creation'),false);
-  assert.equal(readFirstFriend(s,k).phase,'reading');
+test('children who already unlocked Adam keep their original receipt',()=>{
+ const s=memory(),k=firstFriendKey('child'),old={version:1,phase:'unlocked',character:'adam',islandId:'genesis',storyId:'creation'};s.setItem(k,JSON.stringify(old));
+ assert.deepEqual(readFirstFriend(s,k),old);assert.deepEqual(offerFirstFriend(s,k),old);assert.equal(startFirstFriendVoyage(s,k),null);
 });

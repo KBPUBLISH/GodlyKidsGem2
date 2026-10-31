@@ -1,3 +1,6 @@
+import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome} from '../utils/livingFirstFriend';
+import {getProfileScopeKey} from '../utils/profileScope';
+import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { PREVIEW_SHIP_ART } from '../utils/previewAssets.mjs';
 import { stopPreviewWarmup, warmPreviewNextScreen } from '../utils/previewWarmup';
@@ -7,6 +10,7 @@ import { Users } from 'lucide-react';
 import {
   CREW_WAVE_ANIMATION,
   getOnDeckCrew,
+  ONBOARDING_ADAM_ID,
   rewardsService,
   type UnlockedCharacter,
 } from '../services/rewardsService';
@@ -784,6 +788,10 @@ type AdamTour = {
 const CrewPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const livingJourney=useLivingFriendJourney();
+  const firstFriendVoyage=!!livingJourney&&['ship','pack','reading','reward'].includes(livingJourney.phase);
+  const firstFriendHome=!!livingJourney&&['aboard','placing'].includes(livingJourney.phase);
+  const livingJourneyActive=firstFriendVoyage||firstFriendHome;
   const { kids, currentProfileId } = useUser();
   const kidName = useMemo(() => {
     const fromProfile =
@@ -837,7 +845,7 @@ const CrewPage: React.FC = () => {
   }, []);
 
   const [crewGuide, setCrewGuide] = useState(
-    () => discoverShip || sailForStory || (shipTourNow && !tapAdamRequested),
+    () => !livingJourneyActive&&(discoverShip || sailForStory || (shipTourNow && !tapAdamRequested)),
   );
   const [tapAdam, setTapAdam] = useState(
     () => Boolean((location.state as { tapAdam?: boolean } | null)?.tapAdam),
@@ -863,7 +871,7 @@ const CrewPage: React.FC = () => {
   // walked the kid through the ship. During the tour only the button he's
   // talking about pops in.
   const firstTimeLock = (crewGuide || tapAdam) && !hasSeenAdamTour();
-  const navHidden = firstTimeLock || !!tour;
+  const navHidden = livingJourneyActive || firstTimeLock || !!tour;
   const tabBarTourBeat = !!tourBeat && TAB_BAR_TOUR_BEATS.has(tourBeat.id);
   const showJourneyBtn = !navHidden || tabBarTourBeat;
   const showCrewBtn = showJourneyBtn;
@@ -904,8 +912,9 @@ const CrewPage: React.FC = () => {
   // Crew on deck: characters unlocked from story Rewards loot boxes.
   // If the kid picked a crew roster, show that; otherwise all unlocked.
   const loadCrew = useCallback(() => {
-    setCrew(getOnDeckCrew());
-  }, []);
+    const atHome=LIVING_TEST_BUILD&&['placed','unlocked'].includes(livingJourney?.phase);
+    setCrew(getOnDeckCrew().filter(c=>!atHome||(c.id!==ONBOARDING_ADAM_ID&&!/^adam$/i.test(c.name.trim()))));
+  }, [livingJourney?.phase]);
 
   useEffect(() => {
     const onVisibility = () => setPageHidden(document.hidden);
@@ -1326,6 +1335,17 @@ const CrewPage: React.FC = () => {
 
   const openVoyageIsland = useCallback((island: VoyageIsland) => {
     if (sailingRef.current) return;
+    if(firstFriendVoyage){
+      if(voyageRef.current[0]?.id!==island.id)return;
+      sailingRef.current=true;setSailingIsland(true);setStoryError('');
+      const voyageScope=getProfileScopeKey();
+      void openLivingFirstFriendStory(voyageScope).then(dest=>{
+        const go=()=>{if(getProfileScopeKey()===voyageScope)navigate(dest.path,{state:dest.state});};
+        if(reduceMotion){go();return;}
+        timersRef.current.push(window.setTimeout(go,SAIL_IN_MS));
+      }).catch(()=>{sailingRef.current=false;setSailingIsland(false);setStoryError('Try the island again.');});
+      return;
+    }
     if (LIVING_TEST_BUILD && voyageRef.current[0]?.id === island.id) {
       sailingRef.current = true; setSailingIsland(true); setStoryError('');
       void resolveFirstStoryPackDestination().then(dest => {
@@ -1360,7 +1380,7 @@ const CrewPage: React.FC = () => {
     // The island swells toward the bow, then the deck fades to white.
     window.setTimeout(() => setWhiteFade(true), SAIL_IN_MS - WHITE_FADE_MS);
     window.setTimeout(go, SAIL_IN_MS);
-  }, [navigate]);
+  }, [navigate,firstFriendVoyage,reduceMotion]);
 
   const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
   const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
@@ -1425,7 +1445,8 @@ const CrewPage: React.FC = () => {
   /** My Home: the wheel spins hard, the deck fades to white, then we land. */
   const goMyHome = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
-    const go = () => navigate('/my-home', { state: { from: '/crew' } });
+    if(firstFriendHome&&!bringLivingFirstFriendHome()){setStoryError('Try again.');return;}
+    const go = () => navigate('/my-home', { state: { from: '/crew',livingFirstFriend:firstFriendHome } });
     if (reduceMotion || LIVING_TEST_BUILD) {
       go();
       return;
@@ -1436,7 +1457,7 @@ const CrewPage: React.FC = () => {
     const fadeId = window.setTimeout(() => setWhiteFade(true), WHEEL_SPIN_FADE_DELAY_MS);
     const navId = window.setTimeout(go, WHEEL_SPIN_FADE_DELAY_MS + WHITE_FADE_MS);
     timersRef.current = [fadeId, navId];
-  }, [clearTimers, enteringGame, navigate, reduceMotion]);
+  }, [clearTimers, enteringGame, navigate, reduceMotion,firstFriendHome]);
 
   /** Hatch-open hint → white fade → navigate. (Runs after any 3D descent.) */
   const beginHatchTransition = useCallback(
@@ -2106,6 +2127,7 @@ const CrewPage: React.FC = () => {
               transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1), height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease',
             }}
           >
+            {firstFriendVoyage&&isActive&&i===0&&<span className="living-island-point" aria-hidden="true">👇</span>}
             <span
               className="pointer-events-none absolute left-1/2 flex flex-col items-center gap-1"
               style={{
@@ -2193,7 +2215,7 @@ const CrewPage: React.FC = () => {
             ref={deckRef}
             characters={crew3d}
             paused={!!chatCharacter || deckBusy}
-            onCharacterTap={(character) => openChat(character)}
+            onCharacterTap={(character) => firstFriendHome?goMyHome():openChat(character)}
           />
         </Suspense>
       )}
@@ -2485,10 +2507,11 @@ const CrewPage: React.FC = () => {
           the last visit (fed by homeworld/src/island-feed.mjs). */}
       <IslandNotices />
 
+      {livingJourneyActive&&!sailingIsland&&<LivingJourneyGuide line={firstFriendHome?'Bring Adam home!':'Tap the first island.'} spoken={firstFriendHome?'You found Adam! Let’s bring him to your community.':'Tap the first island. Let’s find a story friend!'} onAction={firstFriendHome?goMyHome:undefined} label="My community"/>}
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard
         variant={discoverShip ? 'discoverShip' : sailForStory ? 'sailForStory' : 'crewShip'}
-        active={crewGuide && !chatCharacter}
+        active={crewGuide && !chatCharacter && !livingJourneyActive}
         onFinished={finishCrewGuide}
       />
 

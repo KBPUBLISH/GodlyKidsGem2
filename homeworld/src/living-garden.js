@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {heightAt,cellFromKey} from './core.mjs';
-import {gardenNext,gardenApprove,gardenWork,gardenHarvest,GARDEN_CROPS,HARVEST_COINS} from './living-garden-rules.mjs';
+import {gardenAvailable,gardenNext,gardenApprove,gardenWork,gardenHarvest,GARDEN_CROPS,HARVEST_COINS} from './living-garden-rules.mjs';
 
 export class LivingGarden {
  constructor(test){
@@ -25,6 +25,14 @@ export class LivingGarden {
    p.cropObject=p.crop==='cabbage'?this.cabbage():g.asset(`crop_${p.crop}_ready`);
    p.cropObject.position.set(p.x,heightAt(g.world,p.x,p.y)+.055,-p.y);this.group.add(p.cropObject);
   }
+  this.highlights=[];
+  for(const index of [3,4,5]){
+   const p=this.plots[index],tile=new THREE.Group();tile.position.set(p.x,heightAt(g.world,p.x,p.y)+.065,-p.y);
+   const fill=new THREE.Mesh(new THREE.PlaneGeometry(.88,.88),new THREE.MeshBasicMaterial({color:'#ffdf73',transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));fill.rotation.x=-Math.PI/2;tile.add(fill);
+   const points=[[-.45,-.45],[.45,-.45],[.45,.45],[-.45,.45],[-.45,-.45]].map(([x,z])=>new THREE.Vector3(x,.01,z));
+   tile.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#fff2a0'})));
+   this.group.add(tile);this.highlights.push({index,tile,fill});
+  }
   this.marker=new THREE.Mesh(new THREE.RingGeometry(.31,.43,32),new THREE.MeshBasicMaterial({color:'#ffe34f',side:THREE.DoubleSide,depthWrite:false}));this.marker.rotation.x=-Math.PI/2;this.group.add(this.marker);
   this.hoe=g.asset('tool_hoe');this.hoe.scale.setScalar(.65);this.hoe.visible=false;this.group.add(this.hoe);
  }
@@ -38,8 +46,9 @@ export class LivingGarden {
  sync(){
   if(!this.small)return;
   const s=this.state,now=Date.now(),next=gardenNext(s);
-  this.plots.forEach((p,i)=>{p.soil.visible=i<3||i<3+s.dug;p.cropObject.visible=i<3||i<3+s.planted;p.cropObject.scale.setScalar(s.readyAt[i]>now?.38:1);});
-  this.marker.visible=!!next;if(next){const p=this.plots[next.index];this.marker.position.set(p.x,heightAt(this.g.world,p.x,p.y)+.06,-p.y);}
+  this.plots.forEach((p,i)=>{p.soil.visible=i<3||s.dugSpots.includes(i);p.cropObject.visible=i<3||s.plantedSpots.includes(i);p.cropObject.scale.setScalar(s.readyAt[i]>now?.38:1);});
+  for(const h of this.highlights){h.tile.visible=gardenAvailable(s).includes(h.index);h.fill.material.color.set(s.dug<3?'#ffdf73':'#a7ed7c');}
+  this.marker.visible=false;if(next){const p=this.plots[next.index];this.marker.position.set(p.x,heightAt(this.g.world,p.x,p.y)+.06,-p.y);}
  }
  approve(){if(this.test.farm.commit(gardenApprove(this.test.farm.state))){this.pending=false;this.g.notify();}else this.g.notify();}
  cancel(){this.pending=false;this.g.notify();}
@@ -47,8 +56,9 @@ export class LivingGarden {
   if(!this.small)return;
   this.test.activity();
   if(!this.state.approved){this.pending=true;this.g.notify();return;}
-  const next=gardenNext(this.state),job=next||{kind:'harvest',index:index??this.state.readyAt.findIndex(t=>t<=Date.now())};
+  const next=gardenNext(this.state),job=next?{...next,index:index??next.index}:{kind:'harvest',index:index??this.state.readyAt.findIndex(t=>t<=Date.now())};
   if(!Number.isInteger(job.index)||!this.plots[job.index]||this.work)return;
+  if(job.kind!=='harvest'&&!gardenAvailable(this.state).includes(job.index))return;
   if(job.kind==='harvest'&&this.state.readyAt[job.index]>Date.now())return;
   const p=this.plots[job.index];this.test.walk(p);this.work={...job,elapsed:0};this.g.notify();
  }
@@ -77,7 +87,7 @@ export class LivingGarden {
   const point=new THREE.Vector3();if(!ray.ray.intersectPlane(this.g.groundPlane,point))return false;
   const i=this.plots.findIndex(p=>Math.hypot(p.x-point.x,p.y+point.z)<.55);
   if(i<0)return false;
-  if(this.state.completed)this.go(i);else if(i===gardenNext(this.state)?.index)this.go();
+  if(this.state.completed)this.go(i);else if(gardenAvailable(this.state).includes(i))this.go(i);
   return true;
  }
  snapshot(){
@@ -86,8 +96,9 @@ export class LivingGarden {
    label:!s.approved?'Make my garden bigger':next?.kind==='dig'?'Dig a spot':'Plant a seed',
    instruction:!s.approved?'Let’s make room for more vegetables. Your tools and seeds are free.':next?.kind==='dig'?'Tap the glowing spot. Walk over and dig!':'Tap the spot to plant a seed. Three seeds earn 10 coins!',
    progress:next?.kind==='dig'?`${s.dug} / 3 spots dug`:`${s.planted} / 3 seeds planted`,
+   spots:gardenAvailable(s).map(index=>({index,...this.test.project(this.plots[index],.12)})),
    target:target?this.test.project(target,.1):null,
    crops:this.small?this.plots.map((p,i)=>({index:i,crop:p.crop,ready:s.completed&&s.readyAt[i]<=Date.now(),...this.test.project(p,.5)})):[]};
  }
- dispose(){this.g.scene.remove(this.group);this.marker?.geometry.dispose();this.marker?.material.dispose();this.ownedGeometry?.dispose();this.ownedMaterials?.forEach(m=>m.dispose());}
+ dispose(){this.g.scene.remove(this.group);this.highlights?.forEach(h=>h.tile.traverse(o=>{o.geometry?.dispose();o.material?.dispose();}));this.marker?.geometry.dispose();this.marker?.material.dispose();this.ownedGeometry?.dispose();this.ownedMaterials?.forEach(m=>m.dispose());}
 }

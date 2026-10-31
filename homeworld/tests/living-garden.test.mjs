@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {farmFresh,farmRestore,farmBuy,farmPurchaseError} from '../src/living-farm-rules.mjs';
-import {gardenApprove,gardenWork,gardenHarvest,prepareLivingGardenBase,GARDEN_GROW_MS} from '../src/living-garden-rules.mjs';
+import {gardenRestore,gardenApprove,gardenWork,gardenHarvest,prepareLivingGardenBase,GARDEN_GROW_MS} from '../src/living-garden-rules.mjs';
 import {initialState,seedStarterGarden} from '../src/core.mjs';
 const grow=s=>{s=gardenApprove(s);for(const kind of ['dig','plant'])for(let i=3;i<6;i++)s=gardenWork(s,kind,i,100);return s;};
 test('a free garden opens with zero coins; three digs and seeds fund a named chicken exactly once',()=>{
  let s=farmFresh();assert.equal(s.coins,0);assert.equal(farmBuy(s,'chicken','Sunny',0),s);
  assert.equal(gardenWork(s,'dig',3,0),s);s=gardenApprove(s);
- assert.equal(gardenWork(s,'plant',3,0),s);assert.equal(gardenWork(s,'dig',5,0),s);
+ assert.equal(gardenWork(s,'plant',3,0),s);assert.equal(gardenWork(s,'dig',2,0),s);
  s=gardenWork(s,'dig',3,100);assert.equal(gardenWork(s,'dig',3,100),s);
  s=farmRestore(JSON.parse(JSON.stringify(s)));assert.equal(s.garden.dug,1);
  s=grow(s);assert.equal(s.coins,10);assert.equal(s.garden.completed,true);
@@ -36,4 +36,12 @@ test('the small starter garden replaces only untouched demo crops and keeps earn
  assert.equal(prepareLivingGardenBase(small,w),small);assert.equal(Object.keys(original.cells).length,16);
  const played={...original,stats:{...original.stats,harvested:1},inventory:{carrot:3}};
  const kept=prepareLivingGardenBase(played,w);assert.equal(kept.livingGardenLayout,'existing');assert.deepEqual(kept.cells,played.cells);assert.deepEqual(kept.inventory,played.inventory);
+});
+
+test('each highlighted square can be worked in any order and legacy counts migrate',()=>{
+ let s=gardenApprove(farmFresh());for(const i of [5,3,4])s=gardenWork(s,'dig',i,100);
+ for(const i of [4,5,3])s=gardenWork(farmRestore(s),'plant',i,200);
+ assert.equal(s.coins,10);assert.deepEqual(s.garden.dugSpots,[5,3,4]);assert.deepEqual(s.garden.plantedSpots,[4,5,3]);
+ const old={...s.garden,dug:2,planted:0};delete old.dugSpots;delete old.plantedSpots;
+ assert.deepEqual(gardenRestore(old).dugSpots,[3,4]);assert.deepEqual(gardenRestore(old).plantedSpots,[]);
 });

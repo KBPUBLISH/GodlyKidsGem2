@@ -11,7 +11,7 @@ export class LivingFarm{
   try{
    const saved=JSON.parse(localStorage.getItem(KEY));this.state=farmRestore(saved);
    // Existing adventures keep their animals, balance, and task position.
-   if(!saved?.garden&&(this.state.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.state.garden={...gardenFresh(),approved:true,dug:3,planted:3,completed:true};
+   if(!saved?.garden&&(this.state.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.state.garden={...gardenFresh(),approved:true,dug:3,planted:3,dugSpots:[3,4,5],plantedSpots:[3,4,5],completed:true};
   }catch{this.state=farmFresh();}
   this.pending=null;this.error='';this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
  }

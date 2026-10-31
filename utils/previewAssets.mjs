@@ -9,7 +9,7 @@ export const PREVIEW_ART = {
 const language = [PREVIEW_ART.languageOcean, PREVIEW_ART.languageGlobe];
 export const WELCOME_ART = {
   unlock:'/assets/images/onboarding/island-unlock-v2.webp',
-  buildGrow:'/assets/images/onboarding/island-build-grow-v1.webp',
+  buildGrow:'/assets/images/onboarding/island-build-grow-v2.webp',
   discover:'/assets/images/onboarding/island-discover-v1.webp',
 };
 const onboarding = [

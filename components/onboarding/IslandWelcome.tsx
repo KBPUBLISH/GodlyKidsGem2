@@ -11,7 +11,7 @@ import './IslandWelcome.css';
 
 const slides=[
  {title:'Unlock',copy:'Meet your Bible friends.',src:WELCOME_ART.unlock,alt:'A boy and girl look out over their island world as Noah, David and Esther wave from across a bridge.'},
- {title:'Build & Grow',copy:'Plant a garden. Make a home.',src:WELCOME_ART.buildGrow,alt:'Children care for vegetables beside their home and chicken coop.'},
+ {title:'Build & Grow',copy:'Build a world with Bible friends.',src:WELCOME_ART.buildGrow,alt:'A girl plants seeds with Eve while a boy builds a wooden hut with Noah.'},
  {title:'Discover',copy:'Audio adventures. Books to explore.',src:WELCOME_ART.discover,alt:'Children enjoy headphones and a storybook with Esther.'},
 ];
 type Props={onComplete:(choice:'trial'|'tour')=>void;onBack:()=>void};
@@ -37,7 +37,7 @@ export default function IslandWelcome({onComplete,onBack}:Props){
   <div className="welcome-shell">
    <div className="welcome-top"><button className="welcome-back" aria-label="Back" disabled={paying} onClick={()=>{setError('');step?setStep(step-1):onBack();}}><ChevronLeft/></button><img src={PREVIEW_ART.logo} alt="Godly Kids" width="640" height="366"/></div>
    <header className="welcome-heading"><h1 ref={heading} tabIndex={-1}>{trial?(isPremium?'Your adventure awaits':`Try ${TRIAL_DAYS} Days Free`):slide.title}</h1><p>{trial?(isPremium?'Your membership is ready.':'More stories. More adventures.') :slide.copy}</p></header>
-   <figure className="welcome-art" onPointerDown={e=>{swipe.current={x:e.clientX,y:e.clientY};}} onPointerCancel={()=>{swipe.current=null;}} onPointerUp={e=>{const start=swipe.current;swipe.current=null;if(!start||trial)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;if(Math.abs(dx)>48&&Math.abs(dx)>Math.abs(dy)*1.3){if(dx<0)advance();else if(step)setStep(step-1);}}}>
+   <figure className={`welcome-art${step===1?' welcome-build-art':''}`} onPointerDown={e=>{swipe.current={x:e.clientX,y:e.clientY};}} onPointerCancel={()=>{swipe.current=null;}} onPointerUp={e=>{const start=swipe.current;swipe.current=null;if(!start||trial)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;if(Math.abs(dx)>48&&Math.abs(dx)>Math.abs(dy)*1.3){if(dx<0)advance();else if(step)setStep(step-1);}}}>
     <img src={trial?PREVIEW_ART.splash:slide.src} alt={trial?'Children with their Bible friends on their island.':slide.alt} fetchPriority="high" decoding="async"/>
     {step===2&&<div className="welcome-formats"><span><Headphones size={18}/>Listen</span><span><BookOpen size={18}/>Read</span></div>}
    </figure>

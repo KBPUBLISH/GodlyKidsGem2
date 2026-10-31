@@ -19,3 +19,5 @@
 .living-island-point{position:absolute;left:50%;top:28%;font-size:34px;transform:translate(-50%,-100%);pointer-events:none;filter:drop-shadow(0 2px 2px #26452e);animation:living-island-point 1.2s ease-in-out infinite}
 @keyframes living-island-point{50%{transform:translate(-50%,calc(-100% - 7px))}}
 @media(prefers-reduced-motion:reduce){.living-island-point{animation:none}}
+
+.living-journey-guide{animation:perry-guide-arrive .45s ease-out both}.living-perry-cue{position:relative}.living-perry-cue:has(.living-perry-dismiss){padding-right:36px}.living-perry-cue .living-perry-dismiss{position:absolute;right:0;top:-9px;min-width:44px;min-height:44px;padding:0;background:transparent;border:0;color:#694922;font-size:24px}.living-perry-listen{font-size:22px!important;color:#ae442b;font-weight:900!important}@keyframes perry-guide-arrive{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.living-journey-guide{animation:none}}

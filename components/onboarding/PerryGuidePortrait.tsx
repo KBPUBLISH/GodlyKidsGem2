@@ -21,7 +21,9 @@ const PerryGuidePortrait: React.FC = () => {
     if (!host) return;
 
     let disposed = false;
-    let frame = 0;
+    let frame = 0,lastPaint=-Infinity,stillDrawn=false;
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+    const release=(root:THREE.Object3D)=>root.traverse(obj=>{const mesh=obj as THREE.Mesh;if(!mesh.isMesh)return;mesh.geometry?.dispose();for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){for(const value of Object.values(material))if(value instanceof THREE.Texture)value.dispose();material.dispose();}});
     let mixer: THREE.AnimationMixer | null = null;
     const clock = new THREE.Clock();
 
@@ -30,7 +32,7 @@ const PerryGuidePortrait: React.FC = () => {
       alpha: true,
       powerPreference: 'low-power',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.style.width = '100%';
@@ -41,7 +43,7 @@ const PerryGuidePortrait: React.FC = () => {
     const scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(renderer);
     const room = new RoomEnvironment();
-    scene.environment = pmrem.fromScene(room, 0.04).texture;
+    scene.environment = pmrem.fromScene(room, 0.04, .1, 100, {size:64}).texture;
     scene.environmentIntensity = 0.22;
     room.dispose();
     pmrem.dispose();
@@ -76,7 +78,7 @@ const PerryGuidePortrait: React.FC = () => {
     const draco = new DRACOLoader().setDecoderPath('/draco/');
     loader.setDRACOLoader(draco);
     loader.load(PERRY_INTRO_MODEL, (gltf) => {
-      if (disposed) return;
+      if (disposed){release(gltf.scene);return;}
       const model = gltf.scene;
       model.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
@@ -108,13 +110,15 @@ const PerryGuidePortrait: React.FC = () => {
       }
       const live = new THREE.Box3().setFromObject(wrapper);
       const liveCenter = live.getCenter(new THREE.Vector3());
-      wrapper.position.sub(liveCenter);setReady(true);
+      wrapper.position.sub(liveCenter);stillDrawn=false;setReady(true);
     },undefined,()=>{ /* The small parrot fallback remains; navigation never waits. */ });
 
-    const tick = () => {
+    const tick = (now=performance.now()) => {
       if (disposed) return;
       frame = requestAnimationFrame(tick);
-      mixer?.update(clock.getDelta());
+      if(document.hidden||now-lastPaint<1000/30||(reduced.matches&&stillDrawn))return;
+      lastPaint=now;stillDrawn=true;
+      mixer?.update(reduced.matches?0:Math.min(clock.getDelta(),.08));
       renderer.render(scene, camera);
     };
     tick();
@@ -123,7 +127,7 @@ const PerryGuidePortrait: React.FC = () => {
       disposed = true;
       cancelAnimationFrame(frame);
       mixer?.stopAllAction();
-      scene.traverse(obj=>{const mesh=obj as THREE.Mesh;if(!mesh.isMesh)return;mesh.geometry?.dispose();const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];for(const material of materials){for(const value of Object.values(material))if(value instanceof THREE.Texture)value.dispose();material.dispose();}});
+      release(scene);
       scene.environment?.dispose();
       renderer.dispose();renderer.forceContextLoss();
       draco.dispose();

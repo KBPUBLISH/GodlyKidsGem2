@@ -63,6 +63,7 @@ export function createAvatarPreview(host: HTMLElement, avatarId: string, portrai
     turn(radians:number){player.model.rotation.y+=radians;resumeAt=elapsed+2;draw();},
     setDragging(value:boolean){dragging=value;resumeAt=elapsed+2;},
     pause(){paused=true;activity();},
+    resume(){paused=false;activity();},
     portrait() { player.model.rotation.y=.3;draw();return renderer.domElement.toDataURL('image/png'); },
     dispose() {
       stopped=true;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',activity);reduced.removeEventListener('change',activity);player.dispose();

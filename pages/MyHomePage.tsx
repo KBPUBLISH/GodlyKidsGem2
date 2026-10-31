@@ -1,3 +1,4 @@
+import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import {useCharacterVoice} from '../utils/useCharacterVoice';
 import {ADAM_TOUR_FALLBACK_VOICE_ID} from '../utils/adamTour';
 import {ONBOARDING_GUIDE_VOICE_ID} from '../utils/onboardingJourney';
@@ -232,6 +233,7 @@ const MyHomePage: React.FC = () => {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   /** The prayer currently being spoken in the character's ElevenLabs voice (one at a time). */
   const prayerAudioRef = useRef<{ id: string; audio: HTMLAudioElement | null; url: string | null } | null>(null);
+  const [coach,setCoach]=useState<{id:string;line:string;spoken:string;label:string;autoSpeak?:boolean}|null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
   // Native safe-area variables live on the parent document, outside the island iframe.
   useEffect(() => {
@@ -428,6 +430,9 @@ const MyHomePage: React.FC = () => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
+      if(data.type==='gk-living-coach'&&livingTestMode&&event.source===frameRef.current?.contentWindow){
+        const b=event.data.beat;if(b===null)setCoach(null);else if(['planted','watered','harvested','wood','tent'].includes(b?.id)&&['line','spoken','label'].every(k=>typeof b[k]==='string'&&b[k].length<=500))setCoach(b);return;
+      }
       if(data.type==='gk-living-voice-stop'&&event.source===frameRef.current?.contentWindow){adamVoice.stop();return;}
       if(data.type==='gk-living-voice'){
         if(!livingTestMode||event.source!==frameRef.current?.contentWindow)return;
@@ -835,6 +840,7 @@ const MyHomePage: React.FC = () => {
         </div>
       )}
 
+      {livingTestMode&&coach&&<LivingJourneyGuide key={coach.id} autoSpeak={coach.autoSpeak} line={coach.line} spoken={coach.spoken} label={coach.label} onAction={()=>post({type:'gk-living-coach-action',id:coach.id,action:'next'})} onDismiss={()=>post({type:'gk-living-coach-action',id:coach.id,action:'later'})}/>}
       {livingTestMode && !frameLoaded && <div className={`absolute inset-0 z-[80] flex items-center justify-center ${firstArrival?'bg-black':'bg-[#99b9b0]'}`} role="status">{firstArrival?<span className="text-[#fff3c4] font-bold">Your island is waking up…</span>:<div className="rounded-3xl bg-[#fff8e8] px-8 py-6 text-center text-[#3e2414]"><strong>Rowing ashore…</strong><p>Getting your island ready.</p></div>}</div>}
       {overlayMounted && !livingTestMode && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 

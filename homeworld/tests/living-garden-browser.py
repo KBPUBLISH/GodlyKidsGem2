@@ -124,7 +124,7 @@ async def main():
    await frame.wait_for_function('(n)=>window.__hw.livingTest.state.gathered.length>n',arg=before,timeout=90000)
   await frame.get_by_role('button',name='Take logs to tent',exact=True).click()
   await frame.get_by_role('button',name='Build prayer tent',exact=True).click(timeout=90000)
-  await frame.get_by_role('button',name='No, keep exploring',exact=True).click(timeout=90000)
+  await page.get_by_role('button',name='Keep exploring',exact=True).click(timeout=90000)
   await frame.get_by_role('button',name='Open Tasks',exact=True).click()
   await expect(frame.get_by_role('button',name='Build a tent. 1 of 1. Done',exact=True)).to_be_disabled()
   await expect(frame.get_by_role('status').filter(has_text='All done!')).to_be_visible()

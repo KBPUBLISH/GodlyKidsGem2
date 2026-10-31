@@ -1,3 +1,5 @@
+import ShipPlayerAvatar from '../components/crew/ShipPlayerAvatar';
+import {livingAvatarForProfile} from '../shared/livingAvatars.mjs';
 import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome} from '../utils/livingFirstFriend';
 import {getProfileScopeKey} from '../utils/profileScope';
 import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
@@ -793,6 +795,9 @@ const CrewPage: React.FC = () => {
   const firstFriendHome=!!livingJourney&&['aboard','placing'].includes(livingJourney.phase);
   const livingJourneyActive=firstFriendVoyage||firstFriendHome;
   const { kids, currentProfileId } = useUser();
+  const playerAvatar=livingAvatarForProfile(kids.find(k=>k.id===currentProfileId)||kids[0]);
+  const [shipWelcome,setShipWelcome]=useState(()=>{try{return livingJourney?.phase==='ship'&&sessionStorage.getItem(`gk_ship_welcome:${getProfileScopeKey()}`)!=='1';}catch{return livingJourney?.phase==='ship';}});
+  const introduceIsland=()=>{setShipWelcome(false);try{sessionStorage.setItem(`gk_ship_welcome:${getProfileScopeKey()}`,'1');}catch{}};
   const kidName = useMemo(() => {
     const fromProfile =
       currentProfileId && kids.find((k: { id?: string }) => k.id === currentProfileId);
@@ -1022,6 +1027,7 @@ const CrewPage: React.FC = () => {
   const wheelRef = useRef<HTMLButtonElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const stage = useStageRect(pageRef);
+  const playerDeckWidth=Math.max(100,Math.min(180,stage.width*.24)),playerDeckHeight=playerDeckWidth*1.5;
   /**
    * Live wheel drag. Everything per-move lives here (no React state per
    * pointermove — a CrewPage re-render per touch sample lagged the thumb on
@@ -2127,7 +2133,7 @@ const CrewPage: React.FC = () => {
               transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1), height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease',
             }}
           >
-            {firstFriendVoyage&&isActive&&i===0&&<span className="living-island-point" aria-hidden="true">👇</span>}
+            {firstFriendVoyage&&!shipWelcome&&isActive&&i===0&&<span className="living-island-point" aria-hidden="true">👇</span>}
             <span
               className="pointer-events-none absolute left-1/2 flex flex-col items-center gap-1"
               style={{
@@ -2206,6 +2212,8 @@ const CrewPage: React.FC = () => {
           transition: reduceMotion ? 'none' : 'opacity 500ms ease',
         }}
       />
+
+      {LIVING_TEST_BUILD&&<ShipPlayerAvatar avatarId={playerAvatar.id} name={kidName} paused={pageHidden||sailingIsland} style={{left:stage.left+stage.width*.29-playerDeckWidth/2,top:stage.top+stage.height*.58-playerDeckHeight*.95934,width:playerDeckWidth,height:playerDeckHeight}}/>}
 
       {/* 3D crew — characters with a GLB model stand idle on the deck.
           Tap → AI chat popup (dancing is jukebox-only). */}
@@ -2507,7 +2515,7 @@ const CrewPage: React.FC = () => {
           the last visit (fed by homeworld/src/island-feed.mjs). */}
       <IslandNotices />
 
-      {livingJourneyActive&&!sailingIsland&&<LivingJourneyGuide line={firstFriendHome?'Bring Adam home!':'Tap the first island.'} spoken={firstFriendHome?'You found Adam! Let’s bring him to your community.':'Tap the first island. Let’s find a story friend!'} onAction={firstFriendHome?goMyHome:undefined} label="My community"/>}
+      {livingJourneyActive&&!sailingIsland&&<LivingJourneyGuide key={firstFriendHome?'home':shipWelcome?'welcome':'island'} line={firstFriendHome?'Bring Adam home!':shipWelcome?`Welcome aboard${kidName?`, ${kidName}`:''}!`:`Tap ${voyageIslands[0]?.title||'the first island'}!`} spoken={firstFriendHome?`You found Adam${kidName?`, ${kidName}`:''}! Your tent is ready for him. Let’s bring him to your community.`:shipWelcome?`Welcome aboard${kidName?`, ${kidName}`:''}! This is the Godly Ship. From here, we can sail to different Bible islands and meet new friends. Ready to explore?`:`Oh, look at ${voyageIslands[0]?.title||'that island'}! Tap it and let’s sail to our first Bible adventure. We’ll read a story and meet your first friend!`} onAction={firstFriendHome?goMyHome:shipWelcome?introduceIsland:undefined} label={firstFriendHome?'My community':'Show me!'}/>}
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard
         variant={discoverShip ? 'discoverShip' : sailForStory ? 'sailForStory' : 'crewShip'}

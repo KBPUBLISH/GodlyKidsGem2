@@ -8,6 +8,7 @@ import {advancePath,turnToward,updateLocomotion,resetAnimatedPose} from './chara
 import { freshState, restoreState, currentRequest, readyToDeliver, collect, deliver,activeResourceIds, guidance } from './living-test-rules.mjs';
 import {FIRST_FRIEND_BASE,readFirstFriend,offerFirstFriend,placeFirstFriend} from './living-first-friend.mjs';
 
+import {LivingCoach} from './living-coach.mjs';
 import {LivingArrival} from './living-arrival.js';
 import {createLivingPlayer} from './living-player-model.js';
 import {LivingFarm} from './living-farm.js';
@@ -29,6 +30,7 @@ export class LivingIslandTest {
     this.tasksOpen=this.state.stage===0&&!game.store.state.livingTasksSeen;this.openingStory=false;this.storyError='';this.celebration=null;this.pickupNotice=null;this.inviteAfter=0;
     this.onStoryMessage=event=>{
       if(event.origin!==location.origin||event.source!==window.parent)return;
+      if(event.data?.type==='gk-living-coach-action')this.coach?.respond(event.data.id,event.data.action);
       if(event.data?.type==='gk-living-first-friend-error'){this.openingStory=false;this.storyError='The story isn’t ready just yet. Please try again.';game.notify();}
     };
     window.addEventListener('message',this.onStoryMessage);
@@ -70,6 +72,7 @@ export class LivingIslandTest {
     this.sync();this.syncFirstFriend();
     game.status='Tap land to walk. Nearby supplies collect automatically.';
     game.zoom=13;game.focus.copy(game.actor.position);game.resize();
+    this.coach=new LivingCoach(this);
     if(new URLSearchParams(location.search).get('arrival')==='1'&&!game.store.state.livingArrivalSeen&&this.state.stage===0)this.arrival=new LivingArrival(this);
   }
   makePlayer(){
@@ -222,7 +225,7 @@ export class LivingIslandTest {
   }
   update(dt,speed){
     this.elapsed+=dt;const g=this.g;
-    this.actions.update();this.farm.update();this.garden.update(dt);this.updateSocial();
+    this.actions.update();this.farm.update();this.garden.update(dt);this.coach.update();this.updateSocial();
     this.applyFriendVisibility();
     this.playerVisual.update(dt,speed,this.elapsed,{celebrating:this.celebration?.until>this.elapsed,carrying:Object.values(this.state.inventory).some(n=>n>0),working:!!g.action||this.garden.animating});
     if(this.celebration&&this.elapsed>=this.celebration.until){this.celebration=null;g.notify();}
@@ -271,11 +274,11 @@ export class LivingIslandTest {
     const task=currentRequest(this.state),site=this.site();
     const target=this.nextTarget();
     return {arrival:this.arrival?.snapshot()||null,task,tasksOpen:this.tasksOpen,tasks:starterTasks(this.farm.state.garden,this.state.stage>=1),placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:window.parent!==window,insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
-      adamUnlocked:this.state.adamUnlocked,inviteVisible:this.state.stage>=1&&!this.state.adamUnlocked&&!this.placingAdam&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
+      adamUnlocked:this.state.adamUnlocked,inviteVisible:(window.parent===window||this.coach?.beat?.id!=='tent')&&this.state.stage>=1&&!this.state.adamUnlocked&&!this.placingAdam&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
       openingStory:this.openingStory,storyError:this.storyError,
       site:site?this.project(site,1.3):null,
       resources:this.resources.filter(r=>r.object.visible).map(r=>({id:r.id,type:r.type,...this.project(r)})),
       friends:this.state.adamUnlocked?[{id:'adam',name:'Adam'}]:[]};
   }
-  dispose(){this.arrival?.dispose();this.actions?.dispose();this.garden?.dispose();this.farm?.dispose();window.removeEventListener('message',this.onStoryMessage);}
+  dispose(){this.coach?.dispose();this.arrival?.dispose();this.actions?.dispose();this.garden?.dispose();this.farm?.dispose();window.removeEventListener('message',this.onStoryMessage);}
 }

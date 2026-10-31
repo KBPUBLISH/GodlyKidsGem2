@@ -19,7 +19,7 @@ import { islandStoryProgressService } from '../services/islandStoryProgressServi
 import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
 import { isLibraryFromBasement } from '../utils/libraryFromBasement';
 import { getLibraryMode } from '../utils/libraryMode';
-import {completeLivingFirstFriendReading,isLivingFirstFriendReading} from '../utils/livingFirstFriend';
+import {completeLivingFirstFriendReading} from '../utils/livingFirstFriend';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
 import { BookPageRenderer, ScrollState } from '../components/features/BookPageRenderer';
 import WebViewPageRenderer from '../components/features/WebViewPageRenderer';
@@ -278,10 +278,7 @@ const BookReaderPage: React.FC = () => {
     );
     const navigateBackFromReader = useCallback(() => {
         stopBookAudioRef.current();
-        if(islandSceneReturn?.storyId&&isLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId)){
-            navigate(`/sail/${encodeURIComponent(islandSceneReturn.islandId)}/lesson/hub?storyId=${encodeURIComponent(islandSceneReturn.storyId)}&livingFirstFriend=1`,{replace:true,state:{livingFirstFriend:true}});
-            return;
-        }
+
 
         if (islandSceneReturn) {
             // If the book was already finished, ensure scene unlock progress is saved
@@ -2469,10 +2466,7 @@ const BookReaderPage: React.FC = () => {
 
         stopBookAudioRef.current();
 
-        if(islandSceneReturn?.islandId&&islandSceneReturn.storyId&&completeLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId,pages.filter(p=>p._id!=='the-end-page'&&!p.isColoringPage).length)){
-            navigate(`/sail/${encodeURIComponent(islandSceneReturn.islandId)}/lesson/hub?storyId=${encodeURIComponent(islandSceneReturn.storyId)}&livingFirstFriend=1`,{replace:true,state:{livingFirstFriend:true}});
-            return;
-        }
+        if(islandSceneReturn?.islandId&&islandSceneReturn.storyId)completeLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId,pages.filter(p=>p._id!=='the-end-page'&&!p.isColoringPage).length);
 
         const hubPath = islandSceneReturn
             ? buildIslandLessonHubPath(islandSceneReturn)

@@ -1,3 +1,4 @@
+import {livingFriendRecord,collectLivingFirstFriend} from '../utils/livingFirstFriend';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -33,6 +34,7 @@ type TreasureNavState = {
   returnTo?: string;
   /** First-time path: after the dig, HS invites them to meet the unlocked crew. */
   onboardingJourney?: boolean;
+  packRequirements?:{hasQuizContent:boolean;hasTryIt:boolean};
 };
 
 /** Card shape sent into the game iframe (shown when the chest opens). */
@@ -60,8 +62,10 @@ const BuriedTreasurePage: React.FC = () => {
   const location = useLocation();
   const { addCoins } = useUser();
   const navState = (location.state || {}) as TreasureNavState;
+  const friend= livingFriendRecord();
+  const livingFriend=!!friend&&friend.islandId===navState.islandId&&friend.storyId===navState.storyId&&['pack','reading','reward','aboard'].includes(friend.phase);
   const onboardingJourney =
-    Boolean(navState.onboardingJourney) || isOnboardingJourneyActive();
+    !livingFriend&&(Boolean(navState.onboardingJourney) || isOnboardingJourneyActive());
 
   useEffect(() => {
     if (onboardingJourney) noteJourneyStep('treasure');
@@ -118,6 +122,7 @@ const BuriedTreasurePage: React.FC = () => {
     if (cardsRef.current) return cardsRef.current;
     const { storyId, storyTitle, pool } = navStateRef.current;
     const cards: RewardCard[] = [];
+    if(livingFriend&&!islandStoryProgressService.arePackBeatsComplete(navStateRef.current.islandId!,storyId!,navStateRef.current.packRequirements||{hasQuizContent:true,hasTryIt:true}))return cards;
     if (storyId && Array.isArray(pool)) {
       for (const def of pool) {
         if (!def?.id) continue;
@@ -154,12 +159,13 @@ const BuriedTreasurePage: React.FC = () => {
         );
       }
     }
+    if(livingFriend&&collectLivingFirstFriend(navStateRef.current.islandId!,storyId!,navStateRef.current.packRequirements||{hasQuizContent:true,hasTryIt:true})&&!cards.some(c=>/^adam$/i.test(c.name)))cards.push({name:'Adam'});
     if (onboardingJourney) {
       ensureOnboardingAdam(storyId || 'onboarding-genesis', pool);
     }
     cardsRef.current = cards;
     return cards;
-  }, [addCoins, onboardingJourney]);
+  }, [addCoins, onboardingJourney,livingFriend]);
 
   /** Fade to white, then run the navigation. */
   const leaveWithFade = useCallback(
@@ -188,6 +194,7 @@ const BuriedTreasurePage: React.FC = () => {
       if (!frame || event.source !== frame.contentWindow) return;
       const type = event.data?.type;
       if (type === 'gk-continue' || type === 'gk-go-game-shelf') {
+        if(livingFriend){if(livingFriendRecord()?.phase==='aboard')leaveWithFade(()=>navigate('/crew',{replace:true}));return;}
         if (onboardingJourney) {
           setMeetCrewGuide(true);
           return;
@@ -220,7 +227,7 @@ const BuriedTreasurePage: React.FC = () => {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [collectCards, leaveWithFade, navigate, onboardingJourney, reduceMotion]);
+  }, [collectCards, leaveWithFade, navigate, onboardingJourney, reduceMotion,livingFriend]);
 
   const goBackToStoryPack = useCallback(() => {
     if (leaving) return;
@@ -248,7 +255,8 @@ const BuriedTreasurePage: React.FC = () => {
     timersRef.current = [navId];
   }, [clearTimers, leaving, navigate, reduceMotion]);
 
-  if (arrivedAlreadyClaimed && !onboardingJourney) {
+  if(arrivedAlreadyClaimed&&livingFriend&&friend?.phase==='aboard')return <Navigate to="/crew" replace/>;
+  if (arrivedAlreadyClaimed && !onboardingJourney&&!livingFriend) {
     return <Navigate to={safeAppReturnPath(navState.returnTo)} replace />;
   }
 

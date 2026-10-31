@@ -400,7 +400,7 @@ export async function resolveFirstStoryPackDestination(): Promise<{
       if (pack?._id) {
         const title = pack.displayTitle || pack.title || first.title;
         return {
-          path: `/sail/${encodeURIComponent(first.id)}/lesson${LIVING_TEST_BUILD ? '/hub' : ''}?storyId=${encodeURIComponent(pack._id)}`,
+          path: `/sail/${encodeURIComponent(first.id)}/lesson?storyId=${encodeURIComponent(pack._id)}`,
           state: {
             onboardingJourney: true,
             title,

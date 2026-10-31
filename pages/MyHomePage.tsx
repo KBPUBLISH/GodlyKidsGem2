@@ -1,3 +1,6 @@
+import {useCharacterVoice} from '../utils/useCharacterVoice';
+import {ADAM_TOUR_FALLBACK_VOICE_ID} from '../utils/adamTour';
+import {ONBOARDING_GUIDE_VOICE_ID} from '../utils/onboardingJourney';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate,useLocation } from 'react-router-dom';
 import {openLivingFirstFriendVoyage} from '../utils/livingFirstFriend';
@@ -204,6 +207,7 @@ type DropCharacter = {
 const MyHomePage: React.FC = () => {
   const navigate = useNavigate();
   const routeLocation=useLocation();
+  const adamVoice=useCharacterVoice(rewardsService.getUnlockedCharacters().find(c=>/^adam$/i.test(c.name.trim()))?.voiceId||ADAM_TOUR_FALLBACK_VOICE_ID);
   const livingTestMode=LIVING_TEST_BUILD || new URLSearchParams(routeLocation.search).get('livingTest')==='1';
   useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
@@ -423,6 +427,11 @@ const MyHomePage: React.FC = () => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
+      if(data.type==='gk-living-voice'){
+        if(!livingTestMode||event.source!==frameRef.current?.contentWindow)return;
+        const request=event.data;if(typeof request.text==='string'&&request.text.length<=500&&['adam','perry'].includes(request.voice))void adamVoice.speak(request.text,request.voice==='perry'?ONBOARDING_GUIDE_VOICE_ID:undefined);
+        return;
+      }
       if(data.type==='gk-living-collect-first-friend'){
         if(!livingTestMode||event.source!==frameRef.current?.contentWindow||openingFirstFriend.current)return;
         openingFirstFriend.current=true;
@@ -576,7 +585,7 @@ const MyHomePage: React.FC = () => {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post]);
+  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post,adamVoice.speak]);
 
   useEffect(() => {
     if (!ready) return;

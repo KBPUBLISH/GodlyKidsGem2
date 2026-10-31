@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {marketTrade} from './living-market-rules.mjs';
 import {gardenFresh} from './living-garden-rules.mjs';
 import {heightAt} from './core.mjs';
 import {scopeKey} from './storage-scope.mjs';
@@ -9,16 +10,18 @@ export class LivingFarm{
  constructor(test){
   this.test=test;this.g=test.g;
   try{
-   const saved=JSON.parse(localStorage.getItem(KEY));this.state=farmRestore(saved);
+   const saved=this.g.store.state.livingFarm||JSON.parse(localStorage.getItem(KEY));this.initialState=farmRestore(saved);
    // Existing adventures keep their animals, balance, and task position.
-   if(!saved?.garden&&(this.state.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.state.garden={...gardenFresh(),approved:true,dug:3,planted:3,dugSpots:[3,4,5],plantedSpots:[3,4,5],completed:true};
-  }catch{this.state=farmFresh();}
-  this.pending=null;this.error='';this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
+   if(!saved?.garden&&(this.initialState.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))this.initialState.garden={...gardenFresh(),approved:true,dug:3,planted:3,dugSpots:[3,4,5],plantedSpots:[3,4,5],completed:true};
+  }catch{this.initialState=farmFresh();}
+  this.pending=null;this.error='';if(JSON.stringify(this.g.store.state.livingFarm)!==JSON.stringify(this.initialState)){try{this.g.store.save({...this.g.store.state,livingFarm:this.initialState});}catch{this.error='We couldn’t save that. Please try again.';}}this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
  }
- commit(next){
+ get state(){return this.g.store.state.livingFarm||this.initialState;}
+ trade(kind,id){const next=marketTrade(this.state,this.g.store.state.inventory,kind,id);if(!next)return false;return this.commit(next.farm,{inventory:next.inventory});}
+ commit(next,changes={}){
   if(next===this.state)return false;
-  try{localStorage.setItem(KEY,JSON.stringify(next));}catch{this.error='We couldn’t save that. Please try again.';this.g.notify();return false;}
-  this.state=next;this.error='';this.sync();this.test.garden?.sync();this.test.sync();this.g.notify();return true;
+  try{this.g.store.save({...this.g.store.state,...changes,livingFarm:next});}catch{this.error='We couldn’t save that. Please try again.';this.g.notify();return false;}
+  this.error='';this.sync();this.test.garden?.sync();this.test.sync();this.g.notify();return true;
  }
  offer(kind){this.test.activity();this.pending={kind,...farmOffer(this.state,kind)};this.error='';this.g.notify();}
  dismissChicken(){this.commit({...this.state,chickenDismissed:true});}

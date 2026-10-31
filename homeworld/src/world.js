@@ -164,7 +164,7 @@ export class HomeWorld {
       ...['construction','house-upgrades','wood-storage'].map(loadModel),
       this.livingTestMode?empty:loadModel('eve'),this.livingTestMode?empty:loadModel('noah'),loadModel('church')
     ]);if(this.disposed)return;
-    this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(this.livingTestMode&&!this.store.locked)this.store.save(prepareLivingGardenBase(this.store.state,world));if(!this.store.locked&&!this.livingTestMode)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
+    this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(this.livingTestMode&&!this.store.locked)this.store.save(prepareLivingGardenBase(this.store.state,world));if(!this.store.locked)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
     this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
@@ -445,10 +445,6 @@ export class HomeWorld {
   }
   allCharacterVitalsSnapshots(wall=Date.now()){return Object.keys(this.store?.state.characters||{}).map(id=>this.characterVitalsSnapshot(wall,id)).filter(Boolean);}
   click(e) {
-    if(this.livingTestMode){
-      if(!this.loaded||!this.livingTest)return;
-      const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);this.livingTest.click(this.ray);return;
-    }
     if(!this.loaded||this.mapOnly||this.fishing?.active)return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);if(this.buildAsk?.picking){this.buildAsk.takeTap(e);return;}if(this.residents?.consumeTap(e))return;
     if(this.store?.state.night||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep){if(!this.interior)this.animals?.roundUp(this.animals.pick(this.ray));return;}
     if(this.interior){if(this.interior.phase!=='exit') this.lookInside(e,r);return;}
@@ -457,7 +453,8 @@ export class HomeWorld {
     if(this.ambient){this.prompt=null;if(this.building?.offerHome(this.ray)) return;this.ambientNudge();return;}
     if(this.playersOnly&&this.fishing?.pickPole(this.ray)&&!this.action){this.residents?.closeMenu();this.nutrition.goFish();return;}
     if(this.playersOnly){const friend=this.residents?.pick(this.ray)||(this.residents?.bodyHit(e.clientX,e.clientY)?this.actor:null);if(friend){if(friend!==this.actor){this.residents.watch(friend);return;}this.residents.greet(this.actor);this.status=this.autoWork?.active?`${this.actor.userData.name} is ${this.autoWork.paused?'paused':'working'}. Pause, keep going, or stop.`:`${this.actor.userData.name} says hello.`;this.notify();return;}this.residents?.closeMenu();if(this.autoWork?.active&&!this.autoWork.paused)this.autoWork.pause();}
-    const x=e.clientX-r.left,y=e.clientY-r.top,levels=this.allCharacterVitalsSnapshots().find(l=>x>=l.hit.x&&x<=l.hit.x+l.hit.width&&y>=l.hit.y&&y<=l.hit.y+l.hit.height);if(!this.building?.preview&&levels){if(levels.id===this.store.state.activeCharacter)this.revealCharacterVitals(Date.now(),levels.id);else this.selectCharacter(levels.id);return;}
+    if(this.livingTest&&!this.building?.preview&&this.livingTest.click(this.ray,{walk:false}))return;
+    const x=e.clientX-r.left,y=e.clientY-r.top,levels=this.allCharacterVitalsSnapshots().find(l=>x>=l.hit.x&&x<=l.hit.x+l.hit.width&&y>=l.hit.y&&y<=l.hit.y+l.hit.height);if(!this.livingTestMode&&!this.building?.preview&&levels){if(levels.id===this.store.state.activeCharacter)this.revealCharacterVitals(Date.now(),levels.id);else this.selectCharacter(levels.id);return;}
     this.prompt=null;
     if(this.building?.preview){const p=V();if(this.ray.ray.intersectPlane(this.groundPlane,p))this.building.moveTo({x:p.x,y:-p.z});return;}
     if(this.animals?.placing){const p=V();if(this.ray.ray.intersectPlane(this.groundPlane,p)){this.animals.placeAt({x:p.x,y:-p.z});}return;}if(this.animals?.tap(this.animals.pick(this.ray)))return;
@@ -505,6 +502,7 @@ export class HomeWorld {
     return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
   }
   walk(target) {
+    if(this.livingTest){this.livingTest.activity();this.livingTest.garden.work=null;}
     if(this.interior) return;
     if(this.ambientNudge())return;
     this.residents?.cancelWave();
@@ -1106,9 +1104,9 @@ export class HomeWorld {
       if(this.action){resetAnimatedPose(this);this.actor.updateMatrixWorld(true);this.animateWork(dt);}
       else if(this.residents?.waveActive())this.residents.stepWave(dt);
       else updateLocomotion(this,this.idlePose,dt,this.projectAdamWalking?WALK_SPEED:speed,Date.now()/1000);
-      // The guided test owns its requests and supplies; regular campaign chores would
-      // otherwise issue unrelated building reminders and hunger/inventory updates.
-      if(this.livingTestMode){this.lighting(dt);this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.drainToasts();}
+      // Keep the original tools, construction and day cycle. The solo introduction
+      // supplies its own goals until the child has welcomed their first friend.
+      if(this.livingTestMode){this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();}
       else{this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}}
       this.livingTest?.update(dt,speed);
       if(this.interior) this.building.stepInterior(dt);
@@ -1118,8 +1116,8 @@ export class HomeWorld {
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');const view=this.viewPoint();if(sig!==this.fieldSignature.join('|')||dist(view,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...view};}
         // Seeds often sit inside nav-blocked pockets (prop/tree padding), so the walker is stopped ~1 m short; reach past that so stepping up to a nut collects it.
-        let changed=false;for(const seed of this.livingTestMode?[]:this.world.seeds){if(!this.store.state.pickedSeeds.includes(seed.id)&&dist(this.player,{x:seed.position[0],y:seed.position[1]})<Math.max(seed.radius||0,1.2)){try{this.store.commit({type:'pickup',id:seed.id});this.toast(`+${seed.quantity} ${label(seed.itemId)}`);changed=true;}catch(e){this.toast(e.message);break;}}}
-        if(!this.livingTestMode&&this.collectNearbyWood())changed=true;
+        let changed=false;for(const seed of this.world.seeds){if(!this.store.state.pickedSeeds.includes(seed.id)&&dist(this.player,{x:seed.position[0],y:seed.position[1]})<Math.max(seed.radius||0,1.2)){try{this.store.commit({type:'pickup',id:seed.id});this.toast(`+${seed.quantity} ${label(seed.itemId)}`);changed=true;}catch(e){this.toast(e.message);break;}}}
+        if(this.collectNearbyWood())changed=true;
         if(changed)this.refreshDynamic();
         const r=this.renderer.domElement.getBoundingClientRect();this.labels=this.trees.filter(t=>dist(this.player,{x:t.position[0],y:t.position[1]})<12).sort((a,b)=>dist(this.player,{x:a.position[0],y:a.position[1]})-dist(this.player,{x:b.position[0],y:b.position[1]})).slice(0,3).map(t=>{const p=nativePosition(t.position).add(V(0,3.6*t.scale[2],0)).project(this.camera);return {id:t.id,species:t.species,x:(p.x+1)/2*r.width,y:(1-p.y)/2*r.height,visible:Math.abs(p.x)<.85&&Math.abs(p.y)<.72};});this.mining.updateLabels(r);this.notify();
       }

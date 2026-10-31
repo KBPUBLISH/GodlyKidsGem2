@@ -33,12 +33,12 @@ export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,
       {tab==='build'||tab==='decorate'?<BuildMenu key={tab} view={view} {...buildProps} compact allowedCategories={tab==='decorate'?['Decorations','Paths','Fences']:null}/>:<>
         <div className="action-options" role="group" aria-label={farm?'Garden actions':'Choose an action'}>{choices.map(t=>{const selected=tool===t.id;return <button key={t.id} aria-label={t.name} aria-pressed={t.id==='food'||t.id==='harvest'?undefined:selected} className={`tool-button ${selected?'selected':''}`} style={{'--tool-color':t.color,'--tool-soft':t.soft}} onClick={()=>choose(t.id)}><span className="tool-picture"><Icon type={t.id}/></span><span className="tool-name">{t.name}</span>{selected&&<span className="chosen-mark" aria-hidden="true">✓</span>}</button>;})}</div>
         {!farm&&<button className={`action-sleep-shortcut ${view.nutrition.lowEnergy?'is-tired':''}`} onClick={()=>onPanel('sleep')}><Icon type="rest" size={28}/><strong>Rest at home</strong><small>{view.nutrition.sleep?'Sleeping':view.nutrition.lowEnergy?'Low energy':'Recharge'} →</small></button>}
-        {!farm&&!view.playersOnly&&<button className="action-sleep-shortcut community-shortcut" onClick={()=>onPanel('community')}><Icon type="plant" size={28}/><strong>Our community</strong><small>Eve & Noah →</small></button>}
+        {!farm&&!view.playersOnly&&!view.livingTest&&<button className="action-sleep-shortcut community-shortcut" onClick={()=>onPanel('community')}><Icon type="plant" size={28}/><strong>Our community</strong><small>Eve & Noah →</small></button>}
         {(farm||tool==='plant')&&<button className="seed-strip" onClick={()=>onPanel('catalogue')} aria-label={`Choose seed. Selected: ${seed.name}`}><ItemIcon id={seed.id} size={30}/><strong>{seed.name}</strong><small>{view.state.inventory[seed.id]||0} seeds</small><em>Choose →</em></button>}
         {tool==='mine'&&!farm&&<button className="action-extra" onClick={()=>onPanel('tools')}>Better tools →</button>}
         {primary&&<div className="menu-primary"><ActionButton icon={primary.icon} disabled={view.busy||(ready==='fish'&&view.nutrition.energy<4)} onClick={()=>onRun(primary.run)}>{primary.name}</ActionButton><span>{HINTS[ready]}</span></div>}
         {farm&&<p className="action-menu-tip">Choose Dig, then tap clear grass to walk there and dig. Plant and water your new spot.</p>}
-        {farm&&<AnimalFarm view={view} onRun={onRun}/>}
+        {farm&&!view.livingTest&&<AnimalFarm view={view} onRun={onRun}/>}
       </>}
     </div>
   </section>;

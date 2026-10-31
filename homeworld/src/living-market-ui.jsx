@@ -1,0 +1,11 @@
+import React,{useState} from 'react';
+import {ItemIcon} from './ui.jsx';
+import {Coins,FarmPanel,FarmFood} from './living-farm-ui.jsx';
+import {MARKET_SEEDS,marketSellItems} from './living-market-rules.mjs';
+export function LivingMarket({view,onBuy,onTrade,onUse,onGarden,onWalk}){
+ const [tab,setTab]=useState('buy'),farm=view.livingTest.farm,inventory=view.state.inventory;
+ return <div className="living-market"><div className="build-categories" role="tablist" aria-label="Market"><button role="tab" aria-selected={tab==='buy'} onClick={()=>setTab('buy')}>Buy</button><button role="tab" aria-selected={tab==='sell'} onClick={()=>setTab('sell')}>Sell</button></div>
+ {tab==='buy'?<><h2>Seeds</h2><div className="market-seeds">{MARKET_SEEDS.map(s=><button key={s.id} aria-label={`Buy 3 ${s.name.toLowerCase()} seeds · ${s.price} coins`} disabled={farm.coins<s.price} onClick={()=>onTrade('buy',s.id)}><ItemIcon id={s.id}/><strong>{s.name} × 3</strong><Coins value={s.price}/></button>)}</div><h2>Animals</h2><FarmPanel farm={farm} garden={view.livingTest.garden} onGarden={onGarden} onBuy={onBuy} onWalk={onWalk}/></>:<><div className="farm-wallet"><span>Your coins</span><Coins value={farm.coins}/></div><FarmFood farm={farm} onUse={onUse}/>{marketSellItems(inventory).filter(r=>inventory[r.id]>0).map(r=><article key={r.id} className="sell-row"><ItemIcon id={r.id}/><div><strong>{r.name}</strong><small>{inventory[r.id]} in your bag</small></div><button aria-label={`Sell one ${r.name} for ${r.price} coins`} onClick={()=>onTrade('sell',r.id)}>Sell <Coins value={`+${r.price}`}/></button></article>)}{!marketSellItems(inventory).some(r=>inventory[r.id]>0)&&!farm.bag.egg&&!farm.bag.milk&&<p>Collect food, eggs or supplies to sell.</p>}</>}
+ {tab==='sell'&&farm.error&&<p role="alert">{farm.error}</p>}</div>;
+}
+export function LivingFriends({play,onHello,onWatch}){return <><button onClick={onWatch}>👀 Watch island life</button>{play.friends.map(f=><button className="friend-row" key={f.id} aria-label={`${f.name} Say hello`} onClick={()=>onHello(f.id)}><img src="/icons/higgsfield/friends.png?v=2" width="40" height="40" alt=""/>{f.name} 👋</button>)}</>;}

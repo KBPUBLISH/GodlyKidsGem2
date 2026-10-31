@@ -16,12 +16,12 @@ export function convertProjectTiming(state,basis=CONSTRUCTION_BASIS){
 }
 export function assignedProject(state,id){return projectBuildings(state).find(b=>!b.project.paused&&b.project.crew.includes(id));}
 export function projectHomeReserved(state,id){return projectBuildings(state).some(b=>!b.project.paused&&Object.values(b.project.workers).some(w=>['rest_travel','rest'].includes(w.phase)&&w.homeId===id));}
-export function defaultCrew(state,kind){return Object.keys(state.characters||{}).filter(id=>!state.characters[id].sleep&&!assignedProject(state,id)).sort((a,b)=>{const low=id=>(state.characters[id].energy<=20?1:0);return low(a)-low(b)||(a===state.activeCharacter?1:0)-(b===state.activeCharacter?1:0)||a.localeCompare(b);}).slice(0,PROJECT_PLANS[kind]?.crew||1);}
+export function defaultCrew(state,kind){return Object.keys(state.characters||{}).filter(id=>(!state.livingBuilders||state.livingBuilders.includes(id))&&!state.characters[id].sleep&&!assignedProject(state,id)).sort((a,b)=>{const low=id=>(state.characters[id].energy<=20?1:0);return low(a)-low(b)||(a===state.activeCharacter?1:0)-(b===state.activeCharacter?1:0)||a.localeCompare(b);}).slice(0,PROJECT_PLANS[kind]?.crew||1);}
 export function crewStatus(state,kind,crew=defaultCrew(state,kind)){
  const plan=PROJECT_PLANS[kind];if(!plan)return {ok:true,crew:[],required:1};
- const total=Object.keys(state.characters||{}).length;
+ const total=Object.keys(state.characters||{}).filter(id=>!state.livingBuilders||state.livingBuilders.includes(id)).length;
  if(total<plan.crew)return {ok:false,required:plan.crew,crew,reason:`Needs ${plan.crew} characters. Your community has ${total}.`};
- if(!Array.isArray(crew)||crew.length!==plan.crew||new Set(crew).size!==crew.length||crew.some(id=>!state.characters?.[id]))return {ok:false,required:plan.crew,crew:[],reason:`Choose ${plan.crew} different builders.`};
+ if(!Array.isArray(crew)||crew.length!==plan.crew||new Set(crew).size!==crew.length||crew.some(id=>!state.characters?.[id]||(state.livingBuilders&&!state.livingBuilders.includes(id))))return {ok:false,required:plan.crew,crew:[],reason:`Choose ${plan.crew} different builders.`};
  if(crew.some(id=>state.characters[id].sleep||assignedProject(state,id)))return {ok:false,required:plan.crew,crew,reason:'A selected builder is asleep or working on another project.'};
  return {ok:true,required:plan.crew,crew,reason:'Your crew is ready!'};
 }

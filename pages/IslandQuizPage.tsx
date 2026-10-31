@@ -529,6 +529,7 @@ const IslandQuizPage: React.FC = () => {
         storyTitle:
           rewardStory?.displayTitle || rewardStory?.title || navState?.title,
         pool: resolveRewardPool(rewardStory),
+        packRequirements:{hasQuizContent:true,hasTryIt:needsTryIt},
         returnTo: sceneBackPath,
         onboardingJourney,
       },

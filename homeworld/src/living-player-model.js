@@ -11,12 +11,12 @@ export function createLivingPlayer(avatarId) {
   const oval=(key,parent,x,y,z,sx,sy,sz)=>{const m=mesh(new THREE.SphereGeometry(1,20,14),key,parent,x,y,z);m.scale.set(sx,sy,sz);return m;};
   const capsule=(key,parent,r,length,x,y,z)=>mesh(new THREE.CapsuleGeometry(r,length,6,12),key,parent,x,y,z);
   const pivot=(parent,x,y,z)=>{const g=new THREE.Group();g.position.set(x,y,z);parent.add(g);return g;};
-  const body=pivot(model,0,0,0),hips=pivot(body,0,.53,0),legs=[],arms=[],eyes=[];
+  const body=pivot(model,0,0,0),hips=pivot(body,0,.53,0),legs=[],arms=[],eyes=[],bones={mixamorigHips:body,mixamorigSpine:hips};
   for(const side of [-1,1]){
-    const leg=pivot(hips,side*.13,0,0);legs.push(leg);
+    const leg=pivot(hips,side*.13,0,0);legs.push(leg);const sideName=side<0?'Right':'Left';bones[`mixamorig${sideName}UpLeg`]=leg;const lower=pivot(leg,0,-.24,0),foot=pivot(lower,0,-.16,.045);bones[`mixamorig${sideName}Leg`]=lower;bones[`mixamorig${sideName}Foot`]=foot;
     capsule('pants',leg,.105,.22,0,-.16,0);
-    oval('boots',leg,0,-.40,.045,.135,.13,.195);
-    oval('sole',leg,0,-.475,.055,.138,.045,.19);
+    oval('boots',foot,0,0,0,.135,.13,.195);
+    oval('sole',foot,0,-.075,.01,.138,.045,.19);
   }
   const torso=mesh(new THREE.CylinderGeometry(.225,.29,.48,24,2),'shirt',body,0,.82,0);torso.scale.z=.77;
   oval('shirt',body,0,1.04,0,.245,.15,.185);
@@ -28,12 +28,12 @@ export function createLivingPlayer(avatarId) {
     const strap=capsule('bag',body,.024,.33,side*.16,.87,.155);strap.rotation.z=-side*.08;
     const arm=pivot(body,side*.27,1.03,0);arms.push(arm);
     capsule('shirt',arm,.09,.12,side*.035,-.08,0);
-    capsule('skin',arm,.068,.15,side*.045,-.26,.018);
-    oval('skin',arm,side*.045,-.39,.035,.078,.09,.07);
+    const sideName=side<0?'Right':'Left',forearm=pivot(arm,side*.045,-.22,.018),hand=pivot(forearm,0,-.17,.017);bones[`mixamorig${sideName}Arm`]=arm;bones[`mixamorig${sideName}ForeArm`]=forearm;bones[`mixamorig${sideName}Hand`]=hand;
+    capsule('skin',forearm,.068,.15,0,-.04,0);oval('skin',hand,0,0,0,.078,.09,.07);
   }
   oval('bag',body,0,.86,-.22,.22,.245,.115);
   oval('trim',body,0,.92,-.315,.155,.11,.028);
-  const head=pivot(body,0,1.40,.015);
+  const head=pivot(body,0,1.40,.015);bones.mixamorigHead=head;bones.mixamorigSpine2=head;
   oval('skin',head,0,0,0,.305,.325,.275);
   oval('skin',head,0,-.13,.12,.23,.17,.19);
   for(const side of [-1,1]){
@@ -71,10 +71,13 @@ export function createLivingPlayer(avatarId) {
     for(const side of [-1,1])oval('hair',head,side*.26,-.04,.02,.06,.16,.10);
   }
   let phase=0,stride=0;
-  return {model,dispose(){
+  const restPose=Object.values(bones).map(bone=>({bone,position:bone.position.clone(),quaternion:bone.quaternion.clone()}));
+  return {model,bones,restPose,dispose(){
     const geometries=new Set();model.traverse(object=>{if(object.geometry)geometries.add(object.geometry);});
     geometries.forEach(geometry=>geometry.dispose());Object.values(materials).forEach(material=>material.dispose());
-  },update(dt,speed,time,{celebrating=false,carrying=false}={}){
+  },update(dt,speed,time,{celebrating=false,carrying=false,working=false}={}){
+    if(working)return;
+    for(const p of restPose){p.bone.position.copy(p.position);p.bone.quaternion.copy(p.quaternion);}
     stride=THREE.MathUtils.damp(stride,speed>.05?1:0,10,dt);phase+=dt*(speed>.05?9:0);
     legs.forEach((leg,i)=>leg.rotation.x=Math.sin(phase+i*Math.PI)*.5*stride);
     arms.forEach((arm,i)=>{arm.rotation.x=carrying?-.28:Math.sin(phase+i*Math.PI)*-.38*stride;arm.rotation.z=(i===0?1:-1)*(.08+(celebrating?.6:0));});

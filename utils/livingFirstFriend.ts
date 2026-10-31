@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {islandStoryProgressService} from '../services/islandStoryProgressService';
 import { getProfileScopeKey, onProfileScopeChange } from './profileScope';
 import { resolveFirstStoryPackDestination } from './onboardingJourney';
 import { rewardsService, ONBOARDING_ADAM_ID, ONBOARDING_ADAM_REWARD } from '../services/rewardsService';
@@ -26,8 +27,10 @@ export async function openLivingFirstFriendStory(scope:string){
   islandId=decodeURIComponent(/^\/sail\/([^/]+)\/lesson/.exec(url.pathname)?.[1]||'');storyId=url.searchParams.get('storyId')||'';state={...destination.state};
  }
  if(scope!==getProfileScopeKey()||!beginFirstFriendPack(localStorage,key,islandId,storyId))throw Error('Couldn’t save the voyage. Try again.');
+ // A resumed pack can already have a real reader completion on this profile.
+ if(islandStoryProgressService.get(islandId,storyId).read){beginFirstFriendStory(localStorage,key,islandId,storyId);finishFirstFriendStory(localStorage,key,islandId,storyId);}
  delete state.onboardingJourney;changed();
- return {path:`/sail/${encodeURIComponent(islandId)}/lesson/hub?storyId=${encodeURIComponent(storyId)}&livingFirstFriend=1`,state:{...state,fromSail:true,livingFirstFriend:true}};
+ return {path:`/sail/${encodeURIComponent(islandId)}/lesson?storyId=${encodeURIComponent(storyId)}`,state:{...state,fromSail:true,livingFirstFriend:true}};
 }
 export function startLivingFirstFriendReading(islandId:string,storyId:string){
  const ok=!!beginFirstFriendStory(localStorage,firstFriendKey(getProfileScopeKey()),islandId,storyId);if(ok)changed();return ok;
@@ -36,9 +39,12 @@ export function completeLivingFirstFriendReading(islandId:string,storyId:string,
  if(!Number.isInteger(readPageCount)||readPageCount<1)return false;
  const ok=finishFirstFriendStory(localStorage,firstFriendKey(getProfileScopeKey()),islandId,storyId);if(ok)changed();return ok;
 }
-export function collectLivingFirstFriend(islandId:string,storyId:string){
- const key=firstFriendKey(getProfileScopeKey()),record=readFirstFriend(localStorage,key);
- if(record?.phase!=='reward'||record.islandId!==islandId||record.storyId!==storyId)return false;
+export function collectLivingFirstFriend(islandId:string,storyId:string,requirements:{hasQuizContent:boolean;hasTryIt:boolean}){
+ const key=firstFriendKey(getProfileScopeKey());let record=readFirstFriend(localStorage,key);
+ if(!record||record.islandId!==islandId||record.storyId!==storyId||!islandStoryProgressService.arePackBeatsComplete(islandId,storyId,requirements))return false;
+ // Existing readers may resume at the quiz or Try It after updating the test build.
+ if(['pack','reading'].includes(record.phase)){beginFirstFriendStory(localStorage,key,islandId,storyId);finishFirstFriendStory(localStorage,key,islandId,storyId);record=readFirstFriend(localStorage,key);}
+ if(record?.phase!=='reward')return false;
  const findAdam=()=>rewardsService.getUnlockedCharacters().find(c=>c.id===ONBOARDING_ADAM_ID||/^adam$/i.test(c.name.trim()));
  // Use the same reward service as other story packs, with the already-packaged mobile model.
  if(!findAdam())rewardsService.collectReward(storyId,{...ONBOARDING_ADAM_REWARD,modelUrl:'/homeworld/assets/mobile/adam.glb?v=mobile-1'});

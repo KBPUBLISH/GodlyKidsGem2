@@ -1,3 +1,4 @@
+import IslandFriendChat from '../components/crew/IslandFriendChat';
 import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import {useCharacterVoice} from '../utils/useCharacterVoice';
 import {ADAM_TOUR_FALLBACK_VOICE_ID} from '../utils/adamTour';
@@ -281,6 +282,8 @@ const MyHomePage: React.FC = () => {
   );
   // Enter using the saved roster; newer CMS models sync in the background.
   const [modelsReady, setModelsReady] = useState(true);
+  const [friendChat,setFriendChat]=useState<{scope:string;session:number;mode:string;character:UnlockedCharacter;world:Record<string,unknown>;result?:{ok:boolean;line:string;serial:number}}|null>(null);
+  useEffect(()=>setFriendChat(null),[profileScope]);
   const [chatCharacter, setChatCharacter] = useState<UnlockedCharacter | null>(null);
   const [chatWorld, setChatWorld] = useState<WorldBrief | null>(null);
 
@@ -430,6 +433,18 @@ const MyHomePage: React.FC = () => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
+      if(livingTestMode&&event.source===frameRef.current?.contentWindow&&data.type.startsWith('gk-living-friend-')){
+        const message=event.data;
+        if(message.type==='gk-living-friend-open'&&Number.isInteger(message.session)&&message.character?.id==='adam'){
+          adamVoice.stop();setCoach(null);
+          const known=rewardsService.getUnlockedCharacters().find(c=>/^adam$/i.test(c.name.trim()));
+          if(known)setFriendChat({scope:profileScope,session:message.session,mode:message.mode==='tasks'?'tasks':'chat',character:known,world:message.world||{}});
+          else post({type:'gk-living-friend-close',session:message.session});
+        }
+        if(message.type==='gk-living-friend-task-result'&&typeof message.line==='string'&&message.line.length<=500)setFriendChat(current=>current?.session===message.session?{...current,world:message.world||current.world,result:{ok:message.ok===true,line:message.line,serial:Date.now()}}:current);
+        if(message.type==='gk-living-friend-ended')setFriendChat(current=>current?.session===message.session?null:current);
+        return;
+      }
       if(data.type==='gk-living-coach'&&livingTestMode&&event.source===frameRef.current?.contentWindow){
         const b=event.data.beat;if(b===null)setCoach(null);else if(['planted','watered','harvested','wood','tent'].includes(b?.id)&&['line','spoken','label'].every(k=>typeof b[k]==='string'&&b[k].length<=500))setCoach(b);return;
       }
@@ -695,6 +710,7 @@ const MyHomePage: React.FC = () => {
       className="fixed inset-0 h-[100dvh] min-h-0 bg-[#315d41] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
+      {friendChat&&friendChat.scope===profileScope&&<IslandFriendChat key={`${profileScope}:${friendChat.session}`} character={friendChat.character} userName={playerName} world={friendChat.world} mode={friendChat.mode} result={friendChat.result} onClose={()=>{post({type:'gk-living-friend-close',session:friendChat.session});setFriendChat(null);}} onTask={task=>post({type:'gk-living-friend-task',session:friendChat.session,task})}/>}
       {chatCharacter && (
         <CrewChatPopup
           variant="island"
@@ -870,7 +886,7 @@ const MyHomePage: React.FC = () => {
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"
-          onLoad={() => setFrameLoaded(true)}
+          onLoad={() => {setFrameLoaded(true);setFriendChat(null);}}
           style={{
             position: 'absolute',
             top: 0,

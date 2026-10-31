@@ -333,6 +333,7 @@ function App(){
   const close=()=>{if(panel==='report'&&(view.unreadReport||view.report))invoke(g=>g.store.commit({type:'read_report',id:(view.unreadReport||view.report).id,actionId:crypto.randomUUID()}));setPanel(null);};
   useEffect(()=>{if(view.playersOnly||LIVING_TEST)return;if(view.unreadReport&&!view.busy&&!view.building?.preview){setActionsOpen(false);setShowTime(false);setPanel('report');}},[view.playersOnly,view.unreadReport?.id,view.busy,!!view.building?.preview]);
   const openPanel=id=>{if(id==='sleep')setSleepHomeId(null);setActionsOpen(false);if(engine.current?.building?.clearPlan)engine.current.building.clearPlan=null;if(engine.current?.building?.preview)engine.current.building.cancelPreview();setShowTime(false);setPanel(id);};
+  useEffect(()=>{const open=()=>{setPanel(null);setShowTime(false);setActionsTab('build');setActionsOpen(true);};window.addEventListener('gk-open-build',open);return()=>window.removeEventListener('gk-open-build',open);},[]);
   const runAction=fn=>{setActionsOpen(false);invoke(fn);};
   const toggleActions=()=>{
     if(actionsOpen){setActionsOpen(false);return;}

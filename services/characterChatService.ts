@@ -63,6 +63,7 @@ export async function fetchCharacterChat(params: {
   brief?: boolean;
   /** Island chat: what the character knows about their island (energy, wood, buildings…). */
   world?: Record<string, unknown>;
+  signal?: AbortSignal;
 }): Promise<CharacterChatResponse> {
   const base = getApiBaseUrl(); // ends with ".../api/"
   const body: Record<string, unknown> = {
@@ -83,6 +84,7 @@ export async function fetchCharacterChat(params: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: params.signal,
   });
   if (!res.ok) {
     throw new Error(`character-chat failed: ${res.status}`);

@@ -14,6 +14,7 @@ function ActionChip({icon,emoji,label,accessibleLabel,progress,children,...props
 export function LivingTestUI({engine,view,blocked=false,onModalChange}){
  const drawer=useRef(null);
  const play=view.livingTest,task=play?.task,hint=play?.guidance,farm=play?.farm,garden=play?.garden;
+ blocked=blocked||!!play?.friend?.chatOpen;
  const gardenTask=!!garden&&!garden.completed;
  const modal=blocked||play?.arrival?null:farm?.pending?'purchase':play?.decision?'build-confirm':(play?.tasksOpen?'tasks':play?.inviteVisible?'first-friend':play?.welcomeVisible?'welcome':null);
  const invoke=fn=>engine.current?.livingTest&&fn(engine.current.livingTest);
@@ -45,6 +46,7 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
    {!modal&&play.placingAdam&&play.dropTarget?.visible&&<button className="living-target" style={{left:play.dropTarget.x,top:play.dropTarget.y}} aria-label="Place Adam here" onClick={()=>invoke(t=>t.placeAdam())}><span aria-hidden="true">👋</span><span className="living-point-arrow" aria-hidden="true">▼</span></button>}
 
    {!modal&&!play.watching&&!play.insideHome&&!play.placingAdam&&farm.animals.filter(a=>a.ready&&a.screen.visible).map(a=><button key={a.id} className="living-target farm-ready" style={{left:`clamp(30px, ${a.screen.x}px, calc(100% - 30px))`,top:a.screen.y}} aria-label={`Collect from ${a.name}`} onClick={()=>invoke(t=>t.farm.walkTo(a.id))}><span aria-hidden="true">{a.kind==='chicken'?'🥚':'🥛'}</span><b>{a.ready}</b></button>)}
+   {!modal&&play.friend?.near&&<section className="living-friend-hello" aria-label="Adam nearby"><span className="living-friend-face" aria-hidden="true">👋</span><div><strong>Adam</strong><p>{play.friend.greeting}</p><div><button onClick={()=>invoke(t=>t.friend.open('chat'))}>💬 Chat</button><button onClick={()=>invoke(t=>t.friend.open('tasks'))}>🛠 Help</button></div></div></section>}
    {!modal&&play.greeting?.visible&&<div className="living-greeting" role="status" style={{left:`clamp(85px, ${play.greeting.x}px, calc(100% - 85px))`,top:play.greeting.y}}>{play.greeting.text}</div>}
    {!modal&&play.watching&&<section className="living-watch"><span>{play.watchingName}</span><button aria-label="Back to me" onClick={()=>invoke(t=>t.stopWatching())}><Icon type="walk" size={30}/>Back to me</button></section>}
    {!modal&&!play.insideHome&&play.pickupNotice&&!play.celebration&&<div className="living-pickup" role="status">{play.pickupNotice}</div>}

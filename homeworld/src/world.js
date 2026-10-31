@@ -1096,7 +1096,7 @@ export class HomeWorld {
     if(this.resolution){this.resolution.sample(frameDt,this.loaded&&!document.hidden);this.applyResolution();}
     if(this.loaded){
       this.mining?.settleForge();
-      if(this.store.state.night){this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
+      if(this.store.state.night){this.livingTest?.friend?.update(0);this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
       if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
       this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
@@ -1115,7 +1115,8 @@ export class HomeWorld {
       if(this.livingTestMode){this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.animals?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();}
       else{this.lighting(dt);this.nutrition.update();this.building.update();this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.kitchen?.update();this.village?.update();this.gardenKeeper?.update();this.farmer?.update();this.buildAsk?.update();this.stages?.update();this.animals?.update(dt);this.autoWork?.update(now);this.trackEnergy(now);this.syncNight();this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}}
       this.livingTest?.update(dt,speed);
-      if(this.interior) this.building.stepInterior(dt);
+      if(this.livingTest?.friend?.chatOpen)this.livingTest.friend.camera(dt);
+      else if(this.interior) this.building.stepInterior(dt);
       // iPad eases the camera with the real frame time, so a slow paint does not add extra trail. Phones and desktop keep the sim delta (capped at 80 ms).
       else if(this.siteView){this.camera.up.set(0,0,-1);this.camera.position.set(this.focus.x,80,this.focus.z);this.camera.lookAt(this.focus.x,0,this.focus.z);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       else{if(this.camera.up.y<0.9)this.camera.up.set(0,1,0);const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const free=this.freeCamera();const target=free?null:fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.livingTest?.watchActor()||this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;if(target)this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}

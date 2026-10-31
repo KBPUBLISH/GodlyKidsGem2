@@ -4,6 +4,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { heightAt, terrainType, dist, animalPlacementStatus, gameTime } from './core.mjs';
 import { activeBuildings, footprint, pointInBounds } from './building.mjs';
 import { ANIMALS, animalById, animalShop, ANIMAL_PRICE, DOG_CAPACITY, LIVESTOCK } from './animals.mjs';
+import { marketAnimal } from './living-farm-rules.mjs';
 import { cellKey, enclosureMap, herdPlan, nearStable, regionAt, seedAmbient, threatTarget } from './fencing.mjs';
 import { MORNING } from './island-clock.mjs';
 
@@ -774,6 +775,23 @@ export class Animals {
     return true;
   }
 
+  /** Spend island market coins, then let the child tap grass. These animals are not in Build. */
+  buyWithMarketCoins(kind) {
+    const row = marketAnimal(kind);
+    const farm = this.game.livingTest?.farm;
+    if (!row || !farm) return false;
+    if (this.game.store?.state?.night) { this.game.toast('Everyone is asleep. Place animals in the morning.'); return false; }
+    if (farm.state.coins < row.price) { this.game.toast(`Need ${row.price - farm.state.coins} more coins. Sell vegetables at the market.`); return false; }
+    if (!farm.commit({ ...farm.state, coins: farm.state.coins - row.price })) return false;
+    this.confirming = null;
+    this.placing = animalById(kind);
+    this.paidKind = kind;
+    this.marketPaid = row.price;
+    this.game.toast(`Tap the grass to place the ${row.name.toLowerCase()}.`);
+    this.game.notify?.();
+    return true;
+  }
+
   beginPlace(kind) {
     const shop = animalShop(kind);
     if (!shop) return false;
@@ -816,6 +834,16 @@ export class Animals {
   }
 
   cancelPlace() {
+    if (this.marketPaid && this.game.livingTest?.farm) {
+      const farm = this.game.livingTest.farm;
+      farm.commit({ ...farm.state, coins: farm.state.coins + this.marketPaid });
+      this.marketPaid = 0;
+      this.paidKind = null;
+      this.confirming = null;
+      this.placing = null;
+      this.game.notify?.();
+      return;
+    }
     if (this.paidKind && window.parent && window.parent !== window) {
       window.parent.postMessage({ type: 'gk-refund', id: this.paidKind, cost: ANIMAL_PRICE[this.paidKind] }, location.origin);
     }
@@ -844,8 +872,10 @@ export class Animals {
       return false;
     }
     this.placing = null;
+    const fromMarket = this.marketPaid;
+    this.marketPaid = 0;
     this.paidKind = null;
-    if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'gk-buy-commit', id: def.id }, location.origin);
+    if (!fromMarket && window.parent && window.parent !== window) window.parent.postMessage({ type: 'gk-buy-commit', id: def.id }, location.origin);
     this.sync();
     game.toast(`${def.emoji} ${status.reason}`);
     game.notify?.();

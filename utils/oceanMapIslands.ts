@@ -103,7 +103,8 @@ export const mapApiIslandToOceanIsland = (
     0,
     Number(row.storyCounts?.published ?? row.storyCounts?.total ?? 0) || 0,
   );
-  const book = (row.bookLabel || row.title || id).trim();
+  const bookRaw = (row.bookLabel || row.title || id).trim();
+  const book = id === 'beginnings' || /^beginnings$/i.test(bookRaw) ? 'Genesis' : bookRaw;
   const x =
     typeof row.mapPosition?.x === 'number' && Number.isFinite(row.mapPosition.x)
       ? row.mapPosition.x

@@ -19,7 +19,7 @@ export const RESOURCE_IDS = Object.freeze({
 
 export function freshState() {
   return { version: 2, player: { id: PLAYER_ID }, stage: 0, homeWork: 0, approvedBuildings: {}, adamUnlocked:false, adamArrived:false, inviteDismissed:false,welcomeSeen:false,
-    inventory: { wood: 0, carrot: 0 }, deposits: { 'first-camp':0,'garden-carrots':0,'home-wood':0 }, gathered: [] };
+    inventory: { wood: 0, carrot: 0 }, deposits: { 'first-camp':0,'garden-carrots':0,'home-wood':0 }, gathered: [], helpDone: [], helpJob: null };
 }
 
 export function restoreState(value) {
@@ -45,6 +45,13 @@ export function restoreState(value) {
   if (clean.stage >= 3 && Number.isFinite(value.homeWork)) clean.homeWork = Math.max(0, Math.min(1, value.homeWork));
   clean.approvedBuildings=Object.fromEntries(['first-camp','home-wood'].filter(id=>value.approvedBuildings?.[id]===true).map(id=>[id,true]));
   for(const key of ['adamArrived','inviteDismissed','welcomeSeen'])clean[key]=value[key]===true;
+  const helpIds=['weed','dig','water','trees','rocks'];
+  clean.helpDone=[...new Set(Array.isArray(value.helpDone)?value.helpDone:[])].filter(id=>helpIds.includes(id));
+  const job=value.helpJob,kinds={weed:'plant',dig:'plow',water:'water',trees:'chop',rocks:'mine'};
+  if(job&&helpIds.includes(job.id)&&kinds[job.id]===job.kind){
+    const count=Math.max(1,Math.min(20,job.count|0)),done=Math.max(0,Math.min(count,job.done|0));
+    if(done<count)clean.helpJob={id:job.id,who:String(job.who||'Adam').slice(0,24),label:String(job.label||'Help').slice(0,80),kind:job.kind,count,done,base:job.base|0};
+  }
   return clean;
 }
 

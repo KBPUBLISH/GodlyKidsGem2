@@ -60,7 +60,7 @@ export class Farmer{
     return null;
   }
   isAdam(home){return !!home&&skillFor(home.name)?.id==='farmer';}
-  active(){const g=this.g,s=g.store?.state;return !!(s&&g.loaded&&g.playersOnly&&!g.ambient&&!g.store.locked);}
+  active(){const g=this.g,s=g.store?.state;return !!(s&&g.loaded&&g.helpersLive&&!g.ambient&&!g.store.locked);}
   state(){return this.g.store?.state;}
   ranch(s=this.state()){return R.ensureRanch(s?.farm);}
   day(s=this.state()){return timeLabel(gameTime(s)).day;}

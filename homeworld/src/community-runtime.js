@@ -92,7 +92,7 @@ export class Community {
   if(g.store.state.night||g.playersOnly){for(const h of Object.values(this.actors)){if(h.actor)h.actor.visible=false;for(const key of ['hammer','bench','can'])if(h[key])h[key].visible=false;h.fishing?.clear();}if(this.selectionRing)this.selectionRing.visible=false;return;}
   const snapshot=Community.prototype.snapshot.call(this,now);if(!snapshot)return;
   for(const m of snapshot.members){
-   const h=this.actors[m.id],j=m.job;if(m.id==='adam'&&g.livingTest?.friend?.ownsActor)continue;if(!h?.actor||m.selected||h.modelReady===false)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
+   const h=this.actors[m.id],j=m.job;if(m.id==='adam'&&(g.livingTest?.friend?.ownsActor||g.residents?.models?.has('adam')))continue;if(!h?.actor||m.selected||h.modelReady===false)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
    if(m.walking){
     const ahead=(m.project?projectAssignments(g.store.state,now+250).find(x=>x.id===m.id):communitySnapshot(g.store.state,gameTime(g.store.state,now+250)).members.find(x=>x.id===m.id))?.position||m.position;
     const dx=ahead.x-m.position.x,dy=ahead.y-m.position.y,speed=Math.hypot(dx,dy)/.25;

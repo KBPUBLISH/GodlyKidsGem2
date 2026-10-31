@@ -10,7 +10,7 @@ import {completeWelcome,saveWelcomeProgress,welcomeProgress} from '../../utils/w
 import './IslandWelcome.css';
 
 const slides=[
- {title:'Unlock',copy:'Meet your Bible friends.',src:WELCOME_ART.unlock,alt:'A boy and girl look out over their island world as Noah, David and Esther wave from across a bridge.'},
+ {title:'Build Community',copy:'Read Stories - Grow your World',src:WELCOME_ART.unlock,alt:'A boy and girl look out over their island world as Noah, David and Esther wave from across a bridge.'},
  {title:'Build & Grow',copy:'Build a world with Bible friends.',src:WELCOME_ART.buildGrow,alt:'A girl plants seeds with Eve while a boy builds a wooden hut with Noah.'},
  {title:'Discover',copy:'Audio adventures. Books to explore.',src:WELCOME_ART.discover,alt:'Children enjoy headphones and a storybook with Esther.'},
 ];

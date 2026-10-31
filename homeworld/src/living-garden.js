@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {heightAt,cellFromKey} from './core.mjs';
-import {gardenAvailable,gardenNext,gardenJob,gardenCrop,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS,HARVEST_COINS} from './living-garden-rules.mjs';
+import {gardenAvailable,gardenNext,gardenJob,gardenCrop,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS} from './living-garden-rules.mjs';
 import {FARM_ACTION_SECONDS} from './living-action-motion.mjs';
+const bagWith=(inventory,id)=>({...inventory,[id]:(inventory[id]||0)+1});
 
 export class LivingGarden {
  constructor(test){
@@ -74,10 +75,13 @@ export class LivingGarden {
   this.cancel();
   const before=this.state.rewarded,s=this.test.farm.state;
   const next=w.kind==='harvest'?gardenHarvest(s,w.index,now):gardenWork(s,w.kind,w.index,now);
-  if(this.test.farm.commit(next)){
+  const crop=GARDEN_CROPS[w.index];
+  const changes=w.kind==='harvest'&&next!==s?{inventory:bagWith(g.store.state.inventory,crop)}:{};
+  if(this.test.farm.commit(next,changes)){
+   this.test.noteHelp?.(w.kind);
    g.burst(p,w.kind==='water'?'water':'seed',.5);
    if(!before&&this.state.rewarded)this.test.celebrate('+10 coins!');
-   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':w.kind==='water'?'Watered!':`+${HARVEST_COINS} coins`,until:this.test.elapsed+2};}
+   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':w.kind==='water'?'Watered!':`Picked a ${crop}!`,until:this.test.elapsed+2};}
    g.notify();
   }
  }

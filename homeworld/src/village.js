@@ -40,7 +40,7 @@ export class Village {
 
   active() {
     const g = this.g, s = g.store?.state;
-    return !!(s && g.loaded && g.playersOnly && !g.ambient && !s.night && !g.store.locked);
+    return !!(s && g.loaded && g.helpersLive && !g.ambient && !s.night && !g.store.locked);
   }
 
   update() {

@@ -3,7 +3,7 @@ import {activeTrees,applyAction,canPlow,cellAt,cellFromKey,gameTime,heightAt} fr
 import {woodRoom} from './wood-storage.mjs';
 import {assignedProject} from './project-rules.mjs';
 import {advancePath,resetAnimatedPose,turnToward,updateLocomotion} from './character-motion.js';
-import {gardenCrop,gardenHarvest,gardenWork} from './living-garden-rules.mjs';
+import {gardenCrop,gardenHarvest,gardenWork,GARDEN_CROPS} from './living-garden-rules.mjs';
 import {nearbyGreeting,friendRole,validFriendTask} from '../../shared/friendConversation.mjs';
 
 /** A companion owns only Adam's body. The player is never possessed or reassigned. */
@@ -85,7 +85,9 @@ export class LivingFriend {
   if(!validFriendTask(type)||!this.available)return {ok:false,line:'Let’s try again when I’m back.'};
   if(type==='stop'){this.finish(false);this.nextRoutine=this.t.elapsed+90;return {ok:true,line:'Of course! I’ll take a little break.'};}
   if(this.t.builder||assignedProject(this.g.store.state,'adam'))return {ok:false,line:'I’m finishing our building first.'};
-  if(type==='build')return {ok:false,line:'Choose a building and its spot with Build; I’ll help once you confirm it.'};
+  if(type==='build'){const asked=this.g.buildAsk?.requestBuilding?.({name:'Noah'},'tent','tent');if(!asked)window.dispatchEvent(new Event('gk-open-build'));else this.close();return {ok:true,line:'Where should I build? I’ll cut the trees and break the rocks on that spot.'};}
+  if(type==='plow'){const asked=this.g.buildAsk?.request?.({id:'help-dig',mode:'garden',name:'Adam',text:'Tap the areas you want me to dig. Up to 20 spots.',cap:20});if(asked){this.close();return {ok:true,line:'Tap the areas you want me to dig. Up to 20 spots.'};}}
+  if(type==='chop'){const asked=this.g.buildAsk?.request?.({id:'help-clear',mode:'build',kind:'campfire',size:[2,2],name:'Adam',buildingName:'work spot',text:'Tap a place to clear. I’ll cut the trees and break the rocks there.'});if(asked){this.close();return {ok:true,line:'Tap a place to clear. I’ll cut the trees and break the rocks there.'};}}
   if(this.g.store.state.characters.adam.energy<10)return {ok:false,line:'I need a little rest before I can help.'};
   const target=this.target(type);if(!target)return {ok:false,line:({water:'The plants have water already!',harvest:'Let’s let the vegetables grow a little longer.',chop:'I need a clear path and room for wood in our bag.',plow:'There’s no clear garden spot nearby.'})[type]};
   this.finish(false);this.freeze();this.job={type,...target,position:this.position(),time:0,automatic};
@@ -104,6 +106,7 @@ export class LivingFriend {
   if(near&&!this.near&&t.elapsed>=this.nextHello){this.greeting=nearbyGreeting(t.playerName,this.greetingIndex++);this.nextHello=t.elapsed+45;}
   this.near=near;
   if(this.chatOpen){updateLocomotion(h,g.idlePose,dt,0,Date.now()/1000);h.actor.updateMatrixWorld(true);h.rig.ik('Right',h.rig.localPoint([-.35,.9,.1]));h.rig.ik('Left',h.rig.localPoint([.35,.9,.1]));return;}
+  if(g.residents?.models?.has('adam')&&!this.job)return;
   if(!this.job){
    if(near){h.can.visible=false;h.hammer.visible=false;h.bench.visible=false;updateLocomotion(h,g.idlePose,dt,0,Date.now()/1000);h.actor.rotation.y=Math.atan2(g.actor.position.x-h.actor.position.x,g.actor.position.z-h.actor.position.z);}
    // Farmer routine: tend thirsty plants. Tree cutting needs the child's explicit request.
@@ -126,7 +129,9 @@ export class LivingFriend {
   let done=false;
   try{
    if(j.type==='water'||j.type==='harvest'){
-    const farm=t.farm.state,next=j.type==='water'?gardenWork(farm,'water',j.index,Date.now()):gardenHarvest(farm,j.index,Date.now());done=t.farm.commit(next);
+    const farm=t.farm.state,next=j.type==='water'?gardenWork(farm,'water',j.index,Date.now()):gardenHarvest(farm,j.index,Date.now());
+    const crop=GARDEN_CROPS[j.index];
+    done=t.farm.commit(next,j.type==='harvest'&&next!==farm?{inventory:{...g.store.state.inventory,[crop]:(g.store.state.inventory[crop]||0)+1}}:{});
    }else{
     const s=g.store.state,scoped={...s,activeCharacter:'adam',player:{...j.position}},next=applyAction(scoped,{type:j.type,id:j.id,key:j.key,actionId:`friend:adam:${Date.now()}`},g.world,gameTime(s));
     if(next!==scoped){g.store.save({...next,activeCharacter:s.activeCharacter,player:s.player});g.refreshDynamic();done=true;}

@@ -6,6 +6,13 @@ import { scopeKey } from './storage-scope.mjs';
 import { livingTestLayout,friendDropPoint } from './living-test-layout.mjs';
 import {advancePath,turnToward,updateLocomotion,resetAnimatedPose} from './character-motion.js';
 import { freshState, restoreState, currentRequest, readyToDeliver, collect, deliver,activeResourceIds, guidance } from './living-test-rules.mjs';
+const HELP_OFFERS=[
+  {id:'weed',who:'Adam',ask:'Would you help me weed the garden?',yes:'Plant 4 carrots',kind:'plant',count:4},
+  {id:'dig',who:'Adam',ask:'Want to dig some new garden spots with me?',yes:'Dig 10 new spots',kind:'plow',count:10},
+  {id:'water',who:'Adam',ask:'Would you help water the garden?',yes:'Water 5 plants',kind:'water',count:5},
+  {id:'trees',who:'Noah',ask:'Would you help me cut down trees?',yes:'Cut 10 trees',kind:'chop',count:10},
+  {id:'rocks',who:'Noah',ask:'Want to break some stones with me?',yes:'Break 5 stones',kind:'mine',count:5},
+];
 import {FIRST_FRIEND_BASE,readFirstFriend,offerFirstFriend,placeFirstFriend} from './living-first-friend.mjs';
 
 import {LivingFriend} from './living-friend.js';
@@ -104,6 +111,9 @@ export class LivingIslandTest {
     }
     const builders=this.state.adamUnlocked?['adam']:[];if(JSON.stringify(this.g.store.state.livingBuilders)!==JSON.stringify(builders))this.g.store.save({...this.g.store.state,livingBuilders:builders});
     this.applyFriendVisibility();
+    if(this.state.welcomeSeen&&this.state.adamUnlocked){
+      for(const [id,h] of Object.entries(this.g.community.actors))if(h.actor?.visible&&h.modelReady!==false)this.g.residents?.adoptFriend(id,h);
+    }
     this.sync();
   }
   dropSpot(){const p=this.g.player;if(this.dropNav!==this.g.nav||this.dropOrigin?.x!==p.x||this.dropOrigin?.y!==p.y){this.dropOrigin={...p};this.dropNav=this.g.nav;this.dropPoint=friendDropPoint(this.g.nav,p,this.layout.camp.pad);}return this.dropPoint;}
@@ -164,13 +174,16 @@ export class LivingIslandTest {
     this.tasksOpen=false;this.g.notify();
   }
   startTask(id){
-    const task=starterTasks(this.farm.state.garden,this.state.stage>=1).find(t=>t.id===id);
+    const task=starterTasks(this.farm.state.garden,this.state.stage>=1,this.g.store.state.stats?.plowed||0).find(t=>t.id===id);
     if(!task||task.done||task.locked)return;
-    this.closeTasks();if(id==='tent')this.showNext();else this.garden.go();
+    this.closeTasks();
+    if(id==='dig'){this.g.setTool('hoe');this.g.toast('Tap clear grass to dig a garden spot.');}
+    else if(id==='tent')this.showNext();
+    else this.garden.go();
   }
   hearTask(){
     const garden=this.farm.state.garden,hint=guidance(this.state);
-    const message=this.tasksOpen?'Plant four carrot seeds and water them. Then pick one carrot, one pumpkin and one lettuce. Finally, gather wood and build your tent.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
+    const message=this.tasksOpen?'Plant four carrot seeds and water them. Then pick one carrot, one pumpkin and one lettuce. Gather wood and build your tent. Then dig four more garden slots.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
     this.activity();this.speak(message);
   }
   celebrate(title){this.celebration={title,until:this.elapsed+3.2};this.g.burst(this.g.player,'seed',.8);}
@@ -225,9 +238,42 @@ export class LivingIslandTest {
       g.store.save({...s,livingHomeAwarded:true,buildings:[...s.buildings,b]});g.refreshDynamic();
     }
   }
+  noteHelp(kind){
+    const job=this.state.helpJob;if(!job||job.kind!==kind||job.done>=job.count)return;
+    job.done++;if(job.done>=job.count){this.state.helpDone=[...new Set([...(this.state.helpDone||[]),job.id])];this.state.helpJob=null;this.celebrate('All done!');}
+    this.save();this.g.notify();
+  }
+  syncHelp(){
+    const job=this.state.helpJob;if(!job)return;
+    const stats=this.g.store.state.stats||{},base=job.base||0;
+    const done=job.kind==='plow'?(stats.plowed||0)-base:job.kind==='chop'?(stats.trees||0)-base:job.kind==='mine'?(stats.rocks||0)-base:job.done;
+    if(done<=job.done)return;
+    job.done=Math.min(job.count,done);
+    if(job.done>=job.count){this.state.helpDone=[...new Set([...(this.state.helpDone||[]),job.id])];this.state.helpJob=null;this.celebrate('All done!');}
+    this.save();this.g.notify();
+  }
+  considerHelp(){
+    if(this.helpOffer||this.state.helpJob||!this.state.welcomeSeen||!this.farm.state.garden.completed||this.placingAdam||this.dialogOpen||this.g.buildAsk?.busy?.())return;
+    if((this.helpAt||0)>this.elapsed)return;
+    const ashore=new Set(Object.values(this.g.community.actors).filter(h=>h.actor?.visible&&h.modelReady!==false).map(h=>h.name));
+    const next=HELP_OFFERS.find(o=>ashore.has(o.who)&&!(this.state.helpDone||[]).includes(o.id));
+    if(!next)return;
+    this.helpOffer=next;this.g.notify();
+  }
+  acceptHelp(){
+    const offer=this.helpOffer;if(!offer)return;
+    const stats=this.g.store.state.stats||{};
+    const base=offer.kind==='plow'?stats.plowed||0:offer.kind==='chop'?stats.trees||0:offer.kind==='mine'?stats.rocks||0:0;
+    this.state.helpJob={id:offer.id,who:offer.who,label:offer.yes,kind:offer.kind,count:offer.count,done:0,base};
+    this.helpOffer=null;this.save();
+    if(offer.kind==='plow')this.g.buildAsk?.request?.({id:'help-dig',mode:'garden',name:offer.who,text:'Tap the areas you want me to dig. Up to 20 spots.',cap:20});
+    this.g.toast(`${offer.who}: ${offer.yes}. You can help too!`);this.g.notify();
+  }
+  declineHelp(){this.helpOffer=null;this.helpAt=this.elapsed+50;this.g.notify();}
+  cancelHelp(){if(!this.state.helpJob)return;this.state.helpJob=null;this.helpAt=this.elapsed+40;this.save();this.g.toast('Okay, we can do that later.');this.g.notify();}
   update(dt,speed){
     this.elapsed+=dt;const g=this.g;
-    this.actions.update();this.farm.update();this.garden.update(dt);this.coach.update();this.friend.update(dt);this.updateSocial();
+    this.actions.update();this.farm.update();this.garden.update(dt);this.coach.update();this.friend.update(dt);this.updateSocial();this.syncHelp();this.considerHelp();
     this.applyFriendVisibility();
     this.playerVisual.update(dt,speed,this.elapsed,{celebrating:this.celebration?.until>this.elapsed,carrying:Object.values(this.state.inventory).some(n=>n>0),working:!!g.action||this.garden.animating});
     if(this.celebration&&this.elapsed>=this.celebration.until){this.celebration=null;g.notify();}
@@ -275,7 +321,7 @@ export class LivingIslandTest {
   snapshot(){
     const task=currentRequest(this.state),site=this.site();
     const target=this.nextTarget();
-    return {friend:this.friend?.snapshot(),arrival:this.arrival?.snapshot()||null,task,tasksOpen:this.tasksOpen,tasks:starterTasks(this.farm.state.garden,this.state.stage>=1),placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:window.parent!==window,insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
+    return {friend:this.friend?.snapshot(),arrival:this.arrival?.snapshot()||null,task,tasksOpen:this.tasksOpen,helpOffer:this.helpOffer||null,helpJob:this.state.helpJob||null,tasks:starterTasks(this.farm.state.garden,this.state.stage>=1,this.g.store.state.stats?.plowed||0),placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:window.parent!==window,insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
       adamUnlocked:this.state.adamUnlocked,inviteVisible:(window.parent===window||this.coach?.beat?.id!=='tent')&&this.state.stage>=1&&!this.state.adamUnlocked&&!this.placingAdam&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
       openingStory:this.openingStory,storyError:this.storyError,
       site:site?this.project(site,1.3):null,

@@ -1,6 +1,15 @@
 /* Small action controls retain the island's existing illustrated icons and button palette. */
 .living-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.living-island-test .living-request{position:absolute;left:14px;right:72px;top:var(--island-hud-top);display:flex;align-items:flex-start;gap:8px;max-width:264px;z-index:10;pointer-events:none;flex-wrap:wrap}
+.living-island-test .living-request{position:absolute;left:14px;right:72px;top:var(--island-hud-top);display:flex;align-items:flex-start;gap:8px;max-width:280px;z-index:10;pointer-events:none;flex-wrap:wrap}
+.living-help{position:relative;flex-basis:100%;box-sizing:border-box;padding:10px 12px;border:2px solid #91ad70;border-radius:16px;background:#fffbed;color:#314b35;box-shadow:0 4px 0 #38533726}
+.living-help strong{display:block;color:#57723d;font-size:12px}
+.living-help p{margin:4px 0 0;font-size:15px;font-weight:750;line-height:1.3}
+.living-help small{display:block;margin-top:4px;font-weight:800}
+.living-help-actions{display:flex;gap:8px;margin-top:8px}
+.living-help-actions button{flex:1;min-height:40px;border:2px solid #91ad70;border-radius:12px;background:#fffdf2;font-weight:800}
+.living-help-actions button:first-child{background:#e7f3d4}
+.living-help-job{padding-right:42px}
+.living-help-x{position:absolute;top:2px;right:2px;width:36px;height:36px;border:0;background:transparent;color:#57723d;font-size:24px}
 .living-request>*{pointer-events:auto}
 .living-island-test .living-guide{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex:1;min-width:0;max-width:204px;min-height:64px;padding:8px 12px;border-radius:22px;background:#eaf3d8;border:2px solid #c9d7ad;box-shadow:0 4px 0 #69815180,0 4px 12px #29482022}
 .living-guide>.picture-icon,.living-guide>.icon-fallback{flex-shrink:0}

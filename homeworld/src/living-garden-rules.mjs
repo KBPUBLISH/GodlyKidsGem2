@@ -1,5 +1,5 @@
 // Starter tasks and their rewards share one durable farm receipt.
-export const GARDEN_REWARD=10, HARVEST_COINS=2, GARDEN_GROW_MS=Object.freeze({lettuce:120000,carrot:180000,pumpkin:360000});
+export const GARDEN_REWARD=10, GARDEN_GROW_MS=Object.freeze({lettuce:120000,carrot:180000,pumpkin:360000});
 export const CARROT_SPOTS=[0,3,4,5];
 export const PICK_CROPS=['carrot','pumpkin','lettuce'];
 export const GARDEN_CROPS=['carrot','pumpkin','lettuce','carrot','carrot','carrot'];
@@ -66,14 +66,16 @@ export function gardenHarvest(s,index,now){
  const g=s.garden;if(g.planted<4||!Number.isFinite(now)||now<0||gardenCrop(g,index,now)?.phase!=='ready')return s;
  const readyAt=[...g.readyAt],wateredAt=[...g.wateredAt];readyAt[index]=0;wateredAt[index]=null;
  const picked={...g.picked,[GARDEN_CROPS[index]]:1};
- return {...s,coins:s.coins+HARVEST_COINS,garden:{...g,picked,completed:PICK_CROPS.every(c=>picked[c]===1),readyAt,wateredAt}};
+ return {...s,garden:{...g,picked,completed:PICK_CROPS.every(c=>picked[c]===1),readyAt,wateredAt}};
 }
-export function starterTasks(g,tentBuilt){
+export function starterTasks(g,tentBuilt,dug=0){
  const planted=g.planted===4,harvested=PICK_CROPS.every(c=>g.picked[c]===1);
+ const slots=Math.max(0,Math.min(4,Number(dug)||0));
  return [
   {id:'plant',label:'Plant 4 carrot seeds',icon:'plant',value:g.planted,total:4,done:planted,locked:false},
   {id:'pick',label:'Pick 1 of each',accessibleLabel:'Pick 1 carrot, 1 pumpkin and 1 lettuce',icon:'harvest',value:PICK_CROPS.filter(c=>g.picked[c]).length,total:3,done:harvested,locked:!planted,crops:PICK_CROPS.map(c=>({id:c,done:!!g.picked[c]}))},
   {id:'tent',label:'Build a tent',icon:'build',value:tentBuilt?1:0,total:1,done:tentBuilt,locked:!harvested},
+  {id:'dig',label:'Dig 4 more garden slots',icon:'hoe',value:slots,total:4,done:slots>=4,locked:!tentBuilt},
  ];
 }
 // Only replace the untouched demo planting. Gardens a child worked on stay intact.

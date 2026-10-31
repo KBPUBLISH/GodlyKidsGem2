@@ -580,9 +580,9 @@ export class Residents {
     options.push(...this.pickVillageChores(home, s, min, here));
     // Abel's garden fences and scarecrows. builderChores returns nothing for Noah, Adam, and everyone else.
     // A friend sent off the garden (or onto a different goal) leaves the fences for another day.
-    if (game.gardenKeeper && game.playersOnly && allow('gardenWork')) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
+    if (game.gardenKeeper && game.helpersLive && allow('gardenWork')) options.push(...game.gardenKeeper.builderChores(home, s, here, this.claims));
     // Adam's farm brain: paddock fence, trough, feed pile, daily feed/water, arrivals (farmer.js).
-    if (game.farmer && game.playersOnly && (allow('farm') || s.farm?.ranch?.kidFence)) options.push(...game.farmer.chores(home, s, min, here).filter((c) => !this.claims.has(c.key)));
+    if (game.farmer && game.helpersLive && (allow('farm') || s.farm?.ranch?.kidFence)) options.push(...game.farmer.chores(home, s, min, here).filter((c) => !this.claims.has(c.key)));
     if (focus) {
       const allowed = new Set(focus.chores);
       const outline = game.gardenPlan?.active(s);
@@ -596,12 +596,12 @@ export class Residents {
       for (let i = options.length - 1; i >= 0; i--) if (!keep(options[i])) options.splice(i, 1);
     }
     // A garden outline or a build site the kid already tapped is not cancelled by today's other goal.
-    if (game.gardenPlan && game.playersOnly) {
+    if (game.gardenPlan && game.helpersLive) {
       const fence = game.gardenPlan.fenceChore(home);
       if (fence && !this.claims.has(fence.key) && !options.some((o) => o.key === fence.key)) options.push(fence);
       for (const c of game.gardenPlan.plantChores(home, s, this.claims) || []) if (!this.claims.has(c.key)) options.push(c);
     }
-    if (game.buildAsk && game.playersOnly) {
+    if (game.buildAsk && game.helpersLive) {
       const clear = game.buildAsk.siteClearChore(home, s);
       if (clear && !this.claims.has(clear.key)) options.push(clear);
     }
@@ -789,7 +789,7 @@ export class Residents {
    */
   pickVillageChores(home, s, min, here) {
     const game = this.game, village = game.village;
-    if (!village || !game.playersOnly) return [];
+    if (!village || !game.helpersLive) return [];
     const options = [], free = (key) => !this.claims.has(key), busyId = game.order?.id || game.action?.id || null;
     const site = village.openBuild(s);
     // A garden fence, gate, or scarecrow (id starts with garden-) is Abel's job. Noah and Adam leave it alone.
@@ -1204,7 +1204,7 @@ export class Residents {
   sayHello(actor) {
     this.line = null;
     const game = this.game, home = actor?.userData, state = game.store?.state;
-    if (!home?.residentId || !state || !game.playersOnly) return;
+    if (!home?.residentId || !state || !game.helpersLive) return;
     const minutes = gameTime(state);
     const context = {
       residents:[...this.models.values()].map(a => ({id:a.userData.residentId,name:a.userData.name || 'Friend'})),
@@ -1653,6 +1653,7 @@ export class Residents {
     const night = !!game.store?.state?.night;
     this.updateReel();
     for (const actor of this.models.values()) {
+      if ((game.livingTest?.friend?.chatOpen || game.livingTest?.friend?.job) && actor === game.community?.actors?.adam?.actor) continue;
       this.followCull(actor);
       if (game.dining?.owns(actor)) { game.dining.drive(actor, dt); continue; }
       const driving = actor === game.actor && actor.userData.id === this.activeId && !night && !game.action;
@@ -1793,6 +1794,26 @@ export class Residents {
       this.game.toast(`${resident.name} could not appear on the island.`);
       return null;
     }
+  }
+
+  /** A welcomed story friend uses the same chore brain as a dropped-off resident. */
+  adoptFriend(id, helper) {
+    if (!helper?.actor || !helper.bones || !helper.mixer || helper.actor === this.game.actor || this.models.has(id)) return;
+    const actor = helper.actor;
+    const home = actor.userData;
+    home.mixer = helper.mixer;
+    home.model = helper.model;
+    home.bones = helper.bones;
+    home.restPose = helper.restPose;
+    home.clips = helper.clips || {};
+    aliasClip(home.clips, 'Walking', /walk/i);
+    aliasClip(home.clips, 'Idle_03', /idle|stand|breath/i);
+    home.name = helper.name || 'Friend';
+    home.residentId = id;
+    home.id = id;
+    home.x = actor.position.x;
+    home.y = -actor.position.z;
+    this.models.set(id, actor);
   }
 
   dispose() {

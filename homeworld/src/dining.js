@@ -226,7 +226,7 @@ export class Dining {
     g.notify?.();
   }
   routineUpdate(){
-    const g=this.g,s=g.store.state;if(!g.playersOnly||s.night||g.ambient)return;
+    const g=this.g,s=g.store.state;if(!g.helpersLive||s.night||g.ambient)return;
     const minutes=gameTime(s),{day,hour}=timeLabel(minutes),r=this.routine,meal=mealAt(hour);
     const key=meal?`${day}:${meal.id}`:null;
     if(r.key!==key){r.key=key;r.meal=meal;r.stage='idle';r.grill='idle';r.noted=false;r.woodTried=false;r.ask=null;r.released=false;if(this.grill)this.stopGrill();}

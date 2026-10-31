@@ -2,6 +2,17 @@ import {gardenFresh,gardenRestore} from './living-garden-rules.mjs';
 // A small, private test economy. These coins never spend the app's account coins.
 export const FARM_CYCLE_MS=3*60*1000, FIRST_EGG_MS=20000, PRODUCE_CAP=3;
 export const FARM_PRICES={chicken:10,cow:40,egg:5,milk:10};
+/** Farm animals bought at the market with island coins. Chicken and cow keep their named-shop prices. */
+export const MARKET_ANIMALS=[
+ {id:'sheep',name:'Sheep',emoji:'🐑',price:50},
+ {id:'goat',name:'Goat',emoji:'🐐',price:25},
+ {id:'donkey',name:'Donkey',emoji:'🫏',price:20},
+ {id:'horse',name:'Horse',emoji:'🐴',price:170},
+ {id:'dog_terrier',name:'Terrier',emoji:'🐶',price:15},
+ {id:'dog_hound',name:'Hound',emoji:'🐕',price:25},
+ {id:'dog_shepherd',name:'Shepherd dog',emoji:'🐕‍🦺',price:65},
+];
+export const marketAnimal=id=>MARKET_ANIMALS.find(a=>a.id===id)||null;
 export const farmFresh=()=>({version:1,coins:0,garden:gardenFresh(),chickenDismissed:false,coop:0,animals:[],bag:{egg:0,milk:0},collected:0,nextId:1});
 const integer=(v,max=100000)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
 export const animalName=v=>String(v||'').trim().replace(/[\u0000-\u001f<>]/g,'').slice(0,24);
@@ -22,12 +33,12 @@ export function farmOffer(s,kind){
 }
 export function farmPurchaseError(s,kind,name,now){
  const offer=farmOffer(s,kind);
- return offer.reason||(!Number.isFinite(now)?'Please try again.':kind!=='coop'&&!animalName(name)?'Give your animal a name.':s.coins<offer.price?`You have ${s.coins} coins. Pick vegetables or sell eggs to earn ${offer.price-s.coins} more.`:null);
+ return offer.reason||(!Number.isFinite(now)?'Please try again.':s.coins<offer.price?`You have ${s.coins} coins. Sell vegetables or eggs at the market to earn ${offer.price-s.coins} more.`:null);
 }
 export function farmBuy(s,kind,name,now){
   const offer=farmOffer(s,kind);if(farmPurchaseError(s,kind,name,now))return s;
   if(kind==='coop')return {...s,coins:s.coins-offer.price,coop:s.coop+1};
-  const clean=animalName(name);if(!clean)return s;
+  const clean=animalName(name)||(kind==='chicken'?'Chicken':'Cow');
   const animal={id:`living-farm-${s.nextId}`,kind,name:clean,ready:0,nextAt:now+(s.animals.length===0?FIRST_EGG_MS:FARM_CYCLE_MS)};
   return {...s,coins:s.coins-offer.price,nextId:s.nextId+1,animals:[...s.animals,animal]};
 }

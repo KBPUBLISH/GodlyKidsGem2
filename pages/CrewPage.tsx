@@ -2108,7 +2108,7 @@ const CrewPage: React.FC = () => {
         const bottom = islandBaseY;
         const isActive = offset === 0;
         const unlocked = voyageIslands[0]?.id === island.id || firstIslandDone(voyageIslands);
-        const label = isActive && sailingIsland ? 'Sailing…' : unlocked ? island.title : `Complete ${voyageIslands[0]?.title || 'Beginnings'}`;
+        const label = isActive && sailingIsland ? 'Sailing…' : unlocked ? island.title : `Complete ${voyageIslands[0]?.title || 'Genesis'}`;
         const progress = unlocked && !(isActive && sailingIsland)
           ? `${Math.min(island.storiesComplete, island.storiesTotal)}/${island.storiesTotal} stories complete`
           : null;
@@ -2154,11 +2154,11 @@ const CrewPage: React.FC = () => {
               }}
             >
               <span
-                className="whitespace-nowrap rounded-full px-2.5 py-0.5 font-black leading-tight text-[#7A3E12]"
+                className="whitespace-nowrap rounded-full px-5 py-2 font-black leading-tight text-[#7A3E12]"
                 style={{
-                  fontSize: isActive ? 12 : 10,
+                  fontSize: isActive ? 22 : 16,
                   background: 'linear-gradient(180deg, #FFD36A 0%, #FFB23D 100%)',
-                  boxShadow: '0 3px 0 #E09020',
+                  boxShadow: '0 4px 0 #E09020',
                   fontFamily: "'Baloo 2', 'Fredoka', sans-serif",
                   transition: 'font-size 0.3s ease',
                 }}
@@ -2167,9 +2167,9 @@ const CrewPage: React.FC = () => {
               </span>
               {progress && (
                 <span
-                  className="whitespace-nowrap rounded-full px-2 py-[1px] font-bold leading-tight text-[#FFF4D6]"
+                  className="whitespace-nowrap rounded-full px-4 py-1 font-bold leading-tight text-[#FFF4D6]"
                   style={{
-                    fontSize: isActive ? 10 : 8,
+                    fontSize: isActive ? 16 : 13,
                     background: 'rgba(42, 22, 12, 0.72)',
                     boxShadow: '0 1px 0 rgba(255,230,180,0.25) inset, 0 2px 4px rgba(0,0,0,0.35)',
                     fontFamily: "'Baloo 2', 'Fredoka', sans-serif",

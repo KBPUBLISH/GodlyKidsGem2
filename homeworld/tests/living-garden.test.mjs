@@ -21,20 +21,20 @@ test('harvesting and regrowing gives an affordable repeat loop, without duplicat
  let s=grow(farmFresh());s={...s,coins:0};assert.equal(gardenHarvest(s,0,200),s);
  s=gardenWork(s,'water',0,100);s=gardenWork(s,'water',3,100);
  const ripe=100+GARDEN_GROW_MS.carrot;
- s=gardenHarvest(s,0,ripe);assert.equal(s.coins,2);assert.equal(gardenHarvest(s,0,ripe),s);
+ s=gardenHarvest(s,0,ripe);assert.equal(s.coins,0);assert.equal(gardenHarvest(s,0,ripe),s);
  s=gardenHarvest(s,3,ripe);assert.deepEqual(s.garden.picked,{carrot:1,pumpkin:0,lettuce:0});assert.equal(s.garden.completed,false);
  s=farmRestore(s);assert.equal(gardenHarvest(s,0,ripe-1),s);
  s=gardenHarvest(s,1,ripe);assert.equal(s.garden.completed,false);
- s=gardenHarvest(s,2,ripe);assert.equal(s.garden.completed,true);assert.equal(s.coins,8);
+ s=gardenHarvest(s,2,ripe);assert.equal(s.garden.completed,true);assert.equal(s.coins,0);
  assert.equal(gardenHarvest(s,0,ripe+86400000),s);
- s=gardenWork(s,'water',0,ripe);s=gardenHarvest(s,0,ripe+GARDEN_GROW_MS.carrot);assert.equal(s.coins,10);
+ s=gardenWork(s,'water',0,ripe);s=gardenHarvest(s,0,ripe+GARDEN_GROW_MS.carrot);assert.equal(s.coins,0);
  assert.equal(gardenHarvest(s,-1,100000),s);assert.equal(gardenHarvest(s,6,100000),s);
 });
-test('saved insufficient balances and invalid names get accurate purchase errors',()=>{
+test('saved insufficient balances get accurate purchase errors',()=>{
  const s={...grow(farmFresh()),coins:3};assert.equal(farmRestore(s).coins,3);
- assert.match(farmPurchaseError(s,'chicken','Sunny',1),/You have 3 coins.*7 more/);
- assert.match(farmPurchaseError({...s,coins:10},'chicken','<>',1),/name/);
- assert.equal(farmBuy(s,'chicken','Sunny',1),s);
+ assert.match(farmPurchaseError(s,'chicken','',1),/You have 3 coins.*7 more/);
+ assert.equal(farmPurchaseError({...s,coins:10},'chicken','',1),null);
+ assert.equal(farmBuy(s,'chicken','',1),s);
 });
 test('the small starter garden replaces only untouched demo crops and keeps earned progress',()=>{
  const w=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
@@ -46,15 +46,16 @@ test('the small starter garden replaces only untouched demo crops and keeps earn
 });
 
 test('tasks unlock in order, count each vegetable separately, and survive reload',()=>{
- let s=farmFresh();assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,true,true]);
- s=grow(s);assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,false,true]);s=gardenWork(s,'water',0,100);
+ let s=farmFresh();assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,true,true,true]);
+ s=grow(s);assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,false,true,true]);s=gardenWork(s,'water',0,100);
  for(const i of [0,1])s=gardenHarvest(s,i,100+GARDEN_GROW_MS.carrot);
  s=farmRestore(JSON.parse(JSON.stringify(s)));assert.equal(starterTasks(s.garden,false)[1].value,2);
  assert.equal(starterTasks(s.garden,false)[2].locked,true);
- s=gardenHarvest(s,2,100+GARDEN_GROW_MS.carrot);assert.equal(s.coins,16);
- assert.deepEqual(starterTasks(s.garden,false).map(t=>t.done),[true,true,false]);
+ s=gardenHarvest(s,2,100+GARDEN_GROW_MS.carrot);assert.equal(s.coins,10);
+ assert.deepEqual(starterTasks(s.garden,false).map(t=>t.done),[true,true,false,false]);
  assert.equal(starterTasks(s.garden,false)[2].locked,false);
- assert.ok(starterTasks(s.garden,true).every(t=>t.done));
+ assert.equal(starterTasks(s.garden,true,2)[3].value,2);assert.equal(starterTasks(s.garden,true,2)[3].done,false);
+ assert.ok(starterTasks(s.garden,true,4).every(t=>t.done));
 });
 test('legacy partial work and paid planting rewards migrate without lost coins or duplicate rewards',()=>{
  const old={approved:true,dug:3,planted:2,readyAt:[0,0,0,0,0,0]};
@@ -81,7 +82,7 @@ test('each vegetable needs water and grows for its full distinct duration, inclu
   const end=s.garden.readyAt[index];s=farmRestore(JSON.parse(JSON.stringify(s)));
   assert.equal(gardenHarvest(s,index,end-1),s);
   assert.equal(gardenCrop(s.garden,index,1000+GARDEN_GROW_MS[crop]/2).progress,.5);
-  s=gardenHarvest(s,index,end);assert.equal(s.coins,coins+2);
+  s=gardenHarvest(s,index,end);assert.equal(s.coins,coins);
   assert.equal(gardenCrop(s.garden,index,end).phase,'thirsty');
   assert.equal(gardenHarvest(s,index,end+86400000),s);
  }
@@ -96,7 +97,7 @@ test('dry seedlings survive offline time, watering persists, and elapsed time ne
  assert.equal(gardenNext(s.garden,101).kind,'wait');
  s=farmRestore(JSON.parse(JSON.stringify(s)));
  assert.equal(s.garden.readyAt[0],100+GARDEN_GROW_MS.carrot);
- assert.equal(gardenCrop(s.garden,0,86400000).phase,'ready');assert.equal(s.coins,14);
+ assert.equal(gardenCrop(s.garden,0,86400000).phase,'ready');assert.equal(s.coins,10);
  assert.equal(gardenWork(s,'water',-1,0),s);assert.equal(gardenWork(s,'water',6,0),s);
  assert.equal(gardenWork(s,'water',0,NaN),s);
 });

@@ -61,7 +61,7 @@ export class GardenKeeper {
   /** Called every frame from the world's tick (day and night). Cheap: rescans every few seconds or when the save changed. */
   update() {
     const game = this.game, s = this.state;
-    if (!s || !game.loaded || !game.playersOnly) return;
+    if (!s || !game.loaded || !game.helpersLive) return;
     const now = performance.now();
     if (now - this.lastScan < SCAN_MS && s.revision === this.lastRevision) return;
     this.lastScan = now; this.lastRevision = s.revision;

@@ -48,11 +48,11 @@ export type BasementGameLockConfig = {
  */
 export const BASEMENT_GAME_LOCKS: Record<BasementGameId, BasementGameLockConfig> = {
   pool: {
-    requirements: [{ islandId: 'beginnings', islandLabel: 'Beginnings Island' }],
+    requirements: [{ islandId: 'beginnings', islandLabel: 'Genesis' }],
     gameLabel: 'the pool table',
   },
   darts: {
-    requirements: [{ islandId: 'beginnings', islandLabel: 'Beginnings Island' }],
+    requirements: [{ islandId: 'beginnings', islandLabel: 'Genesis' }],
     gameLabel: 'the dartboard',
   },
 };

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,FARM_CYCLE_MS,FIRST_EGG_MS} from '../src/living-farm-rules.mjs';
 const funded=()=>({...farmFresh(),coins:10});
-test('buying needs a name, room and enough coins; duplicate confirms cannot overspend',()=>{
- const s=funded();assert.equal(farmBuy(s,'chicken','',0),s);assert.equal(farmBuy(s,'cow','Daisy',0),s);
- const bought=farmBuy(s,'chicken','  Sunny  ',0);assert.equal(bought.coins,0);assert.equal(bought.animals[0].name,'Sunny');assert.equal(farmBuy(bought,'chicken','Again',0),bought);assert.equal(s.animals.length,0);
+test('buying needs room and enough coins; duplicate confirms cannot overspend',()=>{
+ const s=funded();assert.equal(farmBuy(s,'cow','',0),s);
+ const bought=farmBuy(s,'chicken','',0);assert.equal(bought.coins,0);assert.equal(bought.animals[0].name,'Chicken');assert.equal(farmBuy(bought,'chicken','',0),bought);assert.equal(s.animals.length,0);
  assert.deepEqual(farmRestore(JSON.parse(JSON.stringify(bought))),bought);
 });
 test('first egg comes soon; later production repeats, caps offline and cannot be collected twice',()=>{

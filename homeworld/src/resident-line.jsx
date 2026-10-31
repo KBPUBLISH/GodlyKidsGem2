@@ -10,7 +10,8 @@ export function ResidentLine({name,line,onDismiss,actions,above}) {
     <p role="status" aria-live="polite" aria-atomic="true">{line.text}</p>
     {asking
       ? <div className="resident-line-actions">{actions.map(action => <button key={action.id} type="button" disabled={!!action.disabled} onClick={event => { event.stopPropagation(); action.onClick?.(); }}>{action.label}</button>)}</div>
-      : <button type="button" onClick={onDismiss} aria-label={`Dismiss ${name}’s message`}><span aria-hidden="true">×</span></button>}
+      : null}
+    {onDismiss&&<button type="button" onClick={onDismiss} aria-label={asking?`Cancel ${name}’s request`:`Dismiss ${name}’s message`}><span aria-hidden="true">×</span></button>}
   </aside>;
 }
 
@@ -25,7 +26,7 @@ export function MealAsk({engine,enabled}) {
     return () => cancelAnimationFrame(frame);
   }, [engine, enabled]);
   if (!enabled || !card) return null;
-  return <ResidentLine name={card.name} line={{text: card.text}} actions={[
+  return <ResidentLine name={card.name} line={{text: card.text}} onDismiss={() => engine.current?.dining?.declineAsk?.()} actions={[
     {id: 'go', label: card.goLabel, onClick: () => engine.current?.dining?.acceptAsk?.()},
     {id: 'wait', label: 'Not yet', onClick: () => engine.current?.dining?.declineAsk?.()},
   ]} />;
@@ -50,7 +51,7 @@ export function SiteAsk({engine,enabled}) {
       <button type="button" aria-label="Move right" onPointerDown={event => event.stopPropagation()} onClick={() => slide(10, 0)}>→</button>
       <button type="button" aria-label="Move down" onPointerDown={event => event.stopPropagation()} onClick={() => slide(0, 10)}>↓</button>
     </div>}
-    <ResidentLine name={card.name} line={{text: card.text}} actions={[
+    <ResidentLine name={card.name} line={{text: card.text}} onDismiss={() => engine.current?.buildAsk?.decline?.()} actions={[
       {id: 'go', label: card.goLabel, disabled: card.goEnabled === false, onClick: () => engine.current?.buildAsk?.accept?.()},
       {id: 'wait', label: card.waitLabel || 'Not now', onClick: () => engine.current?.buildAsk?.decline?.()},
     ]} />

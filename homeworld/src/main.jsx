@@ -362,7 +362,7 @@ function App(){
   const activeTool=TOOLS.find(t=>t.id===view.tool);
   const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
-  return <main className={`game-shell ${LIVING_TEST?'living-island-test living-original-controls ':''}${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}`} onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();engine.current?.livingTest?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
+  return <main className={`game-shell ${LIVING_TEST?'living-island-test living-original-controls ':''}${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}${view.livingTest?.arrival?' is-arriving':''}`}  onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();engine.current?.livingTest?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
     <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={introModal||mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>
     <header className="topbar">
@@ -454,7 +454,7 @@ function App(){
     <NightRest night={view.night}/>
     {mapOnly&&!view.night?.sleeping&&<button ref={backToPlay} className="map-only-return" onClick={returnToPlay} aria-label="Back to play. Show game buttons"><span aria-hidden="true">←</span> Back to play</button>}
     {LIVING_TEST&&<LivingTestUI engine={engine} view={view} onModalChange={setIntroModal} blocked={!!panel||showTime||actionsOpen||mapOnly||!!view.building?.preview||!!view.fishing||!!view.night?.sleeping}/>}
-    {!view.loaded&&<div className={`loading ${view.error?'':'with-tips'}`}>{view.error?<><div className="loading-mark">✦</div><h1>The island needs another try</h1><p>{view.status}</p><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<><LoadingTips/><div className="loading-foot"><div className="loading-track"><i/></div><p>{view.status}</p></div></>}</div>}
+    {!view.loaded&&<div className={`loading ${view.error?'':'with-tips'} ${LIVING_TEST&&new URLSearchParams(location.search).get('arrival')==='1'?'arrival-loading':''}`} >{view.error?<><div className="loading-mark">✦</div><h1>The island needs another try</h1><p>{view.status}</p><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<>{LIVING_TEST&&new URLSearchParams(location.search).get('arrival')==='1'?<div className="arrival-loading-glow" role="status" aria-label="Preparing your island"><i/><i/><i/></div>:<LoadingTips/>}<div className="loading-foot"><div className="loading-track"><i/></div><p>{view.status}</p></div></>}</div>}
   </main>;
 }
 // Native shells (Despia / WKWebView) only drop their pull-to-refresh when the page itself consumes the

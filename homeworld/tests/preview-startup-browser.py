@@ -42,12 +42,12 @@ async def main():
   for title in ['Unlock','Build & Grow','Discover']:
    await page.get_by_role('heading',name=title,exact=True).wait_for()
    await page.get_by_role('button',name='Continue',exact=True).click()
-  await page.get_by_role('button',name='Maybe later',exact=True).click()
   await page.get_by_role('textbox',name='Your name').fill('Sarah')
   await page.get_by_role('spinbutton',name='Your age').fill('8')
   await page.get_by_role('button',name="Continue",exact=True).click()
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.wait_for_url('**/#/crew',timeout=15000)
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
+  await page.wait_for_url('**/#/my-home',timeout=15000)
   release_world.set()
   assert not any('.mp4' in u or 'map-ocean-scroll' in u or 'perry-flight-essentials' in u for u in requests),requests
   print('PASS: friends splash first; language artwork and world download start there; Continue bypasses stalled world download; no videos/CDN compiler/bulk preloads; onboarding works when Perry fails',flush=True)

@@ -180,7 +180,12 @@ export function createLivingPlayer(avatarId) {
   bones.mixamorigSpine=spine;bones.mixamorigSpine2=chest;
   let phase=0,stride=0;
   const restPose=[...new Set(Object.values(bones))].map(bone=>({bone,position:bone.position.clone(),quaternion:bone.quaternion.clone()}));
-  return {model,bones,restPose,dispose(){
+  return {model,bones,restPose,arrive(time){
+    const opening=THREE.MathUtils.smoothstep(time,.4,1.1),blink=(time>1.35&&time<1.5)||(time>2.2&&time<2.35);
+    eyes.forEach(e=>e.scale.y=.88*(blink?.12:Math.max(.08,opening)));
+    head.rotation.y=time<1.1?0:Math.sin((time-1.1)*1.6)*.25*Math.min(1,(time-1.1));
+    head.rotation.z=Math.sin(time*1.2)*.035;
+  },dispose(){
     const geometries=new Set([sphere,curl]);model.traverse(object=>{if(object.geometry)geometries.add(object.geometry);});
     geometries.forEach(geometry=>geometry.dispose());Object.values(materials).forEach(material=>material.dispose());
   },update(dt,speed,time,{celebrating=false,carrying=false,working=false}={}){

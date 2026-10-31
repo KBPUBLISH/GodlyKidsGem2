@@ -209,6 +209,7 @@ const MyHomePage: React.FC = () => {
   const routeLocation=useLocation();
   const adamVoice=useCharacterVoice(rewardsService.getUnlockedCharacters().find(c=>/^adam$/i.test(c.name.trim()))?.voiceId||ADAM_TOUR_FALLBACK_VOICE_ID);
   const livingTestMode=LIVING_TEST_BUILD || new URLSearchParams(routeLocation.search).get('livingTest')==='1';
+  const firstArrival=livingTestMode&&!!(routeLocation.state as {firstArrival?:boolean}|null)?.firstArrival;
   useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
   const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
@@ -427,6 +428,7 @@ const MyHomePage: React.FC = () => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
+      if(data.type==='gk-living-voice-stop'&&event.source===frameRef.current?.contentWindow){adamVoice.stop();return;}
       if(data.type==='gk-living-voice'){
         if(!livingTestMode||event.source!==frameRef.current?.contentWindow)return;
         const request=event.data;if(typeof request.text==='string'&&request.text.length<=500&&['adam','perry'].includes(request.voice))void adamVoice.speak(request.text,request.voice==='perry'?ONBOARDING_GUIDE_VOICE_ID:undefined);
@@ -833,7 +835,7 @@ const MyHomePage: React.FC = () => {
         </div>
       )}
 
-      {livingTestMode && !frameLoaded && <div className="absolute inset-0 z-[80] flex items-center justify-center bg-[#99b9b0]" role="status"><div className="rounded-3xl bg-[#fff8e8] px-8 py-6 text-center text-[#3e2414]"><strong>Rowing ashore…</strong><p>Getting your island ready.</p></div></div>}
+      {livingTestMode && !frameLoaded && <div className={`absolute inset-0 z-[80] flex items-center justify-center ${firstArrival?'bg-black':'bg-[#99b9b0]'}`} role="status">{firstArrival?<span className="text-[#fff3c4] font-bold">Your island is waking up…</span>:<div className="rounded-3xl bg-[#fff8e8] px-8 py-6 text-center text-[#3e2414]"><strong>Rowing ashore…</strong><p>Getting your island ready.</p></div>}</div>}
       {overlayMounted && !livingTestMode && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
       {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
@@ -858,7 +860,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId)}
+          src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId)+(firstArrival?'&arrival=1':'')}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

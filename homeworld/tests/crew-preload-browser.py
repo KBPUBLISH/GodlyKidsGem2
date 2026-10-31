@@ -50,13 +50,14 @@ async def main():
   for title in ['Unlock','Build & Grow','Discover']:
    await page.get_by_role('heading',name=title,exact=True).wait_for()
    await page.get_by_role('button',name='Continue',exact=True).click()
-  await page.get_by_role('button',name='Maybe later',exact=True).click()
   await page.get_by_role('textbox',name='Your name').fill('Sarah')
   await page.get_by_role('spinbutton',name='Your age').fill('8')
   await page.get_by_role('button',name="Continue",exact=True).click()
   started=time.monotonic()
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.wait_for_url('**/#/crew')
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
+  await page.wait_for_url('**/#/my-home')
+  await page.goto(BASE+'/#/crew',wait_until='domcontentloaded')
   await page.get_by_role('button',name='Sail to Genesis',exact=True).wait_for()
   # First-run guidance intentionally hides the bottom navigation. All of its
   # art is already cached; verify every image actually rendered on this visit.
@@ -68,7 +69,7 @@ async def main():
   assert not misses,misses
   assert not errors,errors
   await page.screenshot(path='/tmp/crew-preloaded-no-network.png')
-  print(f'PASS: all {len(SHIP)} ship assets + first island cached on splash with 3G classification; no speculative models; real onboarding reaches the ship with those network URLs blocked ({time.monotonic()-started:.2f}s including transition)',flush=True)
+  print(f'PASS: all {len(SHIP)} ship assets + first island cached on splash with 3G classification; no speculative models; onboarding opens the island, then a ship visit reuses art with those network URLs blocked ({time.monotonic()-started:.2f}s including transition)',flush=True)
   await browser.close()
 
 if __name__=='__main__':asyncio.run(main())

@@ -1,6 +1,7 @@
 import React,{useEffect,useRef} from 'react';
 import {Icon,ItemIcon,useDialogFocus} from './ui.jsx';
 import './living-test.css';
+import {IslandArrival} from './living-arrival.jsx';
 import {Coins,FarmPurchase} from './living-farm-ui.jsx';
 
 function Progress({value,total,label}){
@@ -14,7 +15,7 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
  const drawer=useRef(null);
  const play=view.livingTest,task=play?.task,hint=play?.guidance,farm=play?.farm,garden=play?.garden;
  const gardenTask=!!garden&&!garden.completed;
- const modal=blocked?null:farm?.pending?'purchase':play?.decision?'build-confirm':(play?.tasksOpen?'tasks':play?.inviteVisible?'first-friend':play?.welcomeVisible?'welcome':null);
+ const modal=blocked||play?.arrival?null:farm?.pending?'purchase':play?.decision?'build-confirm':(play?.tasksOpen?'tasks':play?.inviteVisible?'first-friend':play?.welcomeVisible?'welcome':null);
  const invoke=fn=>engine.current?.livingTest&&fn(engine.current.livingTest);
  const focusWorld=()=>engine.current?.renderer.domElement.focus({preventScroll:true});
  const close=()=>{
@@ -26,11 +27,12 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
   focusWorld();
  };
  useDialogFocus(modal,drawer,close);
- useEffect(()=>{invoke(t=>t.setDialog(!!modal||blocked));onModalChange?.(!!modal);},[modal,blocked,onModalChange]);
+ useEffect(()=>{invoke(t=>t.setDialog(!!modal||blocked||!!play?.arrival));onModalChange?.(!!modal||!!play?.arrival);},[modal,blocked,onModalChange,!!play?.arrival]);
  const title=modal==='tasks'?'My first tasks':modal==='purchase'?(farm.pending.kind==='coop'?'Bigger coop?':farm.pending.kind==='chicken'?'New chicken?':'New cow?'):modal==='build-confirm'?`Build ${play.decision.name}?`:modal==='first-friend'?'Add a friend?':modal==='welcome'?'Hi, Adam!':'Our home';
  const gardenIcon=garden?.phase==='plant'?'plant':garden?.phase==='water'?'water':'harvest';
  return <div className="living-intro-layer">
-  {view.loaded&&play&&!blocked&&<>
+  {play?.arrival&&<IslandArrival arrival={play.arrival} engine={engine}/>}
+  {view.loaded&&play&&!blocked&&!play.arrival&&<>
    {!modal&&!play.insideHome&&!play.watching&&<section className="living-request" aria-label="Current island task">
     {play.placingAdam?<ActionChip emoji="👋" label="Tap land" accessibleLabel="Place Adam on clear land" onClick={()=>invoke(t=>t.placeAdam())}/>:gardenTask?<ActionChip icon={gardenIcon} emoji={garden.phase==='wait'?'⏳':null} label={garden.busy?'…':garden.phase==='plant'?'Plant':garden.phase==='water'?'Water':garden.phase==='wait'?garden.timer:'Pick'} accessibleLabel={garden.label} disabled={garden.busy||garden.phase==='wait'} aria-busy={garden.busy} progress={{value:garden.value,total:garden.total,label:garden.progress}} onClick={()=>invoke(t=>t.garden.go())}/>:task?<ActionChip icon={hint.delivery?'walk':task.item==='wood'?'wood':'carrot'} label={hint.delivery?'Bring':'Pick'} accessibleLabel={hint.label} progress={{value:hint.delivery?play.deposited:hint.found,total:task.count,label:hint.progress}} onClick={()=>invoke(t=>t.showNext())}/>:play.homeReady?<ActionChip icon="build" label="Visit" accessibleLabel="Explore our home" onClick={()=>invoke(t=>t.visitHome())}/>:play.stage>=3?<div className="living-building" role="status"><Icon type="build" size={30}/><span>Building…</span></div>:!play.adamUnlocked?<ActionChip icon="book" label="Meet Adam" accessibleLabel="Meet your first friend" onClick={()=>invoke(t=>t.openInvite())}/>:null}
     {gardenTask&&garden.phase==='wait'&&task&&!hint.delivery&&<ActionChip icon="wood" label="Find logs" accessibleLabel="Find a log while vegetables grow" onClick={()=>invoke(t=>t.showNext())}/>}

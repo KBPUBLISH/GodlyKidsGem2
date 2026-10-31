@@ -10,8 +10,6 @@ async def enter_name(page):
  for title in ['Unlock','Build & Grow','Discover']:
   await page.get_by_role('heading',name=title,exact=True).wait_for()
   await page.get_by_role('button',name='Continue',exact=True).click()
- await page.get_by_role('heading',name='Try 14 Days Free',exact=True).wait_for()
- await page.get_by_role('button',name='Maybe later',exact=True).click()
  await page.get_by_role('textbox',name='Your name').fill('Sarah')
  await page.get_by_role('spinbutton',name='Your age').fill('8')
  await page.get_by_role('button',name="Continue",exact=True).click()
@@ -100,7 +98,8 @@ async def main():
   await page.get_by_role('button',name='This is me!',exact=True).scroll_into_view_if_needed()
   await page.screenshot(path='/tmp/avatar-picker-small-phone.png')
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.wait_for_url('**/#/crew')
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
+  await page.wait_for_url('**/#/my-home')
   await page.wait_for_function("JSON.parse(localStorage.getItem('godly_kids_data_v6')||'{}').kids?.[0]?.worldAvatarId==='berry'")
   saved=await page.evaluate("JSON.parse(localStorage.getItem('godly_kids_data_v6'))")
   assert len(saved['kids'])==1,saved['kids']
@@ -128,7 +127,8 @@ async def main():
   await page.get_by_role('button',name='Next avatar',exact=True).click()
   await page.wait_for_function("document.querySelector('.avatar-static')?.naturalWidth>0")
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.wait_for_url('**/#/crew')
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
+  await page.wait_for_url('**/#/my-home')
   print('PASS: unavailable WebGL uses the matching portrait and still allows selection and Continue',flush=True)
   await browser.close()
 

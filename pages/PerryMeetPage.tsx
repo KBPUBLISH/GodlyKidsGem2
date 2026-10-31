@@ -38,7 +38,7 @@ const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 const DEFAULT_HEAD = '/avatars/heads/head-1.png';
 
-type Phase = 'intro' | 'details' | 'handoff' | 'ask' | 'avatar' | 'paywall' | 'ready' | 'depart';
+type Phase = 'intro' | 'details' | 'offer' | 'arrival' | 'handoff' | 'ask' | 'avatar' | 'paywall' | 'ready' | 'depart';
 type Holder = 'parent' | 'kid';
 
 const FIELD =
@@ -73,16 +73,17 @@ const PerryMeetPage: React.FC = () => {
   useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('onboarding') : undefined, []);
   const navigate = useNavigate();
   const { addKid, kids, currentProfileId, switchProfile, updateKid, setEquippedAvatar } = useUser();
+  const draft=useRef(LIVING_TEST_BUILD?welcomeProgress().draft:undefined);
   const initialKid = useRef(kids.find(kid=>kid.id===currentProfileId) || kids[0]);
-  const targetKidId = useRef(initialKid.current?.id || crypto.randomUUID?.() || Date.now().toString());
-  const [selectedAvatarId,setSelectedAvatarId] = useState(()=>livingAvatarForProfile(initialKid.current).id);
+  const targetKidId = useRef(draft.current?.kidId || initialKid.current?.id || crypto.randomUUID?.() || Date.now().toString());
+  const [selectedAvatarId,setSelectedAvatarId] = useState(()=>getLivingAvatar(draft.current?.avatarId||livingAvatarForProfile(initialKid.current).id).id);
   const [pendingProfile,setPendingProfile] = useState<string|null>(null);
   const savedKid = useRef(false);
   const [phase, setPhase] = useState<Phase>(()=>LIVING_TEST_BUILD?welcomeProgress().phase:'handoff');
   const [holder, setHolder] = useState<Holder | null>(null);
   const [ready, setReady] = useState(false);
-  const [name, setName] = useState('');
-  const [age, setAge] = useState('');
+  const [name, setName] = useState(draft.current?.name||'');
+  const [age, setAge] = useState(draft.current?.age||'');
   const [savedName, setSavedName] = useState('');
   const [departing, setDeparting] = useState(false);
   const paywallChoice = useRef<'trial' | 'tour' | null>(LIVING_TEST_BUILD?welcomeProgress().choice||null:null);
@@ -192,7 +193,7 @@ const PerryMeetPage: React.FC = () => {
 
   const submitDetails = () => {
     if(!canSubmit)return;
-    if(LIVING_TEST_BUILD) setPhase('avatar');
+    if(LIVING_TEST_BUILD){saveWelcomeProgress({phase:'avatar',draft:{name:name.trim(),age,avatarId:selectedAvatarId,kidId:targetKidId.current}});setPhase('avatar');}
     else saveKid();
   };
 
@@ -213,6 +214,7 @@ const PerryMeetPage: React.FC = () => {
       });
       if (choice === 'trial') noteJourneyStep('trial_started', { source: 'child-name' });
     }
+    if(LIVING_TEST_BUILD){navigate('/my-home',{replace:true,state:{firstArrival:true}});return;}
     markDiscoverShipPending();
     navigate('/crew', {
       replace: true,
@@ -224,9 +226,18 @@ const PerryMeetPage: React.FC = () => {
     });
   };
 
-  if(phase==='intro')return <IslandWelcome onBack={()=>navigate('/',{replace:true,state:{replaySplash:true}})} onComplete={choice=>{paywallChoice.current=choice;setPhase('details');}}/>;
-  if(phase==='details')return <IslandProfileDetails name={name} age={age} onName={setName} onAge={setAge} onContinue={submitDetails} onBack={()=>{saveWelcomeProgress({phase:'intro',step:3});setPhase('intro');}}/>;
-  if(phase==='avatar') return <ChooseAvatar selectedId={selectedAvatarId} onSelect={setSelectedAvatarId} onBack={()=>setPhase(LIVING_TEST_BUILD?'details':'ask')} onConfirm={saveKid}/>;
+  // Hosted checkout remounts this page. The same draft ID makes saving idempotent.
+  useEffect(()=>{
+    if(!LIVING_TEST_BUILD||phase!=='arrival')return;
+    if(canSubmit)saveKid();
+    else{saveWelcomeProgress({phase:'details'});setPhase('details');}
+  },[phase]);
+  const choosePhase=(next: 'details'|'avatar'|'intro'|'offer',step=2)=>{saveWelcomeProgress({phase:next,step,draft:{name:name.trim(),age,avatarId:selectedAvatarId,kidId:targetKidId.current}});setPhase(next);};
+  if(phase==='intro')return <IslandWelcome onBack={()=>navigate('/',{replace:true,state:{replaySplash:true}})} onIntroComplete={()=>choosePhase('details')} onComplete={()=>{}}/>;
+  if(phase==='details')return <IslandProfileDetails name={name} age={age} onName={setName} onAge={setAge} onContinue={submitDetails} onBack={()=>choosePhase('intro')}/>;
+  if(phase==='avatar') return <ChooseAvatar selectedId={selectedAvatarId} onSelect={id=>{setSelectedAvatarId(id);if(LIVING_TEST_BUILD)saveWelcomeProgress({draft:{name:name.trim(),age,avatarId:id,kidId:targetKidId.current}});}} onBack={()=>LIVING_TEST_BUILD?choosePhase('details'):setPhase('ask')} onConfirm={()=>LIVING_TEST_BUILD?choosePhase('offer',3):saveKid()}/>;
+  if(phase==='offer')return <IslandWelcome mode="offer" onBack={()=>choosePhase('avatar')} onComplete={choice=>{paywallChoice.current=choice;setPhase('arrival');}}/>;
+  if(phase==='arrival')return <main className="fixed inset-0 bg-black" role="status" aria-label="Opening your island"/>;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#7EC8E8]">

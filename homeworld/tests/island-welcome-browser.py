@@ -10,6 +10,15 @@ async def reach_offer(page):
  for title in ['Unlock','Build & Grow','Discover']:
   await page.get_by_role('heading',name=title,exact=True).wait_for()
   await page.get_by_role('button',name='Continue',exact=True).click()
+ await create_avatar(page)
+
+async def create_avatar(page):
+ await page.get_by_role('textbox',name='Your name').fill('Mikey')
+ await page.get_by_role('spinbutton',name='Your age').fill('8')
+ await page.get_by_role('button',name='Continue',exact=True).click()
+ await page.get_by_role('heading',name='Choose your avatar',exact=True).wait_for()
+ await page.get_by_role('button',name='Choose Berry Scout',exact=True).click()
+ await page.get_by_role('button',name='This is me!',exact=True).click()
  await page.get_by_role('heading',name='Try 14 Days Free',exact=True).wait_for()
 
 async def parent_gate(page):
@@ -29,7 +38,7 @@ async def main():
    return c
   c=await context();page=await c.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.goto(BASE+'/#/onboarding',wait_until='domcontentloaded')
-  for step,title in enumerate(['Unlock','Build & Grow','Discover','Try 14 Days Free']):
+  for step,title in enumerate(['Unlock','Build & Grow','Discover']):
    await page.get_by_role('heading',name=title,exact=True).wait_for()
    await page.wait_for_function("document.querySelector('.welcome-art>img')?.naturalWidth>0")
    assert not await page.get_by_role('textbox',name='Your name').count()
@@ -43,21 +52,25 @@ async def main():
     await page.screenshot(path=f'/tmp/welcome-{step+1}-{w}-{h}.png')
    await page.set_viewport_size({'width':390,'height':844})
    if step<3:await page.get_by_role('button',name='Continue',exact=True).click()
-  await page.reload();await page.get_by_role('heading',name='Try 14 Days Free',exact=True).wait_for()
-  await page.get_by_role('button',name='Back',exact=True).click();await page.get_by_role('heading',name='Discover',exact=True).wait_for()
-  await page.get_by_role('button',name='Continue',exact=True).click()
-  await page.get_by_role('button',name='Maybe later',exact=True).click()
   await page.get_by_role('heading',name='Let’s meet you!',exact=True).wait_for()
   assert await page.get_by_role('button',name='Continue',exact=True).is_disabled()
-  await page.get_by_role('textbox',name='Your name',exact=True).fill('Sarah')
-  await page.get_by_role('spinbutton',name='Your age',exact=True).fill('18')
+  await page.get_by_role('textbox',name='Your name').fill('Mikey')
+  await page.get_by_role('spinbutton',name='Your age').fill('18')
   assert await page.get_by_role('button',name='Continue',exact=True).is_disabled()
-  await page.get_by_role('spinbutton',name='Your age',exact=True).fill('8')
-  assert await page.get_by_role('button',name='Continue',exact=True).is_enabled()
-  assert await page.evaluate("!localStorage.getItem('godlykids_premium') || localStorage.getItem('godlykids_premium')!=='true'")
+  await create_avatar(page)
+  await page.reload();await page.get_by_role('heading',name='Try 14 Days Free',exact=True).wait_for()
+  await page.get_by_role('button',name='Back',exact=True).click()
+  await page.get_by_role('heading',name='Choose your avatar',exact=True).wait_for()
+  assert await page.locator('.avatar-caption h2').inner_text()=='Berry Scout'
+  await page.get_by_role('button',name='This is me!',exact=True).click()
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
+  await page.wait_for_url('**/#/my-home')
+  saved=await page.evaluate("JSON.parse(localStorage.getItem('godly_kids_data_v6'))")
+  assert len(saved['kids'])==1 and saved['kids'][0]['name']=='Mikey' and saved['kids'][0]['worldAvatarId']=='berry'
+  assert await page.evaluate("localStorage.getItem('godlykids_premium')!=='true'")
   assert not errors,errors
   await c.close()
-  print('PASS: three distinct illustrated intros, offer fourth, mobile/tablet layouts, back/reload, free skip and name/age validation',flush=True)
+  print('PASS: three distinct illustrated intros, avatar before offer, mobile/tablet layouts, draft back/reload, free skip to island and name/age validation',flush=True)
 
   # All checkout responses below are local fixtures. No real checkout is made.
   for outcome in ['failure','cancel','verified','unverified']:
@@ -78,19 +91,21 @@ async def main():
    await page.get_by_placeholder('?',exact=True).fill(str(int(problem[1])+int(problem[2])))
    await page.get_by_role('button',name='Verify & Continue',exact=True).click()
    if outcome=='verified':
-    await page.get_by_role('heading',name='Let’s meet you!',exact=True).wait_for(timeout=20000)
+    await page.wait_for_url('**/#/my-home',timeout=20000)
     assert await page.evaluate("localStorage.getItem('godlykids_premium')==='true'")
    elif outcome=='unverified':
     await page.get_by_role('button',name='Continue setup',exact=True).wait_for(timeout=20000)
     assert await page.evaluate("localStorage.getItem('godlykids_premium')!=='true'")
     await page.get_by_role('button',name='Continue setup',exact=True).click()
-    await page.get_by_role('heading',name='Let’s meet you!',exact=True).wait_for()
+    await page.wait_for_url('**/#/my-home')
    else:
     if outcome=='failure':await page.get_by_role('alert').filter(has_text='Checkout unavailable').wait_for()
     else:await page.wait_for_url('**/#/onboarding?trial=cancelled')
     await page.get_by_role('button',name='Maybe later',exact=True).click()
-    await page.get_by_role('heading',name='Let’s meet you!',exact=True).wait_for()
+    await page.wait_for_url('**/#/my-home')
     assert await page.evaluate("localStorage.getItem('godlykids_premium')!=='true'")
+   saved=await page.evaluate("JSON.parse(localStorage.getItem('godly_kids_data_v6'))")
+   assert len(saved['kids'])==1 and saved['kids'][0]['worldAvatarId']=='berry' and saved['kids'][0]['name']=='Mikey'
    assert len(requests)==1,requests
    assert requests[0]['plan']=='monthly'
    assert 'onboarding=1&session_id={CHECKOUT_SESSION_ID}' in requests[0]['successUrl']

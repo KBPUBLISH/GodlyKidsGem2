@@ -241,8 +241,8 @@ const LandingPage: React.FC = () => {
           style={{ width: LIVING_TEST_BUILD ? 'min(60vw, 280px, 34vh)' : 'min(78vw, 420px)' }}
         />
         <h1
-          className="m-0 mt-2 text-center leading-[0.86] select-none"
-          style={{
+          className="splash-slogan m-0 mt-2 text-center leading-[0.86] select-none"
+          style={LIVING_TEST_BUILD ? undefined : {
             fontFamily: "'Luckiest Guy', 'Fredoka', sans-serif",
             fontSize: LIVING_TEST_BUILD ? 'clamp(1.6rem, 7.2vw, 2rem)' : 'clamp(2.35rem, 11vw, 3.4rem)',
             color: '#FFB000',
@@ -251,9 +251,9 @@ const LandingPage: React.FC = () => {
             textShadow: '0 4px 0 #0B2545',
           }}
         >
-          <span className="block">A Bible</span>
+          {LIVING_TEST_BUILD ? <><span className="block">Little builders.</span><span className="block">Big adventures.</span></> : <><span className="block">A Bible</span>
           <span className="block">Adventure</span>
-          <span className="block">Awaits</span>
+          <span className="block">Awaits</span></>}
         </h1>
       </div>
 
@@ -346,8 +346,8 @@ const LandingPage: React.FC = () => {
           )}
         </div>
         <p
-          className="mt-3 mb-1 text-center font-extrabold uppercase leading-tight select-none"
-          style={{
+          className={`splash-tagline mt-3 mb-1 text-center font-extrabold leading-tight select-none ${LIVING_TEST_BUILD ? '' : 'uppercase'}`}
+          style={LIVING_TEST_BUILD ? undefined : {
             fontFamily: "'Nunito', 'Fredoka', sans-serif",
             fontSize: 'clamp(0.85rem, 3.6vw, 1.05rem)',
             color: '#fff',
@@ -355,7 +355,7 @@ const LandingPage: React.FC = () => {
             textShadow: '0 2px 0 #16325C, 0 4px 10px rgba(0,0,0,0.45)',
           }}
         >
-          Story based Christian Learning for Families
+          {LIVING_TEST_BUILD ? 'Make friends. Grow in faith.' : 'Story based Christian Learning for Families'}
         </p>
         <button
           onClick={handleSignIn}

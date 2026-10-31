@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createAssetWarmupQueue} from '../utils/assetWarmupQueue.mjs';
-import {PREVIEW_ART, PREVIEW_SHIP_ART, previewWarmupAssets} from '../utils/previewAssets.mjs';
+import {PREVIEW_ART, PREVIEW_SHIP_ART, WELCOME_ART, previewWarmupAssets} from '../utils/previewAssets.mjs';
 import {stat} from 'node:fs/promises';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -14,6 +14,11 @@ test('splash warms language first and includes the playable island within a smal
   assert.ok(bytes.reduce((sum, n) => sum+n, 0) < 8*1024*1024);
   assert.ok(bytes[0]+bytes[1] < 170000);
   const modelsBegin = assets.findIndex(url => url.includes('.glb'));
+  for(const url of Object.values(WELCOME_ART)){
+    assert.ok(assets.indexOf(url)>1&&assets.indexOf(url)<modelsBegin,'Intro art must warm before models');
+    assert.ok(bytes[assets.indexOf(url)]<150000,'Each intro illustration stays small on cellular');
+  }
+  assert.ok(!assets.some(url=>url.includes('pass-phone-')||url.includes('onboarding-family-bg')));
   for (const url of Object.values(PREVIEW_SHIP_ART)) {
     assert.ok(assets.includes(url), `Missing ship art: ${url}`);
     assert.ok(assets.indexOf(url) < modelsBegin, `Model would block ship art: ${url}`);

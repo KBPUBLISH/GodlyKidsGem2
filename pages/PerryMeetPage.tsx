@@ -10,6 +10,8 @@ import { noteJourneyStep } from '../utils/journeyStudy';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { warmPreviewNextScreen } from '../utils/previewWarmup';
 import ChooseAvatar from '../components/onboarding/ChooseAvatar';
+import IslandWelcome,{IslandProfileDetails} from '../components/onboarding/IslandWelcome';
+import {clearWelcomeProgress,saveWelcomeProgress,welcomeProgress} from '../utils/welcomeProgress';
 import {getLivingAvatar,livingAvatarForProfile} from '../shared/livingAvatars.mjs';
 import {
   ONBOARDING_FAMILY_BG_POSTER,
@@ -36,7 +38,7 @@ const GOLD = '#FFC43D';
 const BUBBLE = "'Baloo 2', 'Fredoka', sans-serif";
 const DEFAULT_HEAD = '/avatars/heads/head-1.png';
 
-type Phase = 'handoff' | 'ask' | 'avatar' | 'paywall' | 'ready' | 'depart';
+type Phase = 'intro' | 'details' | 'handoff' | 'ask' | 'avatar' | 'paywall' | 'ready' | 'depart';
 type Holder = 'parent' | 'kid';
 
 const FIELD =
@@ -68,7 +70,7 @@ const GoldButton: React.FC<{
 );
 
 const PerryMeetPage: React.FC = () => {
-  useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('ship') : undefined, []);
+  useEffect(() => LIVING_TEST_BUILD ? warmPreviewNextScreen('onboarding') : undefined, []);
   const navigate = useNavigate();
   const { addKid, kids, currentProfileId, switchProfile, updateKid, setEquippedAvatar } = useUser();
   const initialKid = useRef(kids.find(kid=>kid.id===currentProfileId) || kids[0]);
@@ -76,14 +78,14 @@ const PerryMeetPage: React.FC = () => {
   const [selectedAvatarId,setSelectedAvatarId] = useState(()=>livingAvatarForProfile(initialKid.current).id);
   const [pendingProfile,setPendingProfile] = useState<string|null>(null);
   const savedKid = useRef(false);
-  const [phase, setPhase] = useState<Phase>('handoff');
+  const [phase, setPhase] = useState<Phase>(()=>LIVING_TEST_BUILD?welcomeProgress().phase:'handoff');
   const [holder, setHolder] = useState<Holder | null>(null);
   const [ready, setReady] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [savedName, setSavedName] = useState('');
   const [departing, setDeparting] = useState(false);
-  const paywallChoice = useRef<'trial' | 'tour' | null>(null);
+  const paywallChoice = useRef<'trial' | 'tour' | null>(LIVING_TEST_BUILD?welcomeProgress().choice||null:null);
   const [formVisible, setFormVisible] = useState(false);
 
   const readyCopy = useMemo(() => buildPerryReadyCopy(savedName), [savedName]);
@@ -92,8 +94,10 @@ const PerryMeetPage: React.FC = () => {
     if(!pendingProfile || !kids.some(kid=>kid.id===pendingProfile))return;
     // Switch after the new profile exists; a timeout would capture the old kids array.
     if(currentProfileId!==pendingProfile) switchProfile(pendingProfile);
-    else if(LIVING_TEST_BUILD) setEquippedAvatar(getLivingAvatar(selectedAvatarId).portrait);
+    if(currentProfileId!==pendingProfile)return;
+    if(LIVING_TEST_BUILD) setEquippedAvatar(getLivingAvatar(selectedAvatarId).portrait);
     setPendingProfile(null);
+    if(LIVING_TEST_BUILD){clearWelcomeProgress();goToMap();}
   },[pendingProfile,kids,currentProfileId,switchProfile,setEquippedAvatar,selectedAvatarId]);
 
   useEffect(() => {
@@ -139,7 +143,7 @@ const PerryMeetPage: React.FC = () => {
               ? PERRY_WOOHOO_TTS
               : null;
 
-  const canSubmit = name.trim().length > 0 && Number(age) >= 1 && Number(age) <= 17;
+  const canSubmit = name.trim().length > 0 && /^\d+$/.test(age) && Number(age) >= 1 && Number(age) <= 17;
 
   const saveKid = () => {
     const trimmed = name.trim();
@@ -179,12 +183,11 @@ const PerryMeetPage: React.FC = () => {
     }
     setSavedName(trimmed);
     setPendingProfile(id);
-    preloadPerrySpeech(buildPerryReadyCopy(trimmed).tts);
-    preloadPerrySpeech(buildPerryIslandCopy(trimmed).tts);
+    if(!LIVING_TEST_BUILD){preloadPerrySpeech(buildPerryReadyCopy(trimmed).tts);preloadPerrySpeech(buildPerryIslandCopy(trimmed).tts);}
     activityTrackingService.trackOnboardingEvent('perry_name_entered', {
       kidsCount: 1,
     });
-    setPhase('paywall');
+    if(!LIVING_TEST_BUILD)setPhase('paywall');
   };
 
   const submitDetails = () => {
@@ -221,7 +224,9 @@ const PerryMeetPage: React.FC = () => {
     });
   };
 
-  if(phase==='avatar') return <ChooseAvatar selectedId={selectedAvatarId} onSelect={setSelectedAvatarId} onBack={()=>setPhase('ask')} onConfirm={saveKid}/>;
+  if(phase==='intro')return <IslandWelcome onBack={()=>navigate('/',{replace:true,state:{replaySplash:true}})} onComplete={choice=>{paywallChoice.current=choice;setPhase('details');}}/>;
+  if(phase==='details')return <IslandProfileDetails name={name} age={age} onName={setName} onAge={setAge} onContinue={submitDetails} onBack={()=>{saveWelcomeProgress({phase:'intro',step:3});setPhase('intro');}}/>;
+  if(phase==='avatar') return <ChooseAvatar selectedId={selectedAvatarId} onSelect={setSelectedAvatarId} onBack={()=>setPhase(LIVING_TEST_BUILD?'details':'ask')} onConfirm={saveKid}/>;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#7EC8E8]">

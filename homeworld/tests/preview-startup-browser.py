@@ -23,9 +23,9 @@ async def main():
    await r.abort()
   await page.route('**/homeworld/assets/mobile/environment.glb*',hold_world)
   await page.goto(BASE+'/',wait_until='domcontentloaded')
-  await page.get_by_role('heading',name='A Bible Adventure Awaits').wait_for()
+  await page.get_by_role('heading',name='Little builders. Big adventures.').wait_for()
   await asyncio.wait_for(world_waiting.wait(),timeout=25)
-  await page.wait_for_function("Array.from(document.images).some(img => img.src.includes('splash-adventure-mobile') && img.complete && getComputedStyle(img).opacity === '1')")
+  await page.wait_for_function("Array.from(document.images).some(img => img.src.includes('splash-island-friends') && img.complete && getComputedStyle(img).opacity === '1')")
   await page.screenshot(path='/tmp/preview-splash-restored.png')
   assert not await page.get_by_role('heading',name='Choose your language').count()
   assert await page.get_by_role('button',name='Continue anyway',exact=True).is_enabled()
@@ -39,16 +39,18 @@ async def main():
   assert await page.locator('video').count()==0
   assert not any('cdn.tailwindcss' in u for u in requests)
   await page.get_by_role('button',name='Continue',exact=True).click()
-  await page.get_by_role('button',name='Kid',exact=True).click()
+  for title in ['Unlock','Build & Grow','Discover']:
+   await page.get_by_role('heading',name=title,exact=True).wait_for()
+   await page.get_by_role('button',name='Continue',exact=True).click()
+  await page.get_by_role('button',name='Maybe later',exact=True).click()
   await page.get_by_role('textbox',name='Your name').fill('Sarah')
   await page.get_by_role('spinbutton',name='Your age').fill('8')
-  await page.get_by_role('button',name="That's me!",exact=True).click()
+  await page.get_by_role('button',name="Continue",exact=True).click()
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.get_by_role('button',name='Take a Tour',exact=True).click()
   await page.wait_for_url('**/#/crew',timeout=15000)
   release_world.set()
   assert not any('.mp4' in u or 'map-ocean-scroll' in u or 'perry-flight-essentials' in u for u in requests),requests
-  print('PASS: original splash first; language artwork and world download start there; Continue bypasses stalled world download; no videos/CDN compiler/bulk preloads; onboarding works when Perry fails',flush=True)
+  print('PASS: friends splash first; language artwork and world download start there; Continue bypasses stalled world download; no videos/CDN compiler/bulk preloads; onboarding works when Perry fails',flush=True)
   await ctx.close()
   ctx=await b.new_context(viewport={'width':390,'height':844},service_workers='block');page=await ctx.new_page()
   await page.route('**/api/**',api);await page.route('https://fonts.googleapis.com/**',lambda r:r.abort())
@@ -58,7 +60,7 @@ async def main():
   assert await page.locator('img[data-voyage-index]').first.evaluate('(img)=>img.complete&&img.naturalWidth>0')
   await page.screenshot(path='/tmp/preview-ship-first-island.png')
   await page.get_by_role('button',name='Sail to Genesis',exact=True).click()
-  await page.wait_for_url('**/lesson/hub?storyId=*',timeout=20000)
+  await page.wait_for_url('**/#/sail/genesis/lesson?storyId=*',timeout=20000)
   print('PASS: /map redirects to ship; CMS row without artwork still shows an island; tap opens first story pack',flush=True)
   await ctx.close()
   ctx=await b.new_context(viewport={'width':390,'height':844},service_workers='block');page=await ctx.new_page()
@@ -89,7 +91,7 @@ async def main():
   await ns['quality'](frame)
   await ns['finish_garden'](frame)
   assert await frame.get_by_role('button',name='Find a log',exact=True).is_visible()
-  assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==16
   print(f'PASS: cold /my-home opens new test automatically in {elapsed:.2f}s at 8Mbps/100ms, free garden and next wood task work despite failed Adam download',flush=True)
   print('PAGE ERRORS:',errors,flush=True)
   assert not errors,errors

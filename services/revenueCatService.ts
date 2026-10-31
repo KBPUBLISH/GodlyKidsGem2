@@ -9,6 +9,9 @@
  * Web uses RevenueCat Web Billing SDK
  */
 
+import {LIVING_TEST_BUILD} from '../utils/livingTestMode';
+import {welcomeCheckoutPending} from '../utils/welcomeProgress';
+
 // RevenueCat Web Billing API Key
 // RevenueCat Web Billing configuration
 // Sandbox key for testing: rcb_sb_AGCrvdIvLfIRIFAzVNnddnjQT
@@ -683,6 +686,7 @@ export const RevenueCatService = {
    * Redirects directly to Stripe's hosted checkout page
    */
   purchaseWeb: async (productId: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
+    const welcomeReturn=LIVING_TEST_BUILD&&welcomeCheckoutPending();
     const userId = getUserId();
     const userEmail = localStorage.getItem('godlykids_user_email') || '';
     
@@ -705,8 +709,8 @@ export const RevenueCatService = {
           plan: productId,
           userId: userId,
           email: userEmail,
-          successUrl: `${window.location.origin}${window.location.pathname}#/payment-success`,
-          cancelUrl: `${window.location.origin}${window.location.pathname}#/paywall`,
+          successUrl: `${window.location.origin}${window.location.pathname}#/payment-success${welcomeReturn?'?onboarding=1&session_id={CHECKOUT_SESSION_ID}':''}`,
+          cancelUrl: `${window.location.origin}${window.location.pathname}#/${welcomeReturn?'onboarding?trial=cancelled':'paywall'}`,
         }),
       });
       

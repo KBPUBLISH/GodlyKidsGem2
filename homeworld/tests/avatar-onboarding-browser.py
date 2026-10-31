@@ -7,10 +7,14 @@ BASE=os.environ.get('LIVING_ISLAND_TEST_URL','http://127.0.0.1:3000/').rstrip('/
 
 async def enter_name(page):
  await page.goto(BASE+'/#/onboarding',wait_until='domcontentloaded')
- await page.get_by_role('button',name='Kid',exact=True).click()
+ for title in ['Unlock','Build & Grow','Discover']:
+  await page.get_by_role('heading',name=title,exact=True).wait_for()
+  await page.get_by_role('button',name='Continue',exact=True).click()
+ await page.get_by_role('heading',name='Try 14 Days Free',exact=True).wait_for()
+ await page.get_by_role('button',name='Maybe later',exact=True).click()
  await page.get_by_role('textbox',name='Your name').fill('Sarah')
  await page.get_by_role('spinbutton',name='Your age').fill('8')
- await page.get_by_role('button',name="That's me!",exact=True).click()
+ await page.get_by_role('button',name="Continue",exact=True).click()
  await page.get_by_role('heading',name='Choose your avatar',exact=True).wait_for()
 
 async def main():
@@ -74,7 +78,7 @@ async def main():
   await page.get_by_role('button',name='Back to name and age',exact=True).click()
   assert await page.get_by_role('textbox',name='Your name').input_value()=='Sarah'
   assert await page.get_by_role('spinbutton',name='Your age').input_value()=='8'
-  await page.get_by_role('button',name="That's me!",exact=True).click()
+  await page.get_by_role('button',name="Continue",exact=True).click()
   assert await page.locator('.avatar-caption h2').inner_text()=='Berry Scout'
   for width,height in [(390,844),(768,1024),(1024,768),(1366,1024),(844,390),(320,568)]:
    await page.set_viewport_size({'width':width,'height':height});await page.wait_for_timeout(150)
@@ -96,7 +100,7 @@ async def main():
   await page.get_by_role('button',name='This is me!',exact=True).scroll_into_view_if_needed()
   await page.screenshot(path='/tmp/avatar-picker-small-phone.png')
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.get_by_role('button',name='Take a Tour',exact=True).wait_for()
+  await page.wait_for_url('**/#/crew')
   await page.wait_for_function("JSON.parse(localStorage.getItem('godly_kids_data_v6')||'{}').kids?.[0]?.worldAvatarId==='berry'")
   saved=await page.evaluate("JSON.parse(localStorage.getItem('godly_kids_data_v6'))")
   assert len(saved['kids'])==1,saved['kids']
@@ -124,7 +128,7 @@ async def main():
   await page.get_by_role('button',name='Next avatar',exact=True).click()
   await page.wait_for_function("document.querySelector('.avatar-static')?.naturalWidth>0")
   await page.get_by_role('button',name='This is me!',exact=True).click()
-  await page.get_by_role('button',name='Take a Tour',exact=True).wait_for()
+  await page.wait_for_url('**/#/crew')
   print('PASS: unavailable WebGL uses the matching portrait and still allows selection and Continue',flush=True)
   await browser.close()
 

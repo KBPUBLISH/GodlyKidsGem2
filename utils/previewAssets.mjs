@@ -7,9 +7,13 @@ export const PREVIEW_ART = {
 };
 
 const language = [PREVIEW_ART.languageOcean, PREVIEW_ART.languageGlobe];
+export const WELCOME_ART = {
+  unlock:'/assets/images/onboarding/island-unlock-v1.webp',
+  buildGrow:'/assets/images/onboarding/island-build-grow-v1.webp',
+  discover:'/assets/images/onboarding/island-discover-v1.webp',
+};
 const onboarding = [
-  '/assets/images/pass-phone-parent-hand.png', '/assets/images/pass-phone-kid-hand.png',
-  '/assets/images/onboarding-family-bg.jpg?v=openart-3',
+  ...Object.values(WELCOME_ART),
   PREVIEW_ART.logo,
   '/assets/images/avatar-harbor/harbor-phone-v1.webp',
   ...['heading','caption','confirm','arrow'].map(name=>`/assets/images/avatar-harbor/${name}-v1.webp`),

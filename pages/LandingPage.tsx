@@ -85,7 +85,7 @@ const LandingPage: React.FC = () => {
 
         if (hasCompletedOnboarding) {
           const hasKids = userData.kids && userData.kids.length > 0;
-          goWithLanguage(hasKids ? '/my-home' : '/crew');
+          goWithLanguage(hasKids ? '/my-home' : LIVING_TEST_BUILD ? '/onboarding' : '/crew');
           setIsChecking(false);
           return;
         }

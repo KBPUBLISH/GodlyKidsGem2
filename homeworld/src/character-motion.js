@@ -6,6 +6,15 @@ export function resetAnimatedPose(character){
  character.mixer?.stopAllAction();character.currentClip=null;character.clip=null;if(character.locomotion)character.locomotion.weight=0;
  for(const p of character.restPose||[]){p.bone.position.copy(p.position);p.bone.quaternion.copy(p.quaternion);}
 }
+/** Seed a bent knee before IK: a perfectly straight cartoon leg cannot shorten along its own axis. */
+export function preparePlayerCrouch(character,dip){
+ if(!character.model?.userData.avatarId||dip<=.0001)return;
+ for(const side of ['Right','Left']){
+  character.bones[`mixamorig${side}UpLeg`].rotation.x=-.35;
+  character.bones[`mixamorig${side}Leg`].rotation.x=.7;
+ }
+ character.actor.updateMatrixWorld(true);
+}
 export function updateLocomotion(character,idlePose,dt,speed,seconds){
  if(!character.mixer||!character.clips?.Walking)return;
  let state=character.locomotion;if(!state||state.model!==character.model)state=character.locomotion={model:character.model,weight:0,pose:(character.restPose||[]).map(()=>({p:new THREE.Vector3(),q:new THREE.Quaternion()}))};

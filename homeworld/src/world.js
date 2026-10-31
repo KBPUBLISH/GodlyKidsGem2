@@ -391,6 +391,7 @@ export class HomeWorld {
   setTool(tool){if(tool!=='walk'&&this.ambientNudge())return;if(this.building?.clearPlan)this.building.clearPlan=null;if(this.building?.preview)this.building.cancelPreview();this.tool=tool;this.noteTool(tool);this.status={walk:'Tap land to walk. Open Actions to choose a tool.',axe:'Axe ready! Tap land to walk or a tree to chop.',mine:'Pickaxe ready! Tap land to walk or a rock to smash.',hoe:'Dig ready! Tap clear grass to dig, or weeds to clear a garden spot.',plant:'Seeds ready! Tap land to walk or an empty garden spot to plant.',water:'Watering can ready! Tap land to walk or a growing plant to water.',fish:'Rod ready! Tap land to walk or water to fish.'}[tool];this.notify();}
   /** Drop a leftover IK pose (apple reach, prayer) so the next walk or chop starts clean. */
   releasePose(){
+    this.livingTest?.actions.clear();
     resetAnimatedPose(this);
     const home=this.actor?.userData;
     if(home){home.idling=false;home.flourish=null;}
@@ -502,7 +503,7 @@ export class HomeWorld {
     return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
   }
   walk(target) {
-    if(this.livingTest){this.livingTest.activity();this.livingTest.garden.work=null;}
+    if(this.livingTest){this.livingTest.activity();this.livingTest.garden.cancel();}
     if(this.interior) return;
     if(this.ambientNudge())return;
     this.residents?.cancelWave();
@@ -518,6 +519,7 @@ export class HomeWorld {
     this.residents?.cancelWave();
     if(this.store.state.characters[this.store.state.activeCharacter]?.sleep){this.toast('Wake up before starting more work.');return false;}
     if(this.action){this.toast('Your character is finishing this action.');return false;}
+    this.livingTest?.garden.cancel();
     if(this.nutrition&&!this.nutrition.check(action.type==='chop'?'chop_hit':action))return false;
     const path=this.nav.approach(this.player,target,reach,action.type==='mine'?{x:.52,y:-.85}:null);if(!path){this.toast('Your character cannot reach that spot. Try another side or a closer tile.');return false;}
     if(action.type==='chop'||action.type==='mine')this.touchResourceHealth(action.type==='chop'?'tree':'rock',action.id);
@@ -603,6 +605,7 @@ export class HomeWorld {
     return out.slice(0,3);
   }
   startAction(order) {
+    this.livingTest?.garden.cancel();
     if(this.ambientNudge()){this.order=null;this.path=[];if(this.marker)this.marker.visible=false;return;}
     if(order.type==='stoke'){this.order=null;this.path=[];this.marker.visible=false;this.nutrition.commitStoke(order.fireId);return;}
     if(order.type==='fetch_water'){this.order=null;this.path=[];this.marker.visible=false;this.nutrition.commitFetchWater(order.wellId);return;}
@@ -620,6 +623,7 @@ export class HomeWorld {
   }
   finishAction() {
     const a=this.action;if(!a)return;
+    this.livingTest?.actions.clear(a);
     const nutritionAction=['eat','fish','rest','sleep','grill','pray'].includes(a.type);
     try{
       if(a.type==='build')this.building.finish(a);
@@ -672,6 +676,7 @@ export class HomeWorld {
   }
   localPoint(p){return this.actor.localToWorld(V(...p));}
   animateWork(dt) {
+    if(this.livingTest&&['plant','water','harvest'].includes(this.action.type)){this.livingTest.actions.animate(this.action,dt);return;}
     if(['eat','fish','rest','sleep','grill','pray'].includes(this.action.type)){this.nutrition.animate(dt);return;}
     if(this.action.type==='mine'){this.mining.animate(dt);return;}
     if(this.action.type==='build'){this.building.animate(dt);return;}
@@ -785,6 +790,7 @@ export class HomeWorld {
   }
   syncNight(){
     const night=!!this.store.state.night;if(night===!!this.nightVisual)return;this.nightVisual=night;this.keys.clear();this.path=[];this.order=null;this.manualMoving=false;this.marker.visible=false;
+    this.livingTest?.garden.cancel();this.livingTest?.actions.clear();
     if(this.action?.type==='mine')this.mining.end(this.action);this.action=null;this.nutrition.clear();this.building.clearWork();this.building.cancelPreview();if(this.workTree){this.scene.remove(this.workTree);this.workTree=null;}this.fallingId=null;Object.values(this.tools).forEach(t=>t.visible=false);if(this.fishing?.active)this.fishing.leave();if(this.autoWork?.active)this.autoWork.stop(true);
     this.player={...this.store.state.player};for(const h of Object.values(this.community?.actors||{}))h.actor.visible=!night&&!this.playersOnly;if(this.playersOnly)this.community?.hideBuiltIns();if(!night){this.livingTest?.applyFriendVisibility();this.refreshDynamic();}this.animals?.sync();this.notify();
   }

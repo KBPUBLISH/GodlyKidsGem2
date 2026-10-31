@@ -11,6 +11,7 @@ import {FIRST_FRIEND_BASE,readFirstFriend,offerFirstFriend,placeFirstFriend} fro
 import {createLivingPlayer} from './living-player-model.js';
 import {LivingFarm} from './living-farm.js';
 import {LivingGarden} from './living-garden.js';
+import {LivingPlayerActions} from './living-player-actions.js';
 import {starterTasks} from './living-garden-rules.mjs';
 import {foodProp} from './dining.js';
 
@@ -62,7 +63,7 @@ export class LivingIslandTest {
     this.picnic.position.set(spot.x+.7,heightAt(game.world,spot.x+.7,spot.y)+.04,-spot.y);
     const mat=new THREE.Mesh(new THREE.BoxGeometry(.85,.025,.6),new THREE.MeshStandardMaterial({color:'#e2bd78',roughness:1}));this.picnic.add(mat);
     for(const x of [-.2,.2]){const plate=foodProp('carrot');plate.position.set(x,.02,0);this.picnic.add(plate);}
-    this.farm=new LivingFarm(this);this.garden=new LivingGarden(this);
+    this.actions=new LivingPlayerActions(this);this.farm=new LivingFarm(this);this.garden=new LivingGarden(this);
     if(!this.farm.state.garden.planted&&this.state.stage===0){const arrival=game.nav.nearest({x:-.5,y:-.2},2);if(arrival){Object.assign(game.player,arrival);game.actor.position.set(arrival.x,heightAt(game.world,arrival.x,arrival.y),-arrival.y);}}
     const prior=game.store.state;game.store.save({...prior,livingTentAwarded:!!prior.livingTentAwarded||prior.buildings.some(b=>b.id==='living-test-camp'),livingHomeAwarded:!!prior.livingHomeAwarded||prior.buildings.some(b=>b.id==='living-test-home')});
     this.sync();this.syncFirstFriend();
@@ -123,7 +124,7 @@ export class LivingIslandTest {
   dismissInvite(){this.state.inviteDismissed=true;this.save();this.g.notify();}
   openInvite(){if(this.state.stage>=1&&!this.state.adamUnlocked){this.state.inviteDismissed=false;this.g.notify();}}
   welcomeAdam(){this.state.welcomeSeen=true;this.save();this.g.notify();}
-  walk(point,greeting=false){if(this.garden)this.garden.work=null;this.activity();if(!greeting)this.greetTarget=null;if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))return;this.g.tool='walk';this.g.walk(point);this.g.renderer.domElement.focus({preventScroll:true});}
+  walk(point,greeting=false){this.garden?.cancel();this.activity();if(!greeting)this.greetTarget=null;if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))return;this.g.tool='walk';this.g.walk(point);this.g.renderer.domElement.focus({preventScroll:true});}
   activity(){this.lastInput=Date.now();if(this.watching)this.stopWatching();}
   setDialog(open){this.dialogOpen=!!open;if(open)this.activity();}
   confirmBuild(){if(!this.decision)return;this.state.approvedBuildings[this.decision.id]=true;this.decision=null;this.save();this.g.notify();}
@@ -219,9 +220,9 @@ export class LivingIslandTest {
   }
   update(dt,speed){
     this.elapsed+=dt;const g=this.g;
-    this.farm.update();this.garden.update(dt);this.updateSocial();
+    this.actions.update();this.farm.update();this.garden.update(dt);this.updateSocial();
     this.applyFriendVisibility();
-    this.playerVisual.update(dt,speed,this.elapsed,{celebrating:this.celebration?.until>this.elapsed,carrying:Object.values(this.state.inventory).some(n=>n>0),working:!!g.action});
+    this.playerVisual.update(dt,speed,this.elapsed,{celebrating:this.celebration?.until>this.elapsed,carrying:Object.values(this.state.inventory).some(n=>n>0),working:!!g.action||this.garden.animating});
     if(this.celebration&&this.elapsed>=this.celebration.until){this.celebration=null;g.notify();}
     if(this.state.adamUnlocked&&this.state.stage>=3&&this.state.homeWork<1&&!assignedProject(g.store.state,'adam')){
       const helper=g.community.actors.adam;
@@ -273,5 +274,5 @@ export class LivingIslandTest {
       resources:this.resources.filter(r=>r.object.visible).map(r=>({id:r.id,type:r.type,...this.project(r)})),
       friends:this.state.adamUnlocked?[{id:'adam',name:'Adam'}]:[]};
   }
-  dispose(){this.garden?.dispose();this.farm?.dispose();window.removeEventListener('message',this.onStoryMessage);}
+  dispose(){this.actions?.dispose();this.garden?.dispose();this.farm?.dispose();window.removeEventListener('message',this.onStoryMessage);}
 }

@@ -20,6 +20,7 @@ npm run living-test:build
 python homeworld/tests/living-test-browser.py
 # Or individually, in this order:
 python homeworld/tests/living-garden-browser.py
+python homeworld/tests/player-actions-browser.py
 python homeworld/tests/original-world-browser.py
 python homeworld/tests/original-story-browser.py
 ```
@@ -36,3 +37,5 @@ The repeatable animal loop, confirmation rules, prices, personal greetings and a
 
 
 The six playable scouts share a sculpted cartoon model between the rotating avatar picker, profile portraits and island. Broad beveled hair, expressive brows, tapered faces, colorful irises, neckerchiefs and chunky boots keep the shapes readable on phones. Each design stays below 30,000 triangles and is generated locally; no extra model downloads are needed. Existing avatar IDs, profile choices, tool bones, walking and carry animations stay compatible. Portrait requests use an artwork revision while saved profile identifiers remain stable. Regenerate PNG/WebP portraits with `python scripts/render-living-avatar-portraits.py` against the local Vite authoring server.
+
+The child crouches to scatter seeds and pat the soil, lifts and tips a watering can with visible droplets, and pulls vegetables up with both hands. Digging and chopping bend and turn the upper body independently of the legs, with planted feet and the original tool impacts. These lightweight motions use the existing tools and local geometry. Starter planting and picking finish after their visible action; leaving mid-action cancels without paying or granting progress. `player-actions-browser.py` checks actual starter planting, cancellation, ordinary digging/planting/watering, axe swings, tool cleanup and resource commits.

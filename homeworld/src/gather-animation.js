@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {preparePlayerCrouch} from './character-motion.js';
 const V=(...p)=>new THREE.Vector3(...p),Q=()=>new THREE.Quaternion();
 const ease=t=>{t=THREE.MathUtils.clamp(t,0,1);return t*t*(3-2*t);};
 const clamp01=t=>t<0?0:t>1?1:t;
@@ -74,7 +75,9 @@ export function applyGatherPose(rig,pose,tool,{hoe=false,supportWeight=1}={}){
   bones.mixamorigSpine?.rotateX(pose.bend);
   bones.mixamorigSpine?.rotateY(pose.twist);
   bones.mixamorigHead?.rotateY(-pose.twist*.6);
+  if(rig.livingTest)bones.mixamorigHead?.rotateX(pose.bend*.25);
   rig.actor.updateMatrixWorld(true);
+  preparePlayerCrouch(rig,pose.dip);
   for(const f of feet){rig.solveChain([bones[`mixamorig${f.side}Leg`],bones[`mixamorig${f.side}UpLeg`]],f.foot,f.p);f.foot.quaternion.copy(f.foot.parent.getWorldQuaternion(Q()).invert().multiply(f.q));f.foot.updateWorldMatrix(false,true);}
   const c=tool.userData.contact_local||[.3,.72,0],contact=V(c[0],c[2],-c[1]),length=contact.clone().multiply(tool.scale).length();
   const head=rig.localPoint(pose.h),hint=rig.localPoint(pose.w),gap=hint.clone().sub(head);
@@ -123,6 +126,7 @@ export function shakeTreeInstance(game,treeId,t,from){
 }
 export function animateGathering(game,dt){
   const a=game.action;a.t+=dt*(game.animationRate??1)*(game.nutrition?.workRate?.()??1);const hits=a.workHits||2,hoe=['plow','clear_weeds','dig_stump','dig_mud'].includes(a.type),distance=Math.hypot(a.target.x-game.player.x,a.target.y-game.player.y),reach=THREE.MathUtils.clamp(distance-(hoe?0:(a.tree?.radius||.1)*.3),.6,1.4),pose=gatherSample(a.type,a.t,hits,reach,hoe?(a.digScale||1):1),tool=game.tools[hoe?'hoe':'axe'];
+  if(game.livingTest){pose.dip*=1.15;pose.bend*=1.3;pose.twist*=1.25;}
   game.idlePose?.apply(game.bones,Date.now()/1000);game.actor.updateMatrixWorld(true);
   const placed=applyGatherPose(game,pose,tool,{hoe,supportWeight:chopHandWeight(a.t,pose.duration)});
   a.poseAudit={head:placed.head.clone(),grip:placed.grip.clone(),support:placed.support.clone(),phase:pose.phase,swing:pose.swing||''};

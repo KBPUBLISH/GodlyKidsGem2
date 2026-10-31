@@ -132,6 +132,14 @@ export function createLivingPlayer(avatarId) {
       sculpt('hairLight',head,[[-.005,.12],[.04,.10],[.075,-.12],[.035,-.25],[.015,-.10]],.012,0,0,-.57,.01);
     }
   }
+  // Give the torso its own joints. Bending a spine must move the shirt, arms,
+  // backpack and head together, without rotating the legs from their hips.
+  const upperParts=body.children.filter(part=>part!==hips&&part.position.y>.7);
+  const spine=pivot(body,0,.62,0),chest=pivot(spine,0,.32,0);
+  model.updateMatrixWorld(true);
+  for(const part of upperParts)spine.attach(part);
+  for(const part of [head,...arms])chest.attach(part);
+  bones.mixamorigSpine=spine;bones.mixamorigSpine2=chest;
   let phase=0,stride=0;
   const restPose=[...new Set(Object.values(bones))].map(bone=>({bone,position:bone.position.clone(),quaternion:bone.quaternion.clone()}));
   return {model,bones,restPose,dispose(){

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import {heightAt,cellFromKey} from './core.mjs';
 import {gardenAvailable,gardenNext,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS,HARVEST_COINS} from './living-garden-rules.mjs';
+import {FARM_ACTION_SECONDS} from './living-action-motion.mjs';
 
 export class LivingGarden {
  constructor(test){
-  this.test=test;this.g=test.g;this.work=null;
+  this.test=test;this.g=test.g;this.work=null;this.animating=false;
   this.group=new THREE.Group();this.g.scene.add(this.group);this.plots=[];
   const slots=this.g.world.gardenSlots,cols=[...new Set(slots.map(p=>p.col))].sort((a,b)=>a-b),rows=[...new Set(slots.map(p=>p.row))].sort((a,b)=>a-b);
   for(const row of [rows[1],rows[0]])for(const col of cols.slice(0,3))this.plots.push({...cellFromKey(this.g.world,`${col}:${row}`),crop:GARDEN_CROPS[this.plots.length]});
@@ -49,8 +50,9 @@ export class LivingGarden {
   for(const h of this.highlights){h.tile.visible=gardenAvailable(s).includes(h.index);h.fill.material.color.set(s.planted<4?'#a7ed7c':'#ffdf73');}
   this.marker.visible=false;if(next){const p=this.plots[next.index];this.marker.position.set(p.x,heightAt(this.g.world,p.x,p.y)+.06,-p.y);}
  }
+ cancel(){this.test.actions.clear(this.work);this.work=null;this.animating=false;}
  go(index){
-  if(!this.small)return;
+  if(!this.small||this.g.action||this.g.order||this.g.store.state.night)return;
   this.test.activity();
   const next=gardenNext(this.state),job=next?{...next,index:index??next.index}:{kind:'harvest',index:index??this.state.readyAt.findIndex(t=>t<=Date.now())};
   if(!Number.isInteger(job.index)||!this.plots[job.index]||this.work)return;
@@ -60,15 +62,18 @@ export class LivingGarden {
   const p=this.plots[job.index];this.test.walk(p);this.work={...job,elapsed:0};this.g.notify();
  }
  update(dt){
+  this.animating=false;
   if(!this.small)return;
   const now=Date.now();if(now>(this.refreshAt||0)){this.refreshAt=now+1000;this.sync();}
   const w=this.work;if(!w)return;
-  if(this.test.watching||this.test.dialogOpen)return;
+  if(this.g.action||this.g.order){this.cancel();return;}
+  if(this.test.watching||this.test.dialogOpen){this.test.actions.clear(w);return;}
   const p=this.plots[w.index],g=this.g;
-  if(Math.hypot(g.player.x-p.x,g.player.y-p.y)>.75){if(!g.path.length){this.work=null;g.notify();}return;}
+  if(Math.hypot(g.player.x-p.x,g.player.y-p.y)>.75){if(!g.path.length){this.cancel();g.notify();}return;}
   g.path=[];if(w.kind==='harvest'&&now<this.state.readyAt[w.index])return;w.elapsed+=dt;
-  if(w.elapsed<1.1)return;
-  this.work=null;
+  this.animating=true;this.test.actions.pose(w,w.kind,w.elapsed,p);
+  if(w.elapsed<FARM_ACTION_SECONDS[w.kind])return;
+  this.cancel();
   const before=this.state.rewarded,s=this.test.farm.state;
   const next=w.kind==='harvest'?gardenHarvest(s,w.index,now):gardenWork(s,w.kind,w.index,now);
   if(this.test.farm.commit(next)){

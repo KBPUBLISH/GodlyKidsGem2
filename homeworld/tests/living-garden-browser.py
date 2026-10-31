@@ -71,8 +71,33 @@ async def main():
    await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.garden.planted>n',arg=before,timeout=90000)
   assert await frame.evaluate('window.__hw.livingTest.farm.state.coins')==10
   assert await frame.get_by_role('button',name='Find a log',exact=True).count()==0
-  assert not await frame.evaluate('window.__hw.livingTest.resources.some(r=>r.object.visible)')
+  assert await frame.evaluate('window.__hw.livingTest.resources.some(r=>r.object.visible)')
+  assert await frame.evaluate('window.__hw.livingTest.garden.snapshot().phase')=='water'
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.wateredAt[0]') is None
+  await page.screenshot(path='/tmp/garden-needs-water.png')
+  # Water is committed only after the full pouring action, never on tap or interruption.
+  await frame.get_by_role('button',name='Water carrot in garden spot 1',exact=True).click()
+  await frame.wait_for_function('window.__hw.livingTest.garden.work?.poseAudit?.phase==="pour"',timeout=90000)
+  assert await frame.evaluate('window.__hw.tools.watering_can.visible')
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.wateredAt[0]') is None
+  await frame.evaluate('window.__hw.walk({...window.__hw.player})')
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.wateredAt[0]') is None
+  assert not await frame.evaluate('window.__hw.tools.watering_can.visible')
+  await ns['water_starter'](frame)
+  timers=await frame.evaluate('window.__hw.livingTest.farm.state.garden')
+  assert all(timers['readyAt'][i]-timers['wateredAt'][i]==180000 for i in [0,3,4,5])
+  await frame.goto(frame.url);await loaded()
+  assert await frame.evaluate('window.__hw.livingTest.farm.state.garden.readyAt')==timers['readyAt']
+  assert await frame.locator('.living-garden-timer').count()==4
+  await page.screenshot(path='/tmp/garden-growing-timers.png')
+  print('PASS: blue water cues, real pouring, cancellation, three-minute carrots and persistent growth timers',flush=True)
   for crop in ['pumpkin','lettuce','carrot']:
+   if crop=='carrot':
+    assert await frame.evaluate('window.__hw.livingTest.garden.snapshot().phase')=='wait'
+    await frame.get_by_role('button',name='Find a log while vegetables grow',exact=True).click()
+    await frame.wait_for_function('window.__hw.livingTest.state.gathered.length>0',timeout=90000)
+    assert await frame.evaluate('window.__hw.livingTest.state.stage')==0
+    await ns['ripen_watered_garden'](frame)
    await frame.get_by_role('button',name=f'Pick {crop} from garden spot',exact=False).first.click()
    await frame.wait_for_function('(crop)=>window.__hw.livingTest.farm.state.garden.picked[crop]===1',arg=crop,timeout=90000)
    if crop=='pumpkin':
@@ -93,8 +118,6 @@ async def main():
   await frame.get_by_role('button',name='Back to island',exact=True).click()
   print('PASS: first-visit Tasks, four free seeds, each vegetable counted separately, saved progress and 16 coins paid once',flush=True)
   assert await frame.get_by_role('button',name='Find a log',exact=True).count()==1
-  await frame.get_by_role('button',name='Find a log',exact=True).click()
-  await frame.wait_for_function('window.__hw.livingTest.state.gathered.length>0',timeout=90000)
   while await frame.evaluate('window.__hw.livingTest.state.gathered.length')<3:
    before=await frame.evaluate('window.__hw.livingTest.state.gathered.length')
    await frame.get_by_role('button',name='Find a log',exact=True).click()
@@ -116,6 +139,7 @@ async def main():
   await frame.get_by_role('button',name='Back to island',exact=True).click()
   # The ordinary tap-and-walk harvest loop recovers enough money to buy an animal.
   for i in range(4):
+   await ns['ensure_garden_harvest'](frame)
    await frame.get_by_role('button',name='Open Market',exact=True).click()
    await frame.get_by_role('button',name='Pick vegetables · +2 coins',exact=True).click(timeout=60000)
    await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.coins===n',arg=5+i*2,timeout=90000)

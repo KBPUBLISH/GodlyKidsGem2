@@ -165,7 +165,7 @@ export class LivingIslandTest {
   }
   hearTask(){
     const garden=this.farm.state.garden,hint=guidance(this.state);
-    const message=this.tasksOpen?'Plant four carrot seeds. Then pick one carrot, one pumpkin and one lettuce. Finally, gather wood and build your tent.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
+    const message=this.tasksOpen?'Plant four carrot seeds and water them. Then pick one carrot, one pumpkin and one lettuce. Finally, gather wood and build your tent.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
     this.activity();this.speak(message);
   }
   celebrate(title){this.celebration={title,until:this.elapsed+3.2};this.g.burst(this.g.player,'seed',.8);}
@@ -198,7 +198,7 @@ export class LivingIslandTest {
   }
   sync(){
     const g=this.g,task=currentRequest(this.state),site=this.site(),active=activeResourceIds(this.state);
-    for(const r of this.resources)r.object.visible=!!this.farm?.state.garden.completed&&!this.state.gathered.includes(r.id)&&active.includes(r.id);
+    for(const r of this.resources)r.object.visible=(this.farm?.state.garden.planted===4)&&!this.state.gathered.includes(r.id)&&active.includes(r.id);
     const carried=Object.entries(this.state.inventory).flatMap(([type,n])=>Array(n).fill(type));
     this.slots.forEach(({slot,types},i)=>{slot.visible=i<carried.length;for(const [type,obj] of Object.entries(types))obj.visible=carried[i]===type;});
     this.picnic.visible=this.state.stage>=2;
@@ -246,11 +246,12 @@ export class LivingIslandTest {
         }
       }
     }
-    const task=currentRequest(this.state);if(!task||!this.farm.state.garden.completed||this.watching||this.dialogOpen)return;
+    const task=currentRequest(this.state);if(!task||this.farm.state.garden.planted<4||this.watching||this.dialogOpen)return;
     if(this.elapsed>=this.pickAt){
       const found=this.resources.filter(r=>r.object.visible&&Math.hypot(g.player.x-r.x,g.player.y-r.y)<1.05).sort((a,b)=>Math.hypot(g.player.x-a.x,g.player.y-a.y)-Math.hypot(g.player.x-b.x,g.player.y-b.y))[0];
       if(found){const next=collect(this.state,found.id);if(next!==this.state){this.state=next;this.pickAt=this.elapsed+.3;this.pickupNotice={label:found.type==='wood'?'+1 log':'+1 carrot',until:this.elapsed+1.5};this.save();this.sync();g.burst(found,found.type==='wood'?'wood':'seed',.3);g.notify();}}
     }
+    if(!this.farm.state.garden.completed)return;
     const site=this.site();
     if(site&&Math.hypot(g.player.x-site.x,g.player.y-site.y)>1.5)this.declinedBuild=null;
     if(site&&readyToDeliver(this.state)&&this.elapsed>=this.depositAt&&Math.hypot(g.player.x-site.x,g.player.y-site.y)<1.05){

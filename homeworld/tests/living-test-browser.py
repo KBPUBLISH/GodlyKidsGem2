@@ -22,7 +22,25 @@ async def api(route):
     await route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS'},body=json.dumps(body))
 
 async def quality(frame):
-    await frame.evaluate('''()=>{const g=window.__hw;g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;g.sun.castShadow=false;g.resize();const render=g.renderer.render.bind(g.renderer);let n=0;g.renderer.render=(...args)=>{g.camera.updateMatrixWorld();if(++n%8===0)render(...args);};}''')
+    await frame.evaluate('''()=>{const g=window.__hw;g.renderer.setPixelRatio(.5);g.renderer.shadowMap.enabled=false;g.sun.castShadow=false;g.resize();const render=g.renderer.render.bind(g.renderer);render(g.scene,g.camera);let n=0;g.renderer.render=(...args)=>{g.camera.updateMatrixWorld();if(++n%8===0)render(...args);};}''')
+
+async def water_starter(frame):
+    while await frame.evaluate('window.__hw.livingTest.garden.snapshot().phase==="water"'):
+        before=await frame.evaluate('window.__hw.livingTest.farm.state.garden.wateredAt.filter(t=>t!==null).length')
+        await frame.get_by_role('button',name='Water carrot',exact=True).click()
+        await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.garden.wateredAt.filter(t=>t!==null).length>n',arg=before,timeout=90000)
+
+async def ripen_watered_garden(frame):
+    # Simulate elapsed offline growing time in the fixture; never water a dry patch or grant a reward.
+    await frame.evaluate("""()=>{const f=window.__hw.livingTest.farm,g=f.state.garden,now=Date.now();const readyAt=[...g.readyAt],wateredAt=[...g.wateredAt];g.wateredAt.forEach((at,i)=>{if(at!==null&&readyAt[i]>now){const duration=readyAt[i]-at;readyAt[i]=now-1;wateredAt[i]=now-1-duration;}});f.commit({...f.state,garden:{...g,readyAt,wateredAt}});}""")
+
+async def ensure_garden_harvest(frame):
+    if await frame.evaluate('window.__hw.livingTest.garden.snapshot().readyCount'):return
+    if await frame.evaluate('window.__hw.livingTest.garden.snapshot().phase==="water"'):
+        spot=await frame.evaluate('window.__hw.livingTest.garden.snapshot().spots.find(p=>p.kind==="water")')
+        await frame.get_by_role('button',name=f'Water {spot["crop"]} in garden spot {spot["index"]+1}',exact=True).click()
+        await frame.wait_for_function('(i)=>window.__hw.livingTest.farm.state.garden.wateredAt[i]!==null',arg=spot['index'],timeout=90000)
+    await ripen_watered_garden(frame)
 
 async def finish_garden(frame):
     if await frame.get_by_role('dialog',name='My first tasks').count():
@@ -31,6 +49,8 @@ async def finish_garden(frame):
         before=await frame.evaluate('window.__hw.livingTest.farm.state.garden.planted')
         await frame.get_by_role('button',name='Plant a carrot seed',exact=True).click()
         await frame.wait_for_function('(n)=>window.__hw.livingTest.farm.state.garden.planted>n',arg=before,timeout=90000)
+    await water_starter(frame)
+    await ripen_watered_garden(frame)
     while not await frame.evaluate('window.__hw.livingTest.farm.state.garden.completed'):
         before=await frame.evaluate('Object.values(window.__hw.livingTest.farm.state.garden.picked).reduce((a,b)=>a+b,0)')
         label=await frame.evaluate('window.__hw.livingTest.garden.snapshot().label')

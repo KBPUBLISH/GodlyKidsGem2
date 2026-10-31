@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {heightAt,cellFromKey} from './core.mjs';
-import {gardenAvailable,gardenNext,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS,HARVEST_COINS} from './living-garden-rules.mjs';
+import {gardenAvailable,gardenNext,gardenJob,gardenCrop,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS,HARVEST_COINS} from './living-garden-rules.mjs';
 import {FARM_ACTION_SECONDS} from './living-action-motion.mjs';
 
 export class LivingGarden {
@@ -22,7 +22,7 @@ export class LivingGarden {
   // The right-hand opening faces the arrival point and stays wide enough to walk through.
   add('fence_straight',xs[2]+.65,this.plots[2].y,Math.PI/2);
   for(const p of this.plots){
-   p.soil=add('tile_tilled_dry',p.x,p.y);
+   p.soil=add('tile_tilled_dry',p.x,p.y);p.wetSoil=add('tile_seeded_wet',p.x,p.y);
    p.cropObject=p.crop==='lettuce'?this.lettuce():g.asset(`crop_${p.crop}_ready`);
    p.cropObject.position.set(p.x,heightAt(g.world,p.x,p.y)+.055,-p.y);this.group.add(p.cropObject);
   }
@@ -45,21 +45,19 @@ export class LivingGarden {
  }
  sync(){
   if(!this.small)return;
-  const s=this.state,now=Date.now(),next=gardenNext(s);
-  this.plots.forEach((p,i)=>{p.soil.visible=true;p.cropObject.visible=!CARROT_SPOTS.includes(i)||s.plantedSpots.includes(i);p.cropObject.scale.setScalar(s.readyAt[i]>now?.38:1);});
-  for(const h of this.highlights){h.tile.visible=gardenAvailable(s).includes(h.index);h.fill.material.color.set(s.planted<4?'#a7ed7c':'#ffdf73');}
-  this.marker.visible=false;if(next){const p=this.plots[next.index];this.marker.position.set(p.x,heightAt(this.g.world,p.x,p.y)+.06,-p.y);}
+  const s=this.state,now=Date.now();
+  this.plots.forEach((p,i)=>{const crop=gardenCrop(s,i,now),wet=crop.phase==='growing';p.soil.visible=!wet;p.wetSoil.visible=wet;p.cropObject.visible=crop.phase!=='empty';p.cropObject.scale.setScalar(crop.phase==='ready'?1:.18+.65*crop.progress);});
+  for(const h of this.highlights){const job=gardenJob(s,h.index,now);h.tile.visible=!!job&&job.kind!=='wait';h.fill.material.color.set(job?.kind==='water'?'#7ddfff':job?.kind==='plant'?'#a7ed7c':'#ffdf73');}
+  this.marker.visible=false;
  }
  cancel(){this.test.actions.clear(this.work);this.work=null;this.animating=false;}
  go(index){
   if(!this.small||this.g.action||this.g.order||this.g.store.state.night)return;
   this.test.activity();
-  const next=gardenNext(this.state),job=next?{...next,index:index??next.index}:{kind:'harvest',index:index??this.state.readyAt.findIndex(t=>t<=Date.now())};
-  if(!Number.isInteger(job.index)||!this.plots[job.index]||this.work)return;
-  if(job.kind!=='harvest'&&!gardenAvailable(this.state).includes(job.index))return;
-  if(job.kind==='harvest'&&!this.state.completed&&!gardenAvailable(this.state).includes(job.index))return;
-  if(job.kind==='harvest'&&this.state.readyAt[job.index]>Date.now()&&this.state.completed)return;
-  const p=this.plots[job.index];this.test.walk(p);this.work={...job,elapsed:0};this.g.notify();
+  const now=Date.now(),job=index===undefined?gardenNext(this.state,now):gardenJob(this.state,index,now);
+  if(!job||this.work)return false;
+  if(job.kind==='wait'){this.g.toast(`${job.crop[0].toUpperCase()+job.crop.slice(1)} · ${Math.ceil(job.remaining/60000)} min to grow`);return false;}
+  const p=this.plots[job.index];this.test.walk(p);this.work={kind:job.kind,index:job.index,elapsed:0};this.g.notify();return true;
  }
  update(dt){
   this.animating=false;
@@ -70,16 +68,16 @@ export class LivingGarden {
   if(this.test.watching||this.test.dialogOpen){this.test.actions.clear(w);return;}
   const p=this.plots[w.index],g=this.g;
   if(Math.hypot(g.player.x-p.x,g.player.y-p.y)>.75){if(!g.path.length){this.cancel();g.notify();}return;}
-  g.path=[];if(w.kind==='harvest'&&now<this.state.readyAt[w.index])return;w.elapsed+=dt;
+  g.path=[];w.elapsed+=dt;
   this.animating=true;this.test.actions.pose(w,w.kind,w.elapsed,p);
   if(w.elapsed<FARM_ACTION_SECONDS[w.kind])return;
   this.cancel();
   const before=this.state.rewarded,s=this.test.farm.state;
   const next=w.kind==='harvest'?gardenHarvest(s,w.index,now):gardenWork(s,w.kind,w.index,now);
   if(this.test.farm.commit(next)){
-   g.burst(p,'seed',.5);
+   g.burst(p,w.kind==='water'?'water':'seed',.5);
    if(!before&&this.state.rewarded)this.test.celebrate('+10 coins!');
-   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':`+${HARVEST_COINS} coins`,until:this.test.elapsed+2};}
+   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':w.kind==='water'?'Watered!':`+${HARVEST_COINS} coins`,until:this.test.elapsed+2};}
    g.notify();
   }
  }
@@ -88,21 +86,22 @@ export class LivingGarden {
   const point=new THREE.Vector3();if(!ray.ray.intersectPlane(this.g.groundPlane,point))return false;
   const i=this.plots.findIndex(p=>Math.hypot(p.x-point.x,p.y+point.z)<.55);
   if(i<0)return false;
-  if(this.state.completed)this.go(i);else if(gardenAvailable(this.state).includes(i))this.go(i);
+  this.go(i);
   return true;
  }
  snapshot(){
-  const s=this.state,next=gardenNext(s),target=next?this.plots[next.index]:null,planting=s.planted<4;
-  const seconds=next?.kind==='harvest'?Math.max(0,Math.ceil((s.readyAt[next.index]-Date.now())/1000)):0;
-  return {...s,busy:!!this.work,small:this.small,phase:planting?'plant':'harvest',seconds,
-   readyCount:this.small&&s.completed?s.readyAt.filter(t=>t<=Date.now()).length:0,
-   label:planting?'Plant a carrot seed':`Pick a ${target?.crop||'vegetable'}`,
-   instruction:planting?'Tap a glowing spot to plant a carrot seed. Four seeds earn 10 coins!':'Pick one carrot, one pumpkin and one lettuce.',
-   progress:planting?`${s.planted} / 4 carrot seeds planted`:`${Object.values(s.picked).reduce((a,b)=>a+b,0)} / 3 vegetables picked`,
-   value:planting?s.planted:Object.values(s.picked).reduce((a,b)=>a+b,0),total:planting?4:3,
-   spots:gardenAvailable(s).map(index=>({index,crop:this.plots[index].crop,...this.test.project(this.plots[index],.12)})),
-   target:target?this.test.project(target,.1):null,
-   crops:this.small?this.plots.map((p,i)=>({index:i,crop:p.crop,ready:s.planted===4&&s.readyAt[i]<=Date.now(),...this.test.project(p,.5)})):[]};
+  const s=this.state,now=Date.now(),next=gardenNext(s,now),phase=next?.kind||'wait',target=next?this.plots[next.index]:null;
+  const seconds=phase==='wait'?Math.ceil(next.remaining/1000):0,format=ms=>{const n=Math.ceil(ms/1000);return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;};
+  const watered=CARROT_SPOTS.filter(i=>s.wateredAt[i]!==null).length,picked=Object.values(s.picked).reduce((a,b)=>a+b,0);
+  const crops=this.small?this.plots.map((p,i)=>({index:i,...gardenCrop(s,i,now),...this.test.project(p,.5)})):[];
+  return {...s,busy:!!this.work,small:this.small,phase,seconds,timer:format(next?.remaining||0),
+   readyCount:crops.filter(c=>c.phase==='ready'&&s.planted===4).length,thirstyCount:crops.filter(c=>c.phase==='thirsty'&&s.planted===4).length,
+   label:phase==='plant'?'Plant a carrot seed':phase==='water'?`Water ${target.crop}`:phase==='harvest'?`Pick a ${target.crop}`:'Vegetables are growing',
+   instruction:phase==='plant'?'Tap a glowing spot to plant a carrot seed. Four seeds earn 10 coins!':phase==='water'?'Tap a blue drop to water your carrots. They need water to grow.':phase==='wait'?'Your carrots are growing. Gather logs or explore while you wait.':'Pick one carrot, one pumpkin and one lettuce.',
+   progress:phase==='plant'?`${s.planted} / 4 carrot seeds planted`:phase==='water'?`${watered} / 4 carrots watered`:`${picked} / 3 vegetables picked`,
+   value:phase==='plant'?s.planted:phase==='water'?watered:picked,total:phase==='plant'||phase==='water'?4:3,
+   spots:this.small?gardenAvailable(s).map(index=>{const job=gardenJob(s,index,now);return {...job,timer:format(job.remaining),...this.test.project(this.plots[index],.4)};}):[],
+   target:target?this.test.project(target,.1):null,crops};
  }
 
  dispose(){this.g.scene.remove(this.group);this.highlights?.forEach(h=>h.tile.traverse(o=>{o.geometry?.dispose();o.material?.dispose();}));this.marker?.geometry.dispose();this.marker?.material.dispose();this.ownedGeometry?.dispose();this.ownedMaterials?.forEach(m=>m.dispose());}

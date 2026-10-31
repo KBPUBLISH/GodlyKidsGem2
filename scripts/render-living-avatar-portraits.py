@@ -21,10 +21,16 @@ async def main():
      const png=scene.portrait();scene.dispose();return png.split(',')[1];
     }""",avatar['id'])
     (output/(avatar['id']+'.png')).write_bytes(base64.b64decode(png))
+    full=await page.evaluate("""async id=>{
+     const {createAvatarPreview}=await import('/components/onboarding/avatarPreviewScene.ts');
+     const host=document.getElementById('portrait');host.style.width='400px';host.style.height='600px';
+     const scene=createAvatarPreview(host,id);const png=scene.portrait();scene.dispose();host.style.width='256px';host.style.height='256px';return png.split(',')[1];
+    }""",avatar['id'])
+    Path('/tmp/'+avatar['id']+'-avatar-full.png').write_bytes(base64.b64decode(full))
    await browser.close()
   subprocess.run(['node','--input-type=module','-e',"""
 import sharp from 'sharp';import {LIVING_AVATARS} from './shared/livingAvatars.mjs';
-for(const avatar of LIVING_AVATARS)await sharp('public'+avatar.portrait).webp({quality:85}).toFile('public'+avatar.portrait.replace('.png','.webp'));
+for(const avatar of LIVING_AVATARS){await sharp('public'+avatar.portrait).webp({quality:86,effort:6}).toFile('public'+avatar.portrait.replace('.png','.webp'));await sharp('/tmp/'+avatar.id+'-avatar-full.png').webp({quality:85,effort:6}).toFile('public/avatars/adventurers/'+avatar.id+'-full.webp');}
 """],check=True)
   print('Rendered all six matching profile portraits from the island models.')
  finally:html.unlink(missing_ok=True)

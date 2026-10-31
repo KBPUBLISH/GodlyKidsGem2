@@ -228,7 +228,7 @@ const LandingPage: React.FC = () => {
         }}
       >
         <img
-          src={LIVING_TEST_BUILD ? PREVIEW_ART.logo : '/assets/images/godly-kids-logo.png?v=1'}
+          src={PREVIEW_ART.logo}
           alt="Godly Kids"
           draggable={false}
           className="m-0 block h-auto select-none"

@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {statSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {LIVING_AVATARS,getLivingAvatar,livingAvatarForProfile,livingAvatarPortraitUrl} from '../shared/livingAvatars.mjs';
@@ -35,7 +36,18 @@ test('profile choices survive the existing cloud payload and stay independent',(
 test('updated portraits bypass old artwork caches without changing saved avatar identifiers',()=>{
   const src=getLivingAvatar('berry').portrait;
   assert.equal(src,'/avatars/adventurers/berry.png');
-  assert.equal(livingAvatarPortraitUrl(src),src+'?v=sculpted-2');
-  assert.equal(livingAvatarPortraitUrl(src.replace('.png','.webp')),'/avatars/adventurers/berry.webp?v=sculpted-2');
+  assert.equal(livingAvatarPortraitUrl(src),src.replace('.png','.webp')+'?v=harbor-4');
+  assert.equal(livingAvatarPortraitUrl(src.replace('.png','.webp')),'/avatars/adventurers/berry.webp?v=harbor-4');
   for(const other of [null,'/avatars/heads/head-1.png','https://example.com/me.png'])assert.equal(livingAvatarPortraitUrl(other),other);
+});
+
+
+test('the generated avatar screen stays within a small mobile artwork budget',()=>{
+ const root=new URL('../public/',import.meta.url);
+ const bytes=path=>statSync(new URL(path,root)).size;
+ const shared=['logo','heading','caption','confirm','arrow'].reduce((n,name)=>n+bytes(`assets/images/avatar-harbor/${name}-v1.webp`),0);
+ const portraits=LIVING_AVATARS.reduce((n,a)=>n+bytes(`avatars/adventurers/${a.id}.webp`),0);
+ assert.ok(shared+portraits+bytes('assets/images/avatar-harbor/harbor-phone-v1.webp')<450000);
+ assert.ok(bytes('assets/images/avatar-harbor/harbor-tablet-v1.webp')<300000);
+ for(const a of LIVING_AVATARS)assert.ok(bytes(`avatars/adventurers/${a.id}-full.webp`)<50000);
 });

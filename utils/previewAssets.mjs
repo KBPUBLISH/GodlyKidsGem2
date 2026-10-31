@@ -1,7 +1,7 @@
 /** Stable URLs shared by early HTML hints, the screens, and background warmup. */
 export const PREVIEW_ART = {
   splash: '/assets/images/splash-adventure-mobile-v1.webp',
-  logo: '/assets/images/godly-kids-logo-mobile-v1.webp',
+  logo: '/assets/images/avatar-harbor/logo-v1.webp',
   languageOcean: '/assets/images/language/language-ocean-mobile-v1.webp',
   languageGlobe: '/assets/images/language/language-globe-mobile-v1.webp',
 };
@@ -10,6 +10,10 @@ const language = [PREVIEW_ART.languageOcean, PREVIEW_ART.languageGlobe];
 const onboarding = [
   '/assets/images/pass-phone-parent-hand.png', '/assets/images/pass-phone-kid-hand.png',
   '/assets/images/onboarding-family-bg.jpg?v=openart-3',
+  PREVIEW_ART.logo,
+  '/assets/images/avatar-harbor/harbor-phone-v1.webp',
+  ...['heading','caption','confirm','arrow'].map(name=>`/assets/images/avatar-harbor/${name}-v1.webp`),
+  '/assets/fonts/fredoka-latin-700.woff2',
 ];
 /** The crew screen and its preloader share exact URLs, including cache revisions. */
 export const PREVIEW_SHIP_ART = {

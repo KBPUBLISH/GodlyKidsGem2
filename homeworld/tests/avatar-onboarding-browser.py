@@ -38,6 +38,13 @@ async def main():
   await page.emulate_media(reduced_motion='reduce');await page.wait_for_timeout(100)
   still=await canvas.screenshot();await page.wait_for_timeout(200)
   assert still==await canvas.screenshot(),'Reduced motion should keep the character still'
+  # Long drags turn the real 3D model, even with automatic motion disabled.
+  bounds=await page.locator('.avatar-viewport').bounding_box();x=bounds['x']+55;y=bounds['y']+bounds['height']*.45
+  for turn in range(2):
+   await page.mouse.move(x,y);await page.mouse.down();await page.wait_for_timeout(500)
+   await page.mouse.move(bounds['x']+bounds['width']-55,y,steps=12);await page.mouse.up()
+   assert await page.locator('.avatar-caption h2').inner_text()=='Trail Scout'
+  assert still!=await canvas.screenshot(),'Two long drags should rotate through a full turn without choosing another avatar'
   await page.emulate_media(reduced_motion='no-preference')
   await page.screenshot(path='/tmp/avatar-picker-trail.png')
   await asyncio.wait_for(waiting.wait(),timeout=20);release.set()
@@ -58,7 +65,9 @@ async def main():
   await page.locator('.avatar-viewport').focus();await page.keyboard.press('ArrowLeft')
   assert await page.locator('.avatar-caption h2').inner_text()==names[5]
   await page.get_by_role('button',name='Previous avatar',exact=True).click()
-  assert await page.locator('.avatar-caption h2').inner_text()=='Berry Scout'
+  assert await page.locator('.avatar-caption h2').inner_text()=='Sky Scout'
+  assert await page.locator('.avatar-thumbnail').count()==6
+  await page.get_by_role('button',name='Choose Berry Scout',exact=True).click()
   await page.get_by_role('button',name='You can add another profile later',exact=True).click()
   assert await page.get_by_text('More kids in your family?',exact=False).is_visible()
   await page.screenshot(path='/tmp/avatar-picker-berry.png')
@@ -67,6 +76,12 @@ async def main():
   assert await page.get_by_role('spinbutton',name='Your age').input_value()=='8'
   await page.get_by_role('button',name="That's me!",exact=True).click()
   assert await page.locator('.avatar-caption h2').inner_text()=='Berry Scout'
+  for width,height in [(390,844),(768,1024),(1024,768),(1366,1024),(844,390),(320,568)]:
+   await page.set_viewport_size({'width':width,'height':height});await page.wait_for_timeout(150)
+   assert await page.locator('.choose-avatar').evaluate('e=>e.scrollWidth<=e.clientWidth+1&&e.scrollHeight<=e.clientHeight+1'),(width,height)
+   targets=await page.locator('.choose-avatar button').evaluate_all('es=>es.map(e=>{const b=e.getBoundingClientRect();return {label:e.getAttribute("aria-label"),w:b.width,h:b.height};})')
+   assert all(t['w']>=44 and t['h']>=44 for t in targets),targets
+   await page.screenshot(path=f'/tmp/avatar-final-{width}-{height}.png')
   await page.set_viewport_size({'width':320,'height':568})
   assert await page.locator('.choose-avatar').evaluate('el=>el.scrollWidth<=el.clientWidth+1')
   await page.get_by_role('button',name='This is me!',exact=True).scroll_into_view_if_needed()

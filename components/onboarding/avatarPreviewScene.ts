@@ -12,9 +12,9 @@ export function createAvatarPreview(host: HTMLElement, avatarId: string, portrai
   renderer.domElement.setAttribute('aria-hidden','true');
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(portrait ? 25 : 32,1,.1,20);
-  camera.position.set(0,portrait ? 1.43 : 1.12,portrait ? 1.85 : 4.05);
-  camera.lookAt(0,portrait ? 1.43 : .86,0);
+  const camera = new THREE.PerspectiveCamera(portrait ? 27 : 32,1,.1,20);
+  camera.position.set(0,portrait ? 1.47 : 1.18,portrait ? 3.0 : 4.35);
+  camera.lookAt(0,portrait ? 1.43 : .95,0);
   scene.add(new THREE.HemisphereLight('#fff5df','#7d9890',2.5));
   const key = new THREE.DirectionalLight('#fff5e5',3);key.position.set(3,4,5);scene.add(key);
   const rim = new THREE.DirectionalLight('#c6e5f0',1.5);rim.position.set(-3,2,-2);scene.add(rim);

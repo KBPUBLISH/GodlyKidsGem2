@@ -1,4 +1,5 @@
 import React from 'react';
+import {livingAvatarPortraitUrl} from '../../shared/livingAvatars.mjs';
 import { User as UserIcon } from 'lucide-react';
 import { AVATAR_ASSETS } from '../avatar/AvatarAssets';
 
@@ -68,7 +69,7 @@ const PortholeAvatar: React.FC<PortholeAvatarProps> = ({
               </svg>
             </div>
           ) : avatarSrc ? (
-            <img src={avatarSrc} alt="Profile avatar" className="w-full h-full object-cover" />
+            <img src={livingAvatarPortraitUrl(avatarSrc)} alt="Profile avatar" className="w-full h-full object-cover" />
           ) : fallbackInitial ? (
             <svg viewBox="0 0 100 100" className="w-full h-full" aria-hidden>
               <text

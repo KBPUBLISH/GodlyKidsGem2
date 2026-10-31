@@ -786,7 +786,7 @@ export class HomeWorld {
   syncNight(){
     const night=!!this.store.state.night;if(night===!!this.nightVisual)return;this.nightVisual=night;this.keys.clear();this.path=[];this.order=null;this.manualMoving=false;this.marker.visible=false;
     if(this.action?.type==='mine')this.mining.end(this.action);this.action=null;this.nutrition.clear();this.building.clearWork();this.building.cancelPreview();if(this.workTree){this.scene.remove(this.workTree);this.workTree=null;}this.fallingId=null;Object.values(this.tools).forEach(t=>t.visible=false);if(this.fishing?.active)this.fishing.leave();if(this.autoWork?.active)this.autoWork.stop(true);
-    this.player={...this.store.state.player};for(const h of Object.values(this.community?.actors||{}))h.actor.visible=!night&&!this.playersOnly;if(this.playersOnly)this.community?.hideBuiltIns();if(!night)this.refreshDynamic();this.animals?.sync();this.notify();
+    this.player={...this.store.state.player};for(const h of Object.values(this.community?.actors||{}))h.actor.visible=!night&&!this.playersOnly;if(this.playersOnly)this.community?.hideBuiltIns();if(!night){this.livingTest?.applyFriendVisibility();this.refreshDynamic();}this.animals?.sync();this.notify();
   }
   lighting(dt) {
     this.animateWater(dt);

@@ -1,6 +1,6 @@
 import React, {useEffect,useRef,useState} from 'react';
 import {ChevronLeft,ChevronRight,Users} from 'lucide-react';
-import {LIVING_AVATARS,getLivingAvatar} from '../../shared/livingAvatars.mjs';
+import {LIVING_AVATARS,getLivingAvatar,livingAvatarPortraitUrl} from '../../shared/livingAvatars.mjs';
 import {ONBOARDING_FAMILY_BG_POSTER} from '../../utils/onboardingJourney';
 import {createAvatarPreview} from './avatarPreviewScene';
 import './ChooseAvatar.css';
@@ -37,7 +37,7 @@ export default function ChooseAvatar({selectedId,onSelect,onConfirm,onBack}:Prop
           onPointerCancel={()=>{swipe.current=null;}}
           onPointerUp={event=>{const start=swipe.current;swipe.current=null;if(!start)return;const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy)*1.2)move(dx<0?1:-1);}}>
           <div ref={host} className={`avatar-canvas${fallback?' is-hidden':''}`}/>
-          {fallback&&<img className="avatar-static" src={avatar.portrait} alt=""/>}
+          {fallback&&<img className="avatar-static" src={livingAvatarPortraitUrl(avatar.portrait)} alt=""/>}
         </div>
         <button className="avatar-arrow previous" aria-label="Previous avatar" onClick={()=>move(-1)}><ChevronLeft size={28}/></button>
         <button className="avatar-arrow next" aria-label="Next avatar" onClick={()=>move(1)}><ChevronRight size={28}/></button>

@@ -1,13 +1,21 @@
 """Original tool/build controls plus the shared Market wallet; run garden regression first."""
-import asyncio,json,os,runpy,shutil,re
+import asyncio,json,os,runpy,shutil,re,time
 from pathlib import Path
 from playwright.async_api import async_playwright
 ns=runpy.run_path(str(Path(__file__).with_name('living-test-browser.py')))
 BASE=os.environ.get('LIVING_ISLAND_TEST_URL','http://127.0.0.1:3000/').rstrip('/')
 async def main():
+ saved=json.loads(Path('/tmp/garden-tested.json').read_text());now=int(time.time()*1000)
+ # Keep this earned fixture at its saved daytime instead of replaying offline nights as it ages.
+ for origin in saved['origins']:
+  for entry in origin['localStorage']:
+   if entry['name'].startswith('godlykids_homeworld_playtest_v1:'):
+    state=json.loads(entry['value'])
+    if state.get('livingFarm'):
+     state['clock']['wall']=now;state['nightCursorWall']=now;state['lastOnlineWall']=now;entry['value']=json.dumps(state)
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader'])
-  ctx=await browser.new_context(storage_state='/tmp/garden-tested.json',viewport={'width':430,'height':932})
+  ctx=await browser.new_context(storage_state=saved,viewport={'width':430,'height':932})
   page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.route('**/api/**',ns['api']);await page.route('https://fonts.googleapis.com/**',lambda r:r.abort())
   await page.route('https://cdn.tailwindcss.com/**',lambda r:r.fulfill(content_type='application/javascript',body='window.tailwind={config:{}}'))
@@ -56,10 +64,13 @@ async def main():
   await frame.wait_for_function('Object.values(window.__hw.store.state.cells).some(c=>c.seed)',timeout=90000)
   await page.screenshot(path='/tmp/restored-built-garden.png')
   print('PASS: original build and planting actions',flush=True)
+  # Observe the sunrise transition itself; waiting another frame can hide a brief flash of locked friends.
+  await frame.evaluate('''()=>{const g=window.__hw,sync=g.syncNight.bind(g);g.syncNight=(...args)=>{const wasNight=g.nightVisual;sync(...args);if(wasNight&&!g.nightVisual)window.friendsAtSunrise=Object.values(g.community.actors).map(h=>h.actor.visible);};}''')
   await frame.get_by_role('button',name='Day and time',exact=False).click()
   await frame.get_by_text('Grown-up test tools',exact=True).click();await frame.get_by_role('button',name='Preview bedtime',exact=True).click()
   await frame.wait_for_function('!!window.__hw.store.state.night',timeout=10000)
   await frame.wait_for_function('!window.__hw.store.state.night',timeout=20000)
+  assert await frame.evaluate('window.friendsAtSunrise?.every(visible=>!visible)')
   assert await frame.evaluate('Object.values(window.__hw.community.actors).every(h=>!h.actor.visible)')
   assert not errors,errors
   print('PASS: Market buy/sell/reload, original chop animation, Build placement/construction, planting, night/morning and solo control',flush=True)

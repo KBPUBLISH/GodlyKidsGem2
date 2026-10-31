@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {LIVING_AVATARS,getLivingAvatar,livingAvatarForProfile} from '../shared/livingAvatars.mjs';
+import {LIVING_AVATARS,getLivingAvatar,livingAvatarForProfile,livingAvatarPortraitUrl} from '../shared/livingAvatars.mjs';
 import {createLivingPlayer} from '../homeworld/src/living-player-model.js';
 
 test('six distinct designs retain the same world scale and a bounded geometry budget',()=>{
@@ -15,7 +15,7 @@ test('six distinct designs retain the same world scale and a bounded geometry bu
     const bounds=new THREE.Box3().setFromObject(player.model),size=bounds.getSize(new THREE.Vector3());
     assert.ok(size.y>1.5&&size.y<2.1,avatar.id);
     let triangles=0;player.model.traverse(o=>{if(o.isMesh)triangles+=(o.geometry.index?.count||o.geometry.attributes.position.count)/3;});
-    assert.ok(triangles<60000,`${avatar.id}: ${triangles} triangles`);
+    assert.ok(triangles<30000,`${avatar.id}: ${triangles} triangles`);
     player.dispose();
   }
 });
@@ -29,4 +29,13 @@ test('profile choices survive the existing cloud payload and stay independent',(
   assert.equal(livingAvatarForProfile({worldAvatarId:'invalid',avatarSeed:brother.avatarSeed}).id,'sky');
   assert.equal(getLivingAvatar('invalid').id,'trail');
   assert.equal(livingAvatarForProfile(null).id,'trail');
+});
+
+
+test('updated portraits bypass old artwork caches without changing saved avatar identifiers',()=>{
+  const src=getLivingAvatar('berry').portrait;
+  assert.equal(src,'/avatars/adventurers/berry.png');
+  assert.equal(livingAvatarPortraitUrl(src),src+'?v=sculpted-2');
+  assert.equal(livingAvatarPortraitUrl(src.replace('.png','.webp')),'/avatars/adventurers/berry.webp?v=sculpted-2');
+  for(const other of [null,'/avatars/heads/head-1.png','https://example.com/me.png'])assert.equal(livingAvatarPortraitUrl(other),other);
 });

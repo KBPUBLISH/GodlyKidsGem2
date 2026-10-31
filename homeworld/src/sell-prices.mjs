@@ -17,6 +17,7 @@ export const SELL_ITEMS = [
   {id:'fish', name:'Raw fish', price:1, group:'fish'},
   {id:'cooked_fish', name:'Grilled fish', price:1, group:'fish'},
   {id:'carrot', name:'Carrot', price:3, group:'produce'},
+  {id:'lettuce', name:'Lettuce', price:3, group:'produce'},
   {id:'wheat', name:'Wheat', price:2, group:'produce'},
   {id:'sunflower', name:'Sunflower', price:3, group:'produce'},
   {id:'pumpkin', name:'Pumpkin', price:4, group:'produce'},

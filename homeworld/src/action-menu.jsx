@@ -2,6 +2,7 @@ import React from 'react';
 import {Icon,ItemIcon,ActionButton,TOOLS} from './ui.jsx';
 import {BuildMenu} from './building-ui.jsx';
 import {AnimalFarm} from './animals-ui.jsx';
+import {LIVING_TEST} from './storage-scope.mjs';
 
 const TABS=[{id:'actions',name:'Actions',icon:'actions'},{id:'build',name:'Build',icon:'build'},{id:'farm',name:'Farm',icon:'plant'},{id:'decorate',name:'Decorate',icon:'rest'}];
 const HARVEST={id:'harvest',name:'Harvest',color:'#527c38',soft:'#edf6d9'};
@@ -38,7 +39,7 @@ export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,
         {tool==='mine'&&!farm&&<button className="action-extra" onClick={()=>onPanel('tools')}>Better tools →</button>}
         {primary&&<div className="menu-primary"><ActionButton icon={primary.icon} disabled={view.busy||(ready==='fish'&&view.nutrition.energy<4)} onClick={()=>onRun(primary.run)}>{primary.name}</ActionButton><span>{HINTS[ready]}</span></div>}
         {farm&&<p className="action-menu-tip">Choose Dig, then tap clear grass to walk there and dig. Plant and water your new spot.</p>}
-        {farm&&!view.livingTest&&<AnimalFarm view={view} onRun={onRun}/>}
+        {farm&&!LIVING_TEST&&!view.livingTest&&<AnimalFarm view={view} onRun={onRun}/>}
       </>}
     </div>
   </section>;

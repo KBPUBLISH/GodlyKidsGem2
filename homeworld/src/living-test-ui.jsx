@@ -55,7 +55,6 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
    {!modal&&play.watching&&<section className="living-watch"><span>{play.watchingName}</span><button aria-label="Back to me" onClick={()=>invoke(t=>t.stopWatching())}><Icon type="walk" size={30}/>Back to me</button></section>}
    {!modal&&!play.insideHome&&play.pickupNotice&&!play.celebration&&<div className="living-pickup" role="status">{play.pickupNotice}</div>}
    {!modal&&play.celebration&&<div className="living-celebration" role="status"><Icon type="actions" size={28}/><strong>{play.celebration}</strong></div>}
-   {view.toasts?.[0]&&!modal&&!play.celebration&&!play.pickupNotice&&<div className="toast living-toast" role="status">{view.toasts[0].text}</div>}
   </>}
   {modal&&play&&<div className="drawer-shade living-sheet-shade" onClick={close}><section ref={drawer} className={`drawer living-sheet living-sheet-${modal}`} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="living-drawer-title" onClick={e=>e.stopPropagation()}>
    <div className="drawer-header"><h1 id="living-drawer-title">{title}</h1><button className="close" onClick={close} aria-label="Back to island">×</button></div>

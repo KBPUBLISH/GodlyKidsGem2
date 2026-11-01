@@ -14,7 +14,7 @@ export function AdventureGoals({engine,view,blocked,onPanel,onModalChange,reques
  const persist=next=>{const g=engine.current;if(!g?.store)return false;try{g.store.save({...g.store.state,adventureGoals:next});setError('');g.notify();return true;}catch{setError('Your goal could not be saved. Please try again.');return false;}};
  const close=()=>{if(modal==='complete')persist({...saved,celebrate:null});setSheet(null);setSelected(null);};
  useDialogFocus(!!modal,dialog,close);
- useEffect(()=>{if(request!==lastRequest.current){lastRequest.current=request;setSelected(null);setSheet('picker');}},[request]);
+ useEffect(()=>{if(request!==lastRequest.current){lastRequest.current=request;setSelected(null);setSheet(saved.active?'detail':'picker');}},[request]);
  useEffect(()=>{onModalChange?.(!!modal);engine.current?.livingTest?.setDialog(!!modal||blocked);return()=>onModalChange?.(false);},[!!modal,blocked]);
  useEffect(()=>{onActiveChange?.(!!active);},[!!active]);
  const stamp=JSON.stringify(facts),saveStamp=JSON.stringify(saved);

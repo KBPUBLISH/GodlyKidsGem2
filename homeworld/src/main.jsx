@@ -408,9 +408,9 @@ function App(){
 
     {view.inside&&<div className="home-outside-bar"><button type="button" className="home-outside" onClick={()=>invoke(g=>g.building.leaveHome())}>Outside</button><span className="home-inside-status" role="status">Inside the {view.inside.name}</span></div>}
     {(view.playersOnly||LIVING_TEST)&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onPointerUp={onBackToShip} onClick={onBackToShip}><img src={LIVING_TEST?LIVING_SHIP_ICON:SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
+    {LIVING_TEST&&!panel&&!actionsOpen&&!mapOnly&&!view.fishing&&!view.night?.sleeping&&!view.livingTest?.arrival&&<button type="button" className="adventure-tasks-button" aria-label="Open my tasks" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);if(!goalActive&&view.livingTest?.tasks?.some(t=>!t.done)){invoke(g=>{g.building?.cancelPreview();g.livingTest.openTasks();});}else setGoalRequest(n=>n+1);}}><TasksIcon/><span>Tasks</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
-      {LIVING_TEST&&<button aria-label="Choose my goal" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);setGoalRequest(n=>n+1);}}><Icon type="book"/><span>My goal</span></button>}
-      {LIVING_TEST&&<button aria-label="Open Tasks" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);invoke(g=>{g.building?.cancelPreview();g.livingTest.openTasks();});}}><TasksIcon/><span>Tasks</span>{view.livingTest?.tasks?.some(t=>!t.done)&&<b className="task-alert" aria-hidden="true">!</b>}</button>}
+
       {LIVING_TEST&&<button aria-label="Open Market" onClick={()=>openPanel('market')} disabled={!view.loaded}><img className="picture-icon" src="/assets/build_market.png" alt=""/><span>Market</span></button>}
       {LIVING_TEST&&view.livingTest?.adamUnlocked&&<button aria-label="Friends" onClick={()=>openPanel('living-friends')}><FriendsIcon/><span>Friends</span></button>}
       {view.playersOnly&&<button aria-label="Open the island to-do list" disabled={!view.loaded||view.ambient} onClick={openPlan}><Icon type="book"/><span>To-do</span></button>}

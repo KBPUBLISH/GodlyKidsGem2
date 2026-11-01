@@ -1,4 +1,4 @@
-/** Profile-bound journey: tent → ship → pack → reader → reward → ship → placement. */
+/** Profile-bound journey: ship → Genesis pack → Adam aboard → island tasks/tent → placement. */
 export const TEST_SCOPE_PREFIX='living-test-solo';
 export const FIRST_FRIEND_BASE='gk_living_first_friend_v1';
 export const testScopeFor=profile=>`${TEST_SCOPE_PREFIX}:${String(profile||'local').trim()||'local'}`;

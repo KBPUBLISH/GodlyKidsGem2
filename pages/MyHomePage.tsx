@@ -22,10 +22,11 @@ import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from 
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRICES, ISLAND_SELL_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_URL = '/homeworld/index.html?v=players190&players=1';
+const HOMEWORLD_VERSION = 'players191';
+const HOMEWORLD_URL = `/homeworld/index.html?v=${HOMEWORLD_VERSION}&players=1`;
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string, playerName: string, livingTest = false, avatarId = 'trail', friendModel = '', friendImage = '') =>
-  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}${livingTest ? `&avatar=${encodeURIComponent(avatarId)}${friendModel ? `&friendModel=${encodeURIComponent(friendModel)}` : ''}${friendImage ? `&friendImage=${encodeURIComponent(friendImage)}` : ''}` : ''}`;
+  `${livingTest?`/homeworld/living-test.html?v=${HOMEWORLD_VERSION}&players=1&livingTest=1`:HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}${livingTest ? `&avatar=${encodeURIComponent(avatarId)}${friendModel ? `&friendModel=${encodeURIComponent(friendModel)}` : ''}${friendImage ? `&friendImage=${encodeURIComponent(friendImage)}` : ''}` : ''}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
@@ -36,6 +37,24 @@ const LOADING_FADE_MS = 520;
 /** Give up waiting for the island's ready message this long after the frame loads. */
 const LOADING_FALLBACK_MS = 12000;
 const LOADING_LINES = ['Setting sail…', 'Rowing ashore…', 'Waking up your island…', 'Almost home…'];
+const ISLAND_COINS_KEY = 'gk_friends_world_coins_v1';
+const ISLAND_STARTING_COINS = 500;
+const islandCoinsKey = (scope: string) => `${ISLAND_COINS_KEY}:${scope}`;
+const readIslandCoins = (scope: string): number => {
+  try {
+    const raw = localStorage.getItem(islandCoinsKey(scope));
+    if (raw === null) return ISLAND_STARTING_COINS;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeIslandCoins = (scope: string, value: number): number => {
+  const next = Math.max(0, Math.floor(Number(value) || 0));
+  try { localStorage.setItem(islandCoinsKey(scope), String(next)); } catch { /* private mode */ }
+  return next;
+};
 
 const CARVED = '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)';
 
@@ -214,7 +233,7 @@ const MyHomePage: React.FC = () => {
   const firstArrival=livingTestMode&&!!(routeLocation.state as {firstArrival?:boolean}|null)?.firstArrival;
   useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
-  const { coins, spendCoins, addCoins, kids, currentProfileId, parentName } = useUser();
+  const { kids, currentProfileId, parentName } = useUser();
   const playerAvatarId = livingAvatarForProfile(kids.find(kid=>kid.id===currentProfileId)).id;
   const playerName = useMemo(() => {
     const kid = currentProfileId ? kids.find((k) => k.id === currentProfileId) : null;
@@ -222,14 +241,8 @@ const MyHomePage: React.FC = () => {
     if (!raw || raw === 'Parent') return '';
     return raw.slice(0, 24);
   }, [kids, currentProfileId, parentName]);
-  const coinsRef = useRef(coins);
-  const spendRef = useRef(spendCoins);
-  const addRef = useRef(addCoins);
   const pendingBuyRef = useRef<{ id: string; cost: number; at: number } | null>(null);
   const pendingFarmRef = useRef<{ requestId: string; kind: string; unit: number; qty: number; at: number } | null>(null);
-  coinsRef.current = coins;
-  spendRef.current = spendCoins;
-  addRef.current = addCoins;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   /** The prayer currently being spoken in the character's ElevenLabs voice (one at a time). */
@@ -266,6 +279,21 @@ const MyHomePage: React.FC = () => {
   // Each kid profile owns its own island. The legacy (unscoped) island is handed to
   // the first profile that opens My Home after the per-profile change (copy, not move).
   const [profileScope, setProfileScope] = useState<string>(() => ensureLegacyMigration().scope);
+  const [islandCoins, setIslandCoins] = useState<number>(() => readIslandCoins(getProfileScopeKey()));
+  const coinsRef = useRef(islandCoins);
+  coinsRef.current = islandCoins;
+  const setIslandBalance = useCallback((next: number) => {
+    const saved = writeIslandCoins(profileScope, next);
+    coinsRef.current = saved;
+    setIslandCoins(saved);
+    return saved;
+  }, [profileScope]);
+  const spendIslandCoins = useCallback((amount: number) => {
+    if (!Number.isFinite(amount) || amount < 0 || coinsRef.current < amount) return false;
+    setIslandBalance(coinsRef.current - amount);
+    return true;
+  }, [setIslandBalance]);
+  const addIslandCoins = useCallback((amount: number) => setIslandBalance(coinsRef.current + Math.max(0, Math.floor(amount))), [setIslandBalance]);
   const [residents, setResidents] = useState<PlayersWorldResident[]>(() => readPlayersWorldResidents());
   const [collected, setCollected] = useState<UnlockedCharacter[]>(() => rewardsService.getUnlockedCharacters());
   const adamReward=useMemo(()=>collected.find(c=>/^adam$/i.test(c.name.trim())),[collected]);
@@ -275,6 +303,9 @@ const MyHomePage: React.FC = () => {
       onProfileScopeChange((scope) => {
         ensureLegacyMigration(scope);
         setProfileScope(scope);
+        const balance = readIslandCoins(scope);
+        coinsRef.current = balance;
+        setIslandCoins(balance);
         setCollected(rewardsService.getUnlockedCharacters());
         setResidents(readPlayersWorldResidents());
         setPlacing(null);
@@ -524,26 +555,26 @@ const MyHomePage: React.FC = () => {
           post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: 'That animal is not for sale.' });
           return;
         }
-        if (!spendRef.current(price, `Island ${typeof buy.item === 'string' ? buy.item : id}`)) {
+        if (!spendIslandCoins(price)) {
           post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: `Need ${price - coinsRef.current} coins.` });
           return;
         }
         pendingBuyRef.current = { id, cost: price, at: Date.now() };
         noteFriendsAction('buy', id);
-        post({ type: 'gk-buy-result', ok: true, id, balance: coinsRef.current - price });
+        post({ type: 'gk-buy-result', ok: true, id, balance: coinsRef.current });
       }
       if (data.type === 'gk-refund') {
         const refund = data as { id?: unknown; cost?: unknown };
         const pending = pendingBuyRef.current;
         if (pending && pending.id === refund.id && pending.cost === Number(refund.cost) && Date.now() - pending.at < 120000) {
           pendingBuyRef.current = null;
-          addRef.current(pending.cost, 'Island purchase cancelled', 'other');
-          post({ type: 'gk-coins', balance: coinsRef.current + pending.cost });
+          addIslandCoins(pending.cost);
+          post({ type: 'gk-coins', balance: coinsRef.current });
         }
       }
       if (data.type === 'gk-buy-commit') pendingBuyRef.current = null;
-      // Adam's farm: he asks for animals, the kid pays with earned gold coins (UserContext spendCoins —
-      // the same balance games and quizzes fill). Two steps so coins are never lost on a failed landing:
+      // Adam's farm spends the profile's Friends World coins, never story/mini-game rewards.
+      // Two steps so island coins are never lost on a failed landing:
       //   gk-buy-animal   → check the price and balance, approve (gk-animal-purchased), nothing spent yet
       //   gk-animal-received {qty} → the island placed the animals: spend unit × qty now
       //   gk-animal-refund → the boat could not land anything: drop the approval, nothing to give back
@@ -560,7 +591,7 @@ const MyHomePage: React.FC = () => {
         }
         if (coinsRef.current < price) {
           const short = price - coinsRef.current;
-          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, short, reason: `Need ${short} more coins. Play games to earn some!` });
+          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, short, reason: `Need ${short} more island coins. Sell crops, fish, or gems at your market.` });
           return;
         }
         pendingFarmRef.current = { requestId, kind, unit, qty, at: Date.now() };
@@ -573,16 +604,16 @@ const MyHomePage: React.FC = () => {
         if (!pending || pending.requestId !== got.requestId || qty < 1 || Date.now() - pending.at < 0) return;
         pendingFarmRef.current = null;
         const charged = Math.min(qty, pending.qty) * pending.unit;
-        const spent = spendRef.current(charged, `Farm: ${Math.min(qty, pending.qty)} ${pending.kind}`);
-        post({ type: 'gk-coins', balance: spent ? coinsRef.current - charged : coinsRef.current });
+        const spent = spendIslandCoins(charged);
+        post({ type: 'gk-coins', balance: coinsRef.current });
+        if (!spent) post({ type: 'gk-animal-denied', requestId: pending.requestId, balance: coinsRef.current, reason: 'Your island coin balance changed. Sell goods and try again.' });
       }
       if (data.type === 'gk-animal-refund') {
         const pending = pendingFarmRef.current;
         if (pending && pending.requestId === (data as { requestId?: unknown }).requestId) pendingFarmRef.current = null;
       }
-      if (data.type === 'gk-earn-coins') navigate('/games');
-      // Market stall: the island already removed the goods. Credit the same useUser().coins purse
-      // Adam's animals spend. Not a second wallet, and not RevenueCat.
+      if (data.type === 'gk-earn-coins') post({ type: 'gk-coins', balance: coinsRef.current });
+      // Market stall credits this profile's Friends World wallet only.
       if (data.type === 'gk-sell') {
         const sale = data as { item?: unknown; qty?: unknown; coins?: unknown; name?: unknown };
         const item = typeof sale.item === 'string' ? sale.item : '';
@@ -593,21 +624,20 @@ const MyHomePage: React.FC = () => {
           post({ type: 'gk-sell-result', ok: false, item, balance: coinsRef.current, reason: 'The stall does not buy that.' });
           return;
         }
-        const label = typeof sale.name === 'string' && sale.name ? sale.name : item;
-        addRef.current(coins, `Market stall: ${qty} ${label}`, 'other');
-        post({ type: 'gk-coins', balance: coinsRef.current + coins });
-        post({ type: 'gk-sell-result', ok: true, item, qty, coins, balance: coinsRef.current + coins });
+        const balance = addIslandCoins(coins);
+        post({ type: 'gk-coins', balance });
+        post({ type: 'gk-sell-result', ok: true, item, qty, coins, balance });
       }
       if (data.type === 'gk-dev-grant') {
         const host = window.location.hostname;
         if (host !== 'localhost' && host !== '127.0.0.1') return;
         const amount = Math.max(0, Math.min(100000, Math.floor(Number((data as { amount?: unknown }).amount) || 0)));
-        if (amount > 0) addRef.current(amount, 'Island test grant', 'other');
+        if (amount > 0) addIslandCoins(amount);
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post,adamVoice.speak]);
+  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post,adamVoice.speak,spendIslandCoins,addIslandCoins]);
 
   useEffect(() => {
     if (!ready) return;
@@ -620,8 +650,8 @@ const MyHomePage: React.FC = () => {
 
   useEffect(() => {
     if (!ready) return;
-    post({ type: 'gk-coins', balance: coins });
-  }, [post, ready, coins]);
+    post({ type: 'gk-coins', balance: islandCoins });
+  }, [post, ready, islandCoins]);
 
   const visitRef = useRef<{ id: string; started: number; ended: boolean } | null>(null);
   useEffect(() => {

@@ -13,6 +13,7 @@ import ChooseAvatar from '../components/onboarding/ChooseAvatar';
 import IslandWelcome,{IslandProfileDetails} from '../components/onboarding/IslandWelcome';
 import {clearWelcomeProgress,saveWelcomeProgress,welcomeProgress} from '../utils/welcomeProgress';
 import {getLivingAvatar,livingAvatarForProfile} from '../shared/livingAvatars.mjs';
+import { beginLivingFirstFriendJourney } from '../utils/livingFirstFriend';
 import {
   ONBOARDING_FAMILY_BG_POSTER,
   ONBOARDING_FAMILY_BG_VIDEO,
@@ -206,6 +207,7 @@ const PerryMeetPage: React.FC = () => {
 
   const goToMap = () => {
     startOnboardingJourney();
+    if (LIVING_TEST_BUILD) beginLivingFirstFriendJourney();
     const choice = paywallChoice.current;
     if (choice) {
       noteJourneyStep('paywall_shown', { source: 'child-name' });
@@ -214,7 +216,10 @@ const PerryMeetPage: React.FC = () => {
       });
       if (choice === 'trial') noteJourneyStep('trial_started', { source: 'child-name' });
     }
-    if(LIVING_TEST_BUILD){navigate('/my-home',{replace:true,state:{firstArrival:true}});return;}
+    if(LIVING_TEST_BUILD){
+      navigate('/crew',{replace:true,state:{onboardingJourney:true,livingShipTour:true,kidName:savedName||name.trim()}});
+      return;
+    }
     markDiscoverShipPending();
     navigate('/crew', {
       replace: true,

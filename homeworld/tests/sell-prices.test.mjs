@@ -47,7 +47,7 @@ test('selling one fish, one vegetable, and one gem takes them from the bag and p
   assert.equal(quoteSell('not_a_thing', 1), null);
 });
 
-test('stall coins land in the same godly_kids_data_v6 purse the ship shows', () => {
+test('stall coins use a separate Friends World purse and leave account coins untouched', () => {
   const prev = globalThis.localStorage;
   const store = new Map();
   globalThis.localStorage = {
@@ -55,10 +55,11 @@ test('stall coins land in the same godly_kids_data_v6 purse the ship shows', () 
     setItem: (key, value) => store.set(key, value),
   };
   store.set('godly_kids_data_v6', JSON.stringify({coins:80, currentProfileId:'kid1', kids:[{id:'kid1', coins:100}]}));
-  assert.equal(readShipCoins(), 80);
-  assert.equal(creditShipCoins(10), 90);
+  assert.equal(readShipCoins(), 500);
+  assert.equal(creditShipCoins(10), 510);
   const saved = JSON.parse(store.get('godly_kids_data_v6'));
-  assert.equal(saved.coins, 90);
-  assert.equal(saved.kids[0].coins, 110);
+  assert.equal(saved.coins, 80);
+  assert.equal(saved.kids[0].coins, 100);
+  assert.equal(store.get('gk_friends_world_coins_v1:local'), '510');
   globalThis.localStorage = prev;
 });

@@ -46,7 +46,7 @@ test('the small starter garden replaces only untouched demo crops and keeps earn
  const kept=prepareLivingGardenBase(played,w);assert.equal(kept.livingGardenLayout,'existing');assert.deepEqual(kept.cells,played.cells);assert.deepEqual(kept.inventory,played.inventory);
 });
 
-test('tasks unlock in order, count each vegetable separately, and survive reload',()=>{
+test('tasks unlock in order and finish with Adam placed after the tent',()=>{
  let s=farmFresh();assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,true,true,true]);
  s=grow(s);assert.deepEqual(starterTasks(s.garden,false).map(t=>t.locked),[false,false,true,true]);s=gardenWork(s,'water',0,100);
  for(const i of [0,1])s=gardenHarvest(s,i,100+GARDEN_GROW_MS.carrot);
@@ -55,8 +55,9 @@ test('tasks unlock in order, count each vegetable separately, and survive reload
  s=gardenHarvest(s,2,100+GARDEN_GROW_MS.carrot);assert.equal(s.coins,10);
  assert.deepEqual(starterTasks(s.garden,false).map(t=>t.done),[true,true,false,false]);
  assert.equal(starterTasks(s.garden,false)[2].locked,false);
- assert.equal(starterTasks(s.garden,true,2)[3].value,2);assert.equal(starterTasks(s.garden,true,2)[3].done,false);
- assert.ok(starterTasks(s.garden,true,4).every(t=>t.done));
+ assert.equal(starterTasks(s.garden,true,'aboard')[3].locked,false);assert.equal(starterTasks(s.garden,true,'aboard')[3].done,false);
+ assert.equal(starterTasks(s.garden,true,'placing')[3].done,false);
+ assert.ok(starterTasks(s.garden,true,'placed').every(t=>t.done));
 });
 test('legacy partial work and paid planting rewards migrate without lost coins or duplicate rewards',()=>{
  const old={approved:true,dug:3,planted:2,readyAt:[0,0,0,0,0,0]};

@@ -1,9 +1,8 @@
 [build]
-  command = "npm run build"
+  command = "npm run living-test:build"
   publish = "dist"
 
-# This isolated branch includes the rebuilt island prototype. The normal app's
-# build keeps its existing command and published island assets.
+# The live app uses the same onboarding and rebuilt island as this branch.
 [context."codex/living-world-player-test"]
   command = "npm run living-test:build"
 
@@ -14,6 +13,13 @@
   for = "/preview-islands.json"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Existing static files take precedence. A removed hashed build asset gets a
+# JavaScript 404 instead of index.html, allowing stale-deploy recovery to run.
+[[redirects]]
+  from = "/assets/*"
+  to = "/asset-not-found.js"
+  status = 404
 
 [[redirects]]
   from = "/*"
@@ -27,6 +33,16 @@
 # prefetch (utils/assetPreloader.ts) actually pay off on the crew page.
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/homeworld/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/homeworld/living-test.html"
   [headers.values]
     Cache-Control = "no-cache"
 

@@ -299,59 +299,26 @@ export function journeyMeter(state,garden,project){
   };
 }
 
-/**
- * Gold the island shop already spends: `game.coins`, posted by My Home as the active
- * profile's `useUser().coins` (`gk-coins`). There is no island wallet. When the parent
- * has not posted yet, read that same save (`godly_kids_data_v6`) the way UserContext
- * hydrates the active profile — kid coins capped by the root balance — so the number
- * is the one the shop would show.
- */
+/** Friends World coins are profile-scoped and never touch story or mini-game coins. */
+const ISLAND_STARTING_COINS=500;
+const islandCoinKey=()=>{
+  const scope=typeof location!=='undefined'?new URLSearchParams(location.search).get('profile')||'local':'local';
+  return `gk_friends_world_coins_v1:${scope}`;
+};
 export function readShipCoins(){
-  try{
-    if(typeof localStorage==='undefined')return null;
-    const parsed=JSON.parse(localStorage.getItem('godly_kids_data_v6')||'null');
-    if(!parsed||typeof parsed!=='object')return null;
-    const root=Number.isFinite(parsed.coins)?parsed.coins:null;
-    const id=parsed.currentProfileId;
-    if(!id)return root;
-    const kid=(parsed.kids||[]).find(k=>k&&k.id===id);
-    if(!kid)return root;
-    const kidCoins=Number.isFinite(kid.coins)?kid.coins:null;
-    if(root===null)return kidCoins;
-    if(kidCoins===null)return root;
-    return Math.min(kidCoins,root);
-  }catch{return null;}
+  try{if(typeof localStorage==='undefined')return null;const raw=localStorage.getItem(islandCoinKey());if(raw===null)return ISLAND_STARTING_COINS;const value=Number(raw);return Number.isFinite(value)&&value>=0?Math.floor(value):ISLAND_STARTING_COINS;}catch{return null;}
 }
 export function displayCoins(live){
   if(Number.isFinite(live))return live;
   return readShipCoins();
 }
-/**
- * Add coins to the same purse `useUser().addCoins` writes (`godly_kids_data_v6`).
- * Root and the active kid both rise, matching the min() the island displays.
- * Returns the new displayed balance, or null when there is no save to credit.
- * The embedded island does not call this — the parent app's addCoins does.
- */
+/** Standalone island fallback. Embedded play is credited by MyHomePage. */
 export function creditShipCoins(amount){
   const n=Math.floor(Number(amount)||0);
   if(n<1||typeof localStorage==='undefined')return null;
   try{
-    const raw=localStorage.getItem('godly_kids_data_v6');
-    const parsed=JSON.parse(raw||'null');
-    if(!parsed||typeof parsed!=='object')return null;
-    const shown=readShipCoins();
-    const base=Number.isFinite(shown)?shown:0;
-    const root=Number.isFinite(parsed.coins)?parsed.coins:base;
-    parsed.coins=root+n;
-    const id=parsed.currentProfileId;
-    if(id&&Array.isArray(parsed.kids)){
-      const kid=parsed.kids.find(k=>k&&k.id===id);
-      if(kid){
-        const kidCoins=Number.isFinite(kid.coins)?kid.coins:base;
-        kid.coins=kidCoins+n;
-      }
-    }
-    localStorage.setItem('godly_kids_data_v6', JSON.stringify(parsed));
-    return readShipCoins();
+    const next=(readShipCoins()||0)+n;
+    localStorage.setItem(islandCoinKey(),String(next));
+    return next;
   }catch{return null;}
 }

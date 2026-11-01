@@ -1176,10 +1176,12 @@ const ThemedReadPage: React.FC = () => {
 const ThemedListenPage: React.FC = () => {
   const { isPanorama } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const { isSubscribed } = useUser();
+  const livingShipTour = Boolean((location.state as { livingShipTour?: boolean } | null)?.livingShipTour);
   const hsThisVisitRef = useRef(
     Boolean((location.state as { libraryHsGuide?: boolean } | null)?.libraryHsGuide) &&
-      !hasSeenLibraryHsGuide(),
+      (livingShipTour || !hasSeenLibraryHsGuide()),
   );
   const [hsActive, setHsActive] = useState(() => hsThisVisitRef.current);
 
@@ -1202,8 +1204,13 @@ const ThemedListenPage: React.FC = () => {
     <>
       {isPanorama ? <ListenPagePanorama /> : <ListenPage />}
       <LibraryHsGuide
+        forceActive={livingShipTour}
         onActiveChange={setHsActive}
         onGuideFinished={() => {
+          if (livingShipTour) {
+            navigate('/crew', { replace: true, state: { livingShipTourStep: 'profile' } });
+            return;
+          }
           window.setTimeout(openLibraryPaywall, 700);
         }}
       />

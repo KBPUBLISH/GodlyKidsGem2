@@ -2,7 +2,7 @@ import {bankFishingCatch} from './fishing-catch.mjs';
 import * as THREE from 'three';
 import {heightAt} from './core.mjs';
 import {fishModel} from './nutrition.js';
-import {FISHING_DOCK_LENGTH as DOCK_LENGTH,FISHING_DOCK_WIDTH as DOCK_WIDTH,FISHING_DOCK_START as DOCK_START} from './fishing-dock.mjs';
+import {FISHING_DOCK_LENGTH as DOCK_LENGTH,FISHING_DOCK_WIDTH as DOCK_WIDTH,FISHING_DOCK_START as DOCK_START,dockWalkArea,openDockCells} from './fishing-dock.mjs';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const ease=t=>{t=THREE.MathUtils.clamp(t,0,1);return t*t*(3-2*t);};
@@ -87,7 +87,8 @@ export class Fishing {
     const dock=new THREE.Group();dock.position.copy(shore).setY(deckY);dock.rotation.y=Math.atan2(dir.x,dir.z);
     const plankMat=wood('#9a7046'),darkMat=wood('#6f4d2d'),postMat=wood('#5b3f26');
     const planks=Math.round(DOCK_LENGTH/PLANK);
-    for(let i=0;i<planks;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(DOCK_WIDTH,.08,PLANK-.05),i%3===1?darkMat:plankMat);p.position.set(0,0,.25+PLANK*(i+.5));p.rotation.y=(i%2?1:-1)*.012;p.castShadow=p.receiveShadow=true;dock.add(p);}
+    this.deckMeshes=[];
+    for(let i=0;i<planks;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(DOCK_WIDTH,.08,PLANK-.05),i%3===1?darkMat:plankMat);p.position.set(0,0,.25+PLANK*(i+.5));p.rotation.y=(i%2?1:-1)*.012;p.castShadow=p.receiveShadow=true;dock.add(p);this.deckMeshes.push(p);}
     for(const side of[-1,1]){const beam=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,DOCK_LENGTH+.2),postMat);beam.position.set(side*(DOCK_WIDTH/2-.09),-.09,.25+DOCK_LENGTH/2);dock.add(beam);
       for(let z=.6;z<=DOCK_LENGTH;z+=1.2){const post=new THREE.Mesh(new THREE.CylinderGeometry(.075,.085,1.4,8),postMat);post.position.set(side*(DOCK_WIDTH/2-.05),-.55,.25+z);dock.add(post);}
     }
@@ -95,10 +96,9 @@ export class Fishing {
     const rail=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,2.1,8),postMat);rail.rotation.x=Math.PI/2;rail.position.set(-(DOCK_WIDTH/2-.05),.5,.25+DOCK_LENGTH-1.15);dock.add(rail);
     for(const z of[DOCK_LENGTH-2.1,DOCK_LENGTH-.2]){const p=new THREE.Mesh(new THREE.CylinderGeometry(.045,.05,.6,8),postMat);p.position.set(-(DOCK_WIDTH/2-.05),.26,.25+z);dock.add(p);}
     g.scene.add(dock);this.dock=dock;
-    // The spare rod waits on the seaward edge of the planks, where the child
-    // can walk up to it and tap it to fish.
-    const side=V(-dir.z,0,dir.x),poleAt=shore.clone().addScaledVector(dir,DOCK_START+DOCK_LENGTH-.48).addScaledVector(side,DOCK_WIDTH/2-.16);poleAt.y=deckY+.04;
-    const pole=new THREE.Group();pole.position.copy(poleAt);pole.rotation.set(0,Math.atan2(dir.x,dir.z)+.6,-.38);
+    // The spare rod is planted at the outer edge of the dock, ready to tap.
+    const side=V(-dir.z,0,dir.x),poleAt=shore.clone().addScaledVector(dir,DOCK_LENGTH-.12).addScaledVector(side,DOCK_WIDTH/2-.1);poleAt.y=deckY+.04;
+    const pole=new THREE.Group();pole.position.copy(poleAt);pole.rotation.set(0,Math.atan2(dir.x,dir.z)+.25,-.3);
     pole.add(buildRod().rod);
     const pLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0,1.9,0),V(.12,.9,.1),V(.18,.1,.16)]),new THREE.LineBasicMaterial({color:'#f7ecd0',transparent:true,opacity:.8}));pole.add(pLine);
     const pBob=new THREE.Mesh(new THREE.SphereGeometry(.055,10,8),wood('#e7623f'));pBob.position.set(.18,.1,.16);pole.add(pBob);
@@ -108,6 +108,7 @@ export class Fishing {
     this.stand=shore.clone().addScaledVector(dir,.25+DOCK_LENGTH-1.35).setY(deckY+.04);
     this.eye=this.stand.clone().add(V(0,1.52,0));
     this.waterY=s.water[2];
+    this.makeWalkable(g.nav);
     // first-person rod, bobber and line
     const built=buildRod();this.rod=built.rod;this.reelMesh=built.reel;this.spoolMesh=built.spool;this.rodTipY=built.tipY;
     this.rod.visible=false;g.scene.add(this.rod);
@@ -119,6 +120,16 @@ export class Fishing {
   get available(){return !!this.spot;}
   /** Nav target on land where the dock meets the shore. */
   landing(){const s=this.spot;return {x:s.position[0],y:s.position[1]};}
+  /** Make the rendered planks part of the same navigation grid as the island. */
+  makeWalkable(nav){openDockCells(nav,this.spot);}
+  /** Deck height for a walking actor, or null when the point is off the dock. */
+  surfaceHeight(x,y){return dockWalkArea(this.spot,{x,y})?.inside?this.deckY+.04:null;}
+  /** Raycast the visible planks so tapping them walks onto the dock, not through the water below. */
+  walkTarget(ray){
+    const hit=this.deckMeshes?.length?ray.intersectObjects(this.deckMeshes,false)[0]:null;
+    if(!hit)return null;
+    return {x:hit.point.x,y:-hit.point.z};
+  }
 
   /** Called by Nutrition.begin for a fish action. */
   enter(a,target=1){

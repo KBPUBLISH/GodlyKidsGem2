@@ -704,16 +704,15 @@ const MapPage: React.FC = () => {
           return;
         }
         const title = `${island.book}: ${island.title}`;
-        // Story packs live on the island's main map; islands with no main-map
-        // art fall back to the legacy island scene (same rule the sail deck used).
-        if (islandHasMainMap(island)) {
-          navigate(`/map/${encodeURIComponent(island.id)}/main`, {
-            state: { title },
-          });
-          return;
-        }
-        navigate(`/sail/${encodeURIComponent(island.id)}/lesson`, {
-          state: { title },
+        // Always arrive at the island-facing ship deck first. The child then
+        // chooses to travel forward into that island's story map.
+        navigate(`/sail/${encodeURIComponent(island.id)}`, {
+          state: {
+            title,
+            hasMainMap: islandHasMainMap(island),
+            mainMapUrl: island.mainMapUrl,
+            mainMapVideoUrl: island.mainMapVideoUrl,
+          },
         });
       };
 

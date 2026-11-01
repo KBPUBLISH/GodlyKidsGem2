@@ -3,7 +3,7 @@ import {islandStoryProgressService} from '../services/islandStoryProgressService
 import { getProfileScopeKey, onProfileScopeChange } from './profileScope';
 import { resolveFirstStoryPackDestination } from './onboardingJourney';
 import { rewardsService, ONBOARDING_ADAM_ID, ONBOARDING_ADAM_REWARD } from '../services/rewardsService';
-import { firstFriendKey,readFirstFriend,startFirstFriendVoyage,beginFirstFriendPack,beginFirstFriendStory,isFirstFriendReading,finishFirstFriendStory,claimFirstFriend,prepareFirstFriendDrop } from '../homeworld/src/living-first-friend.mjs';
+import { firstFriendKey,readFirstFriend,offerFirstFriend,startFirstFriendVoyage,beginFirstFriendPack,beginFirstFriendStory,isFirstFriendReading,finishFirstFriendStory,claimFirstFriend,prepareFirstFriendDrop } from '../homeworld/src/living-first-friend.mjs';
 const EVENT='gk-living-friend-journey';
 const changed=()=>window.dispatchEvent(new Event(EVENT));
 export const livingFriendRecord=()=>readFirstFriend(localStorage,firstFriendKey(getProfileScopeKey()));
@@ -25,6 +25,14 @@ export function reconcileLivingFirstFriendCompletion(){
 export function useLivingFriendJourney(){
  const [record,setRecord]=useState(livingFriendRecord);
  useEffect(()=>{const sync=()=>setRecord(livingFriendRecord());window.addEventListener(EVENT,sync);window.addEventListener('storage',sync);const off=onProfileScopeChange(sync);return()=>{window.removeEventListener(EVENT,sync);window.removeEventListener('storage',sync);off();};},[]);
+ return record;
+}
+/** Begin the first-friend voyage on the ship. Existing progress is never reset. */
+export function beginLivingFirstFriendJourney(){
+ const key=firstFriendKey(getProfileScopeKey());
+ if(!readFirstFriend(localStorage,key))offerFirstFriend(localStorage,key);
+ const record=startFirstFriendVoyage(localStorage,key);
+ if(record)changed();
  return record;
 }
 export function openLivingFirstFriendVoyage(scope:string){

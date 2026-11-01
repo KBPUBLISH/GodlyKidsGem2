@@ -17,6 +17,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { applyDevResetPremium } from '../utils/devPremium';
 import WebViewModal from '../components/features/WebViewModal';
 import ParentGateModal from '../components/features/ParentGateModal';
+import CreateAccountModal from '../components/modals/CreateAccountModal';
 import DespiaService from '../services/despiaService';
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ const SettingsPage: React.FC = () => {
   
   // Parent gate for Help Center
   const [showHelpCenterGate, setShowHelpCenterGate] = useState(false);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [showDeleteAccountGate, setShowDeleteAccountGate] = useState(false);
   const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   
@@ -578,7 +580,7 @@ const SettingsPage: React.FC = () => {
                                 <span>Sign in</span>
                             </button>
                             <button
-                                onClick={() => navigate('/onboarding')}
+                                onClick={() => setShowCreateAccount(true)}
                                 className="explorer-action explorer-shop w-full"
                             >
                                 <UserPlus size={20} />
@@ -809,6 +811,17 @@ const SettingsPage: React.FC = () => {
         onSuccess={() => {
           void runDeleteAccountAfterParentGate();
         }}
+      />
+
+      <CreateAccountModal
+        isOpen={showCreateAccount}
+        onClose={() => setShowCreateAccount(false)}
+        onAccountCreated={() => setShowCreateAccount(false)}
+        onSignIn={() => {
+          setShowCreateAccount(false);
+          navigate('/signin', { state: { returnTo: '/settings' } });
+        }}
+        navigateToOnboarding={false}
       />
     </main>
   );

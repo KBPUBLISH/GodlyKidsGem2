@@ -1,7 +1,5 @@
-// The built Market stall. Tapping it opens a Sell card. Coins go to the same purse
-// Adam's animal purchase spends: the parent app's useUser().addCoins (gk-sell), which
-// writes godly_kids_data_v6. There is no island wallet. A standalone island (the dev
-// page, no parent) writes that same save so the number on the card still moves.
+// The built Market stall. Sales credit the profile-scoped Friends World wallet.
+// Story and mini-game reward coins are intentionally never read or changed here.
 import {activeBuildings} from './building.mjs';
 import {sellCard, quoteSell} from './sell-prices.mjs';
 import {creditShipCoins} from './today-goals.mjs';

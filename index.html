@@ -196,6 +196,52 @@
   }
 }
 </script>
+  <script>
+    // Recover open sessions that still reference a hashed Vite chunk removed by
+    // a newer Netlify deploy. Reload at most once so a real outage cannot loop.
+    (() => {
+      const reloadKey = 'gk_stale_chunk_reload';
+      const staleChunkPattern =
+        /failed to fetch dynamically imported module|chunkloaderror|loading chunk|importing a module script failed|not a valid javascript mime type|expected a javascript-or-wasm module script/i;
+
+      const errorText = (value) => {
+        if (!value) return '';
+        if (typeof value === 'string') return value;
+        return [value.message, value.reason?.message, value.error?.message, value.filename]
+          .filter(Boolean)
+          .join(' ');
+      };
+
+      const reloadForFreshDeploy = (event) => {
+        if (event?.preventDefault) event.preventDefault();
+
+        try {
+          if (sessionStorage.getItem(reloadKey)) return;
+          sessionStorage.setItem(reloadKey, String(Date.now()));
+        } catch (_) {
+          // Storage can be unavailable in a locked-down WebView; reload still helps.
+        }
+
+        window.location.reload();
+      };
+
+      window.addEventListener('vite:preloadError', reloadForFreshDeploy);
+      window.addEventListener('unhandledrejection', (event) => {
+        if (staleChunkPattern.test(errorText(event))) reloadForFreshDeploy(event);
+      });
+      window.addEventListener('error', (event) => {
+        const text = errorText(event);
+        const missingBuiltAsset = /\/assets\/[^?#]+\.(?:js|css)(?:[?#]|$)/i.test(text);
+        if (missingBuiltAsset || staleChunkPattern.test(text)) reloadForFreshDeploy(event);
+      }, true);
+
+      window.setTimeout(() => {
+        try {
+          sessionStorage.removeItem(reloadKey);
+        } catch (_) {}
+      }, 10000);
+    })();
+  </script>
 </head>
   <body>
     <div id="root"></div>

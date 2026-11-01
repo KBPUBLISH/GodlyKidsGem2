@@ -1,3 +1,4 @@
+import {AdventureGoals} from './adventure-goals.jsx';
 import {PlayerCare} from './player-care.jsx';
 import {NightRest,MorningNote} from './night-ui.jsx';
 import React,{useEffect,useRef,useState} from 'react';
@@ -263,6 +264,7 @@ function pinBuildGoal(g,kind){
 }
 function App(){
   const host=useRef(null),engine=useRef(null);const [view,setView]=useState({loaded:false,status:'Loading your island…'}),[introModal,setIntroModal]=useState(false),[panel,setPanel]=useState(null),[showTime,setShowTime]=useState(false),[toast,setToast]=useState(''),[toastLife,setToastLife]=useState(0),[confirmReset,setConfirmReset]=useState(false);
+  const [goalRequest,setGoalRequest]=useState(0),[goalModal,setGoalModal]=useState(false),[goalActive,setGoalActive]=useState(false);
   const [playerName,setPlayerName]=useState(playerNameFromUrl);
   useEffect(()=>{
     const onMessage=e=>{
@@ -384,9 +386,9 @@ function App(){
   const activeTool=TOOLS.find(t=>t.id===view.tool);
   const showRecent=view.loaded&&!view.ambient&&!panel&&!actionsOpen&&!view.fishing&&!view.night?.sleeping&&!mapOnly&&view.recentTools?.length>0&&!view.building?.preview;
   const seed=SEEDS.find(s=>s.id===view.seed)||SEEDS[0];
-  return <main className={`game-shell ${LIVING_TEST?'living-island-test living-original-controls ':''}${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}${view.livingTest?.arrival?' is-arriving':''}`}  onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();engine.current?.livingTest?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
+  return <main className={`game-shell ${LIVING_TEST?'living-island-test living-original-controls ':''}${goalActive?'goals-active ':''}${goalModal?'goal-dialog-open ':''}${mapOnly?'map-only':''}${view.sitePicking?' site-view':''}${view.livingTest?.arrival?' is-arriving':''}`}  onPointerDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();engine.current?.livingTest?.activity();}} onKeyDownCapture={()=>{engine.current?.music?.unlock();engine.current?.community?.activity();}} onWheelCapture={()=>engine.current?.community?.activity()}>
     <div ref={host} className="world" onPointerDown={()=>setActionsOpen(false)}/>
-    <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={introModal||mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>
+    <div className="game-controls" hidden={mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson} inert={introModal||goalModal||mapOnly||view.night?.sleeping||!!view.fishing?.firstPerson}>
     <header className="topbar">
       {view.loaded&&!view.playersOnly&&!LIVING_TEST&&<button className="selected-character" aria-label={`Choose character. Playing as ${view.state.characters[view.state.activeCharacter].name}`} onClick={()=>openPanel('characters')}><span className={`community-avatar ${view.state.activeCharacter}`} aria-hidden="true">{view.state.characters[view.state.activeCharacter].name[0]}</span><span><small>Playing as</small><strong>{view.state.characters[view.state.activeCharacter].name} ⌄</strong></span></button>}
       {LIVING_TEST?<LivingHud view={view} name={playerName} expanded={showTime} onTime={()=>{setActionsOpen(false);setPanel(null);setShowTime(!showTime);}} onSound={()=>invoke(g=>g.setMusic(g.music?.on===false))}/>:<>      <div className="top-actions">
@@ -407,6 +409,7 @@ function App(){
     {view.inside&&<div className="home-outside-bar"><button type="button" className="home-outside" onClick={()=>invoke(g=>g.building.leaveHome())}>Outside</button><span className="home-inside-status" role="status">Inside the {view.inside.name}</span></div>}
     {(view.playersOnly||LIVING_TEST)&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onPointerUp={onBackToShip} onClick={onBackToShip}><img src={LIVING_TEST?LIVING_SHIP_ICON:SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
+      {LIVING_TEST&&<button aria-label="Choose my goal" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);setGoalRequest(n=>n+1);}}><Icon type="book"/><span>My goal</span></button>}
       {LIVING_TEST&&<button aria-label="Open Tasks" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);invoke(g=>{g.building?.cancelPreview();g.livingTest.openTasks();});}}><TasksIcon/><span>Tasks</span>{view.livingTest?.tasks?.some(t=>!t.done)&&<b className="task-alert" aria-hidden="true">!</b>}</button>}
       {LIVING_TEST&&<button aria-label="Open Market" onClick={()=>openPanel('market')} disabled={!view.loaded}><img className="picture-icon" src="/assets/build_market.png" alt=""/><span>Market</span></button>}
       {LIVING_TEST&&view.livingTest?.adamUnlocked&&<button aria-label="Friends" onClick={()=>openPanel('living-friends')}><FriendsIcon/><span>Friends</span></button>}
@@ -478,7 +481,8 @@ function App(){
     <MorningNote report={view.loaded&&!view.night?.sleeping&&!view.sitePicking?view.morning:null} onDismiss={()=>invoke(g=>g.dismissMorning())}/>
     <NightRest night={view.night}/>
     {mapOnly&&!view.night?.sleeping&&<button ref={backToPlay} className="map-only-return" onClick={returnToPlay} aria-label="Back to play. Show game buttons"><span aria-hidden="true">←</span> Back to play</button>}
-    {LIVING_TEST&&<LivingTestUI engine={engine} view={view} onModalChange={setIntroModal} blocked={!!panel||showTime||actionsOpen||mapOnly||!!view.building?.preview||!!view.fishing||!!view.night?.sleeping}/>}
+    {LIVING_TEST&&<AdventureGoals engine={engine} view={view} request={goalRequest} onModalChange={setGoalModal} onActiveChange={setGoalActive} onPanel={openPanel} blocked={introModal||!!panel||showTime||actionsOpen||mapOnly||!!view.building?.preview||!!view.fishing||!!view.night?.sleeping||!!view.livingTest?.arrival||!!view.livingTest?.friend?.chatOpen}/>}
+    {LIVING_TEST&&<LivingTestUI engine={engine} view={view} onModalChange={setIntroModal} blocked={goalModal||!!panel||showTime||actionsOpen||mapOnly||!!view.building?.preview||!!view.fishing||!!view.night?.sleeping}/>}
     {!view.loaded&&<div className={`loading ${view.error?'':'with-tips'} ${LIVING_TEST&&new URLSearchParams(location.search).get('arrival')==='1'?'arrival-loading':''}`} >{view.error?<><div className="loading-mark">✦</div><h1>The island needs another try</h1><p>{view.status}</p><p>{view.error}</p><button onClick={()=>location.reload()}>Reload island</button></>:<>{LIVING_TEST&&new URLSearchParams(location.search).get('arrival')==='1'?<div className="arrival-loading-glow" role="status" aria-label="Preparing your island"><i/><i/><i/></div>:<LoadingTips/>}<div className="loading-foot"><div className="loading-track"><i/></div><p>{view.status}</p></div></>}</div>}
   </main>;
 }

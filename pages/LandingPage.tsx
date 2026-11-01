@@ -358,14 +358,19 @@ const LandingPage: React.FC = () => {
           {LIVING_TEST_BUILD ? 'Make friends. Grow in faith.' : 'Story based Christian Learning for Families'}
         </p>
         <button
+          type="button"
           onClick={handleSignIn}
-          className="mt-2 font-bold text-sm hover:underline active:opacity-70 transition-all"
+          className="mt-2 min-h-[44px] rounded-full border-2 px-6 py-2 font-extrabold text-sm active:scale-[0.97] transition-transform"
           style={{
-            color: '#fff',
-            textShadow: '0 1px 2px #16325C, 0 0 8px rgba(0,0,0,0.45)',
+            fontFamily: BUBBLE,
+            color: '#fff8dc',
+            background: 'rgba(18, 38, 74, 0.9)',
+            borderColor: 'rgba(255, 231, 145, 0.9)',
+            boxShadow: '0 3px 0 #0b1932, 0 7px 14px rgba(0,0,0,0.25)',
           }}
+          aria-label="Sign in to an existing account"
         >
-          Sign In
+          Already have an account? Sign in
         </button>
       </div>
     </div>

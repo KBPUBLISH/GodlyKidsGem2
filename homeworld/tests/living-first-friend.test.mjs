@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {firstFriendKey,readFirstFriend,offerFirstFriend,startFirstFriendVoyage,beginFirstFriendPack,beginFirstFriendStory,finishFirstFriendStory,claimFirstFriend,prepareFirstFriendDrop,placeFirstFriend} from '../src/living-first-friend.mjs';
 const memory=()=>{const values=new Map();return {values,getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};};
 const reading=(s,k)=>{offerFirstFriend(s,k);startFirstFriendVoyage(s,k);beginFirstFriendPack(s,k,'genesis','creation');beginFirstFriendStory(s,k,'genesis','creation');};
-test('every step is explicit: tent, voyage, pack, story, reward, ship and placement',()=>{
+test('every step is explicit: ship, Genesis story, Adam aboard, then island placement',()=>{
  const s=memory(),k=firstFriendKey('child');
  assert.equal(startFirstFriendVoyage(s,k),null);assert.equal(beginFirstFriendStory(s,k,'genesis','creation'),null);
  offerFirstFriend(s,k);assert.equal(beginFirstFriendStory(s,k,'genesis','creation'),null);

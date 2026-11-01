@@ -20,6 +20,8 @@ import { activityTrackingService } from '../services/activityTrackingService';
 import { metaAttributionService } from '../services/metaAttributionService';
 import { Capacitor } from '@capacitor/core';
 import { ONBOARDING_FAMILY_BG_POSTER, ONBOARDING_FAMILY_BG_VIDEO, markDiscoverShipPending, startOnboardingJourney } from '../utils/onboardingJourney';
+import { beginLivingFirstFriendJourney } from '../utils/livingFirstFriend';
+import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
 import { preloadCloudFlythroughAssets } from '../components/onboarding/CloudFlythrough';
 import ForParentsGate from '../components/onboarding/ForParentsGate';
 import PassPhoneHandoff from '../components/onboarding/PassPhoneHandoff';
@@ -960,8 +962,9 @@ const OnboardingPage: React.FC = () => {
     }
     void savePreferencesToBackend([], []);
     startOnboardingJourney();
+    if (LIVING_TEST_BUILD) beginLivingFirstFriendJourney();
     markDiscoverShipPending();
-    navigate('/crew', { replace: true, state: { onboardingJourney: true, discoverShip: true } });
+    navigate('/crew', { replace: true, state: { onboardingJourney: true, discoverShip: !LIVING_TEST_BUILD, livingShipTour: LIVING_TEST_BUILD } });
   };
   
   const togglePriority = (id: string) => {

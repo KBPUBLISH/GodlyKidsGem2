@@ -9,17 +9,18 @@ import {
 type Props = {
   onActiveChange?: (active: boolean) => void;
   onGuideFinished?: () => void;
+  forceActive?: boolean;
 };
 
 /**
  * First tap of Library on the ship deck — HS welcome, once.
  */
-const LibraryHsGuide: React.FC<Props> = ({ onActiveChange, onGuideFinished }) => {
+const LibraryHsGuide: React.FC<Props> = ({ onActiveChange, onGuideFinished, forceActive = false }) => {
   const location = useLocation();
   const [active, setActive] = useState(
     () =>
       Boolean((location.state as { libraryHsGuide?: boolean } | null)?.libraryHsGuide) &&
-      !hasSeenLibraryHsGuide(),
+      (forceActive || !hasSeenLibraryHsGuide()),
   );
 
   useEffect(() => {

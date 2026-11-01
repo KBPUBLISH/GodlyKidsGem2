@@ -6,8 +6,8 @@ export function MarketPanel({card, onSell}){
   if(!card) return <p>The market is gone. Build one from Build › Community.</p>;
   const coins = Number.isFinite(card.coins) ? card.coins : null;
   return <div className="sell-card">
-    <div className="sell-purse"><span>Your coins</span><b>{coins === null ? '—' : coins}</b></div>
-    <p className="catalogue-note">Sell extra fish, garden food, and diamonds. The coins are the same ones Adam uses to buy animals.</p>
+    <div className="sell-purse"><span>Island coins</span><b>{coins === null ? '—' : coins}</b></div>
+    <p className="catalogue-note">Sell extra fish, garden food, and diamonds for island coins. These stay in My Friends and buy animals and island goods.</p>
     {card.groups.map(group => <section key={group.id} className="sell-group" aria-label={group.name}>
       <h2><span aria-hidden="true">{group.icon}</span> {group.name}</h2>
       {group.items.map(item => <article key={item.id} className="sell-row">

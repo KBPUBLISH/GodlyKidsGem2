@@ -870,7 +870,7 @@ export class HomeWorld {
   get goal(){try{const v=JSON.parse(localStorage.getItem(GOAL_KEY)||'null');return v?.kind&&buildingById(v.kind)?v:null;}catch{return null;}}
   setGoal(kind){if(!buildingById(kind))return;localStorage.setItem(GOAL_KEY,JSON.stringify({kind,at:Date.now()}));this.toast(`Goal set: build a ${buildingById(kind).name}!`);this.notify();}
   clearGoal(){localStorage.removeItem(GOAL_KEY);this.notify();}
-  /** Gold the island shop spends (parent `gk-coins`, or the same profile wallet when the parent has not posted). */
+  /** Profile-scoped Friends World coins. Separate from story and mini-game rewards. */
   coinBalance(){return displayCoins(this.coins);}
   /** Green-dot work: a live chore, a job, building duty, or a meal. Asleep and idle stay quiet. */
   friendActivity(actor){

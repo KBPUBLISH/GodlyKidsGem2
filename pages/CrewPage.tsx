@@ -1,5 +1,5 @@
 import {livingAvatarForProfile} from '../shared/livingAvatars.mjs';
-import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome} from '../utils/livingFirstFriend';
+import {useLivingFriendJourney,openLivingFirstFriendStory} from '../utils/livingFirstFriend';
 import {getProfileScopeKey} from '../utils/profileScope';
 import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
@@ -796,8 +796,15 @@ const CrewPage: React.FC = () => {
   const livingJourneyActive=firstFriendVoyage||firstFriendHome;
   const { kids, currentProfileId } = useUser();
   const playerAvatar=livingAvatarForProfile(kids.find(k=>k.id===currentProfileId)||kids[0]);
-  const [shipWelcome,setShipWelcome]=useState(()=>{try{return livingJourney?.phase==='ship'&&sessionStorage.getItem(`gk_ship_welcome:${getProfileScopeKey()}`)!=='1';}catch{return livingJourney?.phase==='ship';}});
-  const introduceIsland=()=>{setShipWelcome(false);try{sessionStorage.setItem(`gk_ship_welcome:${getProfileScopeKey()}`,'1');}catch{}};
+  type LivingShipTourStep='welcome'|'library'|'profile'|'friends'|'island';
+  const shipTourKey=`gk_ship_welcome:${getProfileScopeKey()}`;
+  const [livingShipTourStep,setLivingShipTourStep]=useState<LivingShipTourStep>(()=>{
+    const requested=(location.state as {livingShipTourStep?:LivingShipTourStep}|null)?.livingShipTourStep;
+    if(requested&&['welcome','library','profile','friends','island'].includes(requested))return requested;
+    try{return livingJourney?.phase==='ship'&&sessionStorage.getItem(shipTourKey)!=='1'?'welcome':'island';}
+    catch{return livingJourney?.phase==='ship'?'welcome':'island';}
+  });
+  const finishShipTour=()=>{setLivingShipTourStep('island');try{sessionStorage.setItem(shipTourKey,'1');}catch{}};
   const kidName = useMemo(() => {
     const fromProfile =
       currentProfileId && kids.find((k: { id?: string }) => k.id === currentProfileId);
@@ -1342,6 +1349,7 @@ const CrewPage: React.FC = () => {
   const openVoyageIsland = useCallback((island: VoyageIsland) => {
     if (sailingRef.current) return;
     if(firstFriendVoyage){
+      if(livingShipTourStep!=='island')return;
       if(voyageRef.current[0]?.id!==island.id)return;
       sailingRef.current=true;setSailingIsland(true);setStoryError('');
       const voyageScope=getProfileScopeKey();
@@ -1386,7 +1394,7 @@ const CrewPage: React.FC = () => {
     // The island swells toward the bow, then the deck fades to white.
     window.setTimeout(() => setWhiteFade(true), SAIL_IN_MS - WHITE_FADE_MS);
     window.setTimeout(go, SAIL_IN_MS);
-  }, [navigate,firstFriendVoyage,reduceMotion]);
+  }, [navigate,firstFriendVoyage,reduceMotion,livingShipTourStep]);
 
   const activeVoyage = voyageIslands[lookIndex] ?? voyageIslands[0];
   const voyageUnlocked = !!activeVoyage && (voyageIslands[0]?.id === activeVoyage.id || firstIslandDone(voyageIslands));
@@ -1445,13 +1453,16 @@ const CrewPage: React.FC = () => {
 
   const goLibrary = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
+    if(firstFriendVoyage&&livingShipTourStep==='library'){
+      navigate('/listen',{state:{libraryHsGuide:true,livingShipTour:true}});
+      return;
+    }
     navigate('/listen');
-  }, [enteringGame, navigate]);
+  }, [enteringGame, navigate, firstFriendVoyage, livingShipTourStep]);
 
   /** My Home: the wheel spins hard, the deck fades to white, then we land. */
   const goMyHome = useCallback(() => {
     if (enteringRef.current || enteringGame) return;
-    if(firstFriendHome&&!bringLivingFirstFriendHome()){setStoryError('Try again.');return;}
     const go = () => navigate('/my-home', { state: { from: '/crew',livingFirstFriend:firstFriendHome } });
     if (reduceMotion || LIVING_TEST_BUILD) {
       go();
@@ -1780,6 +1791,45 @@ const CrewPage: React.FC = () => {
     },
     [enteringGame, hatchOpen, openCanonGame, openChat],
   );
+
+  const firstIslandName=voyageIslands[0]?.title||'Genesis Island';
+  const livingGuide=firstFriendHome?{
+    key:'home',
+    line:'Prepare your island for Adam!',
+    spoken:`You found Adam${kidName?`, ${kidName}`:''}! Let’s head to your island. Finish the starter tasks and build his prayer tent, then the Bring Adam button will appear.`,
+    action:goMyHome,
+    label:'My Friends',
+  }:livingShipTourStep==='welcome'?{
+    key:'welcome',
+    line:`Welcome aboard${kidName?`, ${kidName}`:''}!`,
+    spoken:'Welcome to your ship! This is where your avatar and I sail to Bible adventure islands. There is a basement full of mini games and a library to explore. Let’s check it out!',
+    action:()=>setLivingShipTourStep('library' as LivingShipTourStep),
+    label:'Show me!',
+  }:livingShipTourStep==='library'?{
+    key:'library',
+    line:'Tap Library',
+    spoken:'First is the Library. Tap it to explore our audio adventures and Bible stories.',
+    action:goLibrary,
+    label:'Open Library',
+  }:livingShipTourStep==='profile'?{
+    key:'profile',
+    line:'Crew is your Profile',
+    spoken:'Crew is your profile. This is where you can add more users, choose who is playing, or change your settings.',
+    action:()=>setLivingShipTourStep('friends' as LivingShipTourStep),
+    label:'Next',
+  }:livingShipTourStep==='friends'?{
+    key:'friends',
+    line:'My Friends',
+    spoken:'My Friends is where the friends you collect from Bible adventures live! Let me show you by sailing to our first Bible island.',
+    action:finishShipTour,
+    label:'Let’s sail!',
+  }:{
+    key:'island',
+    line:`Tap ${firstIslandName}!`,
+    spoken:`Ready to explore? Tap ${firstIslandName} and let’s sail to our first Bible adventure. We’ll read a story and meet Adam!`,
+    action:undefined,
+    label:undefined,
+  };
 
   return (
     <div ref={pageRef} className="relative w-full h-screen overflow-hidden">
@@ -2141,7 +2191,7 @@ const CrewPage: React.FC = () => {
               transition: 'left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1), height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease',
             }}
           >
-            {firstFriendVoyage&&!shipWelcome&&isActive&&i===0&&<span className="living-island-point" aria-hidden="true">👇</span>}
+            {firstFriendVoyage&&livingShipTourStep==='island'&&isActive&&i===0&&<span className="living-island-point" aria-hidden="true">👇</span>}
             <span
               className="pointer-events-none absolute left-1/2 flex flex-col items-center gap-1"
               style={{
@@ -2525,7 +2575,7 @@ const CrewPage: React.FC = () => {
           the last visit (fed by homeworld/src/island-feed.mjs). */}
       <IslandNotices />
 
-      {livingJourneyActive&&!sailingIsland&&<LivingJourneyGuide key={firstFriendHome?'home':shipWelcome?'welcome':'island'} line={firstFriendHome?'Bring Adam home!':shipWelcome?`Welcome aboard${kidName?`, ${kidName}`:''}!`:`Tap ${voyageIslands[0]?.title||'the first island'}!`} spoken={firstFriendHome?`You found Adam${kidName?`, ${kidName}`:''}! Your tent is ready for him. Let’s bring him to your community.`:shipWelcome?`Welcome aboard${kidName?`, ${kidName}`:''}! This is the Godly Ship. From here, we can sail to different Bible islands and meet new friends. Ready to explore?`:`Oh, look at ${voyageIslands[0]?.title||'that island'}! Tap it and let’s sail to our first Bible adventure. We’ll read a story and meet your first friend!`} onAction={firstFriendHome?goMyHome:shipWelcome?introduceIsland:undefined} label={firstFriendHome?'My community':'Show me!'}/>}
+      {livingJourneyActive&&!sailingIsland&&<LivingJourneyGuide key={livingGuide.key} line={livingGuide.line} spoken={livingGuide.spoken} onAction={livingGuide.action} label={livingGuide.label}/>}
       {/* White fade → basement or Canon Golf */}
       <OnboardingGuideCard
         variant={discoverShip ? 'discoverShip' : sailForStory ? 'sailForStory' : 'crewShip'}

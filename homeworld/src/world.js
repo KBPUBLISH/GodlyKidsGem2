@@ -21,7 +21,7 @@ import {Mining} from './mining.js';
 import {toolTier} from './mining.mjs';
 import {digPower,digCycleScale,shovelTier} from './digging.mjs';
 import {Construction} from './construction.js';
-import {activeBuildings,footprint,boundsOverlap,woodTotal,buildingById,buildingProgress,deckHeight} from './building.mjs';
+import {activeBuildings,footprint,boundsOverlap,woodTotal,buildingById,buildingProgress} from './building.mjs';
 import {ACTIVE_FRACTION} from './project-rules.mjs';
 import {Nutrition} from './nutrition.js';
 import {energyFor,completedHomes,FOODS,RECIPES,MAX_ENERGY,hungerFor,mealGain,workRate,workRateNote} from './nutrition.mjs';
@@ -510,7 +510,7 @@ export class HomeWorld {
     return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
   }
   /** Ground, or the top of the harbour planks when the point is on a finished dock. */
-  groundY(x,y){const ground=heightAt(this.world,x,y),built=deckHeight(this.world,this.store.state,x,y),fishing=fishingDockDeckHeight(this.world,(sx,sy)=>heightAt(this.world,sx,sy),x,y),deck=Math.max(built??-Infinity,fishing??-Infinity);return Number.isFinite(deck)?Math.max(ground,deck):ground;}
+  groundY(x,y){const ground=heightAt(this.world,x,y),fishing=fishingDockDeckHeight(this.world,(sx,sy)=>heightAt(this.world,sx,sy),x,y),deck=fishing??-Infinity;return Number.isFinite(deck)?Math.max(ground,deck):ground;}
   walk(target) {
     if(this.livingTest){this.livingTest.activity();this.livingTest.garden.cancel();}
     if(this.interior) return;

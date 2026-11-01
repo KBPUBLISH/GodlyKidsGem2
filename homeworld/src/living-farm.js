@@ -1,5 +1,5 @@
 import {createCoopModel} from './coop-model.js';
-import {coopSpotNear} from './coop-placement.mjs';
+import {coopPlacementStatus} from './coop-placement.mjs';
 import {coopSurfaceHeight,eggSlots} from './coop-layout.mjs';
 import * as THREE from 'three';
 import {marketTrade} from './living-market-rules.mjs';
@@ -44,9 +44,20 @@ export class LivingFarm{
  get position(){return this.state.coopPosition||this.test.layout.farmPad;}
  surfaceHeight(x,y){return this.state.coop?coopSurfaceHeight(this.position,x,y):null;}
  offerCoop(){this.g.prompt=null;this.g.showPrompt('coop','living-coop',this.position,1.5,[{id:'coop-enter',label:'Go in',icon:'walk'},{id:'coop-move',label:'Move',icon:'build'}]);}
- startMove(){if(this.g.action||this.g.order){this.g.toast('Finish this action first.');return;}this.moveZoom=this.g.zoom;this.g.zoom=Math.max(this.g.zoom,32);this.g.resize();this.moving=true;this.g.keys.clear();this.g.path=[];this.g.toast('Tap open ground for your coop.');this.g.notify();}
- cancelMove(){this.moving=false;if(this.moveZoom!=null){this.g.zoom=this.moveZoom;this.moveZoom=null;this.g.resize();}this.g.notify();}
- click(ray){if(this.moving){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p)){const target=coopSpotNear(this.g.world,this.g.store.state,{x:p.x,y:-p.z});if(!target){this.g.toast('The coop needs more room. Try open ground away from trees and water.');return true;}if(this.commit({...this.state,coopPosition:target})){this.cancelMove();this.g.toast('Coop moved!');this.g.notify();}}return true;}if(this.state.coop){const hit=ray.intersectObject(this.coop,true)[0];if(hit){if(hit.object.userData.coopStep)this.g.walk({x:hit.point.x,y:-hit.point.z});else this.offerCoop();return true;}}return false;}
+ startMove(){
+  if(this.g.action||this.g.order){this.g.toast('Finish this action first.');return;}
+  if(this.moving||!this.state.coop)return;
+  this.g.prompt=null;this.moveZoom=this.g.zoom;this.g.zoom=Math.max(this.g.zoom,19);this.g.resize();this.moving=true;this.moveTarget={...this.position};this.g.keys.clear();this.g.path=[];
+  this.moveGhost=this.coopModel(this.state.coop);this.group.add(this.moveGhost);
+  this.moveGhost.traverse(o=>{if(o.isMesh){o.castShadow=false;o.material.transparent=true;o.material.opacity=.65;o.material.depthWrite=false;}});
+  const pad=new THREE.Mesh(new THREE.PlaneGeometry(3.6,3.05),new THREE.MeshBasicMaterial({transparent:true,opacity:.28,depthWrite:false,side:THREE.DoubleSide}));pad.rotation.x=-Math.PI/2;pad.position.set(0,.025,.325);this.moveGhost.add(pad);
+  this.updateMovePreview();this.g.notify();
+ }
+ updateMovePreview(){if(!this.moving||!this.moveGhost)return;const p=this.moveTarget;this.moveValid=coopPlacementStatus(this.g.world,this.g.store.state,p);this.moveGhost.position.set(p.x,heightAt(this.g.world,p.x,p.y),-p.y);this.moveGhost.traverse(o=>{if(o.isMesh)o.material.color.set(this.moveValid?'#48bd73':'#eb6555');});if(this.coop)this.coop.visible=false;}
+ nudgeMove(dx,dy){if(!this.moving)return;this.moveTarget={x:this.moveTarget.x+dx*.5,y:this.moveTarget.y+dy*.5};this.updateMovePreview();this.g.notify();}
+ confirmMove(){if(!this.moving)return false;this.updateMovePreview();if(!this.moveValid){this.g.toast('Choose a clear spot for your coop.');this.g.notify();return false;}const target={...this.moveTarget};if(!this.commit({...this.state,coopPosition:target}))return false;this.cancelMove();this.g.toast('Coop moved!');return true;}
+ cancelMove(){this.moving=false;this.moveTarget=null;if(this.moveGhost){this.group.remove(this.moveGhost);this.moveGhost.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.moveGhost=null;}if(this.coop)this.coop.visible=true;if(this.moveZoom!=null){this.g.zoom=this.moveZoom;this.moveZoom=null;this.g.resize();}this.g.notify();}
+ click(ray){if(this.moving){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p)){this.moveTarget={x:p.x,y:-p.z};this.updateMovePreview();this.g.notify();}return true;}if(this.state.coop){const hit=ray.intersectObject(this.coop,true)[0];if(hit){if(hit.object.userData.coopStep)this.g.walk({x:hit.point.x,y:-hit.point.z});else this.offerCoop();return true;}}return false;}
  walkTo(id){if(this.state.animals.find(a=>a.id===id)?.kind==='chicken'){this.openCoop();return;}const i=this.state.animals.findIndex(a=>a.id===id);if(i>=0)this.test.walk(this.ground(i));}
  ground(i){return this.test.layout.farmSpots[i];}
  sync(){
@@ -76,7 +87,7 @@ export class LivingFarm{
   return true;
  }
  update(){
-  const now=Date.now();if(now<this.checkAt)return;this.checkAt=now+500;
+  const now=Date.now();if(now<this.checkAt)return;this.checkAt=now+500;if(this.moving)this.updateMovePreview();
   const next=farmAdvance(this.state,now),newlyReady=next.animals.find((a,i)=>a.ready>0&&!this.state.animals[i].ready);
   if(this.commit(next)&&newlyReady)this.g.toast(`${newlyReady.name}: ${newlyReady.kind==='chicken'?'egg':'milk'} ready!`);
   if(this.test.watching||this.test.dialogOpen)return;
@@ -87,7 +98,7 @@ export class LivingFarm{
   }
  }
  snapshot(){
-  return {...this.state,moving:!!this.moving,coopScreen:this.test.project(this.position,1.1),eggCount:this.state.animals.filter(a=>a.kind==='chicken').reduce((n,a)=>n+a.ready,0),pending:this.pending,error:this.error,animals:this.state.animals.map((a,i)=>({...a,eggSlots:eggSlots(a),screen:this.test.project(this.ground(i),.7),seconds:Math.max(0,Math.ceil((a.nextAt-Date.now())/1000))})),offers:['chicken','coop','cow'].map(kind=>({kind,...farmOffer(this.state,kind)}))};
+  return {...this.state,moving:!!this.moving,moveValid:!!this.moveValid,coopScreen:this.test.project(this.position,1.1),eggCount:this.state.animals.filter(a=>a.kind==='chicken').reduce((n,a)=>n+a.ready,0),pending:this.pending,error:this.error,animals:this.state.animals.map((a,i)=>({...a,eggSlots:eggSlots(a),screen:this.test.project(this.ground(i),.7),seconds:Math.max(0,Math.ceil((a.nextAt-Date.now())/1000))})),offers:['chicken','coop','cow'].map(kind=>({kind,...farmOffer(this.state,kind)}))};
  }
  dispose(){this.g.scene.remove(this.group);this.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
 }

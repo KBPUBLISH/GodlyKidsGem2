@@ -124,8 +124,8 @@ export class Construction {
  updatePreview(){
   if(!this.preview)return;if(this.preview.stroke)return this.updateStroke();const g=this.g,omit=this.preview.movingId||this.preview.upgradingId,checkState=omit?stateWithoutBuilding(g.world,g.store.state,omit):g.store.state,site=buildSiteStatus(g.world,checkState,this.preview),status=site.ok?(this.preview.upgradingId?buildUpgradeStatus(g.world,g.store.state,this.preview.upgradingId,gameTime(g.store.state),this.preview.crew):this.preview.movingId?buildMoveStatus(g.world,g.store.state,{...this.preview,id:this.preview.movingId}):buildPlacementStatus(g.world,g.store.state,this.preview)):site,fp=site.footprint||footprint(g.world,this.preview);
   if(!fp){this.previewStatus={ok:false,reason:'This home is too close to the island edge. Move it farther inland first.'};this.siteValid=false;this.previewRevision=g.store.state.revision;this.ghostGroup.visible=false;this.gridGroup.clear();return;}this.ghostGroup.visible=true;
-  this.previewStatus=status;this.previewRevision=g.store.state.revision;this.siteValid=site.ok;this.ghostGroup.position.set(fp.center.x,site.baseHeight??heightAt(g.world,fp.center.x,fp.center.y)+.02,-fp.center.y);this.ghostGroup.rotation.y=this.preview.rotation*Math.PI/2;
-  this.ghost.traverse(o=>{if(o.isMesh)o.material=this.ghostMaterials[site.ok?'ok':'bad'];if(o.userData.previewEdge)o.material=this.edgeMaterials[site.ok?'ok':'bad'];});
+  this.previewStatus=status;this.previewRevision=g.store.state.revision;this.siteValid=this.preview.movingId?status.ok:site.ok;this.ghostGroup.position.set(fp.center.x,site.baseHeight??heightAt(g.world,fp.center.x,fp.center.y)+.02,-fp.center.y);this.ghostGroup.rotation.y=this.preview.rotation*Math.PI/2;
+  this.ghost.traverse(o=>{if(o.isMesh)o.material=this.ghostMaterials[this.siteValid?'ok':'bad'];if(o.userData.previewEdge)o.material=this.edgeMaterials[this.siteValid?'ok':'bad'];});
   this.drawPlacementGrid(fp);
  }
  drawPlacementGrid(fp){

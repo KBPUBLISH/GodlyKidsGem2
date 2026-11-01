@@ -1,3 +1,4 @@
+import {CoopMoveController} from './move-controller.jsx';
 import React,{useEffect,useRef} from 'react';
 import {Icon,ItemIcon,useDialogFocus} from './ui.jsx';
 import './living-test.css';
@@ -49,7 +50,7 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
 
    {!modal&&!play.watching&&!play.insideHome&&!play.placingAdam&&farm.animals.filter(a=>a.kind!=='chicken'&&a.ready&&a.screen.visible).map(a=><button key={a.id} className="living-target farm-ready" style={{left:`clamp(30px, ${a.screen.x}px, calc(100% - 30px))`,top:a.screen.y}} aria-label={`Collect from ${a.name}`} onClick={()=>invoke(t=>t.farm.walkTo(a.id))}><span aria-hidden="true">{a.kind==='chicken'?'🥚':'🥛'}</span><b>{a.ready}</b></button>)}
    {!modal&&!play.insideHome&&!play.watching&&farm.coop>0&&farm.coopScreen?.visible&&!farm.moving&&<button className="living-target coop-entry" style={{left:`clamp(60px, ${farm.coopScreen.x}px, calc(100% - 60px))`,top:farm.coopScreen.y}} aria-label={`Chicken coop · ${farm.eggCount} eggs ready`} onClick={()=>invoke(t=>t.farm.offerCoop())}><span aria-hidden="true">🏡</span><b>{farm.eggCount>0?`🥚 ${farm.eggCount}`:'Coop'}</b></button>}
-   {!modal&&farm.moving&&<div className="coop-move-hint" role="status">Tap open ground to move the coop<button onClick={()=>invoke(t=>t.farm.cancelMove())}>Cancel</button></div>}
+   {!modal&&farm.moving&&<CoopMoveController valid={farm.moveValid} onMove={(x,y)=>invoke(t=>t.farm.nudgeMove(x,y))} onConfirm={()=>invoke(t=>t.farm.confirmMove())} onCancel={()=>invoke(t=>t.farm.cancelMove())}/>}
    {!modal&&play.friend?.near&&<section className="living-friend-hello" aria-label="Adam nearby"><span className="living-friend-face" aria-hidden="true">👋</span><div><strong>Adam</strong><p>{play.friend.greeting}</p><div><button onClick={()=>invoke(t=>t.friend.open('chat'))}>💬 Chat</button><button onClick={()=>invoke(t=>t.friend.open('tasks'))}>🛠 Help</button></div></div></section>}
    {!modal&&play.greeting?.visible&&<div className="living-greeting" role="status" style={{left:`clamp(85px, ${play.greeting.x}px, calc(100% - 85px))`,top:play.greeting.y}}>{play.greeting.text}</div>}
    {!modal&&play.watching&&<section className="living-watch"><span>{play.watchingName}</span><button aria-label="Back to me" onClick={()=>invoke(t=>t.stopWatching())}><Icon type="walk" size={30}/>Back to me</button></section>}

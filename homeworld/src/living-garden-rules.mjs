@@ -68,14 +68,14 @@ export function gardenHarvest(s,index,now){
  const picked={...g.picked,[GARDEN_CROPS[index]]:1};
  return {...s,garden:{...g,picked,completed:PICK_CROPS.every(c=>picked[c]===1),readyAt,wateredAt}};
 }
-export function starterTasks(g,tentBuilt,dug=0){
+export function starterTasks(g,tentBuilt,friendPhase='offered'){
  const planted=g.planted===4,harvested=PICK_CROPS.every(c=>g.picked[c]===1);
- const slots=Math.max(0,Math.min(4,Number(dug)||0));
+ const friendHome=['placed','unlocked'].includes(friendPhase);
  return [
   {id:'plant',label:'Plant 4 carrot seeds',icon:'plant',value:g.planted,total:4,done:planted,locked:false},
   {id:'pick',label:'Pick 1 of each',accessibleLabel:'Pick 1 carrot, 1 pumpkin and 1 lettuce',icon:'harvest',value:PICK_CROPS.filter(c=>g.picked[c]).length,total:3,done:harvested,locked:!planted,crops:PICK_CROPS.map(c=>({id:c,done:!!g.picked[c]}))},
   {id:'tent',label:'Build a tent',icon:'build',value:tentBuilt?1:0,total:1,done:tentBuilt,locked:!harvested},
-  {id:'dig',label:'Dig 4 more garden slots',icon:'hoe',value:slots,total:4,done:slots>=4,locked:!tentBuilt},
+  {id:'friend',label:'Bring Adam to your island',icon:'book',value:friendHome?1:0,total:1,done:friendHome,locked:!tentBuilt},
  ];
 }
 // Only replace the untouched demo planting. Gardens a child worked on stay intact.

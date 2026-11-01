@@ -37,10 +37,13 @@ const LOADING_FADE_MS = 520;
 const LOADING_FALLBACK_MS = 12000;
 const LOADING_LINES = ['Setting sail…', 'Rowing ashore…', 'Waking up your island…', 'Almost home…'];
 const ISLAND_COINS_KEY = 'gk_friends_world_coins_v1';
+const ISLAND_STARTING_COINS = 500;
 const islandCoinsKey = (scope: string) => `${ISLAND_COINS_KEY}:${scope}`;
 const readIslandCoins = (scope: string): number => {
   try {
-    const value = Number(localStorage.getItem(islandCoinsKey(scope)));
+    const raw = localStorage.getItem(islandCoinsKey(scope));
+    if (raw === null) return ISLAND_STARTING_COINS;
+    const value = Number(raw);
     return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
   } catch {
     return 0;

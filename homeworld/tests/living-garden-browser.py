@@ -127,7 +127,7 @@ async def main():
   await page.get_by_role('button',name='Keep exploring',exact=True).click(timeout=90000)
   await frame.get_by_role('button',name='Open Tasks',exact=True).click()
   await expect(frame.get_by_role('button',name='Build a tent. 1 of 1. Done',exact=True)).to_be_disabled()
-  await expect(frame.get_by_role('status').filter(has_text='All done!')).to_be_visible()
+  await expect(frame.get_by_role('button',name='Bring Adam to your island. 0 of 1',exact=True)).to_be_enabled()
   await page.screenshot(path='/tmp/starter-tasks-complete.png')
   await frame.get_by_role('button',name='Back to island',exact=True).click()
   print('PASS: garden leads directly to prayer tent; first friend is optional',flush=True)

@@ -10,6 +10,7 @@ import {
   ONBOARDING_GENESIS_VIDEO,
   isOnboardingJourneyActive,
   markDiscoverShipPending,
+  resolveFirstStoryPackDestination,
 } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
@@ -768,15 +769,13 @@ const MapPage: React.FC = () => {
     const dest = island || islands[0];
     if (!dest) return;
     const title = `${dest.book}: ${dest.title}`;
-    navigate(`/sail/${encodeURIComponent(dest.id)}`, {
-      state: {
-        onboardingJourney: true,
-        title,
-        hasMainMap: islandHasMainMap(dest),
-        mainMapUrl: dest.mainMapUrl,
-        mainMapVideoUrl: dest.mainMapVideoUrl,
-      },
-    });
+    void resolveFirstStoryPackDestination()
+      .then((story) => navigate(story.path, {
+        state: { ...story.state, onboardingJourney: true, title },
+      }))
+      .catch(() => navigate(`/sail/${encodeURIComponent(dest.id)}/lesson`, {
+        state: { onboardingJourney: true, title },
+      }));
   }, [islands, navigate]);
 
   /** Video ends → white fade, then sail deck. */

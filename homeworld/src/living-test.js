@@ -178,16 +178,16 @@ export class LivingIslandTest {
     this.tasksOpen=false;this.g.notify();
   }
   startTask(id){
-    const task=starterTasks(this.farm.state.garden,this.state.stage>=1,this.g.store.state.stats?.plowed||0).find(t=>t.id===id);
+    const task=starterTasks(this.farm.state.garden,this.state.stage>=1,this.friendPhase).find(t=>t.id===id);
     if(!task||task.done||task.locked)return;
     this.closeTasks();
-    if(id==='dig'){this.g.setTool('hoe');this.g.toast('Tap clear grass to dig a garden spot.');}
+    if(id==='friend'){if(this.bringAdamReady)this.bringAdam();else if(this.placingAdam)this.g.toast('Tap clear land to welcome Adam.');else this.openInvite();}
     else if(id==='tent')this.showNext();
     else this.garden.go();
   }
   hearTask(){
     const garden=this.farm.state.garden,hint=guidance(this.state);
-    const message=this.tasksOpen?'Plant four carrot seeds and water them. Then pick one carrot, one pumpkin and one lettuce. Gather wood and build your tent. Then dig four more garden slots.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
+    const message=this.tasksOpen?'Plant four carrot seeds and water them. Then pick one carrot, one pumpkin and one lettuce. Gather wood and build your tent. Finally, bring Adam from the ship and drop him on your island.':this.bringAdamReady?'Tap Bring Adam, then choose clear land for him.':this.placingAdam?'Tap clear land to welcome Adam.':!garden.completed?this.garden.snapshot().instruction:hint?`${currentRequest(this.state)?.friend==='adam'?'Help Adam. ':''}${hint.instruction} ${hint.progress}.`:'Tap a picture to explore.';
     this.activity();this.speak(message);
   }
   celebrate(title){this.celebration={title,until:this.elapsed+3.2};this.g.burst(this.g.player,'seed',.8);}
@@ -325,7 +325,7 @@ export class LivingIslandTest {
   snapshot(){
     const task=currentRequest(this.state),site=this.site();
     const target=this.nextTarget();
-    return {friend:this.friend?.snapshot(),arrival:this.arrival?.snapshot()||null,task,tasksOpen:this.tasksOpen,helpOffer:this.helpOffer||null,helpJob:this.state.helpJob||null,tasks:starterTasks(this.farm.state.garden,this.state.stage>=1,this.g.store.state.stats?.plowed||0),bringAdamReady:this.bringAdamReady,placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:window.parent!==window,insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
+    return {friend:this.friend?.snapshot(),arrival:this.arrival?.snapshot()||null,task,tasksOpen:this.tasksOpen,helpOffer:this.helpOffer||null,helpJob:this.state.helpJob||null,tasks:starterTasks(this.farm.state.garden,this.state.stage>=1,this.friendPhase),bringAdamReady:this.bringAdamReady,placingAdam:this.placingAdam,dropTarget:this.placingAdam?this.project(this.dropSpot(),.2):null,friendPhase:this.friendPhase,garden:this.garden?.snapshot(),friendLoading:this.friendEarned&&!this.state.adamUnlocked,friendError:this.g.friendError,farm:this.farm?.snapshot(),decision:this.decision,watching:this.watching,watchingName:this.watchFocus?.label||'Your island',greeting:this.greeting&&this.elapsed<this.greeting.until?{text:this.greeting.text,...this.project({x:this.g.community.actors.adam.actor.position.x,y:-this.g.community.actors.adam.actor.position.z},2.4)}:null,guidance:guidance(this.state),target:target?{...this.project(target,.85),id:target.id||'delivery'}:null,celebration:this.celebration?.until>this.elapsed?this.celebration.title:null,pickupNotice:this.pickupNotice?.until>this.elapsed?this.pickupNotice.label:null,canSpeak:window.parent!==window,insideHome:!!this.g.interior,stage:this.state.stage,deposited:task?this.state.deposits[task.id]:0,inventory:this.state.inventory,homeReady:this.state.homeWork===1,
       adamUnlocked:this.state.adamUnlocked,inviteVisible:(window.parent===window||this.coach?.beat?.id!=='tent')&&this.state.stage>=1&&!this.state.adamUnlocked&&!['aboard','placing','placed'].includes(this.friendPhase)&&!this.placingAdam&&!this.state.inviteDismissed&&this.elapsed>=this.inviteAfter,welcomeVisible:this.state.adamUnlocked&&!this.state.welcomeSeen,
       openingStory:this.openingStory,storyError:this.storyError,
       site:site?this.project(site,1.3):null,

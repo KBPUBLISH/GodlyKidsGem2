@@ -300,12 +300,13 @@ export function journeyMeter(state,garden,project){
 }
 
 /** Friends World coins are profile-scoped and never touch story or mini-game coins. */
+const ISLAND_STARTING_COINS=500;
 const islandCoinKey=()=>{
   const scope=typeof location!=='undefined'?new URLSearchParams(location.search).get('profile')||'local':'local';
   return `gk_friends_world_coins_v1:${scope}`;
 };
 export function readShipCoins(){
-  try{if(typeof localStorage==='undefined')return null;const value=Number(localStorage.getItem(islandCoinKey()));return Number.isFinite(value)&&value>=0?Math.floor(value):0;}catch{return null;}
+  try{if(typeof localStorage==='undefined')return null;const raw=localStorage.getItem(islandCoinKey());if(raw===null)return ISLAND_STARTING_COINS;const value=Number(raw);return Number.isFinite(value)&&value>=0?Math.floor(value):ISLAND_STARTING_COINS;}catch{return null;}
 }
 export function displayCoins(live){
   if(Number.isFinite(live))return live;

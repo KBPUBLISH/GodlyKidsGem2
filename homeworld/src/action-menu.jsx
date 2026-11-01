@@ -42,10 +42,12 @@ export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,
         {!farm&&<button className={`action-sleep-shortcut ${view.nutrition.lowEnergy?'is-tired':''}`} onClick={()=>onPanel('sleep')}><Icon type="rest" size={28}/><strong>Rest at home</strong><small>{view.nutrition.sleep?'Sleeping':view.nutrition.lowEnergy?'Low energy':'Recharge'} →</small></button>}
         {!farm&&!view.playersOnly&&!view.livingTest&&<button className="action-sleep-shortcut community-shortcut" onClick={()=>onPanel('community')}><Icon type="plant" size={28}/><strong>Our community</strong><small>Eve & Noah →</small></button>}
         {(farm||tool==='plant')&&<button className="seed-strip" onClick={()=>onPanel('catalogue')} aria-label={`Choose seed. Selected: ${seed.name}`}><ItemIcon id={seed.id} size={30}/><strong>{seed.name}</strong><small>{view.state.inventory[seed.id]||0} seeds</small><em>Choose →</em></button>}
+        {farm&&<BuildMenu view={view} {...buildProps} compact allowedCategories={['Farm']}/>}
         {farm&&<div className="action-options garden-preset-options" role="group" aria-label="Premade garden presets">{GARDEN_PRESETS.map(p=><button key={p.id} className="tool-button garden-preset-button" style={{'--tool-color':p.fenced?'#8a633d':'#527c38','--tool-soft':p.fenced?'#f5eadc':'#edf6d9'}} onClick={()=>onRun(g=>g.buildAsk?.startGardenPreset(p.id))} aria-label={`${p.name}, ${p.plots} plots, needs ${p.friends} friends${p.fenced?', wood required':''}`}><GardenPresetGrid preset={p}/><span className="tool-name">{p.name}</span><small>{p.plots} plots · {p.friends} friends{p.fenced?' · wood':''}</small></button>)}</div>}
         {tool==='mine'&&!farm&&<button className="action-extra" onClick={()=>onPanel('tools')}>Better tools →</button>}
         {primary&&<div className="menu-primary"><ActionButton icon={primary.icon} disabled={view.busy||(ready==='fish'&&view.nutrition.energy<4)} onClick={()=>onRun(primary.run)}>{primary.name}</ActionButton><span>{HINTS[ready]}</span></div>}
         {farm&&<p className="action-menu-tip">Choose Dig, then tap clear grass to walk there and dig. Plant and water your new spot.</p>}
+
         {farm&&!LIVING_TEST&&!view.livingTest&&<AnimalFarm view={view} onRun={onRun}/>}
       </>}
     </div>

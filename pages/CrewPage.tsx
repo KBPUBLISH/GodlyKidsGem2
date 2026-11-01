@@ -1,5 +1,5 @@
 import {livingAvatarForProfile} from '../shared/livingAvatars.mjs';
-import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome} from '../utils/livingFirstFriend';
+import {useLivingFriendJourney,openLivingFirstFriendStory,bringLivingFirstFriendHome,reconcileLivingFirstFriendCompletion} from '../utils/livingFirstFriend';
 import {getProfileScopeKey} from '../utils/profileScope';
 import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import { LIVING_TEST_BUILD } from '../utils/livingTestMode';
@@ -791,6 +791,7 @@ const CrewPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const livingJourney=useLivingFriendJourney();
+  useEffect(()=>{reconcileLivingFirstFriendCompletion();},[livingJourney?.phase,livingJourney?.islandId,livingJourney?.storyId]);
   const firstFriendVoyage=!!livingJourney&&['ship','pack','reading','reward'].includes(livingJourney.phase);
   const firstFriendHome=!!livingJourney&&['aboard','placing'].includes(livingJourney.phase);
   const livingJourneyActive=firstFriendVoyage||firstFriendHome;
@@ -1487,7 +1488,10 @@ const CrewPage: React.FC = () => {
     [clearTimers, navigate, reduceMotion],
   );
 
-  const crew3d = crew.filter(canWalkOnDeck).map(c=>LIVING_TEST_BUILD&&isAdamCharacter(c)?{...c,modelUrl:'/homeworld/assets/mobile/adam.glb?v=mobile-1'}:c);
+  // Use the model attached to the story reward. CMS refresh above updates this
+  // URL when Adam's model changes; overriding it here kept the old packaged
+  // Adam on the boat even after the story pack was updated.
+  const crew3d = crew.filter(canWalkOnDeck);
 
   // First boarding this session: unlock waving, then play it once models
   // are on deck. Re-entering the ship later in the same session stays idle.

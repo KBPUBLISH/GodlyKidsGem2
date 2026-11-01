@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {FOODS} from '../src/nutrition.mjs';
-import {RECIPES,combine,partEnergy,canMake,pickRecipe} from '../src/recipes.mjs';
+import {RECIPES,combine,partEnergy,canMake,pickRecipe,missingLine} from '../src/recipes.mjs';
 
 test('every recipe is two real ingredients and restores more energy than both bites together',()=>{
   assert.ok(RECIPES.length>=8);
@@ -42,15 +42,31 @@ test('combine spends the two ingredients, adds the snack, and does not mutate th
   assert.notEqual(unknown,stocks);
 });
 
-test('combine makes a garden salad from carrot and pumpkin',()=>{
-  const next=combine({carrot:1,pumpkin:2,wheat_seed:4},'garden_salad');
+test('combine makes a garden salad from carrot and lettuce',()=>{
+  const next=combine({carrot:1,lettuce:2,wheat_seed:4},'garden_salad');
   assert.equal(next.garden_salad,1);
   assert.equal(next.carrot,undefined);
-  assert.equal(next.pumpkin,1);
+  assert.equal(next.lettuce,1);
   assert.equal(next.wheat_seed,4);
 });
 
 test('a fresh seed bag becomes seed crackers, the strongest snack those seeds can make',()=>{
   const stocks={wheat_seed:6,sunflower_seed:6,pumpkin_seed:6,pine_seed:3,oak_acorn:3,coconut:3};
   assert.equal(pickRecipe(stocks)?.id,'seed_crackers');
+});
+
+test('recognizable recipes use real bag items and report only missing ingredients',()=>{
+  const expected=['Sunflower bread','Pumpkin soup','Pumpkin pie','Apple pie','Carrot cake'];
+  for(const name of expected)assert.ok(RECIPES.some(recipe=>recipe.name===name),name);
+  assert.equal(RECIPES.some(recipe=>recipe.id==='carrot_bites'),false);
+  assert.equal(missingLine({apple:1},RECIPES.find(recipe=>recipe.id==='apple_pie')),'1 wheat');
+  assert.equal(missingLine({apple:1,wheat:1},RECIPES.find(recipe=>recipe.id==='apple_pie')),'');
+});
+
+test('combine makes apple pie immediately from an apple and wheat',()=>{
+  const next=combine({apple:2,wheat:1,pumpkin:3},'apple_pie');
+  assert.equal(next.apple_pie,1);
+  assert.equal(next.apple,1);
+  assert.equal(next.wheat,undefined);
+  assert.equal(next.pumpkin,3);
 });

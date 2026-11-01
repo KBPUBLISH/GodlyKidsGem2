@@ -192,7 +192,7 @@ export class Nutrition {
   }
   goFish(){
     const g=this.g;if(this.busy()||!this.check('fish'))return;const spot=this.spot;if(!spot){g.toast('The fishing spot could not be found.');return;}
-    const land={x:spot.position[0],y:spot.position[1]},path=g.nav.path(g.player,land);if(!path){g.toast('The way to the dock is blocked. Clear a path first.');return;}
+    const land=g.fishing?.polePoint||{x:spot.position[0],y:spot.position[1]},path=g.nav.path(g.player,land);if(!path){g.toast('The way to the dock is blocked. Clear a path first.');return;}
     g.livingTest?.activity();g.livingTest?.garden.cancel();g.keys.clear();g.lastGroundKey=null;
     g.tool='fish';g.path=path;g.order={type:'fish',spotId:spot.id,actionId:crypto.randomUUID(),target:{x:spot.water[0],y:spot.water[1]}};g.marker.position.copy(position(spot.position)).add(V(0,.04,0));g.marker.visible=true;g.status='Walking to the dock…';g.notify();
   }

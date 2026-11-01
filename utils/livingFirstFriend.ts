@@ -7,6 +7,21 @@ import { firstFriendKey,readFirstFriend,startFirstFriendVoyage,beginFirstFriendP
 const EVENT='gk-living-friend-journey';
 const changed=()=>window.dispatchEvent(new Event(EVENT));
 export const livingFriendRecord=()=>readFirstFriend(localStorage,firstFriendKey(getProfileScopeKey()));
+/**
+ * Older/completed profiles can reach this journey after they already opened
+ * the treasure. Do not send them back through the first story: adopt that
+ * saved completion and move Adam to the "bring him home" step.
+ */
+export function reconcileLivingFirstFriendCompletion(){
+ const key=firstFriendKey(getProfileScopeKey()),record=readFirstFriend(localStorage,key);
+ if(record?.phase!=='reward'||!record.islandId||!record.storyId)return false;
+ const progress=islandStoryProgressService.get(record.islandId,record.storyId);
+ if(!progress.game&&!progress.rewards)return false;
+ const findAdam=()=>rewardsService.getUnlockedCharacters().find(c=>c.id===ONBOARDING_ADAM_ID||/^adam$/i.test(c.name.trim()));
+ if(!findAdam())rewardsService.collectReward(record.storyId,ONBOARDING_ADAM_REWARD);
+ if(!findAdam()||!claimFirstFriend(localStorage,key,record.islandId,record.storyId))return false;
+ changed();return true;
+}
 export function useLivingFriendJourney(){
  const [record,setRecord]=useState(livingFriendRecord);
  useEffect(()=>{const sync=()=>setRecord(livingFriendRecord());window.addEventListener(EVENT,sync);window.addEventListener('storage',sync);const off=onProfileScopeChange(sync);return()=>{window.removeEventListener(EVENT,sync);window.removeEventListener('storage',sync);off();};},[]);

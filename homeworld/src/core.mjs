@@ -20,6 +20,7 @@ import {scopeKey,migrateLegacyKeys,adoptNewerLegacy} from './storage-scope.mjs';
 import {creditSkill} from './settlement.mjs';
 import {combine as combineRecipe,recipeById,sameStocks,recipeDay} from './recipes.mjs';
 import {takeForSale} from './sell-prices.mjs';
+import {fishingDockContains,fishingDockLayout} from './fishing-dock.mjs';
 /** Island save. Per kid profile when the page URL carries `?profile=<scope>` (storage-scope.mjs); plain legacy key otherwise. */
 export const SAVE_KEY_BASE = 'godlykids_homeworld_playtest_v1';
 export const SAVE_KEY = scopeKey(SAVE_KEY_BASE);
@@ -637,6 +638,23 @@ export class Navigation {
     for(const t of trees)circle(t.position[0],t.position[1],t.radius+.3);
     for(const b of activeRocks(world,state))circle(b.position[0],b.position[1],b.radius+.28);
     for(const b of [...world.blockers,...buildingBlockers(world,state)]){const [x,y,x1,y1]=b.bounds,a=this.cell({x:x-.22,y:y-.22}),z=this.cell({x:x1+.22,y:y1+.22});for(let r=Math.max(0,a.row);r<=Math.min(this.height-1,z.row);r++)for(let c=Math.max(0,a.col);c<=Math.min(this.width-1,z.col);c++){const p=this.point(c,r);if(inBlocker(b,p.x,p.y,.22))this.blocked[r*this.width+c]=1;}}
+    // A finished dock is a pier: its planks are a path, including the part that stands over the water.
+    for(const b of activeBuildings(state)){
+      if(b.kind!=='dock'||b.status!=='complete')continue;
+      const fp=footprint(world,b);if(!fp)continue;
+      const [x0,y0,x1,y1]=fp.bounds,a=this.cell({x:x0+.08,y:y0+.08}),z=this.cell({x:x1-.08,y:y1-.08});
+      for(let r=Math.max(0,a.row);r<=Math.min(this.height-1,z.row);r++)for(let c=Math.max(0,a.col);c<=Math.min(this.width-1,z.col);c++){
+        const p=this.point(c,r);
+        if(p.x>x0+.05&&p.x<x1-.05&&p.y>y0+.05&&p.y<y1-.05)this.blocked[r*this.width+c]=0;
+      }
+    }
+    // The permanent fishing pier is scenery rather than a saved building, but its
+    // centre planks are still a real path from the beach to the rod at the end.
+    const fishingDock=fishingDockLayout(world);
+    if(fishingDock)for(let row=0;row<this.height;row++)for(let col=0;col<this.width;col++){
+      const p=this.point(col,row);
+      if(fishingDockContains(fishingDock,p.x,p.y))this.blocked[row*this.width+col]=0;
+    }
   }
   cell(p){return {col:Math.floor((p.x-this.world.grid.origin[0])*2),row:Math.floor((p.y-this.world.grid.origin[1])*2)};}
   point(col,row){return {x:this.world.grid.origin[0]+col*.5+.25,y:this.world.grid.origin[1]+row*.5+.25};}

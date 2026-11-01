@@ -3,10 +3,16 @@ import {Icon,ItemIcon,ActionButton,TOOLS} from './ui.jsx';
 import {BuildMenu} from './building-ui.jsx';
 import {AnimalFarm} from './animals-ui.jsx';
 import {LIVING_TEST} from './storage-scope.mjs';
+import {GARDEN_PRESETS} from './garden-presets.mjs';
 
 const TABS=[{id:'actions',name:'Actions',icon:'actions'},{id:'build',name:'Build',icon:'build'},{id:'farm',name:'Farm',icon:'plant'},{id:'decorate',name:'Decorate',icon:'rest'}];
 const HARVEST={id:'harvest',name:'Harvest',color:'#527c38',soft:'#edf6d9'};
 const HINTS={walk:'Tap a tree to gather wood.',axe:'Tap a tree to gather wood.',mine:'Rocks use 5 energy per hit.',hoe:'Tap clear grass to walk there and dig.',plant:'Tap an empty garden plot.',water:'Tap a plant to help it grow.',fish:'Tap water to cast your line.'};
+
+function GardenPresetGrid({preset}){
+  const width=Math.max(...preset.cells.map(([x])=>x))+1,height=Math.max(...preset.cells.map(([,y])=>y))+1,filled=new Set(preset.cells.map(([x,y])=>`${x}:${y}`));
+  return <span className={`garden-preset-grid ${preset.fenced?'fenced':''}`} style={{gridTemplateColumns:`repeat(${width},1fr)`,gridTemplateRows:`repeat(${height},1fr)`}} aria-hidden="true">{Array.from({length:width*height},(_,i)=>{const key=`${i%width}:${Math.floor(i/width)}`;return <i key={key} className={filled.has(key)?'plot':'empty'}/>;})}</span>;
+}
 
 export const QUICK_TOOLS=[HARVEST,...TOOLS];
 export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,buildProps,seed}){
@@ -36,6 +42,7 @@ export function ActionMenu({view,tab,onTab,onClose,onEquip,onRun,onPanel,onPick,
         {!farm&&<button className={`action-sleep-shortcut ${view.nutrition.lowEnergy?'is-tired':''}`} onClick={()=>onPanel('sleep')}><Icon type="rest" size={28}/><strong>Rest at home</strong><small>{view.nutrition.sleep?'Sleeping':view.nutrition.lowEnergy?'Low energy':'Recharge'} →</small></button>}
         {!farm&&!view.playersOnly&&!view.livingTest&&<button className="action-sleep-shortcut community-shortcut" onClick={()=>onPanel('community')}><Icon type="plant" size={28}/><strong>Our community</strong><small>Eve & Noah →</small></button>}
         {(farm||tool==='plant')&&<button className="seed-strip" onClick={()=>onPanel('catalogue')} aria-label={`Choose seed. Selected: ${seed.name}`}><ItemIcon id={seed.id} size={30}/><strong>{seed.name}</strong><small>{view.state.inventory[seed.id]||0} seeds</small><em>Choose →</em></button>}
+        {farm&&<div className="action-options garden-preset-options" role="group" aria-label="Premade garden presets">{GARDEN_PRESETS.map(p=><button key={p.id} className="tool-button garden-preset-button" style={{'--tool-color':p.fenced?'#8a633d':'#527c38','--tool-soft':p.fenced?'#f5eadc':'#edf6d9'}} onClick={()=>onRun(g=>g.buildAsk?.startGardenPreset(p.id))} aria-label={`${p.name}, ${p.plots} plots, needs ${p.friends} friends${p.fenced?', wood required':''}`}><GardenPresetGrid preset={p}/><span className="tool-name">{p.name}</span><small>{p.plots} plots · {p.friends} friends{p.fenced?' · wood':''}</small></button>)}</div>}
         {tool==='mine'&&!farm&&<button className="action-extra" onClick={()=>onPanel('tools')}>Better tools →</button>}
         {primary&&<div className="menu-primary"><ActionButton icon={primary.icon} disabled={view.busy||(ready==='fish'&&view.nutrition.energy<4)} onClick={()=>onRun(primary.run)}>{primary.name}</ActionButton><span>{HINTS[ready]}</span></div>}
         {farm&&<p className="action-menu-tip">Choose Dig, then tap clear grass to walk there and dig. Plant and water your new spot.</p>}

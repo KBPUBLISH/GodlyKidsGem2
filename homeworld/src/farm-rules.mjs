@@ -185,8 +185,8 @@ export function nextRequest(state){
   return {kind,qty:n,price:bundlePrice(kind,n)};
 }
 
-/** When Adam may ask for animals: a stable stands and has room. */
-export const canAsk=status=>!!status&&status.stables>0&&status.room>0;
+/** Adam never orders livestock until the stable has a closed, gap-free paddock. */
+export const canAsk=status=>!!status&&status.stables>0&&status.fenced&&status.room>0;
 /** The next island morning (07:00) after `minutes`. "Not now" waits until then. */
 export function nextMorning(minutes){const MORNING=420,day=Math.floor((minutes-MORNING)/1440);return (day+1)*1440+MORNING;}
 

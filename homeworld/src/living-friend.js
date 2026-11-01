@@ -29,7 +29,20 @@ export class LivingFriend {
   this.helper.can.visible=false;this.helper.hammer.visible=false;this.helper.bench.visible=false;if(this.tool)this.tool.visible=false;
   this.savedCamera={zoom:this.g.zoom,yaw:this.g.viewYaw,pitch:this.g.viewPitch,overview:this.g.overview};this.g.overview=false;
   document.body.classList.add('living-chat-open');this.savedPlayerYaw=this.g.actor.rotation.y;this.chooseCamera();
-  this.post({type:'gk-living-friend-open',session:this.session,mode,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
+  this.post({type:'gk-living-friend-open',session:this.session,mode,intro:!this.t.state.fenceAsked,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
+ }
+ answerFence(answer){
+  if(this.t.state.fenceAsked)return;
+  this.t.state.fenceAsked=true;this.t.save();
+  if(answer==='yes'){
+   this.close();
+   const asked=this.g.buildAsk?.requestFence?.({name:'Adam'});
+   if(asked)this.g.buildAsk.accept();
+   else this.g.toast?.('We need a clear moment before choosing the fence.');
+   this.post({type:'gk-living-friend-ended',session:this.session});
+   return;
+  }
+  this.post({type:'gk-living-friend-task-result',session:this.session,ok:true,line:'Ok, just let me know what tasks to help with.',world:this.brief()});
  }
  close(){if(!this.chatOpen)return;this.chatOpen=false;document.body.classList.remove('living-chat-open');this.hiddenTrees=null;this.g.actor.rotation.y=this.savedPlayerYaw;this.g.refreshDynamic();this.t.activity();this.nextHello=this.t.elapsed+45;if(this.savedCamera){Object.assign(this.g,{zoom:this.savedCamera.zoom,viewYaw:this.savedCamera.yaw,viewPitch:this.savedCamera.pitch,overview:this.savedCamera.overview});this.g.updateProjection();}this.freeze();this.g.notify();}
  chooseCamera(){
@@ -53,6 +66,7 @@ export class LivingFriend {
  }
  handle(data){
   if(data.session!==this.session||!this.chatOpen)return;
+  if(data.type==='gk-living-friend-intro'){this.answerFence(data.answer);return;}
   if(data.type==='gk-living-friend-close')this.close();
   if(data.type==='gk-living-friend-task'&&validFriendTask(data.task)){
    if(data.task==='build'){this.close();window.dispatchEvent(new Event('gk-open-build'));this.post({type:'gk-living-friend-ended',session:this.session});return;}
@@ -105,7 +119,7 @@ export class LivingFriend {
   if(near&&!this.near&&!this.job&&!t.builder&&!assignedProject(g.store.state,'adam'))this.freeze();
   if(near&&!this.near&&t.elapsed>=this.nextHello){this.greeting=nearbyGreeting(t.playerName,this.greetingIndex++);this.nextHello=t.elapsed+45;}
   this.near=near;
-  if(this.chatOpen){updateLocomotion(h,g.idlePose,dt,0,Date.now()/1000);h.actor.updateMatrixWorld(true);h.rig.ik('Right',h.rig.localPoint([-.35,.9,.1]));h.rig.ik('Left',h.rig.localPoint([.35,.9,.1]));return;}
+  if(this.chatOpen){resetAnimatedPose(h);h.actor.rotation.y=Math.atan2(g.actor.position.x-h.actor.position.x,g.actor.position.z-h.actor.position.z);return;}
   if(g.residents?.models?.has('adam')&&!this.job)return;
   if(!this.job){
    if(near){h.can.visible=false;h.hammer.visible=false;h.bench.visible=false;updateLocomotion(h,g.idlePose,dt,0,Date.now()/1000);h.actor.rotation.y=Math.atan2(g.actor.position.x-h.actor.position.x,g.actor.position.z-h.actor.position.z);}

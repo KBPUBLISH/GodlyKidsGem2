@@ -5,6 +5,7 @@ import {
   footprintKeys, stableOnEdge, fenceFromTaps, extendFence, gardenPlanFromTaps,
   canOffer, rowSlotMismatch, isSnoozed, snoozeUntil, buildAskLine, fenceAskLine, gardenAskLine, FENCE_CAP, isStructure,
 } from '../src/build-ask.mjs';
+import { GARDEN_PRESETS, placeGardenPreset, fenceWoodNeeded } from '../src/garden-presets.mjs';
 
 test('garden taps toggle up to 20 and the ring follows that shape', () => {
   let keys = [];
@@ -77,4 +78,26 @@ test('the stable footprint prefers the first tapped edge', () => {
   const stable = stableOnEdge('8:4', ['8:4', '9:4', '10:4', '10:5', '8:5'], [3, 2]);
   assert.ok(stable.keys.includes('8:4'));
   assert.equal(stable.keys.filter(k => k !== '8:4' && ['9:4', '10:4', '10:5', '8:5'].includes(k)).length <= 2, true);
+});
+
+test('garden presets provide four shapes in fenced and open versions', () => {
+  assert.equal(GARDEN_PRESETS.length, 8);
+  assert.deepEqual([...new Set(GARDEN_PRESETS.map(p => p.friends))], [2, 3, 4, 5]);
+  for (const shape of ['square', 'rows', 'corner', 'cross']) {
+    assert.equal(GARDEN_PRESETS.filter(p => p.shape === shape).length, 2);
+  }
+});
+
+test('preset placement translates plots and leaves exactly one gate unpaid', () => {
+  const open = placeGardenPreset('square-open', '10:20');
+  assert.deepEqual(open.keys, ['10:20', '11:20', '10:21', '11:21']);
+  assert.deepEqual(open.ring, []);
+  assert.equal(open.gate, null);
+  assert.equal(open.wood, 0);
+
+  const fenced = placeGardenPreset('corner-fenced', '5:7', { col: 0, row: 0 });
+  assert.ok(fenced.gate && fenced.ring.includes(fenced.gate));
+  assert.equal(fenced.ring.some(key => fenced.keys.includes(key)), false);
+  assert.equal(fenced.wood, (fenced.ring.length - 1) * 2);
+  assert.equal(fenceWoodNeeded(fenced), fenced.wood);
 });

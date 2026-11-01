@@ -4,8 +4,9 @@
 import * as THREE from 'three';
 import { cellAt, cellFromKey, gameTime, heightAt, terrainType, activeTrees, activeStumps } from './core.mjs';
 import { skillFor } from './character-skills.mjs';
-import { buildingById } from './building.mjs';
+import { buildingById, woodTotal } from './building.mjs';
 import { fenceGaps } from './farm-rules.mjs';
+import { gardenPreset, placeGardenPreset } from './garden-presets.mjs';
 import {
   GARDEN_CAP, FENCE_CAP, canOffer, isSnoozed, snoozeUntil, gardenAskLine, buildAskLine, fenceAskLine,
   footprintKeys, fenceFromTaps, extendFence, toggleKey, isStructure,
@@ -96,6 +97,28 @@ export class BuildAsk {
     return this.request({ id: 'fence', mode: 'fence', name: home?.name || 'Adam', text: fenceAskLine(), cap: FENCE_CAP });
   }
 
+  startGardenPreset(id) {
+    const preset = gardenPreset(id), s = this.state();
+    if (!preset || !s) return false;
+    if (this.g.gardenPlan?.active?.(s)) { this.g.toast?.('Finish the active garden preset before placing another.'); return false; }
+    const crew = [...(this.g.residents?.models?.values() || [])].map(actor => actor.userData?.residentId).filter(Boolean);
+    if (crew.length < preset.friends) {
+      this.g.toast?.(`${preset.name} needs ${preset.friends} friends ashore. You have ${crew.length}.`, 4600);
+      return false;
+    }
+    const sample = placeGardenPreset(id, '0:0');
+    if (preset.fenced && woodTotal(s) < sample.wood) {
+      this.g.toast?.(`${preset.name} needs ${sample.wood} wood for its fence posts. You have ${woodTotal(s)}.`, 4800);
+      return false;
+    }
+    this.open = null;
+    this.picking = { id: `preset:${id}`, mode: 'gardenPreset', presetId: id, name: preset.name, crew: crew.slice(0, preset.friends), keys: [], plan: null };
+    this.paint([]);
+    this.g.enterSiteView?.();
+    this.g.notify?.();
+    return true;
+  }
+
   /** The card ResidentLine draws. Null while Eve's meal ask is up, so the two never stack. */
   card() {
     if (this.g.dining?.askCard?.()) return null;
@@ -106,6 +129,16 @@ export class BuildAsk {
 
   pickCard() {
     const p = this.picking;
+    if (p.mode === 'gardenPreset') {
+      return {
+        name: p.name,
+        text: p.plan ? `The garden covers these squares. Place ${p.name}?` : 'Drag over open grass to position this garden.',
+        picking: true,
+        goLabel: 'Place this garden',
+        waitLabel: 'Not now',
+        goEnabled: !!p.plan,
+      };
+    }
     if (p.mode === 'build') {
       const name = p.buildingName || 'building';
       return {
@@ -158,7 +191,12 @@ export class BuildAsk {
   confirm() {
     const p = this.picking;
     if (!p) return;
-    if (p.mode === 'garden') {
+    if (p.mode === 'gardenPreset') {
+      if (!p.plan) return;
+      const saved = this.g.gardenPlan?.commitPreset(p.plan, p.crew);
+      if (!saved) return;
+      this.g.toast?.(`${p.crew.length} friends will plow, plant${p.plan.fenced?', and fence':''} this garden.`, 4400);
+    } else if (p.mode === 'garden') {
       if (!p.keys.length) return;
       const saved = this.g.gardenPlan?.commit(p.keys);
       if (!saved) { this.g.toast?.('Those squares are not open grass.'); return; }
@@ -287,18 +325,48 @@ export class BuildAsk {
   /** While the kid is choosing squares, a tap never walks them off. */
   takeTap(event) {
     if (!this.picking) return false;
-    const g = this.g;
-    const point = new THREE.Vector3();
-    if (!g.ray?.ray?.intersectPlane(g.groundPlane, point)) return true;
-    const cell = cellAt(g.world, point.x, -point.z);
-    this.onCell(cell.key);
+    const key = this.eventCell(event);
+    if (key) this.onCell(key);
     return true;
+  }
+
+  takeDrag(event) {
+    if (this.picking?.mode !== 'gardenPreset' || (event.type === 'pointermove' && !event.buttons)) return false;
+    const key = this.eventCell(event);
+    if (key && key !== this.picking.anchor) {
+      this.picking.anchor = key;
+      this.onCell(key);
+    }
+    return true;
+  }
+
+  eventCell(event) {
+    const g = this.g, rect = g.renderer?.domElement?.getBoundingClientRect?.();
+    if (!rect?.width || !rect.height) return null;
+    g.mouse.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
+    g.ray.setFromCamera(g.mouse, g.camera);
+    const point = new THREE.Vector3();
+    if (!g.ray.ray.intersectPlane(g.groundPlane, point)) return null;
+    return cellAt(g.world, point.x, -point.z).key;
   }
 
   onCell(key) {
     const p = this.picking;
     if (!p || !this.grass(key)) { this.g.toast?.('That needs to be grass.'); return; }
-    if (p.mode === 'build') {
+    if (p.mode === 'gardenPreset') {
+      const origin = this.g.world?.grid?.origin || [0, 0];
+      const player = this.state()?.player || { x: origin[0], y: origin[1] };
+      const plan = placeGardenPreset(p.presetId, key, { col: player.x - origin[0], row: player.y - origin[1] });
+      const occupied = this.g.gardenPlan?.occupied?.(this.state()) || new Set();
+      const all = [...(plan?.keys || []), ...(plan?.ring || [])];
+      if (!plan || all.some(k => !this.grass(k) || occupied.has(k) || this.state()?.cells?.[k]?.soil)) {
+        this.g.toast?.('The whole preset needs open grass. Drag it to another spot.');
+        return;
+      }
+      p.plan = plan;
+      p.keys = plan.keys;
+      this.paint(all);
+    } else if (p.mode === 'build') {
       const spot = footprintKeys(key, p.size || [1, 1], 0);
       if (!spot || spot.keys.some(k => !this.grass(k) || this.state()?.cells?.[k]?.soil)) {
         this.g.toast?.('The whole building needs open grass. Tap another square.');
@@ -322,7 +390,7 @@ export class BuildAsk {
   persistDraft() {
     const s = this.state(), p = this.picking;
     if (!s || !p || !this.g.store) return;
-    const draft = { id: p.id, mode: p.mode, kind: p.kind || null, name: p.name, buildingName: p.buildingName || null, size: p.size || null, cap: p.cap || null, text: p.text || '', keys: [...(p.keys || [])], spot: p.spot ? { key: p.spot.key, rotation: p.spot.rotation || 0, keys: [...(p.spot.keys || [])] } : null };
+    const draft = { id: p.id, mode: p.mode, kind: p.kind || null, name: p.name, buildingName: p.buildingName || null, size: p.size || null, cap: p.cap || null, text: p.text || '', keys: [...(p.keys || [])], spot: p.spot ? { key: p.spot.key, rotation: p.spot.rotation || 0, keys: [...(p.spot.keys || [])] } : null, presetId: p.presetId || null, crew: p.crew || null, plan: p.plan || null };
     try { this.g.store.save({ ...s, village: { ...(s.village || {}), siteDraft: draft } }); }
     catch (e) { this.g.toast?.(e.message); }
   }
@@ -342,7 +410,7 @@ export class BuildAsk {
     if (this.picking?.id === draft.id && (this.picking.keys || []).join() === (draft.keys || []).join()) return;
     this.open = null;
     this.picking = { ...draft, keys: [...(draft.keys || [])], spot: draft.spot ? { ...draft.spot, keys: [...(draft.spot.keys || [])] } : null };
-    this.paint(this.picking.mode === 'build' ? (this.picking.spot?.keys || this.picking.keys) : this.picking.keys);
+    this.paint(this.picking.mode === 'build' ? (this.picking.spot?.keys || this.picking.keys) : this.picking.mode === 'gardenPreset' ? [...(this.picking.plan?.keys || []), ...(this.picking.plan?.ring || [])] : this.picking.keys);
     this.g.enterSiteView?.();
     this.g.notify?.();
   }

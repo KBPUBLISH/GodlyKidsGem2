@@ -25,6 +25,7 @@ const PerryGuidePortrait: React.FC = () => {
     const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
     const release=(root:THREE.Object3D)=>root.traverse(obj=>{const mesh=obj as THREE.Mesh;if(!mesh.isMesh)return;mesh.geometry?.dispose();for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){for(const value of Object.values(material))if(value instanceof THREE.Texture)value.dispose();material.dispose();}});
     let mixer: THREE.AnimationMixer | null = null;
+    let fitUntil = 0;
     const clock = new THREE.Clock();
 
     const renderer = new THREE.WebGLRenderer({
@@ -51,6 +52,26 @@ const PerryGuidePortrait: React.FC = () => {
     const camera = new THREE.OrthographicCamera(-1, 1, 1.15, -1.15, 0.1, 40);
     camera.position.set(0.4, 0.15, 8);
     camera.lookAt(0, 0, 0);
+    // Wings open wider than the body. Keep the widest flap seen so tips are never sliced off.
+    const seen = new THREE.Box3();
+    let spanReady = false;
+    const fitBird = () => {
+      if (!wrapper.children.length) return;
+      const box = new THREE.Box3().setFromObject(wrapper);
+      if (box.isEmpty()) return;
+      if (!spanReady) { seen.copy(box); spanReady = true; }
+      else { seen.min.min(box.min); seen.max.max(box.max); }
+      const size = seen.getSize(new THREE.Vector3());
+      const center = seen.getCenter(new THREE.Vector3());
+      const aspect = (host.clientWidth || 168) / Math.max(host.clientHeight || 112, 1);
+      const pad = 1.14;
+      const halfH = Math.max(size.y / 2, size.x / 2 / aspect) * pad;
+      camera.top = center.y + halfH;
+      camera.bottom = center.y - halfH;
+      camera.left = center.x - halfH * aspect;
+      camera.right = center.x + halfH * aspect;
+      camera.updateProjectionMatrix();
+    };
 
     scene.add(new THREE.HemisphereLight(0xfff2e0, 0x6eb6d4, 1.15));
     const sun = new THREE.DirectionalLight(0xffe9c4, 1.35);
@@ -61,16 +82,10 @@ const PerryGuidePortrait: React.FC = () => {
     scene.add(wrapper);
 
     const resize = () => {
-      const w = host.clientWidth || 108;
-      const h = host.clientHeight || 124;
+      const w = host.clientWidth || 168;
+      const h = host.clientHeight || 112;
       renderer.setSize(w, h, false);
-      const aspect = w / Math.max(h, 1);
-      const halfH = 0.95;
-      camera.left = -halfH * aspect;
-      camera.right = halfH * aspect;
-      camera.top = halfH;
-      camera.bottom = -halfH;
-      camera.updateProjectionMatrix();
+      fitBird();
     };
     resize();
 
@@ -106,11 +121,15 @@ const PerryGuidePortrait: React.FC = () => {
         const action = mixer.clipAction(clip);
         action.setLoop(THREE.LoopRepeat, Infinity);
         action.play();
-        mixer.update(0);
-      }
-      const live = new THREE.Box3().setFromObject(wrapper);
-      const liveCenter = live.getCenter(new THREE.Vector3());
-      wrapper.position.sub(liveCenter);stillDrawn=false;setReady(true);
+        const marks = 8;
+        for (let i = 0; i < marks; i++) {
+          mixer.setTime(clip.duration * (i / marks));
+          fitBird();
+        }
+        mixer.setTime(0);
+      } else fitBird();
+      fitUntil = performance.now() + 2200;
+      stillDrawn=false;setReady(true);
     },undefined,()=>{ /* The small parrot fallback remains; navigation never waits. */ });
 
     const tick = (now=performance.now()) => {
@@ -119,6 +138,7 @@ const PerryGuidePortrait: React.FC = () => {
       if(document.hidden||now-lastPaint<1000/30||(reduced.matches&&stillDrawn))return;
       lastPaint=now;stillDrawn=true;
       mixer?.update(reduced.matches?0:Math.min(clock.getDelta(),.08));
+      if (now < fitUntil) fitBird();
       renderer.render(scene, camera);
     };
     tick();

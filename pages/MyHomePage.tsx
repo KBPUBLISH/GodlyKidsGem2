@@ -24,8 +24,8 @@ import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRI
 
 const HOMEWORLD_URL = '/homeworld/index.html?v=players190&players=1';
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
-const homeworldUrlFor = (scope: string, playerName: string, livingTest = false, avatarId = 'trail') =>
-  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}${livingTest ? `&avatar=${encodeURIComponent(avatarId)}` : ''}`;
+const homeworldUrlFor = (scope: string, playerName: string, livingTest = false, avatarId = 'trail', friendModel = '', friendImage = '') =>
+  `${livingTest?'/homeworld/living-test.html?players=1&livingTest=1':HOMEWORLD_URL}&profile=${encodeURIComponent(scope)}${playerName ? `&player=${encodeURIComponent(playerName)}` : ''}${livingTest ? `&avatar=${encodeURIComponent(avatarId)}${friendModel ? `&friendModel=${encodeURIComponent(friendModel)}` : ''}${friendImage ? `&friendImage=${encodeURIComponent(friendImage)}` : ''}` : ''}`;
 
 /** Loading screen art — the same sea and wheel as the ship deck. */
 const LOADING_SEA = '/assets/images/crew-voyage-sea-pano.webp?v=1';
@@ -268,6 +268,7 @@ const MyHomePage: React.FC = () => {
   const [profileScope, setProfileScope] = useState<string>(() => ensureLegacyMigration().scope);
   const [residents, setResidents] = useState<PlayersWorldResident[]>(() => readPlayersWorldResidents());
   const [collected, setCollected] = useState<UnlockedCharacter[]>(() => rewardsService.getUnlockedCharacters());
+  const adamReward=useMemo(()=>collected.find(c=>/^adam$/i.test(c.name.trim())),[collected]);
   // A profile switch while this page is open: re-read this profile's data and reload the island.
   useEffect(
     () =>
@@ -282,7 +283,7 @@ const MyHomePage: React.FC = () => {
   );
   // Enter using the saved roster; newer CMS models sync in the background.
   const [modelsReady, setModelsReady] = useState(true);
-  const [friendChat,setFriendChat]=useState<{scope:string;session:number;mode:string;character:UnlockedCharacter;world:Record<string,unknown>;result?:{ok:boolean;line:string;serial:number}}|null>(null);
+  const [friendChat,setFriendChat]=useState<{scope:string;session:number;mode:string;intro?:boolean;character:UnlockedCharacter;world:Record<string,unknown>;result?:{ok:boolean;line:string;serial:number}}|null>(null);
   useEffect(()=>setFriendChat(null),[profileScope]);
   const [chatCharacter, setChatCharacter] = useState<UnlockedCharacter | null>(null);
   const [chatWorld, setChatWorld] = useState<WorldBrief | null>(null);
@@ -438,8 +439,7 @@ const MyHomePage: React.FC = () => {
         if(message.type==='gk-living-friend-open'&&Number.isInteger(message.session)&&message.character?.id==='adam'){
           adamVoice.stop();setCoach(null);
           const known=rewardsService.getUnlockedCharacters().find(c=>/^adam$/i.test(c.name.trim()));
-          if(known)setFriendChat({scope:profileScope,session:message.session,mode:message.mode==='tasks'?'tasks':'chat',character:known,world:message.world||{}});
-          else post({type:'gk-living-friend-close',session:message.session});
+          setFriendChat({scope:profileScope,session:message.session,mode:message.intro?'chat':message.mode==='tasks'?'tasks':'chat',intro:message.intro===true,character:known||{id:'adam',name:'Adam',imageUrl:''},world:message.world||{}});
         }
         if(message.type==='gk-living-friend-task-result'&&typeof message.line==='string'&&message.line.length<=500)setFriendChat(current=>current?.session===message.session?{...current,world:message.world||current.world,result:{ok:message.ok===true,line:message.line,serial:Date.now()}}:current);
         if(message.type==='gk-living-friend-ended')setFriendChat(current=>current?.session===message.session?null:current);
@@ -710,7 +710,7 @@ const MyHomePage: React.FC = () => {
       className="fixed inset-0 h-[100dvh] min-h-0 bg-[#315d41] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
-      {friendChat&&friendChat.scope===profileScope&&<IslandFriendChat key={`${profileScope}:${friendChat.session}`} character={friendChat.character} userName={playerName} world={friendChat.world} mode={friendChat.mode} result={friendChat.result} onClose={()=>{post({type:'gk-living-friend-close',session:friendChat.session});setFriendChat(null);}} onTask={task=>post({type:'gk-living-friend-task',session:friendChat.session,task})}/>}
+      {friendChat&&friendChat.scope===profileScope&&<IslandFriendChat key={`${profileScope}:${friendChat.session}`} character={friendChat.character} userName={playerName} world={friendChat.world} mode={friendChat.mode} intro={friendChat.intro} result={friendChat.result} onClose={()=>{post({type:'gk-living-friend-close',session:friendChat.session});setFriendChat(null);}} onTask={task=>post({type:'gk-living-friend-task',session:friendChat.session,task})} onIntro={answer=>post({type:'gk-living-friend-intro',session:friendChat.session,answer})}/>}
       {chatCharacter && (
         <CrewChatPopup
           variant="island"
@@ -857,7 +857,6 @@ const MyHomePage: React.FC = () => {
       )}
 
       {livingTestMode&&coach&&<LivingJourneyGuide key={coach.id} autoSpeak={coach.autoSpeak} line={coach.line} spoken={coach.spoken} label={coach.label} onAction={()=>post({type:'gk-living-coach-action',id:coach.id,action:'next'})} onDismiss={()=>post({type:'gk-living-coach-action',id:coach.id,action:'later'})}/>}
-      {livingTestMode && !frameLoaded && <div className={`absolute inset-0 z-[80] flex items-center justify-center ${firstArrival?'bg-black':'bg-[#99b9b0]'}`} role="status">{firstArrival?<span className="text-[#fff3c4] font-bold">Your island is waking up…</span>:<div className="rounded-3xl bg-[#fff8e8] px-8 py-6 text-center text-[#3e2414]"><strong>Rowing ashore…</strong><p>Getting your island ready.</p></div>}</div>}
       {overlayMounted && !livingTestMode && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
       {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
@@ -882,7 +881,7 @@ const MyHomePage: React.FC = () => {
         {modelsReady && (
         <iframe
           ref={frameRef}
-          src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId)+(firstArrival?'&arrival=1':'')}
+          src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId,adamReward?.modelUrl||'',adamReward?.imageUrl||'')+(firstArrival?'&arrival=1':'')}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"

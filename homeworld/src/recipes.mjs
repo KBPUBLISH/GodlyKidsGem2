@@ -25,19 +25,23 @@ export const partEnergy=id=>(FOODS[id]?.energy??0)||(NIBBLE[id]??0);
  * `energy` is what eating the finished snack restores — more than both ingredients together.
  */
 export const RECIPES=[
-  {id:'garden_salad',name:'Garden salad',needs:{carrot:1,pumpkin:1},makes:{garden_salad:1},energy:72,says:'Two garden friends in one bowl!'},
+  {id:'garden_salad',name:'Garden salad',needs:{carrot:1,lettuce:1},makes:{garden_salad:1},energy:52,says:'Crunchy garden vegetables in one bowl!'},
   {id:'seed_crackers',name:'Seed crackers',needs:{wheat_seed:1,sunflower_seed:1},makes:{seed_crackers:1},energy:48,says:'Crunchy seeds, stuck together!'},
-  {id:'nut_butter_greens',name:'Nut butter on greens',needs:{oak_acorn:1,sunflower:1},makes:{nut_butter_greens:1},energy:56,says:'Nut butter on garden greens!'},
-  {id:'roasted_seeds',name:'Roasted seeds',needs:{pumpkin_seed:1,pine_seed:1},makes:{roasted_seeds:1},energy:44,says:'Warm seeds from the pan!'},
-  {id:'veggie_stew',name:'Veggie stew',needs:{carrot:1,wheat:1},makes:{veggie_stew:1},energy:58,says:'Carrot and grain, bubbling!'},
-  {id:'pumpkin_coconut',name:'Pumpkin coconut',needs:{pumpkin:1,coconut:1},makes:{pumpkin_coconut:1},energy:68,says:'Pumpkin and coconut, so sweet!'},
-  {id:'apple_nut',name:'Apple nut bite',needs:{apple:1,oak_acorn:1},makes:{apple_nut:1},energy:46,says:'Apple and a nut, one bite!'},
-  {id:'carrot_bites',name:'Carrot seed bites',needs:{carrot:1,sunflower_seed:1},makes:{carrot_bites:1},energy:52,says:'Carrot coins on little seeds!'},
+  {id:'sunflower_bread',name:'Sunflower bread',needs:{wheat:1,sunflower:1},makes:{sunflower_bread:1},energy:50,says:'A sunny, seedy loaf!'},
+  {id:'roasted_seeds',name:'Roasted seeds',needs:{pumpkin_seed:1,sunflower_seed:1},makes:{roasted_seeds:1},energy:44,says:'Warm, crunchy seeds from the pan!'},
+  {id:'pumpkin_soup',name:'Pumpkin soup',needs:{pumpkin:1,carrot:1},makes:{pumpkin_soup:1},energy:72,says:'Warm orange soup, ready to slurp!'},
+  {id:'pumpkin_pie',name:'Pumpkin pie',needs:{pumpkin:1,wheat:1},makes:{pumpkin_pie:1},energy:62,says:'A golden pumpkin pie!'},
+  {id:'apple_pie',name:'Apple pie',needs:{apple:1,wheat:1},makes:{apple_pie:1},energy:48,says:'Warm apple pie from the oven!'},
+  {id:'carrot_cake',name:'Carrot cake',needs:{carrot:1,wheat:1},makes:{carrot_cake:1},energy:55,says:'A sweet carrot cake to share!'},
 ];
 
 export const recipeById=id=>RECIPES.find(r=>r.id===id)||null;
 export const itemName=id=>ITEM_NAMES[id]||String(id||'').replace(/_/g,' ');
 export const needsLine=recipe=>Object.keys(recipe.needs).map(itemName).join(', ');
+export const missingLine=(stocks,recipe)=>Object.entries(recipe.needs)
+  .filter(([id,n])=>(stocks?.[id]||0)<n)
+  .map(([id,n])=>`${n-(stocks?.[id]||0)} ${itemName(id)}`)
+  .join(', ');
 
 export const canMake=(stocks,recipe)=>!!recipe&&Object.entries(recipe.needs).every(([id,n])=>(stocks?.[id]||0)>=n);
 

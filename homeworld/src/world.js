@@ -21,7 +21,7 @@ import {Mining} from './mining.js';
 import {toolTier} from './mining.mjs';
 import {digPower,digCycleScale,shovelTier} from './digging.mjs';
 import {Construction} from './construction.js';
-import {activeBuildings,footprint,boundsOverlap,woodTotal,buildingById,buildingProgress} from './building.mjs';
+import {activeBuildings,footprint,boundsOverlap,woodTotal,buildingById,buildingProgress,deckHeight} from './building.mjs';
 import {ACTIVE_FRACTION} from './project-rules.mjs';
 import {Nutrition} from './nutrition.js';
 import {energyFor,completedHomes,FOODS,RECIPES,MAX_ENERGY,hungerFor,mealGain,workRate,workRateNote} from './nutrition.mjs';
@@ -33,6 +33,7 @@ import {Residents} from './residents.js';
 import {Arrivals} from './arrival-profile.js';
 import {AutoWork} from './auto-work.js';
 import {Fishing} from './fishing.js';
+import {fishingDockDeckHeight} from './fishing-dock.mjs';
 import {Animals} from './animals.js';
 import {NightSky} from './night-sky.js';
 import {planFor} from './island-plan.js';
@@ -134,7 +135,7 @@ export class HomeWorld {
     canvas.addEventListener('touchcancel',this.onCanvasTouchEnd,{passive:true});
     canvas.addEventListener('gesturestart',this.blockGesture,{passive:false});
     canvas.addEventListener('gesturechange',this.blockGesture,{passive:false});
-    this.onStrokePointer=e=>{if(this.pinching)return;if(this.building?.preview?.stroke)this.building.aimFromEvent(e);};
+    this.onStrokePointer=e=>{if(this.pinching)return;if(this.buildAsk?.takeDrag?.(e))return;if(this.building?.preview?.stroke)this.building.aimFromEvent(e);};
     this.renderer.domElement.addEventListener('pointerdown',this.onStrokePointer);
     this.renderer.domElement.addEventListener('pointermove',this.onStrokePointer);
     this.keyDown=e=>{if(this.livingTest?.arrival?.active)return;if(e.key==='Escape'&&this.interior){e.preventDefault();this.building?.leaveHome();return;}if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
@@ -150,13 +151,17 @@ export class HomeWorld {
     const loader=new GLTFLoader();
     this.assetAbort=new AbortController();
     this.draco=new DRACOLoader().setDecoderPath('/draco/');loader.setDRACOLoader(this.draco);
-    const loadModel=async name=>{
-      const url=assetUrl(`/assets/${this.livingTestMode?'mobile/':''}${name}.glb`);
+    const loadModelUrl=async rawUrl=>{
+      const url=new URL(rawUrl,location.href);
       const response=await fetch(url,{signal:AbortSignal.any([this.assetAbort.signal,AbortSignal.timeout(60000)])});
       if(!response.ok)throw Error('The island download needs another try.');
-      return loader.parseAsync(await response.arrayBuffer(),'/homeworld/assets/');
+      return loader.parseAsync(await response.arrayBuffer(),url.href.slice(0,url.href.lastIndexOf('/')+1));
     };
-    this.loadFriendModel=()=>loadModel('adam');
+    const loadModel=name=>loadModelUrl(assetUrl(`/assets/${this.livingTestMode?'mobile/':''}${name}.glb`));
+    const friendModel=new URLSearchParams(location.search).get('friendModel');
+    // The first-story reward owns Adam's model. Keep the packaged GLB only as
+    // an offline fallback so CMS model updates also appear on the island.
+    this.loadFriendModel=()=>friendModel?loadModelUrl(friendModel).catch(()=>loadModel('adam')):loadModel('adam');
     const empty={scene:new THREE.Group(),animations:[]};
     const [world,env,library,adam,construction,houses,woodStores,eve,noah,church]=await Promise.all([
       fetch(assetUrl('/assets/world.json'),{signal:AbortSignal.any([this.assetAbort.signal,AbortSignal.timeout(60000)])}).then(r=>{if(!r.ok)throw Error('Map data is unavailable');return r.json();}),
@@ -167,7 +172,7 @@ export class HomeWorld {
     this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(this.livingTestMode&&!this.store.locked)this.store.save(prepareLivingGardenBase(this.store.state,world));if(!this.store.locked)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
     for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
-    this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,heightAt(world,this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
+    this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,this.groundY(this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
     this.restPose=[];this.model.traverse(o=>{if(o.isBone)this.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});if(o.isMesh){o.castShadow=true;o.receiveShadow=false;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);if(m.map&&m.map.anisotropy<4)m.map.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());m.needsUpdate=true;}}});
     this.mixer=new THREE.AnimationMixer(this.model);this.clips={};
     for(const original of adam.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name)){for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}}this.clips[original.name]=this.mixer.clipAction(clip);}
@@ -425,7 +430,7 @@ export class HomeWorld {
       this.store.persistPlayer(this.player);this.store.communityStep({active:true});const previousId=this.store.state.activeCharacter;
       this.store.commit({type:'select_character',id,previousId,position:{...this.player},actionId:crypto.randomUUID()});if(this.store.state.activeCharacter!==id){this.toast('This character is sleeping. Try again when they wake up.');return false;}
       this.keys.clear();this.path=[];this.order=null;this.manualMoving=false;this.lastGroundKey=null;this.marker.visible=false;this.building.cancelPreview();this.nutrition.clear();Object.values(this.tools).forEach(t=>t.visible=false);
-      this.community.bindActive(id);this.player={...this.store.state.player};this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);this.community.activity();this.overview=false;this.resize();this.refreshDynamic();this.revealCharacterVitals();this.status=`Playing as ${this.store.state.characters[id].name}. Tap land to walk.`;this.notify();return true;
+      this.community.bindActive(id);this.player={...this.store.state.player};this.actor.position.set(this.player.x,this.groundY(this.player.x,this.player.y)+.015,-this.player.y);this.community.activity();this.overview=false;this.resize();this.refreshDynamic();this.revealCharacterVitals();this.status=`Playing as ${this.store.state.characters[id].name}. Tap land to walk.`;this.notify();return true;
     }catch(e){this.toast(e.message);return false;}
   }
   revealCharacterVitals(wall=Date.now(),id=this.store?.state.activeCharacter){
@@ -464,10 +469,12 @@ export class HomeWorld {
     if(this.tool==='mine'){const meshes=[...this.mining.nodes.values()].filter(n=>n.group.visible&&!this.store.state.removedRocks.includes(n.id)).map(n=>n.mesh);const hit=this.ray.intersectObjects(meshes,true)[0];if(hit){let node=hit.object;while(node&&!node.userData.rockId)node=node.parent;if(node?.userData.rockId)this.mining.mine(node.userData.rockId);return;}}
     const hits=this.ray.intersectObjects(this.treeBatches.map(b=>b.mesh),false);if(hits.length){const hit=hits[0],id=hit.object.userData.ids[hit.instanceId];if(id){if(this.tool==='axe'){this.chop(id);return;}if(this.offerTree(id))return;}}
     if(this.tool!=='mine'){const meshes=[...this.mining.nodes.values()].filter(n=>n.group.visible&&!this.store.state.removedRocks.includes(n.id)).map(n=>n.mesh);const hit=this.ray.intersectObjects(meshes,true)[0];if(hit){let node=hit.object;while(node&&!node.userData.rockId)node=node.parent;if(node?.userData.rockId){const rock=this.world.boulders.find(r=>r.id===node.userData.rockId);this.showPrompt('rock',rock.id,{x:rock.position[0],y:rock.position[1]},(rock.radius||.5)+.9,[{id:'mine',label:'Smash',icon:'mine'}]);return;}}}
-    if(this.tool!=='hoe'&&this.stumpNodes?.length){const hit=this.ray.intersectObjects(this.stumpNodes,true)[0],stumpId=hit?.object.userData.stumpId;if(stumpId){const t=this.world.trees.find(t=>t.id===stumpId);this.showPrompt('stump',stumpId,{x:t.position[0],y:t.position[1]},.7,[{id:'dig',label:'Dig out',icon:'shovel'}]);return;}}
+    if(this.stumpNodes?.length){const hit=this.ray.intersectObjects(this.stumpNodes,true)[0],stumpId=hit?.object.userData.stumpId;if(stumpId&&this.offerStump(this.world.trees.find(t=>t.id===stumpId)))return;}
+    const dockTarget=this.fishing?.walkPoint?.(this.ray);if(dockTarget){this.walk(dockTarget);return;}
     const p=V();if(!this.ray.ray.intersectPlane(this.groundPlane,p))return;const target={x:p.x,y:-p.z},cell=cellAt(this.world,target.x,target.y);
+    if(this.offerStump(target))return;
     if(this.tool==='fish'&&terrainType(this.world,target.x,target.y)===0){this.nutrition.goFish();return;}
-    if(this.tool==='hoe'){if(!this.action&&['plow','dig_stump','clear_weeds'].includes(this.order?.type)){this.path=[];this.order=null;this.marker.visible=false;}const stumpHit=this.stumpNodes?.length?this.ray.intersectObjects(this.stumpNodes,true)[0]:null,stumpId=stumpHit?.object.userData.stumpId||activeStumps(this.world,this.store.state).find(t=>cellAt(this.world,t.position[0],t.position[1]).key===cell.key)?.id;if(stumpId){this.digStump(stumpId);return;}if(terrainType(this.world,target.x,target.y)===1){this.digMud(cell.key);return;}if(this.gardenPlot(cell.key))this.peekPlant(cell.key);if(plotWeedy(this.store.state.cells[cell.key],gameTime(this.store.state))){const queued=this.gardenAction('clear_weeds',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'clear_weeds'))this.walk(target);return;}const queued=this.gardenAction('plow',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'plow'))this.walk(target);return;}
+    if(this.tool==='hoe'){if(!this.action&&['plow','dig_stump','clear_weeds'].includes(this.order?.type)){this.path=[];this.order=null;this.marker.visible=false;}if(terrainType(this.world,target.x,target.y)===1){this.digMud(cell.key);return;}if(this.gardenPlot(cell.key))this.peekPlant(cell.key);if(plotWeedy(this.store.state.cells[cell.key],gameTime(this.store.state))){const queued=this.gardenAction('clear_weeds',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'clear_weeds'))this.walk(target);return;}const queued=this.gardenAction('plow',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'plow'))this.walk(target);return;}
     const plot=this.store.state.cells[cell.key],planted=growth(plot,gameTime(this.store.state));
     if(this.gardenPlot(cell.key)){
       // Walk tool: tapping the garden opens the card (fenced %, Abel's next request, the plan).
@@ -502,13 +509,15 @@ export class HomeWorld {
     const full=card.water>=card.max,far=card.away>2.6;
     return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
   }
+  /** Ground, or the top of the harbour planks when the point is on a finished dock. */
+  groundY(x,y){const ground=heightAt(this.world,x,y),built=deckHeight(this.world,this.store.state,x,y),fishing=fishingDockDeckHeight(this.world,(sx,sy)=>heightAt(this.world,sx,sy),x,y),deck=Math.max(built??-Infinity,fishing??-Infinity);return Number.isFinite(deck)?Math.max(ground,deck):ground;}
   walk(target) {
     if(this.livingTest){this.livingTest.activity();this.livingTest.garden.cancel();}
     if(this.interior) return;
     if(this.ambientNudge())return;
     this.residents?.cancelWave();
     this.pinJob=null;
-    if(this.action){this.toast('Your character is finishing this action.');return;}const path=this.nav.path(this.player,target);if(!path){this.toast('There is no clear path there. Try a closer patch of land.');return;}this.lastGroundKey=cellAt(this.world,target.x,target.y).key;this.path=path;this.order=null;this.marker.position.set(target.x,heightAt(this.world,target.x,target.y)+.035,-target.y);this.marker.visible=true;this.status='Walking…';this.notify();
+    if(this.action){this.toast('Your character is finishing this action.');return;}const path=this.nav.path(this.player,target);if(!path){this.toast('There is no clear path there. Try a closer patch of land.');return;}this.lastGroundKey=cellAt(this.world,target.x,target.y).key;this.path=path;this.order=null;this.marker.position.set(target.x,this.groundY(target.x,target.y)+.035,-target.y);this.marker.visible=true;this.status='Walking…';this.notify();
   }
   collectNearbyWood(){
     if(this.action||this.order||!woodRoom(this.store.state))return false;let changed=false;for(const drop of this.store.state.woodDrops||[]){if(dist(this.player,drop)>.9||!woodRoom(this.store.state))continue;try{this.store.persistPlayer(this.player);const before=woodTotal(this.store.state);this.store.commit({type:'pickup_wood',id:drop.id});const gained=woodTotal(this.store.state)-before;if(gained){this.toast(`+${gained} wood put away`);this.burst(drop,'wood',.2);changed=true;}}catch(e){this.toast(e.message);break;}}
@@ -536,6 +545,20 @@ export class HomeWorld {
     const actions=[];if(tree.species==='apple'&&!String(id).startsWith('planted:')&&applesReady(this.store.state,id,gameTime(this.store.state)))actions.push({id:'pick',label:'Pick apples',icon:'apple_seed'});
     actions.push({id:'chop',label:'Chop',icon:'axe'});
     this.showPrompt('tree',id,{x:tree.position[0],y:tree.position[1]},(tree.radius||.4)+2.2,actions);return true;
+  }
+  /** A tap on the stump, or on the grass it sits in, offers a shovel instead of walking past it. */
+  offerStump(point){
+    if(!point)return false;
+    const here=cellAt(this.world,point.x??point.position?.[0],point.y??point.position?.[1]);
+    let best=null,bestD=Infinity;
+    for(const t of activeStumps(this.world,this.store.state)){
+      const spot={x:t.position[0],y:t.position[1]},d=dist(here,spot);
+      if(cellAt(this.world,spot.x,spot.y).key!==here.key&&d>1.15)continue;
+      if(d<bestD){best=t;bestD=d;}
+    }
+    if(!best)return false;
+    this.showPrompt('stump',best.id,{x:best.position[0],y:best.position[1]},1.2,[{id:'dig',label:'Dig out the stump',icon:'shovel'}]);
+    return true;
   }
   /** A little floating menu over a tapped object. It fades when you walk off, start something else, or after a few seconds. */
   showPrompt(kind,id,position,height,actions){this.prompt={kind,id,position,height,actions,until:Date.now()+8000};this.notify();}
@@ -1101,7 +1124,7 @@ export class HomeWorld {
       if(this.store.state.night){this.livingTest?.friend?.update(0);this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
       if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
-      this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
+      this.actor.position.set(this.player.x,this.groundY(this.player.x,this.player.y)+.015,-this.player.y);
       if(this.residents?.waveActive()&&speed>0.08)this.residents.cancelWave();
       if(!this.path.length&&this.order&&!this.action)this.startAction(this.order);
       if(!this.path.length&&!this.order&&!this.action&&this.status==='Walking…'){

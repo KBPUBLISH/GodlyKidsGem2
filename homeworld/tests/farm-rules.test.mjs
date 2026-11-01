@@ -85,13 +85,15 @@ test('nextRequest climbs the ladder: chickens first, then a sheep, capped by roo
   assert.match(requestLine('chicken',2,{herd:0,fenced:false}),/stable is up.*two chickens/);
 });
 
-test('Adam asks as soon as a stable with room stands, and "Not now" waits for the next island morning',()=>{
+test('Adam waits for a closed paddock before asking for animals, and "Not now" waits for the next island morning',()=>{
   const plan=paddockPlan([stable],4);
   assert.equal(canAsk(farmStatus(state({buildings:[]}),null)),false,'no stable → no ask');
   const st=farmStatus(state(),plan);
   assert.equal(st.fenced,false);
-  assert.equal(canAsk(st),true,'stable up, fence still open → ask');
-  const full=state({animals:['a','b','c','d'].map(id=>({id,kind:'chicken'}))});
+  assert.equal(canAsk(st),false,'stable up, fence still open → wait');
+  const closed=state({buildings:[state().buildings[0],...plan.ring.map(fence)]});
+  assert.equal(canAsk(farmStatus(closed,plan)),true,'closed paddock with room → ask');
+  const full={...closed,animals:['a','b','c','d'].map(id=>({id,kind:'chicken'}))};
   assert.equal(canAsk(farmStatus(full,plan)),false);
   // 07:00 is minute 420 of each day; declining at 10:00 on day 2 waits for 07:00 on day 3
   assert.equal(nextMorning(1440+600),2*1440+420);

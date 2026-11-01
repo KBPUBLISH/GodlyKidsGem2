@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {heightAt} from './core.mjs';
 import {fishModel} from './nutrition.js';
+import {FISHING_DOCK_LENGTH as DOCK_LENGTH,FISHING_DOCK_WIDTH as DOCK_WIDTH,FISHING_DOCK_START as DOCK_START} from './fishing-dock.mjs';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const ease=t=>{t=THREE.MathUtils.clamp(t,0,1);return t*t*(3-2*t);};
@@ -55,7 +56,7 @@ export function buildRod(){
   function blankRadius(y){const t=THREE.MathUtils.clamp((y-.42)/1.48,0,1);return THREE.MathUtils.lerp(.0105,.0025,Math.pow(t,.8));}
 }
 
-const DOCK_LENGTH=4.2,DOCK_WIDTH=1.25,PLANK=.42;
+const PLANK=.42;
 const CAST_CYCLE=1.7;            // seconds for the power meter to swing up and back
 const BITE_WINDOW=2.8;           // seconds to start reeling once the bobber dips
 const REEL_PER_TURN=.17;         // progress per full handle turn while the fish is calm
@@ -93,8 +94,9 @@ export class Fishing {
     const rail=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,2.1,8),postMat);rail.rotation.x=Math.PI/2;rail.position.set(-(DOCK_WIDTH/2-.05),.5,.25+DOCK_LENGTH-1.15);dock.add(rail);
     for(const z of[DOCK_LENGTH-2.1,DOCK_LENGTH-.2]){const p=new THREE.Mesh(new THREE.CylinderGeometry(.045,.05,.6,8),postMat);p.position.set(-(DOCK_WIDTH/2-.05),.26,.25+z);dock.add(p);}
     g.scene.add(dock);this.dock=dock;
-    // A spare rod stuck in the sand beside the dock: walk up to it (or tap it) and the island asks "Fish?".
-    const side=V(-dir.z,0,dir.x),poleAt=shore.clone().addScaledVector(side,1.05).addScaledVector(dir,-.35);poleAt.y=heightAt(g.world,poleAt.x,-poleAt.z)+.02;
+    // The spare rod waits on the seaward edge of the planks, where the child
+    // can walk up to it and tap it to fish.
+    const side=V(-dir.z,0,dir.x),poleAt=shore.clone().addScaledVector(dir,DOCK_START+DOCK_LENGTH-.48).addScaledVector(side,DOCK_WIDTH/2-.16);poleAt.y=deckY+.04;
     const pole=new THREE.Group();pole.position.copy(poleAt);pole.rotation.set(0,Math.atan2(dir.x,dir.z)+.6,-.38);
     pole.add(buildRod().rod);
     const pLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0,1.9,0),V(.12,.9,.1),V(.18,.1,.16)]),new THREE.LineBasicMaterial({color:'#f7ecd0',transparent:true,opacity:.8}));pole.add(pLine);
@@ -228,8 +230,10 @@ export class Fishing {
     for(let i=0;i<=21;i++){const k=i/21,p=tip.clone().multiplyScalar((1-k)**2).addScaledVector(mid,2*(1-k)*k).addScaledVector(end,k*k);arr.setXYZ(i,p.x,p.y,p.z);}arr.needsUpdate=true;this.line.geometry.computeBoundingSphere();
   }
 
-  /** True when the ray hits the spare rod in the sand. */
+  /** True when the ray hits the spare rod at the dock edge. */
   pickPole(ray){return !!(this.poleHit&&ray.intersectObject(this.poleHit,false).length);}
+  /** A tapped point on the visible planks, in gameplay X/Y coordinates. */
+  walkPoint(ray){const hit=this.dock&&ray.intersectObject(this.dock,true)[0];return hit?{x:hit.point.x,y:-hit.point.z}:null;}
   /** Screen position for the "Fish?" bubble when the character is standing near the rod. */
   prompt(){
     const g=this.g;if(!this.pole||this.active||!g.loaded||g.overview||g.mapOnly||g.action||g.order)return null;

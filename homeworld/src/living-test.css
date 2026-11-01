@@ -49,6 +49,7 @@
 .living-watch{position:absolute;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:7px;z-index:20}
 .living-watch>span{font-size:13px;font-weight:900;color:#fff9e5;text-shadow:0 1px 3px #203c2b,0 0 5px #203c2b}
 .living-watch button{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:14px;background:#fff0cc}
+.game-shell:has(.living-watch) .toast{bottom:max(112px,calc(env(safe-area-inset-bottom,0px) + 112px))}
 .living-island-test .living-toast{bottom:100px;max-width:85%;font-size:13px;padding:8px 12px;pointer-events:none}
 .living-loading{position:absolute;z-index:30;left:50%;top:45%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:8px;text-align:center;color:#fff9e5;text-shadow:0 1px 3px #294231;font-size:17px;width:min(300px,90vw)}
 .living-loading p{font-size:13px}

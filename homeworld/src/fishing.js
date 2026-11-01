@@ -1,3 +1,4 @@
+import {bankFishingCatch} from './fishing-catch.mjs';
 import * as THREE from 'three';
 import {heightAt} from './core.mjs';
 import {fishModel} from './nutrition.js';
@@ -189,7 +190,7 @@ export class Fishing {
       if(this.struggling){this.struggleLeft-=dt;this.progress=Math.max(0,this.progress-dt*.045*this.strength);if(this.struggleLeft<=0){this.struggling=false;this.nextStruggle=1.4+Math.random()*1.8;this.message='It calmed down. Reel!';g.notify();}}
       else{this.tension=Math.max(0,this.tension-dt*.55);this.nextStruggle-=dt;if(this.nextStruggle<=0&&this.progress<.95){this.struggling=true;this.struggleLeft=.9+Math.random()*.8*this.strength;this.message='It’s pulling! Hold steady…';this.shake=.2;g.notify();}}
       if(this.tension>=1){this.escape('Snap! The line broke. Cast again!');}
-      else if(this.progress>=1){this.phase='landing';this.t=0;this.fish.visible=true;this.fishFrom=this.bobber.position.clone();this.bobber.visible=false;this.message='';this.landFish();}
+      else if(this.progress>=1){if(this.landFish()){this.phase='landing';this.t=0;this.fish.visible=true;this.fishFrom=this.bobber.position.clone();this.bobber.visible=false;this.message='';}else this.escape('That catch could not be saved. Please try again.');}
       else{const k=this.progress;const p=this.landingPoint.clone().lerp(idleEnd(),Math.min(1,k*1.1));p.y=this.waterY+.02+Math.sin(this.t*10)*.05*(this.struggling?2:1);this.bobber.position.copy(p);}
     }
     if(this.phase==='landing'){const k=ease(this.t/1.1),to=this.eye.clone().addScaledVector(this.dir,.75).add(V(0,-.25,0));const p=this.fishFrom.clone().lerp(to,k);p.y+=Math.sin(k*Math.PI)*1.3;this.fish.position.copy(p);this.fish.rotation.set(0,this.t*3,.3*Math.sin(this.t*9));this.fish.scale.setScalar(1.3);
@@ -198,11 +199,7 @@ export class Fishing {
     if(this.phase==='escaped'){this.bobber.visible=false;if(this.t>=1.4){this.phase='cast';this.t=0;this.message='Hold the button to power up, let go to cast.';g.notify();}}
     this.placeCamera();this.placeRod();this.drawLine();
   }
-  landFish(){
-    const g=this.g,a=this.a;try{const before=g.store.state;g.store.commit({type:'fish',spotId:this.spot.id,actionId:crypto.randomUUID()});if(g.store.state===before)throw Error('That fish slipped off at the dock.');this.caught++;g.toast(`Caught a fish! ${this.caught} of ${this.target}`);g.status='Caught 1 fish · grill it on a campfire';if(a)a.caughtAny=true;}
-    catch(e){g.toast(e.message);}
-    g.notify();
-  }
+  landFish(){return bankFishingCatch(this);}
   escape(message){this.escapes++;this.phase='escaped';this.t=0;this.bobber.visible=false;this.line.visible=false;this.message=message;this.shake=.2;this.g.notify();}
   splash(point,size=1){const g=this.g;for(let i=0;i<9;i++){const o=new THREE.Mesh(g.particleGeometry,g.particleMaterials.water);o.position.copy(point);o.scale.setScalar(size+Math.random()*.6);g.scene.add(o);g.particles.push({mesh:o,life:.7,v:V((Math.random()-.5)*1.4,1+Math.random()*1.4,(Math.random()-.5)*1.4)});}}
 

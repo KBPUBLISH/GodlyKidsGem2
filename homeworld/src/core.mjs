@@ -474,7 +474,8 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     inv[log[0]]--;const f=next.buildings.find(b=>b.id===fire.id);if(f.kind==='oven'&&fireFuelLeft(fire,minutes)<=0)f.litAt=minutes;f.fuelUntil=Math.max(minutes,f.fuelUntil||0)+logMinutesFor(f);next.stats.logsAdded=(next.stats.logsAdded||0)+1;
   } else if(a.type==='fish') {
     const spot=world.fishingSpots?.find(s=>s.id===a.spotId);
-    if(!spot||dist(state.player,{x:spot.position[0],y:spot.position[1]})>1.25||!terrainType(world,spot.position[0],spot.position[1])||terrainType(world,spot.water[0],spot.water[1])!==0)return state;
+    const dock=fishingDockLayout(world),onPier=dock?.spot.id===spot?.id&&fishingDockContains(dock,state.player.x,state.player.y);
+    if(!spot||(!onPier&&dist(state.player,{x:spot.position[0],y:spot.position[1]})>1.25)||!terrainType(world,spot.position[0],spot.position[1])||terrainType(world,spot.water[0],spot.water[1])!==0)return state;
     add('fish',1);next.stats.fishCaught=(next.stats.fishCaught||0)+1;
   } else if(a.type==='sell') {
     // The built market buys surplus from the bag. Coins are credited by the parent app, not stored here.

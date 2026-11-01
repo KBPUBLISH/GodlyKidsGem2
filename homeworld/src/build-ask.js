@@ -100,10 +100,10 @@ export class BuildAsk {
   startGardenPreset(id) {
     const preset = gardenPreset(id), s = this.state();
     if (!preset || !s) return false;
-    if (this.g.gardenPlan?.active?.(s)) { this.g.toast?.('Finish the active garden preset before placing another.'); return false; }
+    if (this.g.gardenPlan?.active?.(s)) { this.g.toast?.('Finish your current template before placing another.'); return false; }
     const crew = [...(this.g.residents?.models?.values() || [])].map(actor => actor.userData?.residentId).filter(Boolean);
     if (crew.length < preset.friends) {
-      this.g.toast?.(`${preset.name} needs ${preset.friends} friends ashore. You have ${crew.length}.`, 4600);
+      this.g.toast?.(`${preset.name} needs ${preset.friends} ${preset.friends===1?'friend':'friends'} ashore. You have ${crew.length}.`, 4600);
       return false;
     }
     const sample = placeGardenPreset(id, '0:0');
@@ -132,9 +132,9 @@ export class BuildAsk {
     if (p.mode === 'gardenPreset') {
       return {
         name: p.name,
-        text: p.plan ? `The garden covers these squares. Place ${p.name}?` : 'Drag over open grass to position this garden.',
+        text: p.plan ? `These squares show your ${p.name}. Build it here?` : 'Tap open grass to place your template. Drag to move it.',
         picking: true,
-        goLabel: 'Place this garden',
+        goLabel: 'Build it here',
         waitLabel: 'Not now',
         goEnabled: !!p.plan,
       };
@@ -195,7 +195,7 @@ export class BuildAsk {
       if (!p.plan) return;
       const saved = this.g.gardenPlan?.commitPreset(p.plan, p.crew);
       if (!saved) return;
-      this.g.toast?.(`${p.crew.length} friends will plow, plant${p.plan.fenced?', and fence':''} this garden.`, 4400);
+      this.g.toast?.(p.plan.fenceOnly ? 'Your friends will build the fence and leave an entrance open.' : `${p.crew.length} friends will plow, plant${p.plan.fenced?', and fence':''} this garden.`, 4400);
     } else if (p.mode === 'garden') {
       if (!p.keys.length) return;
       const saved = this.g.gardenPlan?.commit(p.keys);

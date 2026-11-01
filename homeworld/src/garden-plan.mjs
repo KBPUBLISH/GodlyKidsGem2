@@ -67,7 +67,7 @@ export function isOutlineDone(outline, planted, fenced) {
   if (!outline?.keys?.length || outline.done) return !!outline?.done;
   const grew = new Set(planted || []);
   const posts = new Set(fenced || []);
-  if (!outline.keys.every(k => grew.has(k))) return false;
+  if (!outline.fenceOnly && !outline.keys.every(k => grew.has(k))) return false;
   const ring = (outline.ring || []).filter(k => k && k !== outline.gate);
   return ring.every(k => posts.has(k));
 }

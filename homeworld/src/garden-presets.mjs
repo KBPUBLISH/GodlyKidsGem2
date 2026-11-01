@@ -18,7 +18,7 @@ export const GARDEN_PRESETS = Object.entries(SHAPES).flatMap(([shape, spec]) => 
 })));
 
 export function gardenPreset(id) {
-  return GARDEN_PRESETS.find(p => p.id === id) || null;
+  return [...GARDEN_PRESETS, ...FENCE_PRESETS].find(p => p.id === id) || null;
 }
 
 export function placeGardenPreset(id, anchor, toward = null) {
@@ -32,6 +32,7 @@ export function placeGardenPreset(id, anchor, toward = null) {
     presetId: preset.id,
     name: preset.name,
     fenced: preset.fenced,
+    fenceOnly: !!preset.fenceOnly,
     requiredFriends: preset.friends,
     keys,
     ring,
@@ -43,3 +44,9 @@ export function placeGardenPreset(id, anchor, toward = null) {
 export function fenceWoodNeeded(plan) {
   return Math.max(0, (plan?.ring || []).filter(key => key && key !== plan?.gate).length * 2);
 }
+
+export const FENCE_PRESETS = [
+ {id:'pen-small',name:'Little Pen',shape:'square',width:2,height:2,friends:1},
+ {id:'pen-long',name:'Long Pen',shape:'rows',width:4,height:2,friends:2},
+ {id:'pen-big',name:'Big Pen',shape:'square',width:4,height:4,friends:3},
+].map(p=>({...p,fenced:true,fenceOnly:true,plots:0,cells:Array.from({length:p.width*p.height},(_,i)=>[i%p.width,Math.floor(i/p.width)])}));

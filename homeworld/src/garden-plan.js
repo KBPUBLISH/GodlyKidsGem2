@@ -63,7 +63,7 @@ export class GardenPlan {
     if (!s || !plan?.keys?.length) return null;
     const ids = [...new Set((crew || []).filter(Boolean))];
     if (ids.length < plan.requiredFriends) {
-      this.g.toast?.(`${plan.name} needs ${plan.requiredFriends} friends ashore.`);
+      this.g.toast?.(`${plan.name} needs ${plan.requiredFriends} ${plan.requiredFriends===1?'friend':'friends'} ashore.`);
       return null;
     }
     if (plan.fenced && woodTotal(s) < plan.wood) {
@@ -158,7 +158,7 @@ export class GardenPlan {
     if (!isOutlineDone(outline, this.planted(s), this.fenced(s))) return false;
     this.patch({ ...outline, done: true });
     const name = this.g.gardenKeeper?.keeperName?.() || 'Abel';
-    this.g.toast?.(`${name} finished that patch of garden.`, 4200);
+    this.g.toast?.(outline.fenceOnly ? 'Your fenced pen is ready!' : `${name} finished that patch of garden.`, 4200);
     return true;
   }
 
@@ -201,7 +201,7 @@ export class GardenPlan {
   /** Abel plants the tiles the kid marked, once they are tilled. Weeding is a different chore. */
   plantChores(home, s, claims) {
     const outline = this.active(s);
-    if (!outline || !this.allowsWorker(home, outline) || this.crewBlocked(s, outline)) return [];
+    if (!outline || outline.fenceOnly || !this.allowsWorker(home, outline) || this.crewBlocked(s, outline)) return [];
     const crop = Object.entries(s.inventory || {}).find(([id, n]) => n > 0 && ['carrot_seed', 'wheat_seed', 'sunflower_seed', 'pumpkin_seed'].includes(id));
     if (!crop) return [];
     const out = [];
@@ -217,7 +217,7 @@ export class GardenPlan {
 
   plowChores(home, s, claims) {
     const outline = this.active(s);
-    if (!outline?.foreman || !this.allowsWorker(home, outline) || this.crewBlocked(s, outline)) return [];
+    if (!outline?.foreman || outline.fenceOnly || !this.allowsWorker(home, outline) || this.crewBlocked(s, outline)) return [];
     const out = [];
     for (const key of outline.keys) {
       if (!this.grass(key) || s.cells?.[key]?.soil || claims?.has(`cell:${key}`)) continue;

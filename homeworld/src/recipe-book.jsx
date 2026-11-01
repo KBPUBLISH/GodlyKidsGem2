@@ -14,6 +14,7 @@ export function RecipeBook({inventory,onCraft}){
         const made=Object.keys(recipe.makes)[0];
         const missing=missingLine(stocks,recipe);
         return <button type="button" key={recipe.id} className={`recipe-card ${known?'known':'locked'}`} disabled={!known||!onCraft} onClick={()=>onCraft(recipe.id)} aria-label={known?`Make ${recipe.name}`:`${recipe.name}. Missing ${missing}`}>
+          <span className="recipe-result" aria-hidden="true"><ItemIcon id={made} size={64}/></span>
           <span className="recipe-icons" aria-hidden="true">{Object.keys(recipe.needs).map(id=><ItemIcon key={id} id={id} size={32}/>)}<i>→</i><ItemIcon id={made} size={32}/></span>
           <strong>{recipe.name}</strong>
           <small>{known?`Tap to make · +${recipe.energy} energy`:`Missing: ${missing}`}</small>

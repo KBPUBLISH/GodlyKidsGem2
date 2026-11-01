@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {DISH_ICONS,RecipeIcon} from './recipe-icons.jsx';
 
 export const TOOLS=[
   {id:'axe',name:'Chop',color:'#ad6236',soft:'#fff0d7'},
@@ -21,6 +22,7 @@ export function Icon({type,size=44,className=''}){
   return <img className={`picture-icon higgsfield-icon ${className}`} src={`/icons/higgsfield/${id}.png`} width={size} height={size} alt="" aria-hidden="true" draggable={false} decoding="async" data-game-icon={id} data-icon-source="higgsfield" onError={()=>setFailed(id)}/>;
 }
 export function ItemIcon({id,...props}){
+  if(DISH_ICONS.has(id))return <RecipeIcon id={id} {...props}/>;
   return <Icon type={ITEM_ICONS[id]||(id?.endsWith('_wood')?'wood':id)} {...props}/>;
 }
 

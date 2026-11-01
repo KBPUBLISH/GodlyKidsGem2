@@ -1,3 +1,4 @@
+import {WORK_ACTION_RATE} from './action-tempo.mjs';
 import * as THREE from 'three';
 import {heightAt,cellFromKey} from './core.mjs';
 import {gardenAvailable,gardenNext,gardenJob,gardenCrop,gardenWork,gardenHarvest,GARDEN_CROPS,CARROT_SPOTS} from './living-garden-rules.mjs';
@@ -69,7 +70,7 @@ export class LivingGarden {
   if(this.test.watching||this.test.dialogOpen){this.test.actions.clear(w);return;}
   const p=this.plots[w.index],g=this.g;
   if(Math.hypot(g.player.x-p.x,g.player.y-p.y)>.75){if(!g.path.length){this.cancel();g.notify();}return;}
-  g.path=[];w.elapsed+=dt;
+  g.path=[];w.elapsed+=dt*WORK_ACTION_RATE;
   this.animating=true;this.test.actions.pose(w,w.kind,w.elapsed,p);
   if(w.elapsed<FARM_ACTION_SECONDS[w.kind])return;
   this.cancel();

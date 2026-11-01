@@ -1,3 +1,4 @@
+import {actionPlaybackRate} from './action-tempo.mjs';
 import {prepareLivingGardenBase} from './living-garden-rules.mjs';
 import {AdaptiveResolution} from './adaptive-resolution.js';
 import {moveCharacter,resetAnimatedPose,updateLocomotion,WALK_SPEED} from './character-motion.js';
@@ -699,6 +700,7 @@ export class HomeWorld {
   }
   localPoint(p){return this.actor.localToWorld(V(...p));}
   animateWork(dt) {
+    dt*=actionPlaybackRate(this.action.type);
     if(this.livingTest&&['plant','water','harvest'].includes(this.action.type)){this.livingTest.actions.animate(this.action,dt);return;}
     if(['eat','fish','rest','sleep','grill','pray'].includes(this.action.type)){this.nutrition.animate(dt);return;}
     if(this.action.type==='mine'){this.mining.animate(dt);return;}

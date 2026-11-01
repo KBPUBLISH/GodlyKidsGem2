@@ -83,3 +83,5 @@ tmp-*
 
 # Generated isolated local cooking QA pages
 /public/goal-cooking*-qa.html
+
+/public/coop-qa.html

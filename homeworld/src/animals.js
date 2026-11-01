@@ -75,7 +75,7 @@ export class Animals {
   roaming(inst) {
     if(this.game.livingTestMode&&inst.id.startsWith('living-farm-'))return false;
     if (!LIVESTOCK.has(inst.kind) || inst.record?.wild) return false;
-    const home = inst.home || inst;
+    const coop=this.game.livingTest?.farm;const home=inst.kind==='chicken'&&inst.id.startsWith('living-farm-')&&coop?.state.coop?{x:coop.position.x,y:coop.position.y-2.1}:inst.home||inst;
     if (nearStable(this.game.world, this.game.store.state, home.x, home.y)) return false;
     return !regionAt(this.penMap(), this.game.world, inst.x, inst.y);
   }
@@ -201,7 +201,7 @@ export class Animals {
     inst.x = x;
     inst.y = y;
     inst.lift = lift;
-    inst.root?.position.set(x, heightAt(this.game.world, x, y) + GROUND_LIFT + lift, -y);
+    inst.root?.position.set(x, this.game.groundY(x,y) + GROUND_LIFT + lift, -y);
   }
 
   play(inst, key) {
@@ -238,7 +238,7 @@ export class Animals {
     if (!LIVESTOCK.has(inst.kind) || inst.record?.wild) return null;
     const state = this.game.store?.state;
     if (!state) return null;
-    const home = inst.home || inst;
+    const coop=this.game.livingTest?.farm;const home=inst.kind==='chicken'&&inst.id.startsWith('living-farm-')&&coop?.state.coop?{x:coop.position.x,y:coop.position.y-2.1}:inst.home||inst;
     if (inst._stableRev === state.revision && inst._stableHome === inst.home) return inst._stable;
     inst._stableRev = state.revision;
     inst._stableHome = inst.home;
@@ -293,12 +293,12 @@ export class Animals {
   pickTarget(inst) {
     const map = this.penMap();
     const world = this.game.world, state = this.game.store.state;
-    const home = inst.home || inst;
+    const coop=this.game.livingTest?.farm;const home=inst.kind==='chicken'&&inst.id.startsWith('living-farm-')&&coop?.state.coop?{x:coop.position.x,y:coop.position.y-2.1}:inst.home||inst;
     const stabled = !inst.record?.wild && nearStable(world, state, home.x, home.y);
     const pen = regionAt(map, world, inst.x, inst.y);
     const roaming = this.roaming(inst);
     const radius = stabled ? 1.1 : pen ? Math.min(inst.def.wander || 3, 2.2) : roaming ? (inst.kind === 'sheep' ? 18 : (inst.def.wander || 4) * 2.5) : (inst.def.wander || 4);
-    const origin = stabled ? home : (roaming || pen ? { x: inst.x, y: inst.y } : inst.home);
+    const origin = stabled ? home : (roaming || pen ? { x: inst.x, y: inst.y } : home);
     const tries = roaming ? 14 : 8;
     for (let i = 0; i < tries; i++) {
       const a = Math.random() * Math.PI * 2, r = radius * Math.sqrt(Math.random());
@@ -569,7 +569,9 @@ export class Animals {
       const asDog = this.herd.find((h) => h.dogId === inst.id);
       const asAnimal = this.herd.find((h) => h.animalId === inst.id);
       const herdJob = asDog || asAnimal;
-      if (herdJob && (!night || herdJob.manual)) {
+      if (!herdJob && this.game.livingTest?.farm?.chickenRoutine(inst,stepDt)) {
+        // Returning hens follow the coop's stairs and rest above their nest.
+      } else if (herdJob && (!night || herdJob.manual)) {
         const followed = asDog ? this.instances.get(asDog.animalId) : null;
         const target = followed ? { x: followed.x, y: followed.y } : { x: (asAnimal || asDog).x, y: (asAnimal || asDog).y };
         if (!inst.path?.length || dist(inst.path[inst.path.length - 1], target) > 1.2) {
@@ -623,7 +625,7 @@ export class Animals {
       // Bob is an offset from the ground. Adding abs(sin) every frame launched rabbits and squirrels tens of metres, then the next hop snapped them back.
       if ((wildlife || inst.kind === 'chicken') && inst.mode !== 'fly' && inst.root) {
         const bob = inst.kind === 'chicken' ? Math.sin((inst.mixer.time || 0) * 7) * 0.025 : (inst.mode === 'hop' ? 0 : Math.abs(Math.sin((inst.mixer.time || 0) * 6)) * 0.02);
-        const targetY = heightAt(this.game.world, inst.x, inst.y) + GROUND_LIFT + (inst.lift || 0) + bob;
+        const targetY = this.game.groundY(inst.x,inst.y) + GROUND_LIFT + (inst.lift || 0) + bob;
         if (wildlife) {
           if (inst._lastY === undefined) inst._lastY = targetY;
           const maxDy = 3 * stepDt;

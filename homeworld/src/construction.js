@@ -430,12 +430,18 @@ export class Construction {
   const hits=ray.intersectObjects([...this.nodes.values()].map(n=>n.root),true),id=hits[0]?.object.userData.buildingId,b=this.g.store.state.buildings.find(b=>b.id===id);if(!b||b.kind==='garden'||b.kind==='path')return false;
   if(b.project&&b.status!=='complete'){this.openMenu={id:'build',nonce:Date.now()};this.g.notify();return true;}
   if(HOME_KINDS.includes(b.kind)&&b.status==='complete'){this.showEnter(b);return true;}
+  if(b.status==='complete'){const fp=footprint(this.g.world,b);this.g.showPrompt('building',b.id,fp.center,1.4,[{id:'building-open',label:'Open',icon:'walk'},{id:'move',label:'Move',icon:'build'}]);return true;}
+  return true;
+ }
+ openBuilding(id){
+  const b=this.g.store.state.buildings.find(b=>b.id===id);if(!b||b.status!=='complete')return false;
   if(b.kind==='well'&&b.status==='complete'){this.wellId=b.id;this.g.notify();return true;}
   if(b.kind==='forge'&&b.status==='complete'){this.openMenu={id:'tools',nonce:Date.now()};this.g.notify();return true;}
   if(b.kind==='dining_hall'&&b.status==='complete'){this.openMenu={id:'dining',hallId:b.id,nonce:Date.now()};this.g.notify();return true;}
   if(b.kind==='market'&&b.status==='complete'){this.openMenu={id:'market',stallId:b.id,nonce:Date.now()};this.g.notify();return true;}
   if(buildingById(b.kind).woodCapacity||['hut','tent','cottage','townhouse','chest','campfire','oven','well'].includes(b.kind)){const home=['hut','tent','cottage','townhouse'].includes(b.kind);this.openMenu={id:home?'sleep':b.kind==='chest'||buildingById(b.kind).woodCapacity?'inventory':['campfire','oven','well'].includes(b.kind)?b.kind:'food',homeId:home?b.id:undefined,fireId:b.kind==='campfire'?b.id:undefined,ovenId:b.kind==='oven'?b.id:undefined,wellId:b.kind==='well'?b.id:undefined,nonce:Date.now()};this.g.notify();}else this.g.toast(`${buildingById(b.kind).name} · you built this!`);return true;
  }
+
  update(){
   const now=Date.now(),g=this.g;
   for(const [id,n]of this.nodes){const b=g.store.state.buildings.find(b=>b.id===id);if(!b)continue;if(n.stage==='finishing')this.finishShape(n.root,buildingProgress(b));if(n.fireLight){const left=fireFuelLeft(b,gameTime(g.store.state)),lit=left>0,low=lit&&left<FIRE_LOW_MINUTES?.55:1;n.fireLight.intensity=lit?(3+(1-(g.daylight??1))*8)*(1+.06*Math.sin(now*.012))*low:0;n.root.traverse(o=>{if(o.userData.assembly_phase==='flame'){o.visible=lit;o.scale.y=(1+.05*Math.sin(now*.007))*low;o.rotation.y=Math.sin(now*.004)*.06;}});}}

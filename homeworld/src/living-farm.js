@@ -1,9 +1,11 @@
+import {coopSpotNear} from './coop-placement.mjs';
+import {coopSurfaceHeight,eggSlots} from './coop-layout.mjs';
 import * as THREE from 'three';
 import {marketTrade} from './living-market-rules.mjs';
 import {CARROT_SPOTS,PICK_CROPS} from './living-garden-rules.mjs';
 import {heightAt} from './core.mjs';
 import {scopeKey} from './storage-scope.mjs';
-import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,farmPurchaseError,FARM_PRICES} from './living-farm-rules.mjs';
+import {farmFresh,farmRestore,farmOffer,farmBuy,farmAdvance,farmCollect,farmUse,farmCollectEgg,farmPurchaseError,FARM_PRICES} from './living-farm-rules.mjs';
 const KEY=scopeKey('gk_living_farm_v1');
 
 export class LivingFarm{
@@ -36,7 +38,15 @@ export class LivingFarm{
   this.pending=null;this.test.celebrate(pending.kind==='coop'?'Coop ready!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
  }
  use(item,action){if(action==='eat'){this.test.activity();this.g.nutrition.eat(item,'farm');return;}if(this.commit(farmUse(this.state,item,action))){this.test.activity();this.g.toast(`+${FARM_PRICES[item]} coins`);}}
- walkTo(id){const i=this.state.animals.findIndex(a=>a.id===id);if(i>=0)this.test.walk(this.ground(i));}
+ openCoop(){if(!this.state.coop)return;this.g.path=[];this.g.order=null;this.g.keys.clear();this.g.marker.visible=false;window.dispatchEvent(new Event('gk-open-coop'));}
+ collectEgg(id,slot){return this.commit(farmCollectEgg(this.state,id,slot,Date.now()));}
+ get position(){return this.state.coopPosition||this.test.layout.farmPad;}
+ surfaceHeight(x,y){return this.state.coop?coopSurfaceHeight(this.position,x,y):null;}
+ offerCoop(){this.g.prompt=null;this.g.showPrompt('coop','living-coop',this.position,1.5,[{id:'coop-enter',label:'Go in',icon:'walk'},{id:'coop-move',label:'Move',icon:'build'}]);}
+ startMove(){if(this.g.action||this.g.order){this.g.toast('Finish this action first.');return;}this.moveZoom=this.g.zoom;this.g.zoom=Math.max(this.g.zoom,32);this.g.resize();this.moving=true;this.g.keys.clear();this.g.path=[];this.g.toast('Tap open ground for your coop.');this.g.notify();}
+ cancelMove(){this.moving=false;if(this.moveZoom!=null){this.g.zoom=this.moveZoom;this.moveZoom=null;this.g.resize();}this.g.notify();}
+ click(ray){if(this.moving){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p)){const target=coopSpotNear(this.g.world,this.g.store.state,{x:p.x,y:-p.z});if(!target){this.g.toast('The coop needs more room. Try open ground away from trees and water.');return true;}if(this.commit({...this.state,coopPosition:target})){this.cancelMove();this.g.toast('Coop moved!');this.g.notify();}}return true;}if(this.state.coop){const hit=ray.intersectObject(this.coop,true)[0];if(hit){if(hit.object.userData.coopStep)this.g.walk({x:hit.point.x,y:-hit.point.z});else this.offerCoop();return true;}}return false;}
+ walkTo(id){if(this.state.animals.find(a=>a.id===id)?.kind==='chicken'){this.openCoop();return;}const i=this.state.animals.findIndex(a=>a.id===id);if(i>=0)this.test.walk(this.ground(i));}
  ground(i){return this.test.layout.farmSpots[i];}
  sync(){
   const g=this.g,s=g.store.state,owned=new Set(this.state.animals.map(a=>a.id));
@@ -49,20 +59,33 @@ export class LivingFarm{
    if(!prop){prop=new THREE.Group();const p=this.ground(i);prop.position.set(p.x,heightAt(g.world,p.x,p.y)+.05,-p.y);this.group.add(prop);this.produce.set(a.id,prop);
     const straw=new THREE.Mesh(new THREE.CylinderGeometry(.33,.29,.07,18),new THREE.MeshStandardMaterial({color:'#bf984f',roughness:1}));prop.add(straw);
     const item=new THREE.Mesh(a.kind==='chicken'?new THREE.SphereGeometry(.13,14,10):new THREE.CylinderGeometry(.13,.16,.32,14),new THREE.MeshStandardMaterial({color:a.kind==='chicken'?'#fff3d6':'#ddd9c9',roughness:.8}));item.position.y=a.kind==='chicken'?.19:.21;if(a.kind==='chicken')item.scale.y=1.3;prop.add(item);
-   }prop.visible=a.ready>0;
+   }prop.visible=a.kind!=='chicken'&&a.ready>0;
   }
-  if(this.coopLevel!==this.state.coop){this.coopLevel=this.state.coop;if(this.coop)this.group.remove(this.coop);this.coop=this.coopModel(this.state.coop);const p=this.test.layout.farmPad;this.coop.position.set(p.x,heightAt(g.world,p.x,p.y),-p.y);this.group.add(this.coop);}
+  if(this.coopLevel!==`${this.state.coop}:${this.position.x}:${this.position.y}`){this.coopLevel=`${this.state.coop}:${this.position.x}:${this.position.y}`;if(this.coop){this.group.remove(this.coop);this.coop.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.coop=this.coopModel(this.state.coop);const p=this.position;this.coop.position.set(p.x,heightAt(g.world,p.x,p.y),-p.y);this.group.add(this.coop);}
  }
  coopModel(level){
   const group=new THREE.Group();if(!level)return group;
   const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.9});const wood=mat('#bd915c'),roof=mat('#a55038'),dark=mat('#554433');
   const box=(w,h,d,m,x,y,z)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);b.castShadow=true;group.add(b);return b;};
-  const w=level===1?1.25:1.85;
+  const w=level===1?1.85:2.4;
+  box(w,.1,1.3,wood,0,.35,0);
+  for(const x of [-1.65,1.65]){for(const z of [-1.1,0,1.2])box(.09,.65,.09,wood,x,.325,z);for(const y of [.22,.52])box(.07,.06,2.3,wood,x,y,.05);}
+  for(const y of [.22,.52])box(3.3,.06,.07,wood,0,y,-1.1);
   for(const x of [-w/2+.1,w/2-.1])for(const z of [-.35,.35])box(.1,.5,.1,dark,x,.25,z);
   box(w,.65,.85,wood,0,.7,0);box(.36,.39,.025,dark,0,.59,.44);
   for(const sign of [-1,1]){const r=box(w+.2,.09,.63,roof,0,1.12,sign*.23);r.rotation.x=sign*.4;}
-  for(let i=0;i<3;i++)box(.4,.08,.18,wood,0,.12+i*.10,.95-i*.17);
+  for(let i=0;i<6;i++)box(.72,.065,1.1/6,wood,0,.4-(i+.5)*.4/6,.65+(i+.5)*1.1/6).userData.coopStep=true;
   return group;
+ }
+ chickenRoutine(inst,dt){
+  const a=this.state.animals.find(a=>a.id===inst.id);if(a?.kind!=='chicken'||!this.state.coop)return false;
+  const p=this.position,anchor=`${p.x}:${p.y}`;if(inst.coopAnchor!==anchor){inst.coopRoost=false;inst.coopAnchor=anchor;}
+  const roost=a.ready>0||a.nextAt-Date.now()<10000;
+  if(!roost){if(inst.coopRoost){inst.path=null;inst.mode='idle';inst.wait=.5;inst.coopRoost=false;}return false;}
+  const index=this.state.animals.filter(a=>a.kind==='chicken').findIndex(a=>a.id===inst.id),nest={x:p.x+(index%3-1)*.45,y:p.y};
+  if(!inst.coopRoost){const entry={x:p.x,y:p.y-1.8},path=this.g.animals.routeTo(inst,entry);if(!path)return false;inst.path=[...path,entry,{x:p.x,y:p.y-.65},nest];inst.coopRoost=true;inst.mode='move';this.g.animals.play(inst,'move');}
+  if(inst.path?.length)this.g.animals.stepMove(inst,dt);else{inst.mode='idle';this.g.animals.play(inst,'idle');}
+  return true;
  }
  update(){
   const now=Date.now();if(now<this.checkAt)return;this.checkAt=now+500;
@@ -70,13 +93,13 @@ export class LivingFarm{
   if(this.commit(next)&&newlyReady)this.g.toast(`${newlyReady.name}: ${newlyReady.kind==='chicken'?'egg':'milk'} ready!`);
   if(this.test.watching||this.test.dialogOpen)return;
   for(const [i,a] of this.state.animals.entries()){
-   const p=this.ground(i);if(a.ready&&Math.hypot(this.g.player.x-p.x,this.g.player.y-p.y)<1.15){
+   const p=this.ground(i);if(a.kind!=='chicken'&&a.ready&&Math.hypot(this.g.player.x-p.x,this.g.player.y-p.y)<1.15){
     const amount=a.ready;if(this.commit(farmCollect(this.state,a.id,now))){this.test.pickupNotice={label:`+${amount} ${a.kind==='chicken'?'egg'+(amount>1?'s':''):'milk'}`,until:this.test.elapsed+2};}
    }
   }
  }
  snapshot(){
-  return {...this.state,pending:this.pending,error:this.error,animals:this.state.animals.map((a,i)=>({...a,screen:this.test.project(this.ground(i),.7),seconds:Math.max(0,Math.ceil((a.nextAt-Date.now())/1000))})),offers:['chicken','coop','cow'].map(kind=>({kind,...farmOffer(this.state,kind)}))};
+  return {...this.state,moving:!!this.moving,coopScreen:this.test.project(this.position,1.1),eggCount:this.state.animals.filter(a=>a.kind==='chicken').reduce((n,a)=>n+a.ready,0),pending:this.pending,error:this.error,animals:this.state.animals.map((a,i)=>({...a,eggSlots:eggSlots(a),screen:this.test.project(this.ground(i),.7),seconds:Math.max(0,Math.ceil((a.nextAt-Date.now())/1000))})),offers:['chicken','coop','cow'].map(kind=>({kind,...farmOffer(this.state,kind)}))};
  }
  dispose(){this.g.scene.remove(this.group);this.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
 }

@@ -1,3 +1,4 @@
+import {eggSlots} from './coop-layout.mjs';
 import {gardenFresh,gardenRestore} from './living-garden-rules.mjs';
 // A small, private test economy. These coins never spend the app's account coins.
 export const FARM_CYCLE_MS=3*60*1000, FIRST_EGG_MS=20000, PRODUCE_CAP=3;
@@ -22,7 +23,8 @@ export function farmRestore(v){
   for(const a of v.animals){if(!a||!['chicken','cow'].includes(a.kind)||typeof a.id!=='string'||!a.id.startsWith('living-farm-')||ids.has(a.id)||!animalName(a.name)||!integer(a.ready,PRODUCE_CAP)||!Number.isFinite(a.nextAt)||a.nextAt<0)return farmFresh();ids.add(a.id);}
   if(v.animals.some(a=>Number(a.id.slice('living-farm-'.length))>=v.nextId))return farmFresh();
   if(!integer(v.bag?.egg)||!integer(v.bag?.milk)||!integer(v.collected))return farmFresh();
-  return {...v,coop:Math.max(v.coop,v.animals.some(a=>a.kind==='chicken')?1:0),eggsCollected:integer(v.eggsCollected)?v.eggsCollected:0,garden:gardenRestore(v.garden),chickenDismissed:v.chickenDismissed===true,animals:v.animals.map(a=>({...a,name:animalName(a.name)})),bag:{...v.bag}};
+  const coopPosition=Number.isFinite(v.coopPosition?.x)&&Number.isFinite(v.coopPosition?.y)?v.coopPosition:undefined;
+  return {...v,...(v.coopPosition?{coopPosition}:{}),coop:Math.max(v.coop,v.animals.some(a=>a.kind==='chicken')?1:0),eggsCollected:integer(v.eggsCollected)?v.eggsCollected:0,garden:gardenRestore(v.garden),chickenDismissed:v.chickenDismissed===true,animals:v.animals.map(a=>({...a,name:animalName(a.name)})),bag:{...v.bag}};
 }
 export const coopCapacity=level=>level===0?0:level===1?3:6;
 export function farmOffer(s,kind){
@@ -48,15 +50,22 @@ export function farmAdvance(s,now){
   const animals=s.animals.map(a=>{
     if(now<a.nextAt||a.ready>=PRODUCE_CAP)return a;
     const cycles=1+Math.floor((now-a.nextAt)/FARM_CYCLE_MS);changed=true;
-    return {...a,ready:Math.min(PRODUCE_CAP,a.ready+cycles),nextAt:a.nextAt+cycles*FARM_CYCLE_MS};
+    const ready=Math.min(PRODUCE_CAP,a.ready+cycles),slots=[...eggSlots(a)];for(let i=0;slots.length<ready&&i<PRODUCE_CAP;i++)if(!slots.includes(i))slots.push(i);
+    return {...a,ready,eggSlots:slots,nextAt:a.nextAt+cycles*FARM_CYCLE_MS};
   });return changed?{...s,animals}:s;
 }
 export function farmCollect(s,id,now){
   const animal=s.animals.find(a=>a.id===id);if(!animal?.ready)return s;
   const item=animal.kind==='chicken'?'egg':'milk';
-  return {...s,collected:s.collected+animal.ready,eggsCollected:(s.eggsCollected||0)+(item==='egg'?animal.ready:0),bag:{...s.bag,[item]:s.bag[item]+animal.ready},animals:s.animals.map(a=>a===animal?{...a,ready:0,nextAt:a.ready>=PRODUCE_CAP?now+FARM_CYCLE_MS:a.nextAt}:a)};
+  return {...s,collected:s.collected+animal.ready,eggsCollected:(s.eggsCollected||0)+(item==='egg'?animal.ready:0),bag:{...s.bag,[item]:s.bag[item]+animal.ready},animals:s.animals.map(a=>a===animal?{...a,ready:0,eggSlots:[],nextAt:a.ready>=PRODUCE_CAP?now+FARM_CYCLE_MS:a.nextAt}:a)};
 }
 export function farmUse(s,item,action){
   if(!['egg','milk'].includes(item)||!['eat','sell'].includes(action)||s.bag[item]<1)return s;
   return {...s,bag:{...s.bag,[item]:s.bag[item]-1},coins:s.coins+(action==='sell'?FARM_PRICES[item]:0)};
+}
+
+/** A nest tap banks one real egg. Slot receipts prevent rapid double-taps. */
+export function farmCollectEgg(s,id,slot,now){
+ const a=s.animals.find(a=>a.id===id);if(!s.coop||a?.kind!=='chicken'||!Number.isFinite(now)||!eggSlots(a).includes(slot))return s;
+ return {...s,collected:s.collected+1,eggsCollected:(s.eggsCollected||0)+1,bag:{...s.bag,egg:s.bag.egg+1},animals:s.animals.map(b=>b===a?{...a,ready:a.ready-1,eggSlots:eggSlots(a).filter(i=>i!==slot),nextAt:a.ready>=PRODUCE_CAP?now+FARM_CYCLE_MS:a.nextAt}:b)};
 }

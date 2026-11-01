@@ -511,7 +511,7 @@ export class HomeWorld {
     return {...card,x:Math.max(150,Math.min(w-150,x)),y:Math.max(130,Math.min(h-70,y)),canFetch:!full&&!far&&!card.busy,reason:full?'Bag is full':far?'Walk closer':card.busy?'Busy just now':''};
   }
   /** Ground, or the top of the harbour planks when the point is on a finished dock. */
-  groundY(x,y){const ground=heightAt(this.world,x,y),fishing=fishingDockDeckHeight(this.world,(sx,sy)=>heightAt(this.world,sx,sy),x,y),deck=fishing??-Infinity;return Number.isFinite(deck)?Math.max(ground,deck):ground;}
+  groundY(x,y){const ground=heightAt(this.world,x,y),fishing=fishingDockDeckHeight(this.world,(sx,sy)=>heightAt(this.world,sx,sy),x,y),coop=this.livingTest?.farm?.surfaceHeight(x,y),coopY=coop==null?-Infinity:heightAt(this.world,this.livingTest.farm.position.x,this.livingTest.farm.position.y)+coop,deck=Math.max(fishing??-Infinity,coopY);return Number.isFinite(deck)?Math.max(ground,deck):ground;}
   walk(target) {
     if(this.livingTest){this.livingTest.activity();this.livingTest.garden.cancel();}
     if(this.interior) return;
@@ -577,7 +577,7 @@ export class HomeWorld {
   }
   runPrompt(actionId){
     const p=this.prompt;if(!p)return;this.prompt=null;
-    if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);else if(actionId==='enter')this.building.enterHome(p.id);else if(actionId==='move')this.building.moveExisting(p.id);else if(actionId==='remove')this.building.askRemove(p.id);
+    if(actionId==='coop-enter')this.livingTest?.farm.openCoop();else if(actionId==='coop-move')this.livingTest?.farm.startMove();else if(actionId==='building-open')this.building.openBuilding(p.id);else if(actionId==='chop')this.chop(p.id);else if(actionId==='pick')this.pickApples(p.id);else if(actionId==='mine')this.mining.mine(p.id);else if(actionId==='dig')this.digStump(p.id);else if(actionId==='enter')this.building.enterHome(p.id);else if(actionId==='move')this.building.moveExisting(p.id);else if(actionId==='remove')this.building.askRemove(p.id);
     this.notify();
   }
   /** Walk to an apple tree and gather its fruit. No tool or energy needed; the tree fruits again later. */
@@ -1120,6 +1120,7 @@ export class HomeWorld {
   }
   tick() {
     if(this.disposed)return;this.raf=requestAnimationFrame(this.tick);const frameDt=this.clock.getDelta(),dt=Math.min(.08,frameDt),now=performance.now();this.frameDt=frameDt;this.frameSerial=(this.frameSerial||0)+1;
+    if(this.coopSceneOpen){this.livingTest?.farm?.update();if(now-this.lastRefresh>500){this.lastRefresh=now;this.notify();}return;}
     if(this.resolution){this.resolution.sample(frameDt,this.loaded&&!document.hidden);this.applyResolution();}
     if(this.loaded){
       this.mining?.settleForge();

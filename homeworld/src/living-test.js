@@ -200,7 +200,9 @@ export class LivingIslandTest {
   click(ray,{walk=true}={}){
     this.activity();if(this.g.interior)return true;
     if(this.placingAdam){const p=new THREE.Vector3();if(ray.ray.intersectPlane(this.g.groundPlane,p))this.placeAdam({x:p.x,y:-p.z});return true;}
+    if(this.farm.moving&&this.farm.click(ray))return true;
     if(ray.intersectObject(this.g.actor,true).length){this.openCare();return true;}
+    if(this.farm.click(ray))return true;
     if(this.garden.click(ray))return true;
     const meshes=[...Object.values(this.g.community.actors).filter(h=>h.actor.visible).map(h=>h.actor),...this.resources.filter(r=>r.object.visible).map(r=>r.object)];
     const hit=ray.intersectObjects(meshes,true)[0];

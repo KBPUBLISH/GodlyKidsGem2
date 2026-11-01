@@ -24,7 +24,7 @@ export function AdventureGoals({engine,view,blocked,onPanel,onModalChange,reques
   setSheet(null);const g=engine.current;if(!g||!step)return;g.livingTest?.stopWatching();g.livingTest?.activity();
   if(step.action==='enjoy-fish'||step.action==='grill'){setSheet(step.action);}
   else if(step.action==='coop'||step.action==='chicken')g.livingTest.farm.offer(step.action);
-  else if(step.action==='eggs'){const a=g.livingTest.farm.state.animals.find(a=>a.kind==='chicken'&&a.ready)||g.livingTest.farm.state.animals.find(a=>a.kind==='chicken');if(a)g.livingTest.farm.walkTo(a.id);g.toast('Tap an egg by your chicken to collect it.');}
+  else if(step.action==='eggs')g.livingTest.farm.openCoop();
   else if(step.action==='food')onPanel('player-care');
   else if(step.action==='fish')g.nutrition.goFish();
   else if(step.action.startsWith('build:'))g.building.startPreview(step.action.slice(6));

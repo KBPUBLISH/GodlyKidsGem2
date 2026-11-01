@@ -44,7 +44,7 @@ export function setEnergy(state,value,id=activeCharacter(state)){
 export function energyCost(state,action){
   const type=typeof action==='string'?action:action.type,power=toolTier(state).power;
   const treeHealth=typeof action==='object'&&action.id?Math.max(0,TREE_MAX_HEALTH-(state.treeDamage?.[action.id]||0)):TREE_MAX_HEALTH;
-  return {chop:2*Math.ceil(treeHealth/power),chop_hit:2,plow:3*Math.ceil(2/digPower(state)),clear_weeds:3*Math.ceil(2/digPower(state)),dig_stump:3,dig_mud:2,fetch_water:1,guard_garden:12,plant:2,water:hasWell(state)?0:1,mine:MINING_ENERGY_PER_HIT,mine_hit:MINING_ENERGY_PER_HIT,fish:4,place_building:5,stack_piece:5,upgrade_building:5}[type]||0;
+  return {chop:2*Math.ceil(treeHealth/power),chop_hit:2,plow:3,clear_weeds:3*Math.ceil(2/digPower(state)),dig_stump:3,dig_mud:2,fetch_water:1,guard_garden:12,plant:2,water:hasWell(state)?0:1,mine:MINING_ENERGY_PER_HIT,mine_hit:MINING_ENERGY_PER_HIT,fish:4,place_building:5,stack_piece:5,upgrade_building:5}[type]||0;
 }
 export const canAffordEnergy=(state,action)=>energyFor(state)>=energyCost(state,action);
 

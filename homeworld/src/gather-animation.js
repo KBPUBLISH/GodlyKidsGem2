@@ -7,7 +7,7 @@ const clamp01=t=>t<0?0:t>1?1:t;
 const easeIn=t=>{t=clamp01(t);return .35*t+.65*t*t;};
 /** Fast at the start, then settle. Wind-up and recover use this. */
 const easeOut=t=>{t=clamp01(t);const u=1-t;return 1-u*u*u;};
-export const GATHER_TIMING={take:.45,chop:.84,mine:.95,plow:1.1,clear_weeds:1.1,dig_stump:1.1,dig_mud:1.0,impact:.66,chopImpact:.68,recover:.6};
+export const GATHER_TIMING={take:.45,chop:.84,mine:.95,plow:.65,clear_weeds:1.1,dig_stump:1.1,dig_mud:1.0,impact:.66,chopImpact:.68,recover:.6};
 const AXE=.78;
 const WIND=.34,HIT=GATHER_TIMING.chopImpact,HOLD=.78;
 const mix=(a,b,k)=>a.map((v,i)=>THREE.MathUtils.lerp(v,b[i],k));

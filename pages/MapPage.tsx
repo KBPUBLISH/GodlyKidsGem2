@@ -10,7 +10,6 @@ import {
   ONBOARDING_GENESIS_VIDEO,
   isOnboardingJourneyActive,
   markDiscoverShipPending,
-  resolveFirstStoryPackDestination,
 } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { prefersReducedMotion } from '../utils/bibleMapApi';
@@ -705,16 +704,15 @@ const MapPage: React.FC = () => {
           return;
         }
         const title = `${island.book}: ${island.title}`;
-        // Story packs live on the island's main map; islands with no main-map
-        // art fall back to the legacy island scene (same rule the sail deck used).
-        if (islandHasMainMap(island)) {
-          navigate(`/map/${encodeURIComponent(island.id)}/main`, {
-            state: { title },
-          });
-          return;
-        }
-        navigate(`/sail/${encodeURIComponent(island.id)}/lesson`, {
-          state: { title },
+        // Always arrive at the island-facing ship deck first. The child then
+        // chooses to travel forward into that island's story map.
+        navigate(`/sail/${encodeURIComponent(island.id)}`, {
+          state: {
+            title,
+            hasMainMap: islandHasMainMap(island),
+            mainMapUrl: island.mainMapUrl,
+            mainMapVideoUrl: island.mainMapVideoUrl,
+          },
         });
       };
 
@@ -769,13 +767,15 @@ const MapPage: React.FC = () => {
     const dest = island || islands[0];
     if (!dest) return;
     const title = `${dest.book}: ${dest.title}`;
-    void resolveFirstStoryPackDestination()
-      .then((story) => navigate(story.path, {
-        state: { ...story.state, onboardingJourney: true, title },
-      }))
-      .catch(() => navigate(`/sail/${encodeURIComponent(dest.id)}/lesson`, {
-        state: { onboardingJourney: true, title },
-      }));
+    navigate(`/sail/${encodeURIComponent(dest.id)}`, {
+      state: {
+        onboardingJourney: true,
+        title,
+        hasMainMap: islandHasMainMap(dest),
+        mainMapUrl: dest.mainMapUrl,
+        mainMapVideoUrl: dest.mainMapVideoUrl,
+      },
+    });
   }, [islands, navigate]);
 
   /** Video ends → white fade, then sail deck. */

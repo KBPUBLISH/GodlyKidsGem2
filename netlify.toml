@@ -14,6 +14,13 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+# Existing static files take precedence. A removed hashed build asset gets a
+# JavaScript 404 instead of index.html, allowing stale-deploy recovery to run.
+[[redirects]]
+  from = "/assets/*"
+  to = "/asset-not-found.js"
+  status = 404
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

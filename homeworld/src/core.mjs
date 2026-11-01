@@ -310,7 +310,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
   if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge','remove_building','sell'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building','sell'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['share_fish','eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building','sell'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
   if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge','sell'].includes(a.type))return state;
@@ -442,7 +442,11 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     const bag=farmFood&&character==='you'&&['egg','milk'].includes(a.item)?next.livingFarm?.bag:!farmFood?inv:null;
     if(!food||!bag||!(bag[a.item]>0))return state;
     const gain=mealGain(state,a.item,minutes);if(gain.total<=0)return state;
-    bag[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;
+    bag[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;if(a.item==='cooked_fish')next.stats.fishEaten=(next.stats.fishEaten||0)+1;
+  } else if(a.type==='share_fish') {
+    if(a.recipient===character||!state.characters?.[a.recipient]||!(inv.cooked_fish>0))return state;
+    inv.cooked_fish--;setEnergy(next,energyFor(next,a.recipient)+FOODS.cooked_fish.energy,a.recipient);setHunger(next,hungerFor(next,minutes,a.recipient)+foodFill('cooked_fish'),minutes,a.recipient);
+    next.stats.fishShared=(next.stats.fishShared||0)+1;
   } else if(a.type==='serve_meal') {
     // A shared meal at the Dining Hall: every diner is fed from the bag at once (hungriest first,
     // best-fitting helpings), and whatever is not needed stays in the bag. See dining.mjs planMeal.
@@ -451,7 +455,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     for(const d of a.diners){if(!next.characters[d.id])next.characters[d.id]={name:d.name||d.id,energy:MAX_ENERGY};if(!Number.isFinite(next.characters[d.id].hunger))setHunger(next,MAX_HUNGER,minutes,d.id);}
     const meal=planMeal(next,a.diners,minutes);if(!meal.servings.length)return state;
     for(const s of meal.servings){inv[s.item]--;setEnergy(next,energyFor(next,s.id)+FOODS[s.item].energy,s.id);setHunger(next,hungerFor(next,minutes,s.id)+foodFill(s.item),minutes,s.id);}
-    next.stats.mealsEaten=(next.stats.mealsEaten||0)+meal.servings.length;next.stats.sharedMeals=(next.stats.sharedMeals||0)+1;
+    next.stats.mealsEaten=(next.stats.mealsEaten||0)+meal.servings.length;next.stats.sharedMeals=(next.stats.sharedMeals||0)+1;next.stats.fishShared=(next.stats.fishShared||0)+meal.servings.filter(s=>s.item==='cooked_fish').length;
     next.lastMeal={at:minutes,hallId:hall.id,served:meal.served,servings:meal.servings,diners:a.diners.map(d=>d.id),hungry:meal.stillHungry,cook:typeof a.cook==='string'?a.cook:null};
   } else if(a.type==='cook') {
     if(!canCook(state,a.recipe))return state;

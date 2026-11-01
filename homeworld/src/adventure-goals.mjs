@@ -10,8 +10,25 @@ export const GOALS=[
  {id:'wood',title:'Gather wood together',description:'Cut three trees, then enjoy a snack to get your energy back.',art:'build_wood_store_20.png',emoji:'🪵',color:'peach',steps:[
   {id:'trees',label:'Cut down 3 trees',metric:'trees',count:3,action:'axe'},
   {id:'snack',label:'Eat a snack',metric:'mealsEaten',count:1,action:'food',after:true}]},
- {id:'fish',title:'Catch my first fish',description:'Visit the dock and bring home a fish of your own.',art:'build_dock.png',emoji:'🐟',color:'blue',steps:[
-  {id:'catch',label:'Catch 1 fish at the dock',metric:'fishCaught',count:1,action:'fish'}]},
+ {id:'fish',title:'Grill a fish',description:'Catch a fish, grill it by the fire, then enjoy it or share with a friend.',art:'build_campfire.png',emoji:'🐟',color:'blue',steps:[
+  {id:'catch',label:'Catch 1 fish at the dock',metric:'fishReady',count:1,action:'fish',stock:true},
+  {id:'fire',label:'Build a campfire',metric:'building:campfire',count:1,action:'build:campfire',stock:true},
+  {id:'grill',label:'Grill your fish',metric:'grilledReady',count:1,action:'grill',stock:true},
+  {id:'enjoy',label:'Eat or share your grilled fish',metric:'fishEnjoyed',count:1,action:'enjoy-fish'}]},
+ {id:'chicken',title:'Welcome a chicken',description:'Build a cozy coop, then buy your first chicken. A small coop has room for three!',art:'build_hut.png',emoji:'🐔',color:'peach',steps:[
+  {id:'coop',label:'Build a coop · 20 coins',metric:'coop',count:1,action:'coop',stock:true},
+  {id:'buy',label:'Buy a chicken · 10 coins',metric:'chickens',count:1,action:'chicken',stock:true}]},
+ {id:'flock',title:'Three feathered friends',description:'Give three chickens a home in your coop.',art:'build_hut.png',emoji:'🐔',color:'green',requires:'chicken',steps:[
+  {id:'coop',label:'Build a coop',metric:'coop',count:1,action:'coop',stock:true},
+  {id:'flock',label:'Welcome 3 chickens',metric:'chickens',count:3,action:'chicken',stock:true}]},
+ {id:'eggs',title:'My first eggs',description:'Visit your chickens and collect three fresh eggs.',art:'build_garden.png',emoji:'🥚',color:'peach',requires:'chicken',steps:[
+  {id:'collect',label:'Collect 3 eggs',metric:'eggsCollected',count:3,action:'eggs'}]},
+ {id:'basket',title:'Fill my harvest basket',description:'Grow more good food for your island.',art:'build_garden.png',emoji:'🥕',color:'green',later:true,steps:[
+  {id:'plant',label:'Plant 3 seeds',metric:'planted',count:3,action:'plant'},
+  {id:'water',label:'Water 3 plants',metric:'watered',count:3,action:'water'},
+  {id:'pick',label:'Pick 3 vegetables',metric:'harvested',count:3,action:'harvest'}]},
+ {id:'stone',title:'Gather building stones',description:'Break three rocks and save stone for your next big build.',art:'build_church.png',emoji:'🪨',color:'blue',later:true,steps:[
+  {id:'rocks',label:'Break 3 rocks',metric:'rocks',count:3,action:'mine'}]},
  ...['hut','cottage','church'].map((id,i)=>({id,title:['Make a cozy hut','Make a cottage','Build our church'][i],description:['Gather supplies and build a cozy place to call home.','Make a bigger home with room to welcome friends.','Create a special place for your community to gather.'][i],art:`build_${id}.png`,emoji:['🏡','🏠','⛪'][i],color:['peach','blue','green'][i],later:true,steps:[
   {id:'wood',label:`Gather ${building(id).wood} wood`,metric:'wood',count:building(id).wood,action:'axe',stock:true},
   {id:'stone',label:`Gather ${building(id).stone} stone`,metric:'stone',count:building(id).stone,action:'mine',stock:true},
@@ -21,15 +38,21 @@ export const goalById=id=>GOALS.find(g=>g.id===id);
 const number=v=>Number.isFinite(v)?Math.max(0,v):0;
 export function goalFacts(state={}){
  const facts={...state.stats};
+ facts.fishReady=number(state.inventory?.fish)+number(state.inventory?.cooked_fish);
+ facts.grilledReady=number(state.inventory?.cooked_fish);
+ facts.fishEnjoyed=number(state.stats?.fishEaten)+number(state.stats?.fishShared);
+ facts.coop=number(state.livingFarm?.coop);
+ facts.chickens=(state.livingFarm?.animals||[]).filter(a=>a.kind==='chicken').length;
+ facts.eggsCollected=number(state.livingFarm?.eggsCollected);
  facts.wood=Object.entries(state.inventory||{}).filter(([id])=>id.endsWith('_wood')).reduce((n,[,v])=>n+number(v),0);
  facts.stone=number(state.inventory?.stone);
- for(const id of ['hut','cottage','church'])facts[`building:${id}`]=(state.buildings||[]).filter(b=>b.kind===id&&b.status==='complete').length;
+ for(const id of ['hut','cottage','church','campfire'])facts[`building:${id}`]=(state.buildings||[]).filter(b=>b.kind===id&&b.status==='complete').length;
  return facts;
 }
 export function restoreGoals(value){
  const clean={version:1,active:null,records:{},celebrate:null};
  if(value?.version!==1)return clean;
- for(const g of GOALS){const r=value.records?.[g.id];if(!r||!Array.isArray(r.progress)||r.progress.length!==g.steps.length)continue;
+ for(const g of GOALS){let r=value.records?.[g.id];if(g.id==='fish'&&r?.progress?.length===1)r={...r,progress:[r.progress[0],0,0,0],completed:false};if(!r||!Array.isArray(r.progress)||r.progress.length!==g.steps.length)continue;
   clean.records[g.id]={base:Object.fromEntries(Object.entries(r.base||{}).map(([k,v])=>[k,number(v)])),progress:g.steps.map((s,i)=>Math.min(s.count,number(r.progress[i]))),stepBase:r.stepBase==null?null:number(r.stepBase),completed:r.completed===true&&g.steps.every((s,i)=>number(r.progress[i])>=s.count)};
  }
  if(clean.records[value.active]&&!clean.records[value.active].completed)clean.active=value.active;
@@ -37,7 +60,7 @@ export function restoreGoals(value){
  return clean;
 }
 export function availableGoals(saved,facts){
- return GOALS.filter(g=>!saved.records[g.id]?.completed&&(!g.later||Object.values(saved.records).some(r=>r.completed))&&(g.id!=='cottage'||facts['building:hut']>0)&&(g.id!=='church'||facts['building:hut']>0||facts['building:cottage']>0));
+ return GOALS.filter(g=>!saved.records[g.id]?.completed&&(!g.requires||saved.records[g.requires]?.completed)&&(!g.later||Object.values(saved.records).some(r=>r.completed))&&(g.id!=='cottage'||facts['building:hut']>0)&&(g.id!=='church'||facts['building:hut']>0||facts['building:cottage']>0));
 }
 export function chooseGoal(value,id,facts){
  const s=restoreGoals(value),g=goalById(id);if(!g||!availableGoals(s,facts).some(x=>x.id===id))return s;
@@ -48,6 +71,7 @@ export function advanceGoal(value,facts){
  const r=s.records[g.id],progress=[...r.progress];let stepBase=r.stepBase;
  // A finished creation already satisfies its resource-gathering steps.
  const result=g.steps.at(-1);
+ if(g.id==='fish'){if(number(facts.grilledReady)>0)progress.splice(0,3,1,1,1);if(number(facts.fishEnjoyed)>number(r.base.fishEnjoyed))progress.splice(0,4,1,1,1,1);}
  if(result.metric.startsWith('building:')&&number(facts[result.metric])>=result.count)g.steps.forEach((step,i)=>{progress[i]=step.count;});
  for(let i=0;i<g.steps.length;i++){
   const step=g.steps[i];if(progress[i]>=step.count)continue;

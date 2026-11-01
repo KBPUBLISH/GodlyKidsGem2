@@ -80,3 +80,6 @@ tmp-*
 /listen-bottom-*.png
 /read-bottom-*.png
 /world-bottom-*.png
+
+# Generated isolated local cooking QA pages
+/public/goal-cooking*-qa.html

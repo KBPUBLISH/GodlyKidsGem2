@@ -29,7 +29,7 @@ export function LivingTestUI({engine,view,blocked=false,onModalChange}){
  };
  useDialogFocus(modal,drawer,close);
  useEffect(()=>{invoke(t=>t.setDialog(!!modal||blocked||!!play?.arrival));onModalChange?.(!!modal||!!play?.arrival);},[modal,blocked,onModalChange,!!play?.arrival]);
- const title=modal==='tasks'?'My first tasks':modal==='purchase'?(farm.pending.kind==='coop'?'Bigger coop?':farm.pending.kind==='chicken'?'New chicken?':'New cow?'):modal==='build-confirm'?`Build ${play.decision.name}?`:modal==='first-friend'?'Add a friend?':modal==='welcome'?'Hi, Adam!':'Our home';
+ const title=modal==='tasks'?'My first tasks':modal==='purchase'?(farm.pending.kind==='coop'?(farm.coop?'Bigger coop?':'Build a coop?'):farm.pending.kind==='chicken'?'New chicken?':'New cow?'):modal==='build-confirm'?`Build ${play.decision.name}?`:modal==='first-friend'?'Add a friend?':modal==='welcome'?'Hi, Adam!':'Our home';
  const gardenIcon=garden?.phase==='plant'?'plant':garden?.phase==='water'?'water':'harvest';
  return <div className="living-intro-layer">
   {play?.arrival&&<IslandArrival arrival={play.arrival} engine={engine}/>}

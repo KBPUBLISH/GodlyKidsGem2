@@ -14,7 +14,8 @@ test('four free carrot seeds work in any order and pay the planting reward exact
  for(const i of [3,0,4])s=gardenWork(s,'plant',i,100);
  assert.deepEqual(s.garden.plantedSpots,[5,3,0,4]);assert.equal(s.coins,10);assert.equal(s.garden.completed,false);
  assert.equal(gardenWork(s,'plant',5,200),s);assert.equal(grow(farmRestore(s)).coins,10);
- const bought=farmBuy(s,'chicken','Sunny',200);assert.equal(bought.coins,0);assert.equal(bought.animals.length,1);
+ assert.equal(farmBuy(s,'chicken','Sunny',200),s);
+ const bought=farmBuy({...s,coop:1},'chicken','Sunny',200);assert.equal(bought.coins,0);assert.equal(bought.animals.length,1);
  assert.equal(farmBuy(bought,'chicken','Again',200),bought);
 });
 test('harvesting and regrowing gives an affordable repeat loop, without duplicate or early rewards',()=>{
@@ -31,7 +32,7 @@ test('harvesting and regrowing gives an affordable repeat loop, without duplicat
  assert.equal(gardenHarvest(s,-1,100000),s);assert.equal(gardenHarvest(s,6,100000),s);
 });
 test('saved insufficient balances get accurate purchase errors',()=>{
- const s={...grow(farmFresh()),coins:3};assert.equal(farmRestore(s).coins,3);
+ const s={...grow(farmFresh()),coop:1,coins:3};assert.equal(farmRestore(s).coins,3);
  assert.match(farmPurchaseError(s,'chicken','',1),/You have 3 coins.*7 more/);
  assert.equal(farmPurchaseError({...s,coins:10},'chicken','',1),null);
  assert.equal(farmBuy(s,'chicken','',1),s);

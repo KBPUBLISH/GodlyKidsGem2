@@ -16,9 +16,9 @@ test('a landed fish from the seaward pier reaches the bag, stats and active goal
  assert.notEqual(next,s);assert.equal(next.inventory.fish,1);assert.equal(next.stats.fishCaught,1);
  assert.equal(next.characters.adam.energy,s.characters.adam.energy-4);
  const goals=advanceGoal(next.adventureGoals,goalFacts(next));
- assert.equal(goals.records.fish.progress[0],1);assert.equal(goals.records.fish.completed,true);assert.equal(goals.celebrate,'fish');
+ assert.equal(goals.records.fish.progress[0],1);assert.equal(goals.records.fish.completed,false);assert.equal(goals.active,'fish');
  assert.equal(applyAction(next,a,world,480),next);
- assert.equal(advanceGoal(restoreGoals(JSON.parse(JSON.stringify(goals))),goalFacts(next)).celebrate,'fish');
+ assert.equal(advanceGoal(restoreGoals(JSON.parse(JSON.stringify(goals))),goalFacts(next)).active,'fish');
 });
 test('shore catches still work; invalid spots and positions outside the pier stay rejected',()=>{
  const s=atPier(0,0),a={type:'fish',spotId:world.fishingSpots[0].id,actionId:'shore-catch'};

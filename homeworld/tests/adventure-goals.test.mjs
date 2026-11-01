@@ -25,14 +25,14 @@ test('switching goals and restoring a save preserves earlier progress',()=>{
 });
 test('unknown and locked goals cannot be selected; completion unlocks building choices',()=>{
  assert.equal(chooseGoal(fresh(),'church',{}).active,null);assert.equal(chooseGoal(fresh(),'bad',{}).active,null);
- let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishCaught:1});
+ let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishEnjoyed:1});
  assert.equal(availableGoals(s,{}).some(g=>g.id==='hut'),true);
  assert.equal(availableGoals(s,{}).some(g=>g.id==='cottage'),false);
 });
 test('completed buildings and real stock count; incomplete and cancelled buildings do not',()=>{
  const facts=goalFacts({inventory:{pine_wood:6,oak_wood:4,stone:5},buildings:[{kind:'hut',status:'building'},{kind:'church',status:'cancelled'},{kind:'cottage',status:'complete'}]});
  assert.equal(facts.wood,10);assert.equal(facts['building:hut'],0);assert.equal(facts['building:cottage'],1);
- let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishCaught:1});s=chooseGoal(s,'hut',facts);s=advanceGoal(s,facts);
+ let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishEnjoyed:1});s=chooseGoal(s,'hut',facts);s=advanceGoal(s,facts);
  assert.deepEqual(s.records.hut.progress,[10,5,0]);s=advanceGoal(s,{...facts,wood:0,stone:0,'building:hut':1});assert.equal(s.celebrate,'hut');
 });
 test('invalid saves and incomplete forged completion receipts do not unlock everything',()=>{
@@ -40,7 +40,7 @@ test('invalid saves and incomplete forged completion receipts do not unlock ever
  const s=restoreGoals({version:1,active:'wood',records:{wood:{progress:[0,0],completed:true}}});assert.equal(s.records.wood.completed,false);
 });
 test('an existing completed creation needs no duplicate supplies or construction',()=>{
- let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishCaught:1});
+ let s=advanceGoal(chooseGoal(fresh(),'fish',{}),{fishEnjoyed:1});
  s=advanceGoal(chooseGoal(s,'hut',{'building:hut':1}),{'building:hut':1});
  assert.equal(s.celebrate,'hut');assert.deepEqual(s.records.hut.progress,[10,5,1]);
 });

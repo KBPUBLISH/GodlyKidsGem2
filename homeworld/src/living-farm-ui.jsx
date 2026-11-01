@@ -1,4 +1,5 @@
 import React from 'react';
+import {coopCapacity} from './living-farm-rules.mjs';
 import {Icon} from './ui.jsx';
 
 export function Coins({value}){
@@ -17,10 +18,10 @@ export function FarmPurchase({farm,onConfirm,onCancel}){
 }
 export function FarmPanel({farm,garden,onGarden,onBuy,onWalk}){
  return <>
-  <div className="farm-wallet" aria-label={`You have ${farm.coins} coins. Room for ${2+farm.coop*2} chickens.`}><Coins value={farm.coins}/><span>🐔 {farm.animals.filter(a=>a.kind==='chicken').length} / {2+farm.coop*2}</span></div>
+  <div className="farm-wallet" aria-label={`You have ${farm.coins} coins. Room for ${coopCapacity(farm.coop)} chickens.`}><Coins value={farm.coins}/><span>🐔 {farm.animals.filter(a=>a.kind==='chicken').length} / {coopCapacity(farm.coop)}</span></div>
   {garden?.small&&garden.phase!=='harvest'&&<div className="food-actions"><button aria-label={garden.phase==='water'?'Water vegetables':garden.label} disabled={garden.busy||garden.phase==='wait'} onClick={onGarden}><Icon type={garden.phase==='water'?'water':'plant'} size={30}/>{garden.phase==='water'?'Water':garden.phase==='plant'?'Plant':`Growing · ${garden.timer}`}</button></div>}
   {farm.animals.map(a=><article className="living-bag-row farm-animal" key={a.id}><span className="farm-emoji" aria-hidden="true">{a.kind==='chicken'?'🐔':'🐄'}</span><div><strong>{a.name}</strong><small>{a.ready?<>{a.kind==='chicken'?'🥚':'🥛'} × {a.ready}</>:<>⏳ {Math.max(1,Math.ceil(a.seconds/60))} min</>}</small></div><button onClick={()=>onWalk(a.id)}>{a.ready?'Collect':'Visit'}</button></article>)}
-  <div className="food-actions farm-shop">{farm.offers.filter(o=>farm.animals.length||o.kind==='chicken').map(o=><button key={o.kind} aria-label={`${o.kind==='coop'?(farm.coop?'Bigger coop':'Build a coop'):`Buy a ${o.kind}`} · ${o.price} coins${o.reason?'. '+o.reason:''}`} disabled={!!o.reason||farm.coins<o.price} onClick={()=>onBuy(o.kind)}><span className="farm-emoji" aria-hidden="true">{o.kind==='coop'?'🏡':o.kind==='chicken'?'🐔':'🐄'}</span><span>{o.kind==='coop'?'Coop':o.kind==='chicken'?'Chicken':'Cow'}<small>{o.reason?(o.kind==='cow'?'Coop first':o.kind==='chicken'?'Bigger coop':'Full'):<Coins value={o.price}/>}</small></span></button>)}</div>
+  <div className="food-actions farm-shop">{farm.offers.map(o=><button key={o.kind} aria-label={`${o.kind==='coop'?(farm.coop?'Bigger coop':'Build a coop'):`Buy a ${o.kind}`} · ${o.price} coins${o.reason?'. '+o.reason:''}`} disabled={!!o.reason||farm.coins<o.price} onClick={()=>onBuy(o.kind)}><span className="farm-emoji" aria-hidden="true">{o.kind==='coop'?'🏡':o.kind==='chicken'?'🐔':'🐄'}</span><span>{o.kind==='coop'?'Coop':o.kind==='chicken'?'Chicken':'Cow'}<small>{o.reason?(o.kind==='cow'?'Coop first':o.kind==='chicken'?(farm.coop?'Bigger coop':'Coop first'):'Full'):<Coins value={o.price}/>}</small></span></button>)}</div>
   {farm.error&&<p role="alert" className="living-error">{farm.error}</p>}
  </>;
 }

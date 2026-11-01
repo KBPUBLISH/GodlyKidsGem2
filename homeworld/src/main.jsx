@@ -359,12 +359,13 @@ function App(){
   },[actionsOpen]);
   const showFullMap=()=>{
     const g=game();if(!g?.loaded||g.building?.preview)return;
-    previousOverview.current=g.overview;g.keys.clear();g.mapGesture.cancel();g.mapOnly=true;
+    previousOverview.current=g.overview;g.keys.clear();g.mapGesture.cancel();g.mapOnly=true;g.mapSpan=null;
     if(!g.overview)g.toggleMap();
+    else g.resize();
     setPanel(null);setShowTime(false);setActionsOpen(false);setMapOnly(true);
   };
   const returnToPlay=()=>{
-    const g=game();if(g){g.mapGesture.cancel();g.mapOnly=false;if(g.overview!==previousOverview.current)g.toggleMap();}
+    const g=game();if(g){g.mapGesture.cancel();g.mapOnly=false;g.mapSpan=null;if(g.overview!==previousOverview.current)g.toggleMap();else g.resize();}
     setMapOnly(false);
   };
   useEffect(()=>{

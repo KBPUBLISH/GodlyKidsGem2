@@ -108,7 +108,7 @@ export class HomeWorld {
     // that with the plain PCF filter (hardware 4-tap + 5 rotated samples) on a 1536 map fitted to the view
     // (fitShadow); a slightly wider filter radius hides what staircase is left.
     this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.resolution?this.resolution.ratio:1.6));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=this.ipadQuality?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Tap the ground to walk; choose a tool to interact.');this.renderer.domElement.tabIndex=0;container.appendChild(this.renderer.domElement);
-    this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;
+    this.camera=new THREE.OrthographicCamera(-10,10,10,-10,-80,260);this.zoom=19;this.focus=V(1,1,0);this.overview=false;this.viewYaw=0;this.viewPitch=0;this.mapOnly=false;this.mapSpan=null;
     this.hemi=new THREE.HemisphereLight('#d7e8ef','#6c6f3d',2.4);this.scene.add(this.hemi);
     this.sun=new THREE.DirectionalLight('#fff0cf',3);this.sun.position.copy(SUN_OFFSET);this.sun.castShadow=true;const shadowSize=this.ipadQuality?1536:2048;this.sun.shadow.mapSize.set(shadowSize,shadowSize);this.sun.shadow.camera.left=-SHADOW_HALF;this.sun.shadow.camera.right=SHADOW_HALF;this.sun.shadow.camera.top=SHADOW_HALF;this.sun.shadow.camera.bottom=-SHADOW_HALF;this.sun.shadow.camera.far=70;this.sun.shadow.bias=-.0005;this.sun.shadow.normalBias=.03;if(this.ipadQuality)this.sun.shadow.radius=1.5;this.scene.add(this.sun,this.sun.target);
     this.lantern=new THREE.PointLight('#ffd28b',0,8,1.6);this.scene.add(this.lantern);
@@ -118,7 +118,7 @@ export class HomeWorld {
     this.boundResize=()=>this.resize();this.observer=new ResizeObserver(this.boundResize);this.observer.observe(container);
     this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Drag or swipe sideways to turn the view, and up or down to tilt it. Tap the ground to walk; choose a tool to interact.');
     this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),drag:(dx,dy)=>this.panView(dx,dy),tap:e=>this.click(e)});
-    this.wheel=e=>{e.preventDefault();this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
+    this.wheel=e=>{e.preventDefault();if(this.mapOnly&&this.overview)this.setZoomSpan(this.currentMapSpan()+e.deltaY*.06);else this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
     // Pinch zooms the camera. preventDefault only while two fingers are on the canvas, so the
     // browser does not scale the page. One-finger drags and taps stay on pointer events.
     this.renderer.domElement.style.touchAction='none';
@@ -338,7 +338,8 @@ export class HomeWorld {
     const ratio=this.resolution.forSize(w,h);
     if(Math.abs(this.renderer.getPixelRatio()-ratio)>.001)this.renderer.setPixelRatio(ratio);
   }
-  updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,wide=this.overview||!!this.siteView,span=this.overview?overviewSpan(this.viewYaw||0,w/h):this.zoom;this.scene.fog.near=wide?220:40;this.scene.fog.far=wide?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
+  currentMapSpan(){const w=this.container.clientWidth||800,h=this.container.clientHeight||600,full=overviewSpan(this.viewYaw||0,w/h);return THREE.MathUtils.clamp(this.mapSpan??full,18,full);}
+  updateProjection(){if(this.fishing?.firstPerson)this.fishing.placeCamera();const w=this.container.clientWidth||800,h=this.container.clientHeight||600,wide=this.overview||!!this.siteView,span=this.overview?(this.mapOnly?this.currentMapSpan():overviewSpan(this.viewYaw||0,w/h)):this.zoom;this.scene.fog.near=wide?220:40;this.scene.fog.far=wide?400:120;this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.updateProjectionMatrix();}
   rotateView(delta){if(!this.loaded||this.fishing?.active)return;if(this.interior&&this.interior.phase!=='exit'){this.interior.lookYaw=THREE.MathUtils.clamp((this.interior.lookYaw||0)+delta,-.8,.8);return;}this.viewYaw=wrapYaw((this.viewYaw||0)+delta);if(this.overview)this.updateProjection();}
   /** Nobody is being played or watched, so a drag should travel the island instead of spinning on one point. */
   freeCamera(){return !!(this.loaded&&this.ambient&&!this.overview&&!this.mapOnly&&!this.interior&&!this.fishing?.firstPerson&&!this.building?.preview&&!this.residents?.watchActor?.()&&!this.community?.focusActor?.());}
@@ -718,14 +719,15 @@ export class HomeWorld {
     const dist=this.touchSpan(e);if(!(dist>12))return;
     const inn=this.interior,inside=inn?.phase==='inside';
     if(inside&&inn.homeZoom==null)inn.homeZoom=inn.camTo?.zoom??this.zoom;
-    const blocked=!inside&&(!!inn||this.overview||this.mapOnly||!!this.fishing?.firstPerson);
-    this.pinch={dist,zoom:this.zoom,mode:blocked?'blocked':inside?'inside':'outside',id:inside?inn.id:null};
+    const map=this.mapOnly&&this.overview,blocked=!inside&&!map&&(!!inn||this.overview||this.mapOnly||!!this.fishing?.firstPerson);
+    this.pinch={dist,zoom:map?this.currentMapSpan():this.zoom,mode:blocked?'blocked':inside?'inside':map?'map':'outside',id:inside?inn.id:null};
   }
   movePinch(e){
     const p=this.pinch;if(!p||p.mode==='blocked')return;
     const dist=this.touchSpan(e);if(!(dist>12)||!(p.dist>12))return;
     const inn=this.interior;
     if(p.mode==='inside'){if(!inn||inn.phase!=='inside'||inn.id!==p.id){p.mode='blocked';return;}}
+    else if(p.mode==='map'){if(!this.mapOnly||!this.overview){p.mode='blocked';return;}}
     else if(inn||this.overview||this.mapOnly||this.fishing?.firstPerson){p.mode='blocked';return;}
     // Fingers apart (pinch out) = closer = a smaller vertical span.
     this.setZoomSpan(p.zoom*(p.dist/dist));
@@ -739,6 +741,7 @@ export class HomeWorld {
   setZoomSpan(next){
     if(!Number.isFinite(next)||this.fishing?.firstPerson)return;
     const inn=this.interior;
+    if(this.mapOnly&&this.overview){const w=this.container.clientWidth||800,h=this.container.clientHeight||600,full=overviewSpan(this.viewYaw||0,w/h);this.mapSpan=THREE.MathUtils.clamp(next,18,full);this.updateProjection();return;}
     if(inn){
       if(inn.phase!=='inside')return;
       const base=inn.homeZoom??inn.camTo?.zoom??this.zoom;

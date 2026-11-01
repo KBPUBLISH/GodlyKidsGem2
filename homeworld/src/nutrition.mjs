@@ -12,7 +12,7 @@ export const FOODS={
   cooked_fish:{name:'Grilled fish',icon:'🐟',energy:40,source:'Catch a fish, then grill it on a campfire.'},
   bread:{name:'Bread',icon:'🍞',energy:40,source:'An old loaf from before the oven was built.'},
   manna:{name:'Manna',icon:'🍞',energy:50,source:'Bake wheat and water in a hot clay oven.'},
-  egg:{name:'Egg',icon:'🥚',energy:20,source:'Adam gathers eggs from well-fed chickens in the morning.'},
+  cooked_egg:{name:'Fried egg',icon:'🍳',energy:25,source:'Collect an egg from the coop, then cook it at a campfire.'},
   milk:{name:'Milk',icon:'🥛',energy:25,source:'Adam milks the cows and goats he feeds and waters.'},
   garden_salad:{name:'Garden salad',icon:'🥗',energy:72,source:'A cook mixes a carrot and a pumpkin.'},
   seed_crackers:{name:'Seed crackers',icon:'🌾',energy:48,source:'A cook bakes a wheat seed and a sunflower seed.'},
@@ -25,6 +25,7 @@ export const FOODS={
 };
 /** Every recipe is made at a station: `campfire` needs a lit fire beside you, `oven` a clay oven that has heated up. `seconds` is how long the character works at it. */
 export const FOOD_RECIPES={
+  fry_egg:{name:'Cook an egg',ingredients:{egg:1},item:'cooked_egg',quantity:1,station:'campfire',seconds:3.4},
   grill_fish:{name:'Grill fish',ingredients:{fish:1},item:'cooked_fish',quantity:1,station:'campfire',seconds:3.4},
   bake_manna:{name:'Bake manna',ingredients:{wheat:1,water:1},item:'manna',quantity:1,station:'oven',seconds:5},
 };
@@ -81,7 +82,8 @@ export function mealGain(state,item,minutes,id=activeCharacter(state)){
   const energy=Math.max(0,Math.min(food.energy,MAX_ENERGY-energyFor(state,id))),hunger=Math.max(0,Math.min(foodFill(item),MAX_HUNGER-hungerFor(state,minutes,id)));
   return {energy,hunger,total:Math.max(energy,hunger)};
 }
-export const canCook=(state,recipe)=>!!RECIPES[recipe]&&Object.entries(RECIPES[recipe].ingredients).every(([id,n])=>(state.inventory[id]||0)>=n);
+export const ingredientCount=(state,id)=>(state.inventory[id]||0)+(id==='egg'?(state.livingFarm?.bag.egg||0):0);
+export const canCook=(state,recipe)=>!!RECIPES[recipe]&&Object.entries(RECIPES[recipe].ingredients).every(([id,n])=>ingredientCount(state,id)>=n);
 export const restGain=state=>Math.max(0,Math.min(20,25-energyFor(state)));
 /** Prayer: a quiet moment that lifts the spirit. +PRAY_GAIN energy (up to 100), once every PRAY_COOLDOWN_MINUTES of island time. */
 export const PRAY_GAIN=15,PRAY_COOLDOWN_MINUTES=90;

@@ -17,6 +17,7 @@ function shelves(inventory){
   for(const [id,n] of Object.entries(inventory)){
     if(!(n>0))continue;
     if(FOODS[id])out.snacks.push(id);
+    else if(id==='egg')out.other.push(id);
     else if(id==='fish')out.fish.push(id);
     else if(SEED_IDS.has(id))out.seeds.push(id);
     else if(MINERALS[id])out.rocks.push(id);
@@ -49,7 +50,7 @@ function Tile({id,name,count,note,action,tone}){
  * My bag: everything the crew has gathered, sorted onto shelves (snacks,
  * fish, seeds, stone & ore, wood), then the garden and the island record.
  */
-export function BagPanel({view,busy,onEat,onGrill,onPlant,onBuildStorage}){
+export function BagPanel({view,busy,onEat,onGrill,onCookEgg,onPlant,onBuildStorage}){
   const s=view.state,inv=s.inventory||{},stats=s.stats||{};
   const shelf=shelves(inv);
   const kinds=Object.values(shelf).reduce((n,list)=>n+list.length,0);
@@ -93,7 +94,7 @@ export function BagPanel({view,busy,onEat,onGrill,onPlant,onBuildStorage}){
     </Shelf>}
 
     {shelf.other.length>0&&<Shelf icon="bag" title="Other finds">
-      {shelf.other.map(id=><Tile key={id} id={id} name={label(id)} count={inv[id]}/>)}
+      {shelf.other.map(id=><Tile key={id} id={id} name={label(id)} count={inv[id]} action={id==='egg'?<button type="button" className="bag-action warm" disabled={busy||!fireLit} onClick={onCookEgg}>{fireLit?'Cook egg':'Needs a fire'}</button>:null}/>)}
     </Shelf>}
 
     <section className="bag-shelf">

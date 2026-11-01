@@ -60,7 +60,7 @@ export function farmCollect(s,id,now){
   return {...s,collected:s.collected+animal.ready,eggsCollected:(s.eggsCollected||0)+(item==='egg'?animal.ready:0),bag:{...s.bag,[item]:s.bag[item]+animal.ready},animals:s.animals.map(a=>a===animal?{...a,ready:0,eggSlots:[],nextAt:a.ready>=PRODUCE_CAP?now+FARM_CYCLE_MS:a.nextAt}:a)};
 }
 export function farmUse(s,item,action){
-  if(!['egg','milk'].includes(item)||!['eat','sell'].includes(action)||s.bag[item]<1)return s;
+  if(!['egg','milk'].includes(item)||!['eat','sell'].includes(action)||(item==='egg'&&action==='eat')||s.bag[item]<1)return s;
   return {...s,bag:{...s.bag,[item]:s.bag[item]-1},coins:s.coins+(action==='sell'?FARM_PRICES[item]:0)};
 }
 

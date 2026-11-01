@@ -26,5 +26,5 @@ export function FarmPanel({farm,garden,onGarden,onBuy,onWalk}){
  </>;
 }
 export function FarmFood({farm,onUse}){
- return <>{['egg','milk'].filter(k=>farm.bag[k]>0).map(k=><article className="farm-food" key={k}><strong aria-label={`${farm.bag[k]} ${k==='egg'?'eggs':'milk'}`}><span className="farm-emoji" aria-hidden="true">{k==='egg'?'🥚':'🥛'}</span> × {farm.bag[k]}</strong><div className="food-actions"><button aria-label={k==='egg'?'Eat 1 egg':'Drink 1 milk'} onClick={()=>onUse(k,'eat')}><Icon type="food" size={28}/>{k==='egg'?'Eat':'Drink'}</button><button aria-label={`Sell 1 · +${k==='egg'?5:10} coins`} onClick={()=>onUse(k,'sell')}>Sell <Coins value={k==='egg'?'+5':'+10'}/></button></div></article>)}</>;
+ return <>{['egg','milk'].filter(k=>farm.bag[k]>0).map(k=><article className="farm-food" key={k}><strong aria-label={`${farm.bag[k]} ${k==='egg'?'eggs':'milk'}`}><span className="farm-emoji" aria-hidden="true">{k==='egg'?'🥚':'🥛'}</span> × {farm.bag[k]}</strong><div className="food-actions"><button aria-label={k==='egg'?'Cook 1 egg at the campfire':'Drink 1 milk'} onClick={()=>onUse(k,k==='egg'?'cook':'eat')}><Icon type="food" size={28}/>{k==='egg'?'Cook':'Drink'}</button><button aria-label={`Sell 1 · +${k==='egg'?5:10} coins`} onClick={()=>onUse(k,'sell')}>Sell <Coins value={k==='egg'?'+5':'+10'}/></button></div></article>)}</>;
 }

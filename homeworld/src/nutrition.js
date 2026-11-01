@@ -1,7 +1,7 @@
 import {translate, getLanguage} from '../../localization/LocalizedText';
 import * as THREE from 'three';
 import {dist,heightAt,cellFromKey,growth,gameTime} from './core.mjs';
-import {prayGain,prayerWait,prayerFor,PRAY_GAIN,FOODS,FOOD_RECIPES,RECIPES,CRAFT_RECIPES,WATER_MAX,MAX_ENERGY,activeCharacter,energyFor,energyCost,canAffordEnergy,canCook,restGain,isLowEnergy,completedHomes,sleepHome,homeName,canSleep,sleepProgress,SLEEP_SECONDS,MAX_HUNGER,hungerFor,isHungry,isStarving,workRate,needsFood,mealGain} from './nutrition.mjs';
+import {prayGain,prayerWait,prayerFor,PRAY_GAIN,FOODS,FOOD_RECIPES,RECIPES,CRAFT_RECIPES,WATER_MAX,MAX_ENERGY,activeCharacter,energyFor,energyCost,canAffordEnergy,canCook,ingredientCount,restGain,isLowEnergy,completedHomes,sleepHome,homeName,canSleep,sleepProgress,SLEEP_SECONDS,MAX_HUNGER,hungerFor,isHungry,isStarving,workRate,needsFood,mealGain} from './nutrition.mjs';
 import {homeReserved} from './community.mjs';
 import {workPoint,footprint,buildingById,completedFires,litFires,firesNeedingLog,fireFuelLeft,fireCanTakeLog,FIRE_LOW_MINUTES,heatSources,completedOvens,hotOvens,ovenWarmth,OVEN_WARMUP_MINUTES,logMinutesFor} from './building.mjs';
 import {completedWells} from './digging.mjs';
@@ -19,6 +19,7 @@ export function fishModel(cooked=false){
   if(cooked)for(const x of [-.08,0,.08])mesh(new THREE.BoxGeometry(.015,.025,.13),fin,g,[x,.10,0]);
   return g;
 }
+function eggModel(pan=false){const g=new THREE.Group();if(pan){mesh(new THREE.CylinderGeometry(.22,.20,.035,16),material('#424e4c'),g,[0,-.025,0]);mesh(new THREE.BoxGeometry(.28,.03,.055),material('#705034'),g,[-.32,-.02,0]);}const white=mesh(new THREE.SphereGeometry(.16,14,8),material('#fff2cf'),g);white.scale.set(1,.15,.78);const yolk=mesh(new THREE.SphereGeometry(.065,12,8),material('#f6ba33'),g,[.015,.035,0]);yolk.scale.y=.65;return g;}
 function appleModel(){const g=new THREE.Group();mesh(new THREE.SphereGeometry(.09,12,10),material('#d93a2f'),g);mesh(new THREE.CylinderGeometry(.008,.01,.05,6),material('#5a3b1e'),g,[0,.1,0]);const leaf=mesh(new THREE.SphereGeometry(.03,8,6),material('#5aa33a'),g,[.025,.1,0]);leaf.scale.set(1.4,.4,.8);return g;}
 function brickModel(){const g=new THREE.Group();for(const [x,y] of [[-.07,0],[.07,0],[0,.075]])mesh(new THREE.BoxGeometry(.13,.07,.09),material(y?'#b5704a':'#a3623f'),g,[x,y,0]);return g;}
 function breadModel(){const g=new THREE.Group(),loaf=mesh(new THREE.IcosahedronGeometry(.17,1),material('#d4a45b'),g);loaf.scale.set(1,.60,.72);for(const x of [-.08,0,.08])mesh(new THREE.BoxGeometry(.018,.018,.12),material('#f2d99a'),g,[x,.095,0]);return g;}
@@ -84,7 +85,7 @@ export class Nutrition {
     const min=gameTime(g.store.state),oven=r.station==='oven',fires=oven?hotOvens(g.store.state,min):litFires(g.store.state,min);
     if(!fires.length){
       if(oven){const built=completedOvens(g.store.state);g.toast(!built.length?'Build a clay oven before you can bake manna.':built.some(b=>fireFuelLeft(b,min)>0)?'The oven is still heating up. Give it a moment.':'The oven is cold. Tap it to add a log.');return;}
-      g.toast(completedFires(g.store.state).length?'The campfire is out. Tap the fire to add a log.':`Build a campfire before you can ${recipe==='dry_clay'?'dry clay':'grill a fish'}.`);return;
+      g.toast(completedFires(g.store.state).length?'The campfire is out. Tap the fire to add a log.':`Build a campfire before you can ${recipe==='dry_clay'?'dry clay':recipe==='fry_egg'?'cook an egg':'grill a fish'}.`);return;
     }
     const spots=fires.map(fire=>({fire,spot:workPoint(g.world,fire)})).sort((a,b)=>dist(g.player,a.spot)-dist(g.player,b.spot));
     for(const {fire,spot} of spots){
@@ -205,12 +206,12 @@ export class Nutrition {
         a.startedAt=sleep.startedAt;a.duration=SLEEP_SECONDS;this.sleepVisualActive=true;this.g.actor.visible=false;this.g.status='Sleeping at home…';
       }catch(e){a.failed=true;a.duration=0;this.g.toast(e.message);}
     }else if(a.type==='eat'){
-      const named=a.item==='cooked_fish'?fishModel(true):a.item==='bread'||a.item==='manna'?breadModel():a.item==='apple'?appleModel():null;
+      const named=a.item==='cooked_egg'?eggModel():a.item==='cooked_fish'?fishModel(true):a.item==='bread'||a.item==='manna'?breadModel():a.item==='apple'?appleModel():null;
       const produceId=`produce_${a.item}`;
       this.held=named||(this.g.library?.[produceId]?this.g.asset(produceId):new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),material('#e7c56a')));
       if(['carrot','pumpkin'].includes(a.item))this.held.scale.setScalar(a.item==='pumpkin'?.28:.55);this.g.scene.add(this.held);this.g.status=`Eating ${FOODS[a.item].name.toLowerCase()}…`;
     }else if(a.type==='grill'&&a.recipe!=='grill_fish'){
-      const r=RECIPES[a.recipe];a.duration=r?.seconds||4;this.held=a.recipe==='dry_clay'?brickModel():breadModel();this.g.scene.add(this.held);this.g.status=a.recipe==='dry_clay'?'Drying clay bricks by the fire…':'Baking manna in the oven…';a.smokeAt=0;
+      const r=RECIPES[a.recipe];a.duration=r?.seconds||4;this.held=a.recipe==='fry_egg'?eggModel(true):a.recipe==='dry_clay'?brickModel():breadModel();this.g.scene.add(this.held);this.g.status=a.recipe==='fry_egg'?'Cooking an egg at the campfire…':a.recipe==='dry_clay'?'Drying clay bricks by the fire…':'Baking manna in the oven…';a.smokeAt=0;
     }else if(a.type==='grill'){
       a.duration=3.4;const stick=new THREE.Group(),rod=new THREE.Mesh(new THREE.CylinderGeometry(.012,.016,.95,6),new THREE.MeshStandardMaterial({color:'#8a5a2b',roughness:1}));rod.rotation.z=Math.PI/2;rod.position.x=.42;stick.add(rod);
       const fish=fishModel(false);fish.position.set(.86,.02,0);fish.rotation.z=-.15;stick.add(fish);stick.userData.fish=fish;stick.userData.skins=[];fish.traverse(o=>{if(o.isMesh&&o.material&&!o.material.userData?.locked){o.material=o.material.clone();stick.userData.skins.push({m:o.material,from:o.material.color.clone()});}});
@@ -243,7 +244,7 @@ export class Nutrition {
       const fireNode=heatSources(g.store.state).find(b=>b.id===a.fireId),fc=fireNode?footprint(g.world,fireNode).center:a.target,aim=V(fc.x,heightAt(g.world,fc.x,fc.y)+.62+Math.sin(t*2.1)*.04,-fc.y);this.held.position.copy(grip);this.held.quaternion.setFromUnitVectors(V(1,0,0),aim.sub(grip).normalize());this.held.rotateX(Math.sin(t*1.3)*.25);
       const cookedSkin=new THREE.Color('#b88247'),cookedFin=new THREE.Color('#a16b37');for(const s of this.held.userData.skins||[]){const target=s.from.getHex()===0x6ca9ac?cookedSkin:s.from.getHex()===0x467b84?cookedFin:null;if(target)s.m.color.copy(s.from).lerp(target,ease(k));}
       if(t>a.smokeAt){a.smokeAt=t+.22;const c=fc;const base=V(c.x,heightAt(g.world,c.x,c.y)+.55,-c.y);for(let i=0;i<2;i++){const o=new THREE.Mesh(g.particleGeometry,g.particleMaterials[i?'ember':'smoke']);o.position.copy(base).add(V((Math.random()-.5)*.3,Math.random()*.2,(Math.random()-.5)*.3));o.scale.setScalar(i?.5:1.1+Math.random());g.scene.add(o);g.particles.push({mesh:o,life:i?.5:1.1,v:V((Math.random()-.5)*.3,i?1.6:.9+Math.random()*.4,(Math.random()-.5)*.3)});}}
-      g.status=a.recipe==='dry_clay'?(k<.5?'Drying clay bricks by the fire…':'Almost dry!'):a.recipe==='bake_manna'?(k<.4?'Manna is in the oven…':k<.85?'Smells wonderful…':'Almost done!'):k<.35?'Holding the fish over the flames…':k<.8?'Sizzling…':'Almost done!';
+      g.status=a.recipe==='fry_egg'?(k<.6?'Cooking an egg at the campfire…':'Your egg is almost ready!'):a.recipe==='dry_clay'?(k<.5?'Drying clay bricks by the fire…':'Almost dry!'):a.recipe==='bake_manna'?(k<.4?'Manna is in the oven…':k<.85?'Smells wonderful…':'Almost done!'):k<.35?'Holding the fish over the flames…':k<.8?'Sizzling…':'Almost done!';
     }else if(a.type==='rest'){
       this.poseHands([-.34,1.1,.16],[.34,1.1,.16]);g.bones.mixamorigSpine.rotateX(Math.sin(t*1.5)*.025);g.status=`Taking a breather · ${Math.max(1,Math.ceil(a.duration-t))}s`;
     }else if(a.type==='pray'){
@@ -297,7 +298,7 @@ export class Nutrition {
   campfireCard(fireId){
     const g=this.g,s=g.store.state,min=gameTime(s),fire=completedFires(s).find(b=>b.id===fireId)||completedFires(s)[0];if(!fire)return null;
     const left=fireFuelLeft(fire,min),hasWood=Object.entries(s.inventory).some(([id,n])=>id.endsWith('_wood')&&n>0);
-    return {id:fire.id,lit:left>0,minutesLeft:Math.round(left),low:left<FIRE_LOW_MINUTES,canStoke:fireCanTakeLog(fire,min),hasWood,rawFish:s.inventory.fish||0,cookedFish:s.inventory.cooked_fish||0,gain:Math.round(mealGain(s,'cooked_fish',min).total),mud:s.inventory.mud||0,water:s.inventory.water||0,clay:s.inventory.clay||0,canDryClay:canCook(s,'dry_clay'),busy:!!(this.g.action||this.g.order||this.sleep)};
+    return {id:fire.id,lit:left>0,minutesLeft:Math.round(left),low:left<FIRE_LOW_MINUTES,canStoke:fireCanTakeLog(fire,min),hasWood,rawEgg:ingredientCount(s,'egg'),cookedEgg:s.inventory.cooked_egg||0,eggGain:Math.round(mealGain(s,'cooked_egg',min).total),eggEnergy:Math.round(mealGain(s,'cooked_egg',min).energy),rawFish:s.inventory.fish||0,cookedFish:s.inventory.cooked_fish||0,gain:Math.round(mealGain(s,'cooked_fish',min).total),mud:s.inventory.mud||0,water:s.inventory.water||0,clay:s.inventory.clay||0,canDryClay:canCook(s,'dry_clay'),busy:!!(this.g.action||this.g.order||this.sleep)};
   }
   /** What the oven popup needs: heat, fuel, ingredients and whether baking can start now. */
   ovenCard(ovenId){

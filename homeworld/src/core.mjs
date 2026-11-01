@@ -461,7 +461,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(!canCook(state,a.recipe))return state;
     const recipe=RECIPES[a.recipe],stations=recipe.station==='oven'?hotOvens(state,minutes):recipe.station==='well'?completedWells(state):litFires(state,minutes),station=stations.find(b=>b.id===a.fireId);
     if(!station||dist(state.player,workPoint(world,station))>1.45)return state;
-    for(const [id,n]of Object.entries(recipe.ingredients))inv[id]-=n;add(recipe.item,recipe.quantity);
+    for(const [id,n]of Object.entries(recipe.ingredients)){const fromBag=Math.min(inv[id]||0,n);inv[id]=(inv[id]||0)-fromBag;if(id==='egg'&&fromBag<n)next.livingFarm.bag.egg-=n-fromBag;}add(recipe.item,recipe.quantity);
     if(FOODS[recipe.item])next.stats.foodPrepared=(next.stats.foodPrepared||0)+recipe.quantity;else next.stats.crafted=(next.stats.crafted||0)+recipe.quantity;
   } else if(a.type==='craft_recipe') {
     // A cook combines two bag items into one snack. No station: it happens between meals.

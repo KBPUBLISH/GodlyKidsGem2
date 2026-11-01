@@ -1081,7 +1081,7 @@ export class HomeWorld {
     const rect=this.renderer.domElement.getBoundingClientRect();if(!rect.width)return null;
     const c=a.target;this.camera.updateMatrixWorld(true);const pr=V(c.x,heightAt(this.world,c.x,c.y)+1.3,-c.y).project(this.camera);if(pr.z<-1||pr.z>1)return null;
     const k=Math.min(1,a.t/a.duration),left=Math.max(0,a.duration-a.t);
-    const recipe=RECIPES[a.recipe]||RECIPES.grill_fish,name=a.recipe==='dry_clay'?'Drying clay bricks':a.recipe==='bake_manna'?'Baking manna':'Grilling a fish',stageText=a.recipe==='dry_clay'?(k<.5?'By the fire':k<.9?'Hardening':'Almost dry!'):a.recipe==='bake_manna'?(k<.4?'In the oven':k<.85?'Rising':'Almost done!'):(k<.35?'Over the flames':k<.8?'Sizzling':'Almost done!');
+    const recipe=RECIPES[a.recipe]||RECIPES.grill_fish,name=a.recipe==='fry_egg'?'Cooking an egg':a.recipe==='dry_clay'?'Drying clay bricks':a.recipe==='bake_manna'?'Baking manna':'Grilling a fish',stageText=a.recipe==='fry_egg'?(k<.4?'In the pan':k<.8?'Sizzling':'Almost ready!'):a.recipe==='dry_clay'?(k<.5?'By the fire':k<.9?'Hardening':'Almost dry!'):a.recipe==='bake_manna'?(k<.4?'In the oven':k<.85?'Rising':'Almost done!'):(k<.35?'Over the flames':k<.8?'Sizzling':'Almost done!');
     return {key:'grill',cook:true,name,plant:recipe.item,stage:stageText,progress:k,percent:Math.round(k*100),seconds:Math.ceil(left),remaining:null,thirsty:false,ready:k>=1,x:Math.max(90,Math.min(rect.width-90,(pr.x+1)*rect.width/2)),y:Math.max(60,(1-pr.y)*rect.height/2),opacity:Math.min(1,a.t/.2)};
   }
   /** Floating progress timers over every building under construction: percent, time left, who is on it and whether hunger slows them. */

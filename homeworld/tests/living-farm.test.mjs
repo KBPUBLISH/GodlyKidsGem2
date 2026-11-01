@@ -15,7 +15,7 @@ test('first egg comes soon; later production repeats, caps offline and cannot be
  s=farmAdvance(s,100*FARM_CYCLE_MS);assert.equal(s.animals[0].ready,3);
  s=farmCollect(s,s.animals[0].id,100*FARM_CYCLE_MS);assert.equal(farmAdvance(s,100*FARM_CYCLE_MS),s);
 });
-test('eggs can be eaten or sold; earning funds buys larger coops and milk-producing cows',()=>{
+test('eggs can be sold; earning funds buys larger coops and milk-producing cows',()=>{
  let s=farmBuy(funded(),'chicken','Sunny',0);
  for(let t=1;t<=8;t++){s=farmAdvance(s,t*FARM_CYCLE_MS);s=farmCollect(s,s.animals[0].id,t*FARM_CYCLE_MS);s=farmUse(s,'egg','sell');}
  assert.equal(s.coins,40);s=farmBuy(s,'coop','',0);assert.equal(s.coop,2);assert.equal(farmOffer(s,'cow').reason,null);

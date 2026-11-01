@@ -38,7 +38,7 @@ export class LivingFarm{
   if(!this.commit(next))return false;
   this.pending=null;this.test.celebrate(pending.kind==='coop'?'Coop ready!':`Welcome, ${next.animals.at(-1).name}!`);this.g.notify();return true;
  }
- use(item,action){if(action==='eat'){this.test.activity();this.g.nutrition.eat(item,'farm');return;}if(this.commit(farmUse(this.state,item,action))){this.test.activity();this.g.toast(`+${FARM_PRICES[item]} coins`);}}
+ use(item,action){if(action==='cook'&&item==='egg'){this.test.activity();this.g.nutrition.cook('fry_egg');return;}if(action==='eat'){this.test.activity();this.g.nutrition.eat(item,'farm');return;}if(this.commit(farmUse(this.state,item,action))){this.test.activity();this.g.toast(`+${FARM_PRICES[item]} coins`);}}
  openCoop(){if(!this.state.coop)return;this.g.path=[];this.g.order=null;this.g.keys.clear();this.g.marker.visible=false;window.dispatchEvent(new Event('gk-open-coop'));}
  collectEgg(id,slot){return this.commit(farmCollectEgg(this.state,id,slot,Date.now()));}
  get position(){return this.state.coopPosition||this.test.layout.farmPad;}

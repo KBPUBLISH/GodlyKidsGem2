@@ -1,3 +1,4 @@
+import {createCoopModel} from './coop-model.js';
 import {coopSpotNear} from './coop-placement.mjs';
 import {coopSurfaceHeight,eggSlots} from './coop-layout.mjs';
 import * as THREE from 'three';
@@ -63,20 +64,7 @@ export class LivingFarm{
   }
   if(this.coopLevel!==`${this.state.coop}:${this.position.x}:${this.position.y}`){this.coopLevel=`${this.state.coop}:${this.position.x}:${this.position.y}`;if(this.coop){this.group.remove(this.coop);this.coop.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.coop=this.coopModel(this.state.coop);const p=this.position;this.coop.position.set(p.x,heightAt(g.world,p.x,p.y),-p.y);this.group.add(this.coop);}
  }
- coopModel(level){
-  const group=new THREE.Group();if(!level)return group;
-  const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.9});const wood=mat('#bd915c'),roof=mat('#a55038'),dark=mat('#554433');
-  const box=(w,h,d,m,x,y,z)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);b.castShadow=true;group.add(b);return b;};
-  const w=level===1?1.85:2.4;
-  box(w,.1,1.3,wood,0,.35,0);
-  for(const x of [-1.65,1.65]){for(const z of [-1.1,0,1.2])box(.09,.65,.09,wood,x,.325,z);for(const y of [.22,.52])box(.07,.06,2.3,wood,x,y,.05);}
-  for(const y of [.22,.52])box(3.3,.06,.07,wood,0,y,-1.1);
-  for(const x of [-w/2+.1,w/2-.1])for(const z of [-.35,.35])box(.1,.5,.1,dark,x,.25,z);
-  box(w,.65,.85,wood,0,.7,0);box(.36,.39,.025,dark,0,.59,.44);
-  for(const sign of [-1,1]){const r=box(w+.2,.09,.63,roof,0,1.12,sign*.23);r.rotation.x=sign*.4;}
-  for(let i=0;i<6;i++)box(.72,.065,1.1/6,wood,0,.4-(i+.5)*.4/6,.65+(i+.5)*1.1/6).userData.coopStep=true;
-  return group;
- }
+ coopModel(level){return createCoopModel(level);}
  chickenRoutine(inst,dt){
   const a=this.state.animals.find(a=>a.id===inst.id);if(a?.kind!=='chicken'||!this.state.coop)return false;
   const p=this.position,anchor=`${p.x}:${p.y}`;if(inst.coopAnchor!==anchor){inst.coopRoost=false;inst.coopAnchor=anchor;}

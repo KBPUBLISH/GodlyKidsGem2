@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {useDialogFocus} from './ui.jsx';
+import {Icon,useDialogFocus} from './ui.jsx';
 import {GOALS,goalById,goalFacts,restoreGoals,availableGoals,chooseGoal,advanceGoal} from './adventure-goals.mjs';
 import './adventure-goals.css';
 function GoalArt({goal}){
@@ -32,7 +32,7 @@ export function AdventureGoals({engine,view,blocked,onPanel,onModalChange,reques
  if(!view.loaded||!view.livingTest)return null;
  return <div className={`adventure-layer ${active?'has-goal':''}`}>
   {!blocked&&!modal&&!view.livingTest.arrival&&!view.livingTest.placingAdam&&<>
-   {active&&step?<section className="adventure-current" aria-label="My goal"><button className="adventure-current-art" aria-label="See my goal" onClick={()=>setSheet('detail')}><GoalArt goal={active}/></button><div><button className="adventure-current-title" onClick={()=>setSheet('detail')}>{active.title}</button><p aria-live="polite">{step.label} <b>{record.progress[stepIndex]}/{step.count}</b></p><div className="adventure-stage-dots" aria-label={`Step ${stepIndex+1} of ${active.steps.length}`}>{active.steps.map((s,i)=><i key={s.id} className={i<stepIndex?'done':i===stepIndex?'now':''}/>)}</div><button className="adventure-show" onClick={help}>Show me <span aria-hidden="true">→</span></button></div></section>:<button className="adventure-invite" onClick={openPicker}><span aria-hidden="true">✦</span><span><b>My next adventure</b><small>Choose something to do</small></span><span aria-hidden="true">→</span></button>}
+   {active&&step?<button type="button" className="adventure-current-task" aria-label={`${step.label}. ${record.progress[stepIndex]} of ${step.count}. Show me`} onClick={help}><Icon type={step.action.startsWith('build:')?'build':step.action==='axe'?'axe':step.action==='mine'?'mine':step.action==='food'?'food':step.action} size={32}/><span className="adventure-task-label" aria-live="polite">{step.label}</span><b className="adventure-task-count">{record.progress[stepIndex]}/{step.count}</b></button>:<button className="adventure-invite" onClick={openPicker}><span aria-hidden="true">✦</span><span><b>My next adventure</b><small>Choose something to do</small></span><span aria-hidden="true">→</span></button>}
   </>}
   {modal&&<div className="adventure-shade" onClick={close}><section ref={dialog} className={`adventure-sheet ${modal==='complete'?'adventure-complete':''}`} role="dialog" aria-modal="true" aria-labelledby="adventure-title" tabIndex={-1} onClick={e=>e.stopPropagation()}>
    <button data-dialog-close className="adventure-close" aria-label="Back to island" onClick={close}>×</button>

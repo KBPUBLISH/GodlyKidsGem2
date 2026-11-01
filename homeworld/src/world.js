@@ -322,7 +322,7 @@ export class HomeWorld {
       if(g){this.fieldSignature.push(`${key}:${g.stage}`);if(g.stage!=='seeded'&&!(g.seed.kind==='tree'&&g.stage==='ready')){const asset=g.seed.kind==='tree'?`treegrowth_${g.seed.plant}_${g.stage==='seedling'?'sapling':'young'}`:`crop_${g.seed.plant}_${g.stage}`;const crop=this.asset(asset);crop.position.copy(soil.position);crop.position.y+=.025;this.fields.add(crop);}}
       if(plotWeedy(c,minutes)){this.fieldSignature.push(`${key}:weeds`);const clump=this.weedClump();let h=0;for(const ch of key)h=(h*33+ch.charCodeAt(0))>>>0;clump.rotation.y=(h%8)*.5;clump.position.copy(soil.position);clump.position.y+=.04;this.fields.add(clump);}
     }
-    this.mining?.refresh();this.building?.refresh();this.refreshGroundCover();this.nav=new Navigation(this.world,state,minutes);
+    this.mining?.refresh();this.building?.refresh();this.refreshGroundCover();this.nav=new Navigation(this.world,state,minutes);this.fishing?.makeWalkable(this.nav);
   }
   drawGardenGrid() {
     if(this.livingTestMode&&this.store.state.livingGardenLayout==='small')return;
@@ -467,10 +467,13 @@ export class HomeWorld {
     const hits=this.ray.intersectObjects(this.treeBatches.map(b=>b.mesh),false);if(hits.length){const hit=hits[0],id=hit.object.userData.ids[hit.instanceId];if(id){if(this.tool==='axe'){this.chop(id);return;}if(this.offerTree(id))return;}}
     if(this.tool!=='mine'){const meshes=[...this.mining.nodes.values()].filter(n=>n.group.visible&&!this.store.state.removedRocks.includes(n.id)).map(n=>n.mesh);const hit=this.ray.intersectObjects(meshes,true)[0];if(hit){let node=hit.object;while(node&&!node.userData.rockId)node=node.parent;if(node?.userData.rockId){const rock=this.world.boulders.find(r=>r.id===node.userData.rockId);this.showPrompt('rock',rock.id,{x:rock.position[0],y:rock.position[1]},(rock.radius||.5)+.9,[{id:'mine',label:'Smash',icon:'mine'}]);return;}}}
     if(this.tool!=='hoe'&&this.stumpNodes?.length){const hit=this.ray.intersectObjects(this.stumpNodes,true)[0],stumpId=hit?.object.userData.stumpId;if(stumpId){const t=this.world.trees.find(t=>t.id===stumpId);this.showPrompt('stump',stumpId,{x:t.position[0],y:t.position[1]},.7,[{id:'dig',label:'Dig out',icon:'shovel'}]);return;}}
+    const dockTarget=this.tool==='walk'?this.fishing?.walkTarget(this.ray):null;
+    if(dockTarget){this.walk(dockTarget);return;}
     const p=V();if(!this.ray.ray.intersectPlane(this.groundPlane,p))return;const target={x:p.x,y:-p.z},cell=cellAt(this.world,target.x,target.y);
     if(this.tool==='fish'&&terrainType(this.world,target.x,target.y)===0){this.nutrition.goFish();return;}
     if(this.tool==='hoe'){if(!this.action&&['plow','dig_stump','clear_weeds'].includes(this.order?.type)){this.path=[];this.order=null;this.marker.visible=false;}const stumpHit=this.stumpNodes?.length?this.ray.intersectObjects(this.stumpNodes,true)[0]:null,stumpId=stumpHit?.object.userData.stumpId||activeStumps(this.world,this.store.state).find(t=>cellAt(this.world,t.position[0],t.position[1]).key===cell.key)?.id;if(stumpId){this.digStump(stumpId);return;}if(terrainType(this.world,target.x,target.y)===1){this.digMud(cell.key);return;}if(this.gardenPlot(cell.key))this.peekPlant(cell.key);if(plotWeedy(this.store.state.cells[cell.key],gameTime(this.store.state))){const queued=this.gardenAction('clear_weeds',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'clear_weeds'))this.walk(target);return;}const queued=this.gardenAction('plow',cell.key);if(queued===false&&!canAffordEnergy(this.store.state,'plow'))this.walk(target);return;}
     const plot=this.store.state.cells[cell.key],planted=growth(plot,gameTime(this.store.state));
+    if(this.tool!=='plant'&&plot?.soil&&!plot.seed&&!plotWeedy(plot,gameTime(this.store.state))){this.peekPlant(cell.key);return;}
     if(this.gardenPlot(cell.key)){
       // Walk tool: tapping the garden opens the card (fenced %, Abel's next request, the plan).
       if(this.tool==='walk'&&this.playersOnly&&this.gardenKeeper){this.plantPeek=null;this.openGarden();return;}
@@ -510,8 +513,9 @@ export class HomeWorld {
     if(this.ambientNudge())return;
     this.residents?.cancelWave();
     this.pinJob=null;
-    if(this.action){this.toast('Your character is finishing this action.');return;}const path=this.nav.path(this.player,target);if(!path){this.toast('There is no clear path there. Try a closer patch of land.');return;}this.lastGroundKey=cellAt(this.world,target.x,target.y).key;this.path=path;this.order=null;this.marker.position.set(target.x,heightAt(this.world,target.x,target.y)+.035,-target.y);this.marker.visible=true;this.status='Walking…';this.notify();
+    if(this.action){this.toast('Your character is finishing this action.');return;}const path=this.nav.path(this.player,target);if(!path){this.toast('There is no clear path there. Try a closer patch of land.');return;}this.lastGroundKey=cellAt(this.world,target.x,target.y).key;this.path=path;this.order=null;this.marker.position.set(target.x,this.walkSurfaceHeight(target.x,target.y)+.035,-target.y);this.marker.visible=true;this.status='Walking…';this.notify();
   }
+  walkSurfaceHeight(x,y){return this.fishing?.surfaceHeight(x,y)??heightAt(this.world,x,y);}
   collectNearbyWood(){
     if(this.action||this.order||!woodRoom(this.store.state))return false;let changed=false;for(const drop of this.store.state.woodDrops||[]){if(dist(this.player,drop)>.9||!woodRoom(this.store.state))continue;try{this.store.persistPlayer(this.player);const before=woodTotal(this.store.state);this.store.commit({type:'pickup_wood',id:drop.id});const gained=woodTotal(this.store.state)-before;if(gained){this.toast(`+${gained} wood put away`);this.burst(drop,'wood',.2);changed=true;}}catch(e){this.toast(e.message);break;}}
     return changed;
@@ -1018,8 +1022,16 @@ export class HomeWorld {
     if(this.world?.gardenSlots?.some(s=>s.key===key))return true;
     return activeBuildings(this.store.state).some(b=>b.kind==='garden'&&b.status==='complete'&&footprint(this.world,b).keys.includes(key));
   }
-  /** Tap a garden plot: a small card for ~2 seconds. A new tap replaces it and restarts the timer. Fades over the last 300ms. */
-  peekPlant(key,now=performance.now()){this.plantPeek={key,until:now+2000};this.notify();}
+  /** Tap a garden plot: growth info is brief; an empty prepared plot keeps its seed picker open longer. */
+  peekPlant(key,now=performance.now()){
+    const cell=this.store?.state.cells?.[key],picker=!!(cell?.soil&&!cell.seed&&!plotWeedy(cell,gameTime(this.store.state))),duration=picker?8000:2000;
+    this.plantPeek={key,until:now+duration,duration};this.notify();
+  }
+  plantFromPeek(key,seed){
+    const cell=this.store?.state.cells?.[key],choice=SEEDS.find(item=>item.id===seed);
+    if(!choice||!cell?.soil||cell.seed||plotWeedy(cell,gameTime(this.store.state))||!(this.store.state.inventory?.[seed]>0)){this.plantPeek=null;this.toast('That seed is not available for this plot.');this.notify();return false;}
+    this.plantPeek=null;this.seed=seed;return this.gardenAction('plant',key);
+  }
   /** Open the garden card (garden-ui.jsx): fence status, what Abel is asking for, and the layout plan. */
   openGarden(){if(!this.building)return;this.building.openMenu={id:'garden',nonce:Date.now()};this.notify();}
   plantPeekSnapshot(now=performance.now()){
@@ -1027,12 +1039,14 @@ export class HomeWorld {
     const s=this.store.state,cell=s.cells?.[peek.key],min=gameTime(s),g=growth(cell,min);
     const rect=this.renderer.domElement.getBoundingClientRect();if(!rect.width)return null;
     const p=cellFromKey(this.world,peek.key);this.camera.updateMatrixWorld(true);const pr=V(p.x,heightAt(this.world,p.x,p.y)+.9,-p.y).project(this.camera);if(pr.z<-1||pr.z>1)return null;
-    const left=peek.until-now,opacity=left<300?Math.max(0,left/300):Math.min(1,(2000-left)/160);
+    const duration=peek.duration||2000,left=peek.until-now,opacity=left<300?Math.max(0,left/300):Math.min(1,(duration-left)/160);
     const x=Math.max(96,Math.min(rect.width-96,(pr.x+1)*rect.width/2)),y=Math.max(60,(1-pr.y)*rect.height/2);
     if(plotWeedy(cell,min))return {key:peek.key,empty:true,weeds:true,name:'Weeds',note:'Clear them before you can plant.',x,y,opacity};
     if(!g){
       const tilled=cell?.soil==='tilled';
-      return {key:peek.key,empty:true,name:tilled?'Tilled soil. Nothing planted.':'Nothing planted',x,y,opacity};
+      const seeds=cell?.soil?SEEDS.filter(seed=>(s.inventory?.[seed.id]||0)>0).map(seed=>({id:seed.id,name:seed.name,plant:seed.plant,count:s.inventory[seed.id]})):[];
+      const half=Math.min(140,(rect.width-24)/2),pickerX=Math.max(half+12,Math.min(rect.width-half-12,(pr.x+1)*rect.width/2));
+      return {key:peek.key,empty:true,picker:!!cell?.soil,name:tilled?'Choose a seed':'Plant this plot',note:seeds.length?'Tap a seed from your bag.':'No seeds in your bag.',seeds,x:cell?.soil?pickerX:x,y,opacity};
     }
     const stage={seeded:'Just planted',seedling:'Sprouting',growing:'Growing',ready:'Ready to pick!'}[g.stage];
     return {key:peek.key,name:g.seed.name,plant:g.seed.plant,stage,progress:g.progress,percent:Math.round(g.progress*100),thirsty:g.thirsty,ready:g.stage==='ready',remaining:g.progress<1?realDuration(g.remaining/60,s):null,x,y,opacity};
@@ -1106,7 +1120,7 @@ export class HomeWorld {
       if(this.store.state.night){this.livingTest?.friend?.update(0);this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
       if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
-      this.actor.position.set(this.player.x,heightAt(this.world,this.player.x,this.player.y)+.015,-this.player.y);
+      this.actor.position.set(this.player.x,this.walkSurfaceHeight(this.player.x,this.player.y)+.015,-this.player.y);
       if(this.residents?.waveActive()&&speed>0.08)this.residents.cancelWave();
       if(!this.path.length&&this.order&&!this.action)this.startAction(this.order);
       if(!this.path.length&&!this.order&&!this.action&&this.status==='Walking…'){

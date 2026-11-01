@@ -184,7 +184,7 @@ export const TOUR_STEPS=[
       if(ui.plan){const goal=rect('.plan-goal',{rx:16});return goal?{target:goal,text:`Your goal shows what is still needed. ${note}`}:{target:rect('.plan-list li',{rx:14}),text:`These jobs get a home built. ${note}`};}
       return {target:rect('.side-buttons button[aria-label="Open the island to-do list"]',{rx:20}),text:`Open To-do to see what a home needs. ${note}`};
     }},
-  {id:'fish',icon:'fish',title:'Go fishing',why:'Fish makes a fine dinner at the campfire.',hint:'Hint: the fishing pole stands on the beach by the dock. Walk there and tap it.',
+  {id:'fish',icon:'fish',title:'Go fishing',why:'Fish makes a fine dinner at the campfire.',hint:'Hint: the fishing pole stands at the outer edge of the dock. Walk onto the dock and tap it.',
     base:g=>({fish:g.store.state.stats.fishCaught||0}),
     done:(g,b)=>!!g.fishing?.active||g.action?.type==='fish'||g.order?.type==='fish'||(g.store.state.stats.fishCaught||0)>b.fish,
     blocked:g=>!g.fishing?.pole?'The fishing pole is away right now — we’ll skip fishing.':!canAffordEnergy(g.store.state,'fish')?'Too tired to fish right now — we’ll skip this one. Rest at home first.':null,

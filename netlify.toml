@@ -37,6 +37,16 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/homeworld/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/homeworld/living-test.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/"
   [headers.values]
     Cache-Control = "no-cache"

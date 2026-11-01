@@ -116,7 +116,7 @@ export function PlantPeek({engine,enabled}){
   frame=requestAnimationFrame(update);return()=>cancelAnimationFrame(frame);
  },[engine,enabled]);
  if(!enabled||!peek)return null;
- if(peek.empty)return <div className={`plant-peek empty${peek.weeds?' weeds':''}`} style={{left:peek.x,top:peek.y,opacity:peek.opacity}} role="status" aria-live="polite"><strong>{peek.name}</strong>{peek.note&&<small className="plant-peek-note">{peek.note}</small>}</div>;
+ if(peek.empty)return <div className={`plant-peek empty${peek.weeds?' weeds':''}${peek.picker?' seed-picker':''}`} style={{left:peek.x,top:peek.y,opacity:peek.opacity}} role={peek.picker?'dialog':'status'} aria-label={peek.picker?'Choose a seed to plant':undefined} aria-live="polite"><strong>{peek.name}</strong>{peek.note&&<small className="plant-peek-note">{peek.note}</small>}{peek.picker&&peek.seeds?.length>0&&<div className="plant-seed-options">{peek.seeds.map(seed=><button type="button" key={seed.id} onClick={()=>engine.current?.plantFromPeek?.(peek.key,seed.id)} aria-label={`Plant ${seed.name.toLowerCase()}. ${seed.count} seeds available`}><ItemIcon id={seed.plant} size={25}/><span>{seed.name}</span><b>×{seed.count}</b></button>)}</div>}</div>;
  return <div className={`plant-peek ${peek.cook?'cook':''} ${peek.ready?'ready':peek.thirsty?'thirsty':''}`} style={{left:peek.x,top:peek.y,opacity:peek.opacity}} role="status" aria-live="polite">
   <div className="plant-peek-head"><ItemIcon id={peek.plant} size={26}/><div><strong>{peek.name}</strong><small>{peek.stage}{peek.thirsty&&!peek.ready?' · needs water':''}</small></div><b>{peek.percent}%</b></div>
   <div className="plant-peek-track"><i style={{width:`${peek.percent}%`}}/></div>

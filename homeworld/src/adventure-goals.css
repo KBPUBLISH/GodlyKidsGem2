@@ -12,3 +12,8 @@
 .adventure-current-task{pointer-events:auto;position:absolute;top:160px;left:14px;bottom:auto;display:flex;align-items:center;gap:9px;width:270px;max-width:calc(100% - 108px);min-height:64px;padding:10px 12px;text-align:left;border:2px solid #e5d5ac;border-radius:17px;background:#fff9e8;box-shadow:0 4px 0 #344a3a22;color:#38543d}.adventure-current-task>.picture-icon,.adventure-current-task>.icon-fallback{flex:0 0 32px;object-fit:contain}.adventure-task-label{flex:1;font-size:15px;font-weight:850;line-height:1.25}.adventure-task-count{font-size:15px;font-weight:900;color:#27714e;white-space:nowrap;background:#e8efdb;padding:7px;border-radius:10px}
 @media(max-width:600px){.adventure-current-task{top:156px;width:265px;left:14px;bottom:auto;min-height:62px;gap:8px}.adventure-task-label{font-size:14px}.adventure-task-count{font-size:14px;padding:6px}}
 @media(max-height:520px){.adventure-current-task{top:130px;min-height:56px;padding:7px 10px}}
+
+/* Both starter prompts and goal tasks occupy the row below the Tasks button. */
+.game-shell.living-island-test.living-original-controls .living-request{top:160px}
+@media(max-width:600px){.game-shell.living-island-test.living-original-controls .living-request{top:156px}}
+@media(max-height:520px){.game-shell.living-island-test.living-original-controls .living-request{top:130px}}

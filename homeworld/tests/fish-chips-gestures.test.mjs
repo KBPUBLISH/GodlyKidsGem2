@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cutFry,fryCutX,onCrumbBowl,overFillet,onBakingTray,insideOven,dragCentre} from '../src/fish-chips-gestures.mjs';
+import {cutFry,fryCutX,onFillet,inBatter,coatInBatter,onBakingTray,insideOven,dragCentre} from '../src/fish-chips-gestures.mjs';
 
 test('each fry needs a lengthwise cut through its guide, not a crosswise swipe',()=>{
  for(let i=0;i<3;i++){
@@ -15,13 +15,16 @@ test('each fry needs a lengthwise cut through its guide, not a crosswise swipe',
  assert.equal(cutFry(null,{x:.3,y:.8},0),false);
 });
 
-test('the crumb bowl has to land on the fillet; dropping on the counter does not coat it',()=>{
- const start={x:.84,y:.8},origin={x:.82,y:.83};
- assert.ok(onCrumbBowl(start));
- assert.equal(onCrumbBowl({x:.48,y:.38}),false);
- assert.ok(overFillet(dragCentre(start,{x:.49,y:.36},origin)));
- assert.equal(overFillet(dragCentre(start,{x:.2,y:.88},origin)),false);
- assert.equal(overFillet(origin),false);
+test('coating requires dragging the fish through batter; tapping or swiping the counter does not count',()=>{
+ assert.ok(onFillet({x:.5,y:.45}));
+ assert.ok(inBatter({x:.72,y:.45}));
+ assert.ok(coatInBatter({x:.5,y:.45},{x:.72,y:.45}));
+ assert.ok(coatInBatter({x:.65,y:.5},{x:.35,y:.5}));
+ assert.equal(coatInBatter({x:.5,y:.45},{x:.52,y:.45}),false);
+ assert.equal(coatInBatter({x:.5,y:.9},{x:.75,y:.9}),false);
+ assert.equal(coatInBatter({x:.5,y:.45},{x:.95,y:.45}),false);
+ assert.equal(coatInBatter({x:.5,y:.45},{x:.5,y:.75}),false);
+ assert.equal(coatInBatter(null,{x:.72,y:.45}),false);
 });
 
 test('grabbing the tray off-centre preserves its position and tests the tray centre at the oven',()=>{

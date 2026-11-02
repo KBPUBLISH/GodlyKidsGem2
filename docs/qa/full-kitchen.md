@@ -32,10 +32,10 @@ step indices are unchanged, including existing oven and cooking saves.
 - Try Fish and Chips: cut the potato slab lengthwise along three guides. Each
   cut should produce a long fry on the small tray; the last cut produces the
   final two strips. Pause on the completed fries before continuing.
-- Drag the crumb bowl onto the fillet to coat side one. Flip the fish, then
-  drag the crumbs onto its other side. Both check marks must be filled before
-  continuing. Crumbs are provided by the station; saved ingredient costs stay
-  fish and potatoes. A random swipe over the counter must not coat the fish.
+- Slide the fillet through the batter to coat side one. Flip the fish, then
+  slide it through the bowl again to coat its other side. Both check marks must be filled before
+  continuing. Batter is provided by the station; saved ingredient costs stay
+  fish and potatoes. A tap or a swipe over the counter must not coat the fish.
 - At the oven, grab the loaded tray at its edge as well as its centre. It should
   follow the finger without jumping. A drop on the counter should return it;
   a drop inside the opening should snap it onto the shelf. The tray remains
@@ -69,6 +69,6 @@ step indices are unchanged, including existing oven and cooking saves.
 Tests cover every recipe journey, reloads, arrival gating, readiness, duplicate
 collection, and routes avoiding every counter footprint. Existing cooking tests
 cover escrow, cancellation, persistence failures, nutrition and gesture geometry.
-Fish-and-chips geometry tests reject crosswise cuts and drops on the counter,
+Fish-and-chips geometry tests reject crosswise cuts and coating outside the bowl,
 and check that grabbing a tray off-centre still targets the tray's centre.
 Browser rendering and touch layout still require manual review.

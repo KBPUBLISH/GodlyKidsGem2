@@ -22,3 +22,13 @@ no cropping or repainting was used. `KitchenArt` selects cells with SVG viewport
 so they remain square and undistorted in responsive layouts. All files are
 imported through Vite for fingerprinted URLs and bundled into the standalone
 HTML preview as data URLs.
+
+## Cooking action textures
+
+`cooking-actions.webp` is a separate 1254 × 1254 transparent 3 × 3 atlas created
+with ChatGPT image generation from the six-screen cooking reference direction.
+It contains an uncut potato half, one long fry, a glass batter bowl; a raw
+fillet, a battered fillet, a loaded baking tray; an open oven, a kitchen knife,
+and a tutorial hand. These are individual sprites, not flattened screenshots.
+`CookingActionArt` places them inside the live activity SVG; cutting masks,
+food movement, coating, tray hit areas and progress remain interactive.

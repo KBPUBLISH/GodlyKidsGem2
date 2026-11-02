@@ -8,3 +8,10 @@ export function stirDelta(previous,current){
 }
 export const sliced=(start,end)=>!!start&&Math.hypot(end.x-start.x,end.y-start.y)>=.23;
 export const dropped=(start,end)=>!!start&&start.y>.55&&end.y<.46&&end.x>.2&&end.x<.8;
+
+/** A generous downward cut through the food, rather than any swipe on the screen. */
+export function chopCrossed(start,end,index=0){
+ if(!start||!end||end.y-start.y<.16||start.y>.6||end.y<.5)return false;
+ const t=(.55-start.y)/(end.y-start.y),x=start.x+(end.x-start.x)*Math.max(0,Math.min(1,t));
+ return Math.abs(x-(.32+index*.18))<=.17;
+}

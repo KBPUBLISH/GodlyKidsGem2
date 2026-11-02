@@ -5,7 +5,7 @@ import {COOKING_RECIPES,applyCooking,cookingSeconds} from '../src/cooking.mjs';
 import {GameStore,initialState,applyAction,growth,SEEDS} from '../src/core.mjs';
 import {marketTrade} from '../src/living-market-rules.mjs';
 import {quoteSell} from '../src/sell-prices.mjs';
-import {stirDelta,sliced,dropped} from '../src/cooking-gestures.mjs';
+import {stirDelta,sliced,dropped,chopCrossed} from '../src/cooking-gestures.mjs';
 const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
 function setup(){const s=initialState(world,1000);s.clock.paused=true;s.buildings=[{id:'oven',kind:'oven',key:'67:73',rotation:0,status:'complete',baseHeight:0,startedAt:0}];Object.assign(s.inventory,{pumpkin:3,carrot:4,fish:2,potato:4});s.livingFarm={bag:{egg:3}};s.characters.adam.energy=10;s.characters.adam.hunger=10;s.characters.adam.hungerAt=480;s.characters.eve={name:'Eve',energy:10,hunger:10,hungerAt:480};return s;}
 const start=(s,r)=>applyCooking(s,{type:'cooking_start',recipe:r,ovenId:'oven',sequence:s.cooking?.sequence||0},1000);
@@ -46,3 +46,15 @@ test('upgrade duration hook shortens later ovens without changing saved jobs',()
 test('touch geometry accepts swipes and drops; centre taps and alternating jitter do not stir',()=>{assert.ok(sliced({x:.2,y:.6},{x:.7,y:.6}));assert.ok(dropped({x:.4,y:.8},{x:.5,y:.3}));assert.equal(dropped({x:.4,y:.8},{x:.5,y:.7}),false);assert.equal(stirDelta({x:.5,y:.5},{x:.5,y:.51}),0);let angle=0,last={x:.8,y:.5};for(let i=1;i<=80;i++){const p={x:.5+.3*Math.cos(i*2*Math.PI/80),y:.5+.3*Math.sin(i*2*Math.PI/80)};angle+=stirDelta(last,p);last=p;}assert.ok(angle>6);});
 
 test('taking down an oven returns cooking escrow as well as building materials',()=>{const s=setup(),n=start(s,'garden_omelette');const removed=applyAction(n,{type:'remove_building',id:'oven',actionId:'remove-oven'},world,480);assert.equal(removed.cooking.session,null);assert.equal(removed.inventory.carrot,s.inventory.carrot);assert.equal(removed.livingFarm.bag.egg,s.livingFarm.bag.egg);assert.equal(removed.buildings[0].status,'cancelled');});
+
+test('chopping follows the next food guide and ignores empty-board swipes',()=>{
+ for(let i=0;i<3;i++){
+  const x=.32+i*.18;
+  assert.ok(chopCrossed({x,y:.3},{x:x+.08,y:.75},i));
+  assert.equal(chopCrossed({x,y:.5},{x,y:.52},i),false);
+  assert.equal(chopCrossed({x,y:.8},{x,y:.3},i),false);
+ }
+ assert.equal(chopCrossed({x:.95,y:.2},{x:.95,y:.9},0),false);
+ assert.equal(chopCrossed({x:.1,y:.1},{x:.9,y:.1},0),false);
+ assert.equal(chopCrossed(null,{x:.3,y:.8},0),false);
+});

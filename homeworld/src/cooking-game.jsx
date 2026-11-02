@@ -1,6 +1,7 @@
+import {CookingBoard} from './cooking-board.jsx';
 import React,{useEffect,useRef,useState} from 'react';
 import {COOKING_RECIPES,cookingRecipe,cookingCount,canStartCooking} from './cooking.mjs';
-import {stirDelta,sliced,dropped} from './cooking-gestures.mjs';
+import {stirDelta,sliced,dropped,chopCrossed} from './cooking-gestures.mjs';
 import {CookingArt} from './cooking-art.jsx';
 import {CookingScene} from './cooking-scene.js';
 import {ItemIcon,useDialogFocus} from './ui.jsx';
@@ -8,14 +9,14 @@ import {mealGain} from './nutrition.mjs';
 import {gameTime} from './core.mjs';
 import './cooking-game.css';
 
-function PrepScene({recipe,action,progress}){
+function PrepScene({recipe,action,progress,game}){
  const canvas=useRef(null),scene=useRef(null),[fallback,setFallback]=useState(false);
- useEffect(()=>{try{scene.current=new CookingScene(canvas.current);scene.current.set(recipe,action,progress);}catch{setFallback(true);}return()=>{scene.current?.dispose();scene.current=null;};},[]);
+ useEffect(()=>{try{scene.current=new CookingScene(canvas.current,game?.model?.userData?.avatarId);scene.current.set(recipe,action,progress);}catch{setFallback(true);}return()=>{scene.current?.dispose();scene.current=null;};},[]);
  useEffect(()=>{scene.current?.set(recipe,action,progress);},[recipe,action,progress]);
  return <><canvas ref={canvas} className="cooking-canvas" aria-hidden="true"/>{fallback&&<div className="cooking-fallback"><CookingArt id={recipe} size={200}/></div>}</>;
 }
 export function CookingGame({game,view,ovenId,onClose,onLegacy}){
- const dialog=useRef(null),gesture=useRef(null),working=useRef(false),audio=useRef(null),[progress,setProgress]=useState(0),[now,setNow]=useState(Date.now()),[notice,setNotice]=useState(''),[sharing,setSharing]=useState(false),[dragPoint,setDragPoint]=useState(null);
+ const dialog=useRef(null),gesture=useRef(null),working=useRef(false),audio=useRef(null),[progress,setProgress]=useState(0),[now,setNow]=useState(Date.now()),[notice,setNotice]=useState(''),[sharing,setSharing]=useState(false),[dragPoint,setDragPoint]=useState(null),[pantryRecipe,setPantryRecipe]=useState(null);
  const state=view.state,session=state.cooking?.session,recipe=cookingRecipe(session?.recipe),step=recipe?.steps[session?.step],phase=session?.phase;
  const done=phase==='collected',ready=phase==='cooking'&&now>=session.readyAt;
  const exit=()=>onClose();useDialogFocus(true,dialog,exit);
@@ -32,14 +33,14 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
  const advance=(amount=1)=>{
   if(!step)return;const next=Math.min(step.count,progress+amount);sound();
   if(next>=step.count){if(transact({type:'cooking_step',sessionId:session.id,step:session.step}))setNotice({slice:'Lovely slicing!',prepare:'Ready for the oven!',crack:'Egg-cellent!',add:'Looking delicious!',stir:'Beautiful mixing!',bake:'Lovely! Let’s bake.'}[step.action]||'Well done!');}
-  else setProgress(next);
+  else {setProgress(next);setNotice(step.action==='slice'?`Crunch! ${next} of ${step.count} cuts.`:'Nice work!');}
  };
  const point=e=>{const r=e.currentTarget.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
- const down=e=>{if(!step||gesture.current)return;e.preventDefault();try{e.currentTarget.setPointerCapture(e.pointerId);}catch{/* Pointer capture is optional in embedded webviews. */}gesture.current={id:e.pointerId,start:point(e),last:point(e),angle:0};};
- const move=e=>{const g=gesture.current;if(!g||g.id!==e.pointerId)return;const p=point(e);if(['add','bake'].includes(step?.action)){setDragPoint(p);return;}if(step?.action!=='stir')return;g.angle+=stirDelta(g.last,p);g.last=p;setProgress(Math.min(.95,Math.abs(g.angle)/(Math.PI*2)));};
+ const down=e=>{if(!step||gesture.current)return;e.preventDefault();try{e.currentTarget.setPointerCapture(e.pointerId);}catch{/* Pointer capture is optional in embedded webviews. */}setDragPoint(point(e));gesture.current={id:e.pointerId,start:point(e),last:point(e),angle:0};};
+ const move=e=>{const g=gesture.current;if(!g||g.id!==e.pointerId)return;const p=point(e);if(['slice','prepare','add','bake'].includes(step?.action)){setDragPoint(p);return;}if(step?.action!=='stir')return;g.angle+=stirDelta(g.last,p);g.last=p;setProgress(Math.min(.95,Math.abs(g.angle)/(Math.PI*2)));};
  const up=e=>{const g=gesture.current;if(!g||g.id!==e.pointerId)return;gesture.current=null;setDragPoint(null);const p=point(e),action=step?.action;
-  if(action==='crack'||(action==='stir'&&Math.abs(g.angle)>=Math.PI*1.8)||(['slice','prepare','shape'].includes(action)&&sliced(g.start,p))||(['add','bake'].includes(action)&&dropped(g.start,p)))advance(action==='stir'?1:1);
-  else if(action==='stir')setProgress(0);
+  if(action==='crack'||(action==='stir'&&Math.abs(g.angle)>=Math.PI*1.8)||(action==='slice'&&chopCrossed(g.start,p,progress))||(['prepare','shape'].includes(action)&&sliced(g.start,p))||(['add','bake'].includes(action)&&dropped(g.start,p)))advance(action==='stir'?1:1);
+  else if(action==='stir'){setProgress(0);setNotice('Draw one big circle around the bowl.');}else if(action==='slice')setNotice('Start above the glowing line and slide down through the food.');
  };
  const currentId=session?.id;
  const friendIds=new Set((view.livingTest?.friends||view.friends||[]).map(f=>f.id));
@@ -48,28 +49,31 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
  return <div className="cooking-backdrop" onPointerDown={e=>e.stopPropagation()}>
  <section className="cooking-game" role="dialog" aria-modal="true" aria-labelledby="cooking-title" ref={dialog} tabIndex={-1}>
   <header className="cooking-header"><div><span>ISLAND KITCHEN</span><h1 id="cooking-title">{recipe?recipe.name:'What shall we cook?'}</h1></div><button onClick={exit} aria-label="Back to island">✕</button></header>
+  <aside className="cooking-pantry" aria-label="My pantry"><h2>My pantry <small>Fresh from your island</small></h2><div>{[...new Set(COOKING_RECIPES.flatMap(r=>Object.keys(r.ingredients)))].map(id=>{const count=cookingCount(state,id),wanted=cookingRecipe(session?.recipe||pantryRecipe)?.ingredients[id];return <div key={id} className={`pantry-jar ${count?'stocked':'empty'} ${wanted?'wanted':''}`}><ItemIcon id={id} size={36}/><span>{id}</span><b>{count}</b></div>;})}</div></aside>
   {!session?<>
+   <div className="cooking-workspace cooking-welcome"><PrepScene game={game} recipe="pumpkin_stew" action="idle" progress={0}/><span className="cooking-chef-label">Your kitchen, chef!</span></div>
    <p className="cooking-intro">From your garden. Made by you.</p>
-   <div className="cooking-recipes">{COOKING_RECIPES.map(r=>{const available=canStartCooking(state,r,ovenId);return <article key={r.id} className="cooking-recipe"><CookingArt id={r.id} size={110}/><h2>{r.name}</h2><div className="cooking-ingredients">{Object.entries(r.ingredients).map(([id,n])=><span key={id} className={cookingCount(state,id)>=n?'have':'need'}><ItemIcon id={id} size={24}/>{id.replaceAll('_',' ')} <b>{cookingCount(state,id)}/{n}</b></span>)}</div><button className="cooking-gold" disabled={!available} onClick={()=>{if(transact({type:'cooking_start',recipe:r.id,ovenId,sequence:state.cooking?.sequence||0}))sound();}}>{available?'Let’s cook!':'Gather first'}</button></article>;})}</div>
+   <div className="cooking-recipes">{COOKING_RECIPES.map(r=>{const available=canStartCooking(state,r,ovenId);return <article key={r.id} className={`cooking-recipe ${available?'recipe-ready':'recipe-missing'}`} onMouseEnter={()=>setPantryRecipe(r.id)} onFocus={()=>setPantryRecipe(r.id)}><span className="recipe-state">{available?'✦ Ready to cook!':'Missing ingredients'}</span><CookingArt id={r.id} size={110}/><h2>{r.name}</h2><div className="cooking-ingredients">{Object.entries(r.ingredients).map(([id,n])=><span key={id} className={cookingCount(state,id)>=n?'have':'need'}><ItemIcon id={id} size={24}/>{id.replaceAll('_',' ')} <b>{cookingCount(state,id)}/{n}</b></span>)}</div><button className="cooking-gold" disabled={!available} onClick={()=>{if(transact({type:'cooking_start',recipe:r.id,ovenId,sequence:state.cooking?.sequence||0}))sound();}}>{available?'Let’s cook!':'Gather first'}</button></article>;})}</div>
    <p className="cooking-gather">🥕 Grow vegetables · 🥚 Collect eggs · 🐟 Catch fish</p>
    {cookingCount(state,'potato')<2&&<p className="cooking-gather">Potato seeds: Market → Seeds</p>}
    <button className="cooking-link" onClick={onLegacy}>Manna & oven fire →</button>
   </>:<>
-   <div className="cooking-steps" aria-label={`Step ${Math.min(session.step+1,3)} of 3`}>{recipe.steps.map((s,i)=><span key={i} className={session.step>i?'complete':session.step===i?'active':''}>{session.step>i?'✓':i+1}<small>{s.station==='prep'?'Prepare':s.station==='pot'?'Mix':'Bake'}</small></span>)}</div>
+   <div className="cooking-steps" aria-label={`Step ${Math.min(session.step+1,recipe.steps.length)} of ${recipe.steps.length}`}>{recipe.steps.map((s,i)=><span key={i} className={session.step>i?'complete':session.step===i?'active':''}>{session.step>i?'✓':i+1}<small>{s.station==='prep'?'Prepare':s.station==='pot'?'Mix':'Bake'}</small></span>)}</div>
    <div className="cooking-workspace">
-    <PrepScene recipe={recipe.id} action={done?'collected':phase==='cooking'?'cooking':step?.action} progress={progress}/>
-    {step&&<div className={`cooking-gesture gesture-${step.action}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{gesture.current=null;setDragPoint(null);setProgress(0);}} role="group" aria-label={step.prompt}>
+    <PrepScene game={game} recipe={recipe.id} action={done?'collected':phase==='cooking'?'cooking':step?.action} progress={progress}/>
+    {step&&<div className={`cooking-gesture gesture-${step.action}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{gesture.current=null;setDragPoint(null);if(step.action==='stir')setProgress(0);}} role="group" aria-label={step.prompt}>
+     {step.action==='slice'&&<CookingBoard recipe={recipe.id} progress={progress} point={dragPoint}/>}
      <div className="cooking-demonstration" aria-hidden="true">{step.action==='stir'?'⟳':['add','bake'].includes(step.action)?'↑':step.action==='crack'?'☝':'↔'}</div>
-     {dragPoint&&<span className="cooking-ingredient-ghost" style={{left:`${dragPoint.x*100}%`,top:`${dragPoint.y*100}%`}}><CookingArt id={recipe.id} size={80}/></span>}
+     {dragPoint&&['add','bake'].includes(step.action)&&<span className="cooking-ingredient-ghost" style={{left:`${dragPoint.x*100}%`,top:`${dragPoint.y*100}%`}}><CookingArt id={recipe.id} size={80}/></span>}
      {['add','bake'].includes(step.action)&&<><span className="cooking-drop">{step.action==='bake'?'Oven':'Here'}</span><span className="cooking-drag">Drag from here ↑</span></>}
     </div>}
     {phase==='cooking'&&<div className="cooking-baking"><span aria-hidden="true">✦</span><strong>{ready?'Ready to enjoy!':'Cooking something lovely…'}</strong><progress max={session.seconds} value={Math.max(0,session.seconds-(session.readyAt-now)/1000)}/>{!ready&&<small>{Math.max(1,Math.ceil((session.readyAt-now)/1000))} seconds · no need to hurry</small>}</div>}
     {done&&<div className="cooking-finished"><CookingArt id={recipe.id} size={130}/><strong>You made it!</strong><span>Saved in My bag · +{recipe.energy} energy</span></div>}
    </div>
-   {step&&<div className="cooking-action"><h2>{step.prompt}</h2><div className="cooking-progress" aria-label={`${Math.round(progress/step.count*100)} percent`}>{Array.from({length:step.action==='stir'?4:step.count},(_,i)=><i key={i} className={i<(step.action==='stir'?progress*4:progress)?'done':''}/>)}</div><button className="cooking-link" onClick={()=>advance()}>{step.action==='stir'?'Or tap to stir':step.action==='crack'?'Crack an egg':step.action==='add'?'Or tap to pour':step.action==='bake'?'Or tap to slide':'Or tap to slice'}</button></div>}
+   {step&&<div className="cooking-action"><h2>{step.prompt}</h2><div className="cooking-progress" aria-label={`${Math.round(progress/step.count*100)} percent`}>{Array.from({length:step.action==='stir'?4:step.count},(_,i)=><i key={i} className={i<(step.action==='stir'?progress*4:progress)?'done':''}/>)}</div><button className="cooking-link" onClick={()=>advance()}>{step.action==='stir'?'Or tap to stir':step.action==='crack'?'Crack an egg':step.action==='add'?'Or tap to pour':step.action==='bake'?'Or tap to slide':step.action==='prepare'?'Or tap to prepare':'Or tap to chop'}</button></div>}
    {ready&&<button className="cooking-gold cooking-collect" onClick={()=>{if(transact({type:'cooking_collect',sessionId:currentId}))sound();}}>Collect my meal ✦</button>}
    {done&&<div className="cooking-reward"><div><button className="cooking-gold" disabled={session.used||!(state.inventory[recipe.meal]>0)||mealGain(state,recipe.meal,gameTime(state)).total<=0||view.busy} onClick={eat}>Eat</button><button disabled={session.used||!(state.inventory[recipe.meal]>0)||!recipients.length} onClick={()=>setSharing(!sharing)}>Share</button><button onClick={()=>transact({type:'cooking_done',sessionId:currentId})}>Cook again</button></div>{mealGain(state,recipe.meal,gameTime(state)).total<=0&&<small>Your tummy is full. Save your meal for later.</small>}{sharing&&<div className="cooking-share">{recipients.map(([id,c])=><button key={id} disabled={mealGain(state,recipe.meal,gameTime(state),id).total<=0} onClick={()=>{if(transact({type:'share_food',item:recipe.meal,recipient:id,mealSession:session.id,actionId:crypto.randomUUID()})){setSharing(false);setNotice(`A lovely meal for ${c.name||id}!`);sound();}}}>{c.name||id}</button>)}</div>}</div>}
-   {!done&&<footer className="cooking-footer"><span>✓ Your progress is saved</span><button onClick={()=>{if(transact({type:'cooking_cancel',sessionId:currentId}))setNotice('Ingredients returned to your bag.');}}>Cancel & keep ingredients</button></footer>}
+   {!done&&<footer className="cooking-footer"><span>✓ Completed steps are saved</span><button onClick={()=>{if(transact({type:'cooking_cancel',sessionId:currentId}))setNotice('Ingredients returned to your bag.');}}>Cancel & keep ingredients</button></footer>}
   </>}
   <p className="cooking-notice" role="status" aria-live="polite">{notice}</p>
  </section></div>;

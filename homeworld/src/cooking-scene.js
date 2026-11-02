@@ -1,11 +1,20 @@
+import {createLivingPlayer} from './living-player-model.js';
 import * as THREE from 'three';
 /** One small renderer, capped at 30fps / 1.5 DPR; all resources disposed on exit. */
 export class CookingScene{
- constructor(canvas){
+ constructor(canvas,avatarId){
   this.canvas=canvas;this.renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power'});this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
   this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(40,1,.1,40);this.camera.position.set(-.35,3.4,4.4);this.camera.lookAt(-.25,.8,.25);
   this.scene.add(new THREE.HemisphereLight('#fff7dc','#9c7453',2.4));const sun=new THREE.DirectionalLight('#ffebbc',3);sun.position.set(-3,6,4);this.scene.add(sun);
   this.materials=new Map();this.geometries=[];
+  this.chef=createLivingPlayer(avatarId);this.chef.model.position.set(0,.25,-.7);this.chef.model.scale.setScalar(1.25);this.scene.add(this.chef.model);
+  const hat=new THREE.Group();hat.position.y=.4;this.chef.bones.mixamorigHead?.add(hat);
+  this.box(0,0,0,.61,.22,.55,'#fff9e7',hat);
+  for(const [x,y] of [[-.2,.18],[0,.25],[.2,.18]])this.ball(x,y,0,.23,.23,.27,'#fffdf1',hat);
+  this.box(0,.83,.25,.43,.45,.045,'#fff1cf',this.chef.model);
+  // Pantry shelves frame the chef; exact ingredient quantities are displayed above the table.
+  for(const y of [1.2,2]){this.box(-1.6,y,-1.6,1.45,.09,.35,'#9f663e');for(let i=0;i<3;i++){this.ball(-2+i*.4,y+.18,-1.6,.13,.19,.13,['#ea9b3d','#8eaf67','#efcb75'][i]);}}
+  this.chopUntil=0;
   this.box(0,.1,0,5,.4,3,'#8c5435');for(let i=0;i<9;i++)this.box((i-4)*.55,.33,0,.53,.12,3,'#c58c50');
   // Stone hearth, arched mouth, brick surround, glowing fire and chimney.
   this.box(1.4,.65,-.8,1.6,.55,1.25,'#9b9586');this.ball(1.4,1.12,-.8,.82,.9,.65,'#b99c7d');this.ball(1.4,1.12,-.22,.5,.58,.08,'#3c2a25');
@@ -23,7 +32,7 @@ export class CookingScene{
  box(x,y,z,w,h,d,c,p){return this.mesh(new THREE.BoxGeometry(w,h,d),x,y,z,c,p);}
  ball(x,y,z,w,h,d,c,p){const m=this.mesh(new THREE.SphereGeometry(1,16,10),x,y,z,c,p);m.scale.set(w,h,d);return m;}
  set(recipe,action,progress){
-  this.action=action;this.progress=progress;const signature=`${recipe}:${action}:${Math.floor(progress)}`;if(this.signature===signature)return;this.signature=signature;this.spoon=null;this.food.clear();
+  if(action===this.action&&progress>this.progress)this.chopUntil=performance.now()+350;this.action=action;this.progress=progress;const signature=`${recipe}:${action}:${Math.floor(progress)}`;if(this.signature===signature)return;this.signature=signature;this.spoon=null;this.food.clear();
   // Rebuild only this handful of food primitives on a discrete interaction.
   this.foodGeometry??=[];this.foodGeometry.forEach(g=>{g.dispose();this.geometries.splice(this.geometries.indexOf(g),1);});const first=this.geometries.length;
   const egg=recipe==='garden_omelette',fish=recipe==='fish_chips';
@@ -46,8 +55,13 @@ export class CookingScene{
  }
  resize(){const {width,height}=this.canvas.getBoundingClientRect();if(!width||!height)return;this.renderer.setSize(width,height,false);this.camera.aspect=width/height;this.camera.updateProjectionMatrix();}
  tick(t){this.raf=requestAnimationFrame(this.tick);if(document.hidden||t-this.last<1000/30)return;this.last=t;
-  if(!this.reduced){this.fire.scale.y=.2+Math.sin(t*.006)*.035;if(this.spoon)this.spoon.rotation.z=.5+Math.sin(t*.002)*.12;this.food.position.y=Math.sin(t*.002)*.015;}
+  const arm=this.chef.bones.mixamorigRightArm,forearm=this.chef.bones.mixamorigRightForeArm;
+  if(arm){arm.rotation.x=-.65;arm.rotation.z=-.15;if(forearm)forearm.rotation.x=-.7;
+   if(!this.reduced&&this.action==='stir'){arm.rotation.x=-.65+Math.sin(this.progress*Math.PI*2)*.25;arm.rotation.z=-.15+Math.cos(this.progress*Math.PI*2)*.25;}
+   else if(!this.reduced&&t<this.chopUntil){arm.rotation.x-=Math.sin((this.chopUntil-t)/350*Math.PI)*.65;}
+  }
+  if(!this.reduced){this.fire.scale.y=.2+Math.sin(t*.006)*.035;if(this.spoon)this.spoon.rotation.z=.5+Math.sin(this.progress*Math.PI*2)*.45;this.food.position.y=Math.sin(t*.002)*.015;}
   this.renderer.render(this.scene,this.camera);
  }
- dispose(){cancelAnimationFrame(this.raf);this.observer.disconnect();this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.renderer.dispose();this.renderer.forceContextLoss();}
+ dispose(){this.chef?.dispose();cancelAnimationFrame(this.raf);this.observer.disconnect();this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.renderer.dispose();this.renderer.forceContextLoss();}
 }

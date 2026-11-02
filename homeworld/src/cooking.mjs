@@ -3,9 +3,9 @@
  * Each step carries its expected index. Escrow remembers the original bag for refunds.
  */
 export const COOKING_RECIPES = [
- {id:'pumpkin_stew',name:'Pumpkin Stew',ingredients:{pumpkin:1,carrot:1},steps:[{action:'slice',station:'prep',prompt:'Swipe to slice',count:3},{action:'add',station:'pot',prompt:'Drag into the pot',count:1},{action:'stir',station:'pot',prompt:'Stir!',count:1}],seconds:5,meal:'pumpkin_stew',energy:55,minLevel:1},
- {id:'garden_omelette',name:'Garden Omelette',ingredients:{egg:2,carrot:1},steps:[{action:'crack',station:'prep',prompt:'Tap to crack',count:2},{action:'stir',station:'pot',prompt:'Mix in circles!',count:1},{action:'add',station:'pot',prompt:'Pour into the pan',count:1}],seconds:5,meal:'garden_omelette',energy:45,minLevel:1},
- {id:'fish_chips',name:'Fish and Chips',ingredients:{fish:1,potato:2},steps:[{action:'slice',station:'prep',prompt:'Swipe to slice',count:3},{action:'prepare',station:'prep',prompt:'Swipe to prepare the fish',count:2},{action:'bake',station:'oven',prompt:'Slide the tray into the oven',count:1}],seconds:6,meal:'fish_chips',energy:60,minLevel:1},
+ {id:'pumpkin_stew',name:'Pumpkin Stew',ingredients:{pumpkin:1,carrot:1},steps:[{action:'slice',station:'prep',prompt:'Slide the knife down the glowing line',count:3},{action:'add',station:'pot',prompt:'Drag into the pot',count:1},{action:'stir',station:'pot',prompt:'Stir!',count:1}],seconds:5,meal:'pumpkin_stew',energy:55,minLevel:1},
+ {id:'garden_omelette',name:'Garden Omelette',ingredients:{egg:2,carrot:1},steps:[{action:'crack',station:'prep',prompt:'Tap each egg to crack it',count:2},{action:'stir',station:'pot',prompt:'Mix in circles!',count:1},{action:'add',station:'pot',prompt:'Pour into the pan',count:1}],seconds:5,meal:'garden_omelette',energy:45,minLevel:1},
+ {id:'fish_chips',name:'Fish and Chips',ingredients:{fish:1,potato:2},steps:[{action:'slice',station:'prep',prompt:'Slide the knife down the glowing line',count:3},{action:'prepare',station:'prep',prompt:'Swipe to prepare the fish',count:2},{action:'bake',station:'oven',prompt:'Slide the tray into the oven',count:1}],seconds:6,meal:'fish_chips',energy:60,minLevel:1},
 ];
 export const cookingRecipe=id=>COOKING_RECIPES.find(r=>r.id===id);
 export const cookingCount=(state,id)=>(state.inventory?.[id]||0)+(id==='egg'?(state.livingFarm?.bag?.egg||0):0);

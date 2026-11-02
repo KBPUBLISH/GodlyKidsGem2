@@ -1,9 +1,16 @@
 import React from 'react';
-import atlas from './assets/kitchen/cooking-actions.webp';
-
-const cells={potato:[0,0],fry:[1,0],batter:[2,0],fillet:[0,1],coated:[1,1],tray:[2,1],oven:[0,2],knife:[1,2],hand:[2,2]};
-/** Texture sprites inside an interactive SVG; the scene still owns hit areas. */
+import potato from './assets/kitchen/actions/potato.webp';
+import fry from './assets/kitchen/actions/fry.webp';
+import batter from './assets/kitchen/actions/batter.webp';
+import fillet from './assets/kitchen/actions/fillet.webp';
+import coated from './assets/kitchen/actions/coated.webp';
+import tray from './assets/kitchen/actions/tray.webp';
+import oven from './assets/kitchen/actions/oven.webp';
+import knife from './assets/kitchen/actions/knife.webp';
+import hand from './assets/kitchen/actions/hand.webp';
+const images={potato,fry,batter,fillet,coated,tray,oven,knife,hand};
+/** Each action uses one isolated image: no nested sprite viewport to leak. */
 export function CookingActionArt({id,x=0,y=0,width=100,height=100,className='',opacity=1}){
- const [col,row]=cells[id];
- return <svg x={x} y={y} width={width} height={height} viewBox={`${col} ${row} 1 1`} preserveAspectRatio="none" overflow="hidden" className={`cooking-action-art ${className}`} opacity={opacity} aria-hidden="true"><image href={atlas} width="3" height="3"/></svg>;
+ const src=images[id];if(!src)return null;
+ return <image href={src} x={x} y={y} width={width} height={height} preserveAspectRatio="none" className={`cooking-action-art ${className}`} opacity={opacity} aria-hidden="true"/>;
 }

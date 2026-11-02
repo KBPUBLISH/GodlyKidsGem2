@@ -2,13 +2,22 @@ import React,{useEffect,useId,useRef,useState} from 'react';
 import {cutFry,fryCutX,onFillet,coatInBatter,onBakingTray,insideOven,dragCentre} from './fish-chips-gestures.mjs';
 import './fish-chips-activity.css';
 import {CookingActionArt as Art} from './cooking-action-art.jsx';
+import {scheduleFishTransition} from './fish-chips-transitions.mjs';
 
 /** Fish and chips has concrete tools, food transformations and drop targets.
  * All saved recipe indices stay unchanged; completion goes through CookingGame. */
 export function FishChipsActivity({action,progress,onProgress,onComplete}){
- const prefix=useId().replaceAll(':',''),gesture=useRef(null),timer=useRef(null),closing=useRef(false);
- const [drag,setDrag]=useState(null),[flipped,setFlipped]=useState(false),[hint,setHint]=useState(''),[closed,setClosed]=useState(false);
- useEffect(()=>()=>clearTimeout(timer.current),[]);
+ const prefix=useId().replaceAll(':',''),gesture=useRef(null),closing=useRef(false),callbacks=useRef(null);
+ const [drag,setDrag]=useState(null),[flipped,setFlipped]=useState(false),[hint,setHint]=useState(''),[closed,setClosed]=useState(false),[saveFailed,setSaveFailed]=useState(false),[retry,setRetry]=useState(0);
+ callbacks.current={onProgress,onComplete};
+ useEffect(()=>{
+  closing.current=false;setSaveFailed(false);setClosed(false);
+  return scheduleFishTransition({action,progress,
+   onFlip:()=>{setFlipped(true);setHint('Both sides coated! Let’s go to the oven.');callbacks.current.onProgress(2);},
+   onClose:()=>{setClosed(true);setHint('Door closed. Time to bake!');},
+   onComplete:()=>{if(closing.current)return;closing.current=true;if(callbacks.current.onComplete()===false){closing.current=false;setClosed(false);setSaveFailed(true);setHint('Your food is still here. Tap to try saving again.');}},
+  });
+ },[action,progress,retry]);
  const cut=action==='slice',coat=action==='prepare',bake=action==='bake';
  const finished=cut?progress>=3:coat?progress>=2:progress>=1;
  const needsFlip=coat&&progress===1&&!flipped;
@@ -16,7 +25,7 @@ export function FishChipsActivity({action,progress,onProgress,onComplete}){
  const pointer=e=>{const r=e.currentTarget.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
  const completePiece=()=>{
   if(finished||needsFlip)return;
-  onProgress(progress+1);setHint(cut?(progress===2?'Look! Four long fries, ready for the tray.':'A long fry! Follow the next line.'):coat?(progress===0?'One side is coated. Now flip the fish.':'Both sides are covered in batter!'):'Your tray is on the oven shelf. Close the door to bake.');
+  onProgress(progress+1);setHint(cut?(progress===2?'Look! Four long fries, ready for the tray.':'A long fry! Follow the next line.'):coat?(progress===0?'Nice swipe! Turning the fish to coat the other side…':'Both sides are covered in batter!'):'Tray on the shelf! Closing the oven…');
  };
  const down=e=>{
   if(gesture.current||finished||needsFlip||closing.current||e.button>0)return;
@@ -26,20 +35,19 @@ export function FishChipsActivity({action,progress,onProgress,onComplete}){
   e.preventDefault();try{e.currentTarget.setPointerCapture(e.pointerId);}catch{}
   gesture.current={id:e.pointerId,start:p};setDrag(cut?p:origin);
  };
- const move=e=>{const g=gesture.current;if(!g||e.pointerId!==g.id)return;const p=pointer(e);const c=dragCentre(g.start,p,origin);setDrag(cut?p:coat?{x:Math.max(.34,Math.min(.66,c.x)),y:Math.max(.34,Math.min(.59,c.y))}:c);};
+ const move=e=>{
+  const g=gesture.current;if(!g||e.pointerId!==g.id||g.accepted)return;
+  const p=pointer(e),c=dragCentre(g.start,p,origin);
+  if((coat&&coatInBatter(g.start,p))||(bake&&insideOven(c))){g.accepted=true;setDrag(null);completePiece();return;}
+  setDrag(cut?p:coat?{x:Math.max(.34,Math.min(.66,c.x)),y:Math.max(.34,Math.min(.59,c.y))}:c);
+ };
  const up=e=>{
-  const g=gesture.current;if(!g||e.pointerId!==g.id)return;const p=pointer(e),centre=dragCentre(g.start,p,origin);gesture.current=null;setDrag(null);
+  const g=gesture.current;if(!g||e.pointerId!==g.id)return;const p=pointer(e),centre=dragCentre(g.start,p,origin);gesture.current=null;setDrag(null);if(g.accepted)return;
   if(cut?cutFry(g.start,p,progress):coat?coatInBatter(g.start,p):insideOven(centre))completePiece();
   else setHint(cut?'Start at the top of the glowing line. Cut all the way down.':coat?'Slide the fish across the bowl so the batter covers it.':'Slide the tray onto the glowing shelf inside the oven.');
  };
- const flip=()=>{setFlipped(true);setHint('Here is the other side. Slide it through the batter too!');};
- const finish=()=>{
-  if(!finished||closing.current)return;
-  if(!bake){onComplete();return;}
-  closing.current=true;setClosed(true);setHint('Door closed. Time to bake!');timer.current=setTimeout(()=>{if(onComplete()===false){closing.current=false;setClosed(false);setHint('Could not save yet. Your tray is still here. Try again.');}},600);
- };
- const title=cut?(finished?'You made fries!':'Cut long, skinny fries'):coat?(finished?'Battered fish, ready to bake!':needsFlip?'Flip the fish over':progress?'Coat the other side':'Coat the fish in batter'):finished?'Tray in! Close the oven door':'Put the tray on the oven shelf';
- const instruction=cut?(finished?'The potato is now four long strips.':'Follow each line from top to bottom.'):coat?(finished?'Your fish is ready to bake.':needsFlip?'Tap “Flip the fish” to turn it over.':'Slide the fish through the creamy batter.'):finished?'Your fish and fries are ready to bake.':'Drag the tray up into the glowing opening.';
+ const title=cut?(finished?'You made fries!':'Cut long, skinny fries'):coat?(finished?'Battered fish, ready to bake!':needsFlip?'Turning the fish…':progress?'Coat the other side':'Coat the fish in batter'):finished?'Tray in! Time to bake':'Put the tray on the oven shelf';
+ const instruction=cut?(finished?'The potato is now four long strips.':'Follow each line from top to bottom.'):coat?(finished?'Your fish is ready to bake.':needsFlip?'We’re coating the other side for you.':'Slide the fish through the creamy batter.'):finished?'Your fish and fries are ready to bake.':'Drag the tray up into the glowing opening.';
  const tray=finished?{x:.5,y:.35}:drag||origin;
  const fillet=drag||origin;
  return <div className={`fish-activity fish-activity-${action}`}>
@@ -96,7 +104,8 @@ export function FishChipsActivity({action,progress,onProgress,onComplete}){
   </div>
   <div className="fish-controls">
    <div className="fish-action-progress" role="progressbar" aria-label={cut?'Fries cut':coat?'Sides coated':'Tray placed'} aria-valuemin={0} aria-valuemax={cut?3:coat?2:1} aria-valuenow={progress}><span style={{width:`${progress/(cut?3:coat?2:1)*100}%`}}/></div>
-   {finished?<button className="cooking-gold" disabled={closed} onClick={finish}>{cut?'Fries ready! Coat the fish ❯':coat?'Fish ready! Go to the oven ❯':closed?'Baking…':'Close the oven & bake ❯'}</button>:needsFlip?<button className="cooking-gold" onClick={flip}>Flip the fish ↻</button>:<button className="cooking-gold" onClick={completePiece}>{cut?'Cut the next fry ↓':coat?'Coat this side in batter':'Slide the tray onto the shelf ↑'}</button>}
+   {saveFailed?<button className="cooking-gold" onClick={()=>setRetry(n=>n+1)}>Try saving & continue ❯</button>:finished||needsFlip?<button className="cooking-gold" disabled>{needsFlip?'Coating the other side…':cut?'Fries ready! Moving on…':coat?'Fish ready! Going to the oven…':closed?'Baking…':'Closing the oven…'}</button>:<button className="cooking-gold" onClick={completePiece}>{cut?'Cut the next fry ↓':coat?'Coat the fish & continue':'Slide the tray onto the shelf ↑'}</button>}
+
    <p className="fish-hint" role="status" aria-live="polite">{hint||'Drag to play, or use the big button.'}</p>
   </div>
  </div>;

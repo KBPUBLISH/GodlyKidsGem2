@@ -17,11 +17,13 @@ terracotta, sage green, ivory ceramics, natural food textures and warm light
 from the upper left. No baked-in text or user-interface labels.
 
 Original generated PNGs are retained in the session's `generated_images`
-folder. WebP delivery copies retain the original dimensions and atlas alpha;
-no cropping or repainting was used. `KitchenArt` selects cells with SVG viewports
-so they remain square and undistorted in responsive layouts. All files are
-imported through Vite for fingerprinted URLs and bundled into the standalone
-HTML preview as data URLs.
+folder. The source atlases are retained for provenance and asset verification.
+Delivery files in `icons/` and `actions/` are losslessly extracted, isolated
+tiles. `KitchenArt` renders a native image with `object-fit: contain`, and
+`CookingActionArt` renders one SVG image per asset. Neither component loads a
+whole atlas or depends on nested SVG viewport cropping. This avoids mobile
+WebView leaks during transforms and mismatched reward-card aspect ratios.
+Vite fingerprints the assets; the standalone preview embeds them as data URLs.
 
 ## Cooking action textures
 

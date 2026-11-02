@@ -15,15 +15,16 @@ test('each fry needs a lengthwise cut through its guide, not a crosswise swipe',
  assert.equal(cutFry(null,{x:.3,y:.8},0),false);
 });
 
-test('coating requires dragging the fish through batter; tapping or swiping the counter does not count',()=>{
+test('a clear swipe in any direction coats the fish, including an overshoot past the bowl',()=>{
  assert.ok(onFillet({x:.5,y:.45}));
  assert.ok(inBatter({x:.72,y:.45}));
  assert.ok(coatInBatter({x:.5,y:.45},{x:.72,y:.45}));
  assert.ok(coatInBatter({x:.65,y:.5},{x:.35,y:.5}));
  assert.equal(coatInBatter({x:.5,y:.45},{x:.52,y:.45}),false);
  assert.equal(coatInBatter({x:.5,y:.9},{x:.75,y:.9}),false);
- assert.equal(coatInBatter({x:.5,y:.45},{x:.95,y:.45}),false);
- assert.equal(coatInBatter({x:.5,y:.45},{x:.5,y:.75}),false);
+ assert.ok(coatInBatter({x:.5,y:.45},{x:.95,y:.45}));
+ assert.ok(coatInBatter({x:.5,y:.45},{x:.5,y:.75}));
+ assert.ok(coatInBatter({x:.5,y:.45},{x:.36,y:.31}));
  assert.equal(coatInBatter(null,{x:.72,y:.45}),false);
 });
 

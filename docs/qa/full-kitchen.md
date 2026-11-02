@@ -29,7 +29,20 @@ step indices are unchanged, including existing oven and cooking saves.
 - Choose Pumpkin Stew, walk to prep, and make three downward cuts (or use the
   tap button). Walk to simmering, pour, then stir. The room stays visible.
 - Try Garden Omelette: prep to crack eggs, simmering to mix and pour.
-- Try Fish and Chips: prep potatoes and fish, then walk to the oven and bake.
+- Try Fish and Chips: cut the potato slab lengthwise along three guides. Each
+  cut should produce a long fry on the small tray; the last cut produces the
+  final two strips. Pause on the completed fries before continuing.
+- Drag the crumb bowl onto the fillet to coat side one. Flip the fish, then
+  drag the crumbs onto its other side. Both check marks must be filled before
+  continuing. Crumbs are provided by the station; saved ingredient costs stay
+  fish and potatoes. A random swipe over the counter must not coat the fish.
+- At the oven, grab the loaded tray at its edge as well as its centre. It should
+  follow the finger without jumping. A drop on the counter should return it;
+  a drop inside the opening should snap it onto the shelf. The tray remains
+  visible before Close the oven & bake shuts the door and starts cooking.
+- Repeat each interaction using its large button. The same food transformations
+  and completion screens must appear. Leaving during the door animation must
+  clear its timer; reopening lets the child finish the saved recipe safely.
 - While walking, retarget a different station. The chef should use the aisle
   and only open the activity at the correct counter. No timer punishes walking.
   Golden arrows should point along the safe aisle to the next recipe station.
@@ -51,9 +64,11 @@ step indices are unchanged, including existing oven and cooking saves.
 
 ## Automated validation
 
-`node --test homeworld/tests/cooking.test.mjs homeworld/tests/egg-cooking.test.mjs homeworld/tests/kitchen-navigation.test.mjs`
+`node --test homeworld/tests/cooking.test.mjs homeworld/tests/egg-cooking.test.mjs homeworld/tests/kitchen-navigation.test.mjs homeworld/tests/fish-chips-gestures.test.mjs`
 
 Tests cover every recipe journey, reloads, arrival gating, readiness, duplicate
 collection, and routes avoiding every counter footprint. Existing cooking tests
 cover escrow, cancellation, persistence failures, nutrition and gesture geometry.
+Fish-and-chips geometry tests reject crosswise cuts and drops on the counter,
+and check that grabbing a tray off-centre still targets the tray's centre.
 Browser rendering and touch layout still require manual review.

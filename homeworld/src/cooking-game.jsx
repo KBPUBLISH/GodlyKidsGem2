@@ -1,3 +1,4 @@
+import {FishChipsActivity} from './fish-chips-activity.jsx';
 import {CookingBoard} from './cooking-board.jsx';
 import React,{useEffect,useRef,useState,useId} from 'react';
 import {cookingRecipe,cookingCount} from './cooking.mjs';
@@ -34,8 +35,8 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
  };
  const sound=()=>{if(game.music?.on===false)return;try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audio.current??=new Audio();audio.current.resume().catch(()=>{});const o=audio.current.createOscillator(),g=audio.current.createGain(),t=audio.current.currentTime;o.type='sine';o.frequency.setValueAtTime(520,t);o.frequency.exponentialRampToValueAtTime(880,t+.1);g.gain.setValueAtTime(.025,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);o.connect(g);g.connect(audio.current.destination);o.start(t);o.stop(t+.2);}catch{/* silent play remains available */}};
  const advance=(amount=1)=>{
-  if(!step||!atStation)return;const next=Math.min(step.count,progress+amount);sound();
-  if(next>=step.count){if(transact({type:'cooking_step',sessionId:session.id,step:session.step}))setNotice({slice:'Lovely slicing!',prepare:'Ready for the oven!',crack:'Egg-cellent!',add:'Looking delicious!',stir:'Beautiful mixing!',bake:'Lovely! Let’s bake.'}[step.action]||'Well done!');}
+  if(!step||!atStation)return false;const next=Math.min(step.count,progress+amount);sound();
+  if(next>=step.count){if(transact({type:'cooking_step',sessionId:session.id,step:session.step})){setProgress(0);setNotice({slice:'Lovely slicing!',prepare:'Ready for the oven!',crack:'Egg-cellent!',add:'Looking delicious!',stir:'Beautiful mixing!',bake:'Lovely! Let’s bake.'}[step.action]||'Well done!');return true;}return false;}
   else {setProgress(next);setNotice(step.action==='slice'?`Crunch! ${next} of ${step.count} cuts.`:'Nice work!');}
  };
  const point=e=>{const r=e.currentTarget.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
@@ -62,7 +63,7 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
     {mode==='explore'&&step&&atStation&&<button className="cooking-gold" onClick={()=>setStationOpen(true)}>Let’s {step.action==='slice'?'chop':step.action==='crack'?'crack eggs':step.action}! ❯</button>}
     {mode==='activity'&&<button className="kitchen-return-room cooking-link" onClick={()=>{gesture.current=null;setDragPoint(null);if(step.action==='stir')setProgress(0);setStationOpen(false);}}>❮ Back to kitchen</button>}
     {session&&<>
-     {mode==='activity'&&<>
+     {mode==='activity'&&(recipe.id==='fish_chips'?<FishChipsActivity key={`${session.id}:${session.step}`} action={step.action} progress={progress} onProgress={n=>{setProgress(n);sound();}} onComplete={()=>advance(step.count)}/>:<>
       <div className="cooking-workspace kitchen-workbench">
        <svg viewBox="0 0 400 280" className="kitchen-bench-art" aria-hidden="true"><defs><linearGradient id={`${benchId}-bowl`} x2="0" y2="1"><stop stopColor="#e8e9dc"/><stop offset=".35" stopColor="#acc2ba"/><stop offset=".7" stopColor="#668b80"/><stop offset="1" stopColor="#486c61"/></linearGradient><radialGradient id={`${benchId}-mix`} cx=".4" cy=".3" r=".8"><stop stopColor="#ffedb6"/><stop offset=".7" stopColor="#f2c875"/><stop offset="1" stopColor="#c9974c"/></radialGradient></defs><rect width="400" height="280" rx="20" fill="#d5a569"/><path d="M0 75H400M0 145H400M0 215H400" stroke="#bb8b55" strokeWidth="3"/>
         {['add','stir','crack'].includes(step.action)?<g><ellipse cx="200" cy="206" rx="120" ry="22" fill="#795c3d" opacity=".2"/><path d="M90 110Q95 228 200 228Q305 228 310 110" fill={`url(#${benchId}-bowl)`} stroke="#456f65" strokeWidth="6"/><ellipse cx="200" cy="110" rx="110" ry="42" fill={`url(#${benchId}-mix)`} stroke="#e1dfbd" strokeWidth="10"/>{[0,1,2,3,4].map(i=><circle key={i} cx={135+i*30} cy={105+Math.sin(i*2)*13} r={recipe.id==='garden_omelette'?3:10} fill={i%2?'#e58b3f':'#88a65b'}/>)}<g transform={`rotate(${step.action==='stir'?progress*360:25} 200 110)`}><path d="M200 110L200 35" stroke="#865c36" strokeWidth="14" strokeLinecap="round"/><ellipse cx="200" cy="112" rx="16" ry="23" fill="#a87944"/></g>{step.action==='crack'&&[0,1].map(i=><ellipse key={i} cx={140+i*120} cy="55" rx="22" ry="29" fill={i<progress?'#f5c14c':'#fff4d9'} stroke="#c5a875" strokeWidth="3"/>)}</g>:<g><rect x="65" y="65" width="270" height="155" rx="20" fill="#65867e" stroke="#b7c9b4" strokeWidth="8"/><ellipse cx="170" cy="135" rx="67" ry="30" fill="#e5ab62"/>{[0,1,2,3].map(i=><rect key={i} x={245+i*13} y="95" width="9" height="85" rx="4" fill="#f4ce7b"/>)}</g>}
@@ -75,7 +76,7 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
        </div>
       </div>
       <div className="cooking-action"><progress className="kitchen-action-meter" max={step.count} value={progress} aria-label="Cooking action progress"/><div className="cooking-progress" aria-label={`${Math.round(progress/step.count*100)} percent`}>{Array.from({length:step.action==='stir'?4:step.count},(_,i)=><i key={i} className={i<(step.action==='stir'?progress*4:progress)?'done':''}/>)}</div><button className="kitchen-easy-action" onClick={()=>advance()}>{step.action==='stir'?'Stir it! ❯':step.action==='crack'?'Crack an egg! ❯':step.action==='add'?'Pour it in! ❯':step.action==='bake'?'Into the oven! ❯':step.action==='prepare'?'Prepare the fish! ❯':'Chop now! ❯'}</button></div>
-     </>}
+     </>)}
      {step&&!atStation&&<div className="kitchen-recipe-card"><CookingArt id={recipe.id} size={130}/><p>{moving?'Your ingredients are coming with you.':`Tap ${nextPlace.name} in the kitchen to keep cooking.`}</p><small>One little step at a time. You’ve got this!</small></div>}
      {phase==='cooking'&&<div className="kitchen-simmer"><CookingArt id={recipe.id} size={110}/><strong>{ready?'Ready for the serving counter!':'A little simmer. A lot of yum.'}</strong><progress max={session.seconds} value={Math.max(0,session.seconds-(session.readyAt-now)/1000)}/><small>{ready?'No rush. Your food stays lovely and warm.':'Explore your kitchen while it cooks. Nothing burns!'}</small></div>}
      {ready&&atStation&&<button className="cooking-gold cooking-collect" onClick={()=>{if(atStation&&transact({type:'cooking_collect',sessionId:currentId}))sound();}}>Serve my meal ✦</button>}
@@ -85,7 +86,7 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
     </>}
     <p className="cooking-notice" role="status" aria-live="polite">{notice}</p>
    </aside>
-   {session&&<nav className="kitchen-recipe-trail" aria-label="Recipe steps"><strong>Recipe steps</strong>{recipe.steps.map((s,i)=><span key={i} className={session.step>i?'trail-done':session.step===i?'trail-current':''}><b>{session.step>i?'✓':i+1}</b><span>{s.action==='slice'?'Chop & prep':s.action==='crack'?'Crack eggs':s.action==='prepare'?'Prepare fish':s.action==='add'?'Add ingredients':s.station==='pot'?'Mix & simmer':'Bake'}</span></span>)}<span className={done?'trail-done':ready?'trail-current':''}><b>{done?'✓':recipe.steps.length+1}</b><span>Serve</span></span></nav>}
+   {session&&<nav className="kitchen-recipe-trail" aria-label="Recipe steps"><strong>Recipe steps</strong>{recipe.steps.map((s,i)=><span key={i} className={session.step>i?'trail-done':session.step===i?'trail-current':''}><b>{session.step>i?'✓':i+1}</b><span>{s.label|| (s.action==='slice'?'Chop & prep':s.action==='crack'?'Crack eggs':s.action==='prepare'?'Prepare fish':s.action==='add'?'Add ingredients':s.station==='pot'?'Mix & simmer':'Bake')}</span></span>)}<span className={done?'trail-done':ready?'trail-current':''}><b>{done?'✓':recipe.steps.length+1}</b><span>Serve</span></span></nav>}
    {mode==='explore'&&!session&&<button className="kitchen-legacy cooking-link" onClick={onLegacy}>Manna & oven fire</button>}
   </div>
  </section></div>;

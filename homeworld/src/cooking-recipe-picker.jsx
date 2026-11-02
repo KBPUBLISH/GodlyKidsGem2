@@ -1,7 +1,7 @@
 import React from 'react';
 import {COOKING_RECIPES,canStartCooking,cookingCount,cookingRecipe} from './cooking.mjs';
 import {CookingArt} from './cooking-art.jsx';
-import {ItemIcon} from './ui.jsx';
+import {KitchenArt as ItemIcon} from './kitchen-art.jsx';
 
 export function CookingRecipePicker({state,ovenId,selected,onSelect,onStart,onExplore}){
  const choice=cookingRecipe(selected)||cookingRecipe('fish_chips');

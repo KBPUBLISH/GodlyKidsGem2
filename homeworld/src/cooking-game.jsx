@@ -11,6 +11,7 @@ import {gameTime} from './core.mjs';
 import './cooking-game.css';
 import './kitchen-immersive.css';
 import {CookingRecipePicker} from './cooking-recipe-picker.jsx';
+import kitchenInterior from './assets/kitchen/kitchen-interior.webp';
 
 export function CookingGame({game,view,ovenId,onClose,onLegacy}){
  const benchId=useId().replaceAll(':','');
@@ -53,6 +54,7 @@ export function CookingGame({game,view,ovenId,onClose,onLegacy}){
   <header className="cooking-header"><button className="kitchen-island-back" onClick={exit} aria-label="Back to island">❮</button><div className="kitchen-title-sign"><span>My Island Kitchen</span><h1 id="cooking-title">{recipe?recipe.name:'Made with a little love'}</h1></div><span className="kitchen-no-rush">✦ No rush, chef!</span></header>
   <div className="kitchen-play">
    <KitchenRoom interactive={mode==='explore'} game={game} next={nextStation} station={station} moving={moving} travel={travel} onTravel={walkTo} onArrive={id=>{setStation(id);setMoving(false);}} carrying={!!session&&!done} working={mode==='activity'} done={done} counts={Object.fromEntries(['pumpkin','carrot','egg','fish','potato'].map(id=>[id,cookingCount(state,id)]))} action={step?.action} progress={progress}/>
+   <img className="kitchen-illustration" src={kitchenInterior} alt="" aria-hidden="true" draggable="false"/>
    <aside className="kitchen-panel" aria-label="Recipe and station activities" ref={panel}>
     <div className="kitchen-next"><span>{done?'✦ Made with love':!session?'LET’S MAKE SOMETHING':`YOUR RECIPE · ${phase==='prep'?`STEP ${session.step+1} OF ${recipe.steps.length}`:ready?'READY TO SERVE':'NEARLY THERE'}`}</span><h2 aria-live="polite">{moving?'On my way!':!atStation?`Next stop: ${nextPlace.name}`:done?'You made it!':ready?'Let’s serve it!':!session?'Your kitchen is ready!' :phase==='cooking'?'Smells delicious…':step.prompt}</h2>{!atStation&&<button className="cooking-gold" onClick={()=>walkTo(nextStation)}>{moving&&travel?.id===nextStation?'Walking…':`Go to ${nextPlace.name} →`}</button>}</div>
     {mode==='book'&&<CookingRecipePicker state={state} ovenId={ovenId} selected={pantryRecipe} onSelect={setPantryRecipe} onExplore={()=>setBookOpen(false)} onStart={r=>{if(transact({type:'cooking_start',recipe:r.id,ovenId,sequence:state.cooking?.sequence||0})){setBookOpen(false);setStationOpen(true);sound();}}}/>}

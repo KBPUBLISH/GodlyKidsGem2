@@ -75,7 +75,8 @@ export class KitchenRoomScene {
  mesh(geometry,x,y,z,color,parent=this.scene){this.geometries.push(geometry);const mesh=new THREE.Mesh(geometry,this.material(color));mesh.position.set(x,y,z);mesh.receiveShadow=true;mesh.castShadow=y>.1;parent.add(mesh);return mesh;}
  box(x,y,z,w,h,d,color,parent){return this.mesh(new RoundedBoxGeometry(w,h,d,1,Math.min(.055,w/6,h/6,d/6)),x,y,z,color,parent);}
  ball(x,y,z,w,h,d,color,parent){const mesh=this.mesh(new THREE.SphereGeometry(1,12,8),x,y,z,color,parent);mesh.scale.set(w,h,d);return mesh;}
- set({next,carrying,working,done,counts,action,progress}){
+ set({next,carrying,working,done,counts,action,progress,visible=true}){
+  this.visible=visible;
   this.next=next;this.tray.visible=carrying;this.working=working;this.served.visible=done;
   this.action=action;if(progress!==this.progress)this.chopUntil=performance.now()+350;this.progress=progress;
   for(const [id,model] of Object.entries(this.produce))model.visible=(counts[id]||0)>0;
@@ -104,7 +105,7 @@ export class KitchenRoomScene {
   this.onLayout(KITCHEN_STATIONS.map(s=>{const p=new THREE.Vector3(s.x,s.id==='serve'?1.1:2.65,s.z).project(this.camera);return {id:s.id,left:(p.x+1)*50,top:(1-p.y)*50};}));
  }
  tick(t){
-  this.raf=requestAnimationFrame(this.tick);if(document.hidden||t-this.last<1000/30)return;const dt=Math.min((t-this.last)/1000,.05);this.last=t;
+  this.raf=requestAnimationFrame(this.tick);if(document.hidden||this.visible===false||t-this.last<1000/30)return;const dt=Math.min((t-this.last)/1000,.05);this.last=t;
   const p=this.chef.model.position,target=this.path[0];
   if(target){const dx=target.x-p.x,dz=target.z-p.z,d=Math.hypot(dx,dz),distance=3.5*dt;if(d<=distance){p.x=target.x;p.z=target.z;this.path.shift();if(!this.path.length)this.arrive();}else{p.x+=dx/d*distance;p.z+=dz/d*distance;this.chef.model.rotation.y=Math.atan2(dx,dz);}}
   this.chef.update(this.reduced?0:dt,target?3:0,this.reduced?0:t/1000,{carrying:this.tray.visible,celebrating:!this.reduced&&this.served.visible&&!target});

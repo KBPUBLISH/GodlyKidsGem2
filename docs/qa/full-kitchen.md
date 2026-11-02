@@ -9,6 +9,12 @@ selectable meal cards and one start button. Arriving at a preparation station
 opens a large worktop close-up; Back to kitchen returns to the room without
 discarding completed cuts or completed recipe steps. The persistent side panel
 has been replaced by a small bottom task card while walking.
+
+The latest artwork uses a generated transparent icon atlas for meals, pantry
+ingredients and station signs. A separate illustrated kitchen backs the recipe,
+activity and reward screens. These views pause hidden 3D rendering. The room
+resumes when the child returns to walking. All artwork is local to the app and
+requires no image-generation service connection during play.
 Walking uses an open central aisle to avoid the counters. Reduced-motion mode
 places the chef directly at the chosen counter. Recipe transactions and saved
 step indices are unchanged, including existing oven and cooking saves.
@@ -37,6 +43,11 @@ step indices are unchanged, including existing oven and cooking saves.
   walk from the pantry to the indicated station to continue.
 - Check desktop, phone portrait and landscape, keyboard Tab/Enter/Escape,
   reduced motion, and the station-button fallback when WebGL is unavailable.
+- Confirm all atlas icons stay inside their cells without neighboring artwork
+  leaking into a tile. Check recipe selection with missing ingredients, and
+  inspect the small ingredient icons and pantry counts on a narrow phone.
+- Return from the illustrated recipe picker and every cooking close-up to
+  confirm the chef's 3D room resumes, including a continued station journey.
 
 ## Automated validation
 

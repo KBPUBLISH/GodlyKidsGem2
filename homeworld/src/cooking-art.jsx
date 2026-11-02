@@ -1,6 +1,8 @@
 import React from 'react';
+import {KitchenArt,KITCHEN_ART} from './kitchen-art.jsx';
 /** Small, local illustrations also used in the bag and meal picker. */
 export function CookingArt({id,size=96}){
+ if(KITCHEN_ART[id])return <KitchenArt id={id} size={size} className="cooking-art"/>;
  const potato=id==='potato'||id==='potato_seed',stew=id==='pumpkin_stew',egg=id==='garden_omelette';
  return <svg width={size} height={size} viewBox="0 0 120 100" aria-hidden="true" className="cooking-art">
   <ellipse cx="60" cy="87" rx="45" ry="8" fill="#392415" opacity=".17"/>

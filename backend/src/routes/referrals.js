@@ -62,7 +62,7 @@ router.post('/sync', async (req, res) => {
                 referralCode: referralCode || undefined,
                 referredBy: referredBy || undefined,
                 referralCount: 0,
-                coins: coins || 500,
+                coins: coins ?? 10, // Keep supplied balances, including zero.
                 platform: platform || 'unknown',
             };
             

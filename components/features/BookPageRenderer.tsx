@@ -1237,8 +1237,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Pull tab when panel is hidden */}
             {page.scrollUrl && scrollState === 'hidden' && onScrollStateChange && (
                 <div
-                    className="absolute bottom-0 left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
-                    style={{ touchAction: 'none' }}
+                    className="absolute left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
+                    style={{ touchAction: 'none', bottom: 'var(--safe-area-bottom, 0px)' }}
                     onPointerDown={handleScrollTabPointerDown}
                     onPointerMove={handleScrollTabPointerMove}
                     onPointerUp={handleScrollTabPointerUp}

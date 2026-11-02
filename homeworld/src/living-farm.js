@@ -1,3 +1,4 @@
+import {friendsWallet} from './friends-wallet.js';
 import {createCoopModel} from './coop-model.js';
 import {coopPlacementStatus} from './coop-placement.mjs';
 import {coopSurfaceHeight,eggSlots} from './coop-layout.mjs';
@@ -15,17 +16,30 @@ export class LivingFarm{
   try{
    const saved=this.g.store.state.livingFarm||JSON.parse(localStorage.getItem(KEY));this.initialState=farmRestore(saved);
    // The earlier introduction ended at the tent. Keep those earned goals complete.
-   if(![2,3].includes(saved?.garden?.version)&&(test.state.stage>=1||!saved?.garden&&(this.initialState.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))){
+   if(![2,3,4,5].includes(saved?.garden?.version)&&(test.state.stage>=1||!saved?.garden&&(this.initialState.animals.length||test.state.gathered.length||this.g.store.state.livingGardenLayout==='existing'))){
     this.initialState.garden={...this.initialState.garden,planted:4,plantedSpots:[...CARROT_SPOTS],rewarded:true,picked:Object.fromEntries(PICK_CROPS.map(c=>[c,1])),completed:true,readyAt:this.initialState.garden.readyAt};
    }
   }catch{this.initialState=farmFresh();}
   this.pending=null;this.error='';if(JSON.stringify(this.g.store.state.livingFarm)!==JSON.stringify(this.initialState)){try{this.g.store.save({...this.g.store.state,livingFarm:this.initialState});}catch{this.error='We couldn’t save that. Please try again.';}}this.checkAt=0;this.group=new THREE.Group();this.g.scene.add(this.group);this.produce=new Map();this.sync();
  }
- get state(){return this.g.store.state.livingFarm||this.initialState;}
+ get state(){
+  const raw=this.g.store.state.livingFarm||this.initialState;
+  const wallet=friendsWallet('read',{legacyCoins:raw.sharedWallet?0:raw.coins});
+  if(!wallet)return raw;
+  const balance=wallet.ok?wallet.balance:0;
+  if(this.walletRaw!==raw||this.walletView?.coins!==balance){this.walletRaw=raw;this.walletView={...raw,coins:balance};}
+  // Keep the top HUD and every market view on the same balance, even before postMessage arrives.
+  this.g.coins=balance;
+  return this.walletView;
+ }
  trade(kind,id){const next=marketTrade(this.state,this.g.store.state.inventory,kind,id);if(!next)return false;return this.commit(next.farm,{inventory:next.inventory});}
  commit(next,changes={}){
   if(next===this.state)return false;
-  try{this.g.store.save({...this.g.store.state,...changes,livingFarm:next});}catch{this.error='We couldn’t save that. Please try again.';this.g.notify();return false;}
+  const save=()=>this.g.store.save({...this.g.store.state,...changes,livingFarm:window.parent===window?next:{...next,coins:0,sharedWallet:true}});
+  const wallet=friendsWallet('transact',{delta:next.coins-this.state.coins,commit:save});
+  if(wallet&&!wallet.ok){this.error=wallet.reason;this.g.notify();return false;}
+  if(wallet)this.g.coins=wallet.balance;
+  else try{save();}catch{this.error='We couldn’t save that. Please try again.';this.g.notify();return false;}
   this.error='';this.sync();this.test.garden?.sync();this.test.sync();this.g.notify();return true;
  }
  offer(kind){this.test.activity();this.pending={kind,...farmOffer(this.state,kind)};this.error='';this.g.notify();}

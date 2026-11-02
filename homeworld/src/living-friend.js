@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import {activeTrees,applyAction,canPlow,cellAt,cellFromKey,gameTime,heightAt} from './core.mjs';
+import {clearTargets} from './clear-area.mjs';
+import {rockProfile,toolTier} from './mining.mjs';
+import {canAffordEnergy} from './nutrition.mjs';
 import {woodRoom} from './wood-storage.mjs';
 import {assignedProject} from './project-rules.mjs';
 import {advancePath,resetAnimatedPose,turnToward,updateLocomotion} from './character-motion.js';
@@ -10,7 +13,7 @@ import {nearbyGreeting,friendRole,validFriendTask} from '../../shared/friendConv
 export class LivingFriend {
  constructor(test){this.t=test;this.g=test.g;this.chatOpen=false;this.job=null;this.nextRoutine=20;this.near=false;this.greetingIndex=0;this.nextHello=0;this.greeting='';this.session=0;}
  get helper(){return this.g.community.actors.adam;}
- get ownsActor(){return this.chatOpen||!!this.job||this.near;}
+ get ownsActor(){return this.chatOpen||!!this.job||!!this.g.store.state.livingClearArea||this.near;}
  get available(){return this.t.state.adamUnlocked&&this.t.state.welcomeSeen&&this.helper?.actor.visible&&!this.g.store.state.night&&!this.t.placingAdam;}
  position(){const p=this.helper.actor.position;return {x:p.x,y:-p.z};}
  freeze(){
@@ -19,17 +22,17 @@ export class LivingFriend {
  }
  brief(){
   const w=this.g.autoWork.brief(),garden=this.t.farm.state.garden;
-  return {...w,name:'Adam',role:friendRole('Adam'),energy:this.g.store.state.characters.adam.energy,working:this.job?({water:'Watering plants',harvest:'Picking vegetables',chop:'Collecting wood',plow:'Digging a garden spot'}[this.job.type]):this.t.builder?'Building our home':'Caring for the farm',
+  return {...w,name:'Adam',role:friendRole('Adam'),energy:this.g.store.state.characters.adam.energy,working:this.g.store.state.livingClearArea?(this.clearNotice||'Clearing your marked area'):this.job?({water:'Watering plants',harvest:'Picking vegetables',chop:'Collecting wood',plow:'Digging a garden spot'}[this.job.type]):this.t.builder?'Building our home':'Caring for the farm',
    garden:{ready:[0,1,2,3,4,5].filter(i=>gardenCrop(garden,i)?.phase==='ready').length,thirsty:[0,1,2,3,4,5].filter(i=>gardenCrop(garden,i)?.phase==='thirsty').length},animals:this.t.farm.state.animals.map(a=>({name:a.name,kind:a.kind})),starterComplete:garden.completed};
  }
  post(data){if(window.parent!==window)window.parent.postMessage(data,location.origin);}
- open(mode='chat'){
+ open(mode='chat',arrival=false){
   if(!this.available||this.chatOpen||this.t.builder||assignedProject(this.g.store.state,'adam'))return;
   this.t.activity();this.t.garden.cancel();this.g.path=[];this.g.keys.clear();this.t.greetTarget=null;this.freeze();this.chatOpen=true;this.session++;
   this.helper.can.visible=false;this.helper.hammer.visible=false;this.helper.bench.visible=false;if(this.tool)this.tool.visible=false;
   this.savedCamera={zoom:this.g.zoom,yaw:this.g.viewYaw,pitch:this.g.viewPitch,overview:this.g.overview};this.g.overview=false;
   document.body.classList.add('living-chat-open');this.savedPlayerYaw=this.g.actor.rotation.y;this.chooseCamera();
-  this.post({type:'gk-living-friend-open',session:this.session,mode,intro:!this.t.state.fenceAsked,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
+  this.post({type:'gk-living-friend-open',session:this.session,mode,arrival,intro:!this.t.state.fenceAsked,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
  }
  answerFence(answer){
   if(this.t.state.fenceAsked)return;
@@ -44,7 +47,7 @@ export class LivingFriend {
   }
   this.post({type:'gk-living-friend-task-result',session:this.session,ok:true,line:'Ok, just let me know what tasks to help with.',world:this.brief()});
  }
- close(){if(!this.chatOpen)return;this.chatOpen=false;document.body.classList.remove('living-chat-open');this.hiddenTrees=null;this.g.actor.rotation.y=this.savedPlayerYaw;this.g.refreshDynamic();this.t.activity();this.nextHello=this.t.elapsed+45;if(this.savedCamera){Object.assign(this.g,{zoom:this.savedCamera.zoom,viewYaw:this.savedCamera.yaw,viewPitch:this.savedCamera.pitch,overview:this.savedCamera.overview});this.g.updateProjection();}this.freeze();this.g.notify();}
+ close(){if(!this.chatOpen)return;this.chatOpen=false;if(this.g.arrivals?.scene?.phase==='chat')this.g.arrivals.dismiss();document.body.classList.remove('living-chat-open');this.hiddenTrees=null;this.g.actor.rotation.y=this.savedPlayerYaw;this.g.refreshDynamic();this.t.activity();this.nextHello=this.t.elapsed+45;if(this.savedCamera){Object.assign(this.g,{zoom:this.savedCamera.zoom,viewYaw:this.savedCamera.yaw,viewPitch:this.savedCamera.pitch,overview:this.savedCamera.overview});this.g.updateProjection();}this.freeze();this.post({type:'gk-living-friend-ended',session:this.session});this.g.notify();}
  chooseCamera(){
   const g=this.g,actors=[this.helper.actor,g.actor],center=actors[0].position.clone().lerp(actors[1].position,.5).add(new THREE.Vector3(0,-.6,0));
   const ray=new THREE.Raycaster(),meshes=g.treeBatches.map(b=>b.mesh);g.scene.updateMatrixWorld(true);
@@ -97,15 +100,49 @@ export class LivingFriend {
  }
  assign(type,automatic=false){
   if(!validFriendTask(type)||!this.available)return {ok:false,line:'Let’s try again when I’m back.'};
-  if(type==='stop'){this.finish(false);this.nextRoutine=this.t.elapsed+90;return {ok:true,line:'Of course! I’ll take a little break.'};}
+  if(type==='stop'){this.saveClearPlan(null);this.finish(false);this.nextRoutine=this.t.elapsed+90;return {ok:true,line:'Of course! I’ll take a little break.'};}
   if(this.t.builder||assignedProject(this.g.store.state,'adam'))return {ok:false,line:'I’m finishing our building first.'};
   if(type==='build'){const asked=this.g.buildAsk?.requestBuilding?.({name:'Noah'},'tent','tent');if(!asked)window.dispatchEvent(new Event('gk-open-build'));else this.close();return {ok:true,line:'Where should I build? I’ll cut the trees and break the rocks on that spot.'};}
   if(type==='plow'){const asked=this.g.buildAsk?.request?.({id:'help-dig',mode:'garden',name:'Adam',text:'Tap the areas you want me to dig. Up to 20 spots.',cap:20});if(asked){this.close();return {ok:true,line:'Tap the areas you want me to dig. Up to 20 spots.'};}}
-  if(type==='chop'){const asked=this.g.buildAsk?.request?.({id:'help-clear',mode:'build',kind:'campfire',size:[2,2],name:'Adam',buildingName:'work spot',text:'Tap a place to clear. I’ll cut the trees and break the rocks there.'});if(asked){this.close();return {ok:true,line:'Tap a place to clear. I’ll cut the trees and break the rocks there.'};}}
+  if(type==='chop'){
+   if(this.g.buildAsk.busy()||this.g.store.state.village?.siteDraft)return {ok:false,line:'Finish choosing your other spot first.'};
+   this.close();const asked=this.g.buildAsk.startClearArea();
+   return {ok:asked,line:asked?'Draw a box around the area you want me to clear.':'Let’s try again in a moment.'};
+  }
   if(this.g.store.state.characters.adam.energy<10)return {ok:false,line:'I need a little rest before I can help.'};
   const target=this.target(type);if(!target)return {ok:false,line:({water:'The plants have water already!',harvest:'Let’s let the vegetables grow a little longer.',chop:'I need a clear path and room for wood in our bag.',plow:'There’s no clear garden spot nearby.'})[type]};
   this.finish(false);this.freeze();this.job={type,...target,position:this.position(),time:0,automatic};
   return {ok:true,line:({water:'I’ll water a thirsty plant!',harvest:'I’ll pick a ripe vegetable!',chop:'I’ll cut one tree for our wood pile!',plow:'I’ll dig a new garden spot!'})[type]};
+ }
+ saveClearPlan(plan){this.g.store.save({...this.g.store.state,livingClearArea:plan});}
+ clearArea(keys,protectedKeys=[]){
+  if(!this.available||this.t.builder||assignedProject(this.g.store.state,'adam')){this.g.toast('Adam is busy. Try again when he is ready.');return false;}
+  const targets=clearTargets(this.g.world,this.g.store.state,keys,protectedKeys);
+  if(!targets.length)return false;
+  this.finish(false);
+  this.saveClearPlan({keys:[...keys],ids:targets.map(t=>t.id),protectedKeys:[...protectedKeys]});
+  this.clearRetryAt=0;this.clearNotice='';
+  this.g.toast('Adam: I’ll clear the marked area. Your garden and buildings are safe.');
+  return true;
+ }
+ nextClearJob(){
+  const g=this.g,s=g.store.state,plan=s.livingClearArea;
+  if(!plan||g.siteView||this.t.elapsed<(this.clearRetryAt||0))return;
+  const targets=clearTargets(g.world,s,plan.keys,plan.protectedKeys).filter(t=>plan.ids.includes(t.id));
+  if(!targets.length){this.saveClearPlan(null);g.toast('Adam: All clear! What shall we make here?');g.notify();return;}
+  const pos=this.position(),scoped={...s,activeCharacter:'adam'};
+  let reason='I can’t reach the remaining spots. Make a path, then I’ll try again.';
+  targets.sort((a,b)=>Math.hypot(a.position[0]-pos.x,a.position[1]-pos.y)-Math.hypot(b.position[0]-pos.x,b.position[1]-pos.y));
+  for(const target of targets){
+   if(!canAffordEnergy(scoped,target)){reason='I need some energy. I’ll continue after a meal or rest.';continue;}
+   if(target.type==='chop'&&!woodRoom(s)){reason='Our wood storage is full. Use some wood and I’ll keep going.';continue;}
+   if(target.type==='mine_hit'&&toolTier(s).tier<rockProfile(target).minTier){reason='These rocks need stronger tools. I’ll continue after we upgrade.';continue;}
+   const point={x:target.position[0],y:target.position[1]},reach=Math.max(1.7,(target.radius||0)+1),path=g.nav.approach(pos,point,Math.max(.8,reach-.5)),end=path?.at(-1)||pos;
+   if(!path||Math.hypot(end.x-point.x,end.y-point.y)>reach)continue;
+   this.freeze();this.job={type:target.type,id:target.id,target:point,path,reach,position:pos,time:0,automatic:true,clearing:true};this.clearNotice='';return;
+  }
+  this.clearRetryAt=this.t.elapsed+10;
+  if(this.clearNotice!==reason){g.toast(`Adam: ${reason}`,6000);this.clearNotice=reason;}
  }
  finish(done){
   if(!this.job)return;
@@ -114,12 +151,15 @@ export class LivingFriend {
  }
  update(dt){
   if(!this.available){this.near=false;if(this.chatOpen){this.post({type:'gk-living-friend-ended',session:this.session});this.close();}if(this.job)this.finish(false);return;}
+  if(this.g.arrivals?.busy&&!this.chatOpen){this.near=false;return;}
   const t=this.t,g=this.g,h=this.helper,distance=Math.hypot(g.player.x-h.actor.position.x,g.player.y+h.actor.position.z);
   const near=distance<2.8&&!t.watching&&!t.dialogOpen&&!g.interior&&!g.overview;
   if(near&&!this.near&&!this.job&&!t.builder&&!assignedProject(g.store.state,'adam'))this.freeze();
   if(near&&!this.near&&t.elapsed>=this.nextHello){this.greeting=nearbyGreeting(t.playerName,this.greetingIndex++);this.nextHello=t.elapsed+45;}
   this.near=near;
   if(this.chatOpen){resetAnimatedPose(h);h.actor.rotation.y=Math.atan2(g.actor.position.x-h.actor.position.x,g.actor.position.z-h.actor.position.z);return;}
+  if(!this.job&&g.store.state.livingClearArea&&!t.builder&&!assignedProject(g.store.state,'adam'))this.nextClearJob();
+  if((g.siteView||g.store.state.livingClearArea)&&!this.job)return;
   if(g.residents?.models?.has('adam')&&!this.job)return;
   if(!this.job){
    if(near){h.can.visible=false;h.hammer.visible=false;h.bench.visible=false;updateLocomotion(h,g.idlePose,dt,0,Date.now()/1000);h.actor.rotation.y=Math.atan2(g.actor.position.x-h.actor.position.x,g.actor.position.z-h.actor.position.z);}
@@ -127,19 +167,21 @@ export class LivingFriend {
    if(t.elapsed>this.nextRoutine&&!near&&!t.builder&&t.farm.state.garden.completed){this.nextRoutine=t.elapsed+30;this.assign('water',true);}return;
   }
   if(t.builder||assignedProject(g.store.state,'adam')){this.finish(false);return;}
-  const j=this.job,before={...j.position};advancePath(j.position,j.path,dt*1.7);
+  const j=this.job;
+  const before={...j.position};advancePath(j.position,j.path,dt*1.7);
   h.actor.position.set(j.position.x,heightAt(g.world,j.position.x,j.position.y)+.015,-j.position.y);
   if(j.path.length){turnToward(h.actor,Math.atan2(j.position.x-before.x,-j.position.y+before.y),dt);updateLocomotion(h,g.idlePose,dt,1.7,Date.now()/1000);return;}
-  if(Math.hypot(j.position.x-j.target.x,j.position.y-j.target.y)>1.8){this.finish(false);return;}
+  if(Math.hypot(j.position.x-j.target.x,j.position.y-j.target.y)>(j.reach||1.8)){this.finish(false);return;}
   resetAnimatedPose(h);h.actor.rotation.y=Math.atan2(j.target.x-j.position.x,-j.target.y+j.position.y);j.time+=dt;
   const swing=Math.sin(j.time*5);h.bones.mixamorigSpine?.rotateX(.15+.1*swing);h.bones.mixamorigRightArm?.rotateX(-.7+.4*swing);h.bones.mixamorigRightForeArm?.rotateX(-.5);
   h.actor.updateMatrixWorld(true);
   if(j.type==='water'){h.can.visible=true;const hand=h.bones.mixamorigRightHand;h.can.position.copy(hand.getWorldPosition(new THREE.Vector3()));h.can.quaternion.copy(hand.getWorldQuaternion(new THREE.Quaternion()));h.can.rotateZ(-.5);}
-  else if(j.type==='chop'||j.type==='plow'){
-   if(this.toolKind!==j.type){if(this.tool)g.scene.remove(this.tool);this.tool=g.asset(j.type==='chop'?'tool_axe':'tool_hoe');g.scene.add(this.tool);this.toolKind=j.type;}
+  else if(['chop','plow','mine_hit','dig_stump'].includes(j.type)){
+   if(this.toolKind!==j.type){if(this.tool)g.scene.remove(this.tool);this.tool=g.asset(j.type==='chop'?'tool_axe':j.type==='mine_hit'?'tool_pickaxe':'tool_hoe');g.scene.add(this.tool);this.toolKind=j.type;}
    this.tool.visible=true;const hand=h.bones.mixamorigRightHand;this.tool.position.copy(hand.getWorldPosition(new THREE.Vector3()));this.tool.quaternion.copy(hand.getWorldQuaternion(new THREE.Quaternion()));
   }
-  if(j.time<4)return;
+  if(j.time<(j.clearing?1.4:4))return;
+  if(j.clearing&&!clearTargets(g.world,g.store.state,g.store.state.livingClearArea?.keys||[],g.store.state.livingClearArea?.protectedKeys||[]).some(target=>target.id===j.id&&target.type===j.type)){this.finish(false);return;}
   let done=false;
   try{
    if(j.type==='water'||j.type==='harvest'){
@@ -147,10 +189,11 @@ export class LivingFriend {
     const crop=GARDEN_CROPS[j.index];
     done=t.farm.commit(next,j.type==='harvest'&&next!==farm?{inventory:{...g.store.state.inventory,[crop]:(g.store.state.inventory[crop]||0)+1}}:{});
    }else{
-    const s=g.store.state,scoped={...s,activeCharacter:'adam',player:{...j.position}},next=applyAction(scoped,{type:j.type,id:j.id,key:j.key,actionId:`friend:adam:${Date.now()}`},g.world,gameTime(s));
+    const s=g.store.state,scoped={...s,activeCharacter:'adam',player:{...j.position}},next=applyAction(scoped,{type:j.type,id:j.id,key:j.key,actionId:`friend:adam:${crypto.randomUUID()}`},g.world,gameTime(s));
     if(next!==scoped){g.store.save({...next,activeCharacter:s.activeCharacter,player:s.player});g.refreshDynamic();done=true;}
    }
   }catch{g.toast('Adam: Let’s try that again.');}
+  if(!done&&j.clearing)this.clearRetryAt=t.elapsed+10;
   if(done)g.burst(j.target,j.type==='water'?'water':'seed',.5);this.finish(done);g.notify();
  }
  snapshot(){return {near:this.near&&!this.chatOpen&&!this.t.builder&&!assignedProject(this.g.store.state,'adam'),greeting:this.greeting||nearbyGreeting(this.t.playerName),chatOpen:this.chatOpen,working:this.job?.type||null};}

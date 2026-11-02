@@ -6,3 +6,11 @@ export function normalizeCharacterModel(model,height=CHARACTER_HEIGHT){
  model.scale.multiplyScalar(height/size);model.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model,true);
  model.position.add(new THREE.Vector3(-(box.min.x+box.max.x)/2,-box.min.y,-(box.min.z+box.max.z)/2));model.updateMatrixWorld(true);return height;
 }
+
+/** Map equivalent unprefixed GLB bones onto the island's rig keys. */
+export function islandBoneName(name){const clean=name.replace(/[^a-zA-Z0-9]/g,'');return clean.startsWith('mixamorig')?clean:`mixamorig${clean}`;}
+
+/** Match the ship renderer: opaque GLB exports must write depth. */
+export function solidCharacterMaterial(material){
+ if(material.transparent&&material.opacity>=1){material.transparent=false;material.depthWrite=true;material.needsUpdate=true;}
+}

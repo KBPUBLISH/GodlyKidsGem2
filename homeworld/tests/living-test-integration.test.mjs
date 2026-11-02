@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {initialState,Navigation,buildSiteStatus,GameStore} from '../src/core.mjs';
+import {initialState,Navigation,buildSiteStatus,GameStore,applyAction} from '../src/core.mjs';
 import {livingTestLayout,friendDropPoint} from '../src/living-test-layout.mjs';
 
 test('the play test uses reachable places and a valid home site on the original island',()=>{
@@ -66,4 +66,20 @@ test('friend placement stays near the child and leaves space for both models',()
   const p=friendDropPoint(nav,player,layout.camp.pad),d=Math.hypot(p.x-player.x,p.y-player.y);
   assert.ok(d>1.1&&d<4,JSON.stringify({player,p,d}));assert.ok(nav.path(player,p));
  }
+});
+
+test('starter tree receipts follow actual felled-tree stats, not individual axe hits',async()=>{
+ const {freshState,recordStarterTrees,starterTrees}=await import('../src/living-test-rules.mjs');
+ const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
+ let game=initialState(world),task=recordStarterTrees(freshState(),game.stats.trees);
+ for(const [index,tree] of world.trees.slice(0,3).entries()){
+  game={...game,player:{x:tree.position[0],y:tree.position[1]}};
+  const hit=applyAction(game,{type:'chop_hit',id:tree.id},world,480);
+  assert.equal(hit.stats.trees,game.stats.trees);
+  assert.equal(recordStarterTrees(task,hit.stats.trees),task);
+  game=applyAction(hit,{type:'chop',id:tree.id},world,480);
+  task=recordStarterTrees(task,game.stats.trees);
+  assert.equal(starterTrees(task),index+1);
+ }
+ assert.equal(task.inventory.wood,3);
 });

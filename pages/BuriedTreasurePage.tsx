@@ -14,6 +14,7 @@ import WoodBackButton from '../components/WoodBackButton';
 import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 import { completeOnboardingJourney, isOnboardingJourneyActive } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
+import { collectedStoryFriends } from '../shared/storyFriends.mjs';
 import { safeAppReturnPath } from '../utils/treasureNav';
 
 const WHITE_FADE_MS = 480;
@@ -38,7 +39,7 @@ type TreasureNavState = {
 };
 
 /** Card shape sent into the game iframe (shown when the chest opens). */
-type RewardCard = { name: string; imageUrl?: string };
+type RewardCard = { name: string; imageUrl?: string; character?: boolean };
 
 /**
  * Buried Treasure digging game — reward reveal for story packs.
@@ -77,6 +78,7 @@ const BuriedTreasurePage: React.FC = () => {
     const sid = (navState.storyId || '').trim();
     return Boolean(sid && rewardsService.hasCollectedStoryRewards(sid));
   });
+  const [characterRewardShown,setCharacterRewardShown]=useState(false);
   const [meetCrewGuide, setMeetCrewGuide] = useState(false);
   const [whiteFade, setWhiteFade] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -140,6 +142,7 @@ const BuriedTreasurePage: React.FC = () => {
         }
         cards.push({
           name,
+          character: def.type === 'character',
           imageUrl:
             def.type === 'coins'
               ? '/assets/ui/coin.png'
@@ -191,8 +194,15 @@ const BuriedTreasurePage: React.FC = () => {
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const frame = iframeRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
+      if (!frame || event.source !== frame.contentWindow || event.origin !== window.location.origin) return;
       const type = event.data?.type;
+      if (type === 'gk-friend-destination' && cardsRef.current && !livingFriend && !onboardingJourney) {
+        const friends = collectedStoryFriends(navStateRef.current.pool, rewardsService.getUnlockedCharacters());
+        if (!friends.length) return;
+        if (event.data.destination === 'island') leaveWithFade(() => navigate('/my-home', { replace: true, state: { welcomeFriendId: friends[0].id } }));
+        else if (event.data.destination === 'ship') leaveWithFade(() => navigate('/crew', { replace: true }));
+        return;
+      }
       if (type === 'gk-continue' || type === 'gk-go-game-shelf') {
         if(livingFriend){if(livingFriendRecord()?.phase==='aboard')leaveWithFade(()=>navigate('/crew',{replace:true}));return;}
         if (onboardingJourney) {
@@ -207,12 +217,14 @@ const BuriedTreasurePage: React.FC = () => {
       }
       if (event.data?.type !== 'gk-chest-opened') return;
       const cards = collectCards();
+      if(cards.some(c=>c.character))setCharacterRewardShown(true);
       if (cards.length > 0) {
         frame.contentWindow?.postMessage(
           {
             type: 'gk-treasure-rewards',
             rewards: cards,
             hideShelf: onboardingJourney,
+            friends: !livingFriend && !onboardingJourney ? collectedStoryFriends(navStateRef.current.pool, rewardsService.getUnlockedCharacters()).map(c => ({ id: c.id, name: c.name })) : [],
           },
           window.location.origin,
         );
@@ -265,7 +277,7 @@ const BuriedTreasurePage: React.FC = () => {
       className="relative h-[100dvh] min-h-0 bg-[#0b7fa6] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
-      {!onboardingJourney && (
+      {!onboardingJourney && !characterRewardShown && (
         <WoodBackButton
           onClick={goBackToStoryPack}
           disabled={leaving}

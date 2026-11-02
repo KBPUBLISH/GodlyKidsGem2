@@ -4,7 +4,7 @@ import {dayPhase} from './island-clock.mjs';
 import * as THREE from 'three';
 import {heightAt,gameTime} from './core.mjs';
 import {projectAssignments} from './construction-projects.mjs';
-import {normalizeCharacterModel} from './character-model.js';
+import {normalizeCharacterModel,islandBoneName,solidCharacterMaterial} from './character-model.js';
 import {Nutrition} from './nutrition.js';
 import {MEMBERS,communitySnapshot} from './community.mjs';
 import {emitWorkSweat} from './work-sweat.js';
@@ -17,7 +17,7 @@ export class Community {
   for(const info of MEMBERS.filter(m=>m.id!=='adam'&&!game.livingTestMode)){
    const data=models[info.id],actor=new THREE.Group(),model=data.scene;actor.add(model);game.scene.add(actor);
    normalizeCharacterModel(model);
-   const bones={},restPose=[];model.traverse(o=>{if(o.isBone){bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);}}});
+   const bones={},restPose=[];model.traverse(o=>{if(o.isBone){bones[islandBoneName(o.name)]=o;restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);}}});
    const mixer=new THREE.AnimationMixer(model),clips={};for(const original of data.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name))for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}clips[original.name]=mixer.clipAction(clip);}
    const rig={actor,bones,scene:game.scene,world:game.world,particleGeometry:game.particleGeometry,particleMaterials:game.particleMaterials,particles:game.particles};
    for(const name of ['ik','solveChain','localPoint'])rig[name]=game[name].bind(rig);
@@ -40,8 +40,8 @@ export class Community {
   h.actor.remove(h.model);h.model=data.scene;normalizeCharacterModel(h.model);h.actor.add(h.model);
   h.bones={};h.restPose=[];h.clips={};
   h.model.traverse(o=>{
-   if(o.isBone){h.bones[o.name.replace(/[^a-zA-Z0-9]/g,'')]=o;h.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}
-   if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.metalness=0;m.roughness=.85;}}
+   if(o.isBone){h.bones[islandBoneName(o.name)]=o;h.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});}
+   if(o.isMesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material]){solidCharacterMaterial(m);m.metalness=0;m.roughness=.85;}}
   });
   h.mixer=new THREE.AnimationMixer(h.model);
   for(const original of data.animations){const clip=original.clone();for(const track of clip.tracks)if(track.name.endsWith('.position')&&/Hips/.test(track.name))for(let i=0;i<track.values.length;i+=3){track.values[i]=track.values[0];track.values[i+2]=track.values[2];}h.clips[original.name]=h.mixer.clipAction(clip);}
@@ -92,7 +92,7 @@ export class Community {
   if(g.store.state.night||g.playersOnly){for(const h of Object.values(this.actors)){if(h.actor)h.actor.visible=false;for(const key of ['hammer','bench','can'])if(h[key])h[key].visible=false;h.fishing?.clear();}if(this.selectionRing)this.selectionRing.visible=false;return;}
   const snapshot=Community.prototype.snapshot.call(this,now);if(!snapshot)return;
   for(const m of snapshot.members){
-   const h=this.actors[m.id],j=m.job;if(m.id==='adam'&&(g.livingTest?.friend?.ownsActor||g.residents?.models?.has('adam')))continue;if(!h?.actor||m.selected||h.modelReady===false)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
+   const h=this.actors[m.id],j=m.job;if(g.arrivals?.owns(h?.actor))continue;if(m.id==='adam'&&(g.livingTest?.friend?.ownsActor||g.residents?.models?.has('adam')))continue;if(!h?.actor||m.selected||h.modelReady===false)continue;h.actor.visible=!m.resting;h.actor.position.set(m.position.x,heightAt(g.world,m.position.x,m.position.y)+.015,-m.position.y);h.fishing?.clear();if(h.can)h.can.visible=false;if(h.hammer)h.hammer.visible=false;if(h.bench)h.bench.visible=false;
    if(m.walking){
     const ahead=(m.project?projectAssignments(g.store.state,now+250).find(x=>x.id===m.id):communitySnapshot(g.store.state,gameTime(g.store.state,now+250)).members.find(x=>x.id===m.id))?.position||m.position;
     const dx=ahead.x-m.position.x,dy=ahead.y-m.position.y,speed=Math.hypot(dx,dy)/.25;

@@ -43,6 +43,14 @@ export function SiteAsk({engine,enabled}) {
     return () => cancelAnimationFrame(frame);
   }, [engine, enabled]);
   if (!enabled || !card) return null;
+  if(card.clearing)return <section className="clear-area-ui" aria-label="Choose an area for Adam to clear">
+    <div className="clear-area-heading"><span aria-hidden="true">▦</span><div><strong>Clear with Adam</strong><p>Drag a box · Two fingers to move or zoom</p></div></div>
+    <div className="clear-area-footer" onPointerDown={e=>e.stopPropagation()}>
+      <p role="status" aria-live="polite">{card.text}</p>
+      <small>Gardens &amp; buildings stay safe</small>
+      <div><button type="button" onClick={()=>engine.current?.buildAsk.decline()}>Cancel</button><button type="button" disabled={!card.goEnabled} onClick={()=>engine.current?.buildAsk.confirm()}>Confirm <span aria-hidden="true">✓</span></button></div>
+    </div>
+  </section>;
   const slide = (x, z) => engine.current?.nudgeSite?.(x, z);
   return <>
     {card.picking && <div className="site-pan" role="group" aria-label="Move around the island">

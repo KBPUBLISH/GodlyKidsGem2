@@ -202,7 +202,7 @@ export class GardenPlan {
   plantChores(home, s, claims) {
     const outline = this.active(s);
     if (!outline || outline.fenceOnly || !this.allowsWorker(home, outline) || this.crewBlocked(s, outline)) return [];
-    const crop = Object.entries(s.inventory || {}).find(([id, n]) => n > 0 && ['carrot_seed', 'wheat_seed', 'sunflower_seed', 'pumpkin_seed'].includes(id));
+    const crop = Object.entries(s.inventory || {}).find(([id, n]) => n > 0 && ['potato_seed', 'carrot_seed', 'wheat_seed', 'sunflower_seed', 'pumpkin_seed'].includes(id));
     if (!crop) return [];
     const out = [];
     for (const key of outline.keys) {

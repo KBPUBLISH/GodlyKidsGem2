@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
@@ -25,7 +26,7 @@ const CreateProfilePage: React.FC = () => {
     addKid({
       id: crypto.randomUUID(), name: name.trim(), age: Number(age),
       worldAvatarId: avatar.id, avatarSeed: avatar.portrait, avatar: avatar.portrait,
-      coins: 500, coinTransactions: [], ownedItems: ['f1', 'anim1'], unlockedVoices: [],
+      coins: STARTING_GOLD_COINS, coinTransactions: [], ownedItems: ['f1', 'anim1'], unlockedVoices: [],
       frame: 'border-[#8B4513]', hat: null, body: null, leftArm: null, rightArm: null,
       legs: null, animation: 'anim-breathe',
     });

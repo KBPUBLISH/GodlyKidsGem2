@@ -1,6 +1,6 @@
 import {eggSlots} from './coop-layout.mjs';
 import {gardenFresh,gardenRestore} from './living-garden-rules.mjs';
-// A small, private test economy. These coins never spend the app's account coins.
+// Pure farm rules. Embedded play supplies the selected app profile’s shared gold balance.
 export const FARM_CYCLE_MS=3*60*1000, FIRST_EGG_MS=20000, PRODUCE_CAP=3;
 export const FARM_PRICES={chicken:10,cow:40,egg:5,milk:10};
 /** Farm animals bought at the market with island coins. Chicken and cow keep their named-shop prices. */

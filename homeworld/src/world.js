@@ -1,3 +1,5 @@
+import {registerPotatoAssets} from './potato-model.js';
+import {ADAM_MODEL_URL,adamModelUrl} from '../../shared/adamModel.mjs';
 import {actionPlaybackRate} from './action-tempo.mjs';
 import {CoastalLook} from './coastal-look.js';
 import {prepareLivingGardenBase} from './living-garden-rules.mjs';
@@ -121,7 +123,7 @@ export class HomeWorld {
     this.boundResize=()=>this.resize();this.observer=new ResizeObserver(this.boundResize);this.observer.observe(container);
     this.renderer.domElement.setAttribute('aria-label','HomeWorld island. Drag or swipe sideways to turn the view, and up or down to tilt it. Tap the ground to walk; choose a tool to interact.');
     this.mapGesture=new MapGesture(this.renderer.domElement,{rotate:delta=>this.rotateView(delta),tilt:delta=>this.tiltView(delta),drag:(dx,dy)=>this.panView(dx,dy),tap:e=>this.click(e)});
-    this.wheel=e=>{e.preventDefault();if(this.mapOnly&&this.overview)this.setZoomSpan(this.currentMapSpan()+e.deltaY*.06);else this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
+    this.wheel=e=>{e.preventDefault();if(this.siteView){this.setZoomSpan(this.zoom+e.deltaY*.06);return;}if(this.mapOnly&&this.overview)this.setZoomSpan(this.currentMapSpan()+e.deltaY*.06);else this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.015,8,45);this.resize();};this.renderer.domElement.addEventListener('wheel',this.wheel,{passive:false});
     // Pinch zooms the camera. preventDefault only while two fingers are on the canvas, so the
     // browser does not scale the page. One-finger drags and taps stay on pointer events.
     this.renderer.domElement.style.touchAction='none';
@@ -137,10 +139,12 @@ export class HomeWorld {
     canvas.addEventListener('touchcancel',this.onCanvasTouchEnd,{passive:true});
     canvas.addEventListener('gesturestart',this.blockGesture,{passive:false});
     canvas.addEventListener('gesturechange',this.blockGesture,{passive:false});
+    this.onClearPointer=e=>{if(this.buildAsk?.clearPointer(e)){e.stopImmediatePropagation();}};
+    for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])canvas.addEventListener(type,this.onClearPointer,true);
     this.onStrokePointer=e=>{if(this.pinching)return;if(this.buildAsk?.takeDrag?.(e))return;if(this.building?.preview?.stroke)this.building.aimFromEvent(e);};
     this.renderer.domElement.addEventListener('pointerdown',this.onStrokePointer);
     this.renderer.domElement.addEventListener('pointermove',this.onStrokePointer);
-    this.keyDown=e=>{if(this.livingTest?.arrival?.active)return;if(e.key==='Escape'&&this.interior){e.preventDefault();this.building?.leaveHome();return;}if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
+    this.keyDown=e=>{if(this.buildAsk?.picking?.mode==='clear'){if(e.key==='Escape'){e.preventDefault();this.buildAsk.decline();}return;}if(this.livingTest?.arrival?.active||this.arrivals?.busy)return;if(e.key==='Escape'&&this.interior){e.preventDefault();this.building?.leaveHome();return;}if(this.ambient||this.store?.state.night||this.mapOnly||this.store?.state.characters?.[this.store.state.activeCharacter]?.sleep)return;if(['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName))return;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();this.lastGroundKey=null;this.keys.add(e.key);}};this.keyUp=e=>this.keys.delete(e.key);window.addEventListener('keydown',this.keyDown);window.addEventListener('keyup',this.keyUp);
     this.onBlur=()=>{this.mapGesture.cancel();this.endPinch();this.keys.clear();};window.addEventListener('blur',this.onBlur);
     this.markAway=()=>{this.persist();if(this.store&&!this.store.locked)try{this.store.noteAway();}catch(e){this.toast(e.message);}};this.onHide=()=>{if(document.hidden){this.markAway();this.music?.audio?.pause();}else if(this.loaded){this.music?.unlock();this.community?.step({offline:true});this.community?.activity();this.notify();}};this.onUnload=()=>this.markAway();document.addEventListener('visibilitychange',this.onHide);window.addEventListener('pagehide',this.onUnload);this.onStorage=e=>{if(e.key!==SAVE_KEY||!this.store)return;const latest=this.store.readLatest();if(!latest||latest.revision<=this.store.state.revision)return;const moved=dist(latest.player,this.store.state.player)>.6;const changed=JSON.stringify([latest.activeCharacter,latest.removedTrees,latest.removedRocks,latest.rockDamage,latest.treeDamage,latest.woodDrops,latest.inventory,latest.cells,latest.tools,latest.characters?.[latest.activeCharacter],latest.buildings])!==JSON.stringify([this.store.state.activeCharacter,this.store.state.removedTrees,this.store.state.removedRocks,this.store.state.rockDamage,this.store.state.treeDamage,this.store.state.woodDrops,this.store.state.inventory,this.store.state.cells,this.store.state.tools,this.store.state.characters?.[this.store.state.activeCharacter],this.store.state.buildings]);const playing=this.playersOnly&&latest.activeCharacter===this.store.state.activeCharacter&&Date.now()-(this.community?.lastInput||0)<30000;this.store.state=latest;
     // Another HomeWorld window (a second tab with the same save) writes every second while a crew is building. The window
@@ -163,7 +167,7 @@ export class HomeWorld {
     const friendModel=new URLSearchParams(location.search).get('friendModel');
     // The first-story reward owns Adam's model. Keep the packaged GLB only as
     // an offline fallback so CMS model updates also appear on the island.
-    this.loadFriendModel=()=>friendModel?loadModelUrl(friendModel).catch(()=>loadModel('adam')):loadModel('adam');
+    this.loadFriendModel=()=>loadModelUrl(adamModelUrl(friendModel)).catch(error=>{if(adamModelUrl(friendModel)===ADAM_MODEL_URL)throw error;return loadModelUrl(ADAM_MODEL_URL);});
     const empty={scene:new THREE.Group(),animations:[]};
     const [world,env,library,adam,construction,houses,woodStores,eve,noah,church]=await Promise.all([
       fetch(assetUrl('/assets/world.json'),{signal:AbortSignal.any([this.assetAbort.signal,AbortSignal.timeout(60000)])}).then(r=>{if(!r.ok)throw Error('Map data is unavailable');return r.json();}),
@@ -172,7 +176,7 @@ export class HomeWorld {
       this.livingTestMode?empty:loadModel('eve'),this.livingTestMode?empty:loadModel('noah'),loadModel('church')
     ]);if(this.disposed)return;
     this.idlePose=this.livingTestMode?{duration:1,apply(){}}:createRelaxedIdle(eve.animations);this.world=world;this.playersOnly=!this.livingTestMode&&new URLSearchParams(location.search).get('players')==='1';this.store=new GameStore(world,localStorage,Date.now(),{playersOnly:this.playersOnly});if(this.livingTestMode&&!this.store.locked)this.store.save(prepareLivingGardenBase(this.store.state,world));if(!this.store.locked)this.store.enableNightCycle();this.player={...this.store.state.player};this.nav=new Navigation(world,this.store.state);this.library={};library.scene.updateMatrixWorld(true);
-    for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
+    for(const root of [library.scene,construction.scene,houses.scene,woodStores.scene,church.scene])root.traverse(o=>{if(o.userData.game_asset_id&&o.userData.prototype)this.library[o.userData.game_asset_id]=o;});registerWellAssets(this.library);registerOvenAssets(this.library);registerPotatoAssets(this.library);registerDiningHallAssets(this.library);registerForgeAssets(this.library);registerMarketAssets(this.library);registerDockAssets(this.library);registerFarmAssets(this.library,THREE);registerFarmBrainAssets(this.library);
     this.mining=new Mining(this,env.scene);this.addEnvironment(env.scene);
     this.actor=new THREE.Group();this.model=adam.scene;this.actor.add(this.model);if(!this.livingTestMode)normalizeCharacterModel(this.model);this.scene.add(this.actor);this.actor.position.set(this.player.x,this.groundY(this.player.x,this.player.y)+.015,-this.player.y);this.focus.copy(this.actor.position);
     this.restPose=[];this.model.traverse(o=>{if(o.isBone)this.restPose.push({bone:o,position:o.position.clone(),quaternion:o.quaternion.clone()});if(o.isMesh){o.castShadow=true;o.receiveShadow=false;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.metalness=0;m.metalnessMap=null;m.roughness=.85;m.roughnessMap=null;m.normalScale?.setScalar(.3);if(m.map&&m.map.anisotropy<4)m.map.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());m.needsUpdate=true;}}});
@@ -454,6 +458,7 @@ export class HomeWorld {
   }
   allCharacterVitalsSnapshots(wall=Date.now()){return Object.keys(this.store?.state.characters||{}).map(id=>this.characterVitalsSnapshot(wall,id)).filter(Boolean);}
   click(e) {
+    if(this.arrivals?.busy)return;
     if(!this.loaded||this.mapOnly||this.fishing?.active)return;const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);if(this.buildAsk?.picking){this.buildAsk.takeTap(e);return;}if(this.residents?.consumeTap(e))return;
     if(this.store?.state.night||this.action?.type==='sleep'||this.store.state.characters?.[this.store.state.activeCharacter]?.sleep){if(!this.interior)this.animals?.roundUp(this.animals.pick(this.ray));return;}
     if(this.interior){if(this.interior.phase!=='exit') this.lookInside(e,r);return;}
@@ -744,12 +749,12 @@ export class HomeWorld {
   touchSpan(e){const a=e.touches[0],b=e.touches[1];return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
   /** Two fingers landed. Cancel the one-finger turn so the pinch cannot also walk or spin. */
   armPinch(e){
-    this.mapGesture.cancel();this.pinching=true;
+    this.mapGesture.cancel();this.buildAsk?.cancelClearDrag?.();this.pinching=true;
     const dist=this.touchSpan(e);if(!(dist>12))return;
     const inn=this.interior,inside=inn?.phase==='inside';
     if(inside&&inn.homeZoom==null)inn.homeZoom=inn.camTo?.zoom??this.zoom;
     const map=this.mapOnly&&this.overview,blocked=!inside&&!map&&(!!inn||this.overview||this.mapOnly||!!this.fishing?.firstPerson);
-    this.pinch={dist,zoom:map?this.currentMapSpan():this.zoom,mode:blocked?'blocked':inside?'inside':map?'map':'outside',id:inside?inn.id:null};
+    this.pinch={center:{x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2},dist,zoom:map?this.currentMapSpan():this.zoom,mode:blocked?'blocked':inside?'inside':map?'map':'outside',id:inside?inn.id:null};
   }
   movePinch(e){
     const p=this.pinch;if(!p||p.mode==='blocked')return;
@@ -758,6 +763,10 @@ export class HomeWorld {
     if(p.mode==='inside'){if(!inn||inn.phase!=='inside'||inn.id!==p.id){p.mode='blocked';return;}}
     else if(p.mode==='map'){if(!this.mapOnly||!this.overview){p.mode='blocked';return;}}
     else if(inn||this.overview||this.mapOnly||this.fishing?.firstPerson){p.mode='blocked';return;}
+    if(this.siteView&&this.buildAsk?.picking?.mode==='clear'){
+      const center={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2};
+      this.panView(center.x-p.center.x,center.y-p.center.y);p.center=center;
+    }
     // Fingers apart (pinch out) = closer = a smaller vertical span.
     this.setZoomSpan(p.zoom*(p.dist/dist));
   }
@@ -1142,7 +1151,7 @@ export class HomeWorld {
     if(this.resolution){this.resolution.sample(frameDt,this.loaded&&!document.hidden);this.applyResolution();}
     if(this.loaded){
       this.mining?.settleForge();
-      if(this.store.state.night){this.livingTest?.friend?.update(0);this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderer.render(this.scene,this.camera);return;}
+      if(this.store.state.night){this.livingTest?.friend?.update(0);this.community?.update(dt);this.residents?.update(dt);this.dining?.update(dt);this.gardenKeeper?.update();this.buildAsk?.update();this.animals?.update(dt);this.syncNight();this.lighting(dt);this.drainToasts();if(now-(this.farmToastAt||0)>800){this.farmToastAt=now;this.pullFarmToasts();}if(now-this.lastRefresh>200){this.lastRefresh=now;this.notify();}this.renderIsland(this.camera,now);return;}
       if(this.interior){this.keys.clear();this.path.length=0;this.order=null;if(this.marker) this.marker.visible=false;}
       const speed=moveCharacter(this,dt);
       this.actor.position.set(this.player.x,this.groundY(this.player.x,this.player.y)+.015,-this.player.y);
@@ -1167,6 +1176,7 @@ export class HomeWorld {
       else if(this.siteView){this.camera.up.set(0,0,-1);this.camera.position.set(this.focus.x,80,this.focus.z);this.camera.lookAt(this.focus.x,0,this.focus.z);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       else{if(this.camera.up.y<0.9)this.camera.up.set(0,1,0);const preview=this.building.preview,fp=preview&&!preview.stroke?footprint(this.world,preview):null;const free=this.freeCamera();const target=free?null:fp?V(fp.center.x,this.building.ghostGroup.position.y-.7,-fp.center.y):this.overview?V(-2,0,-10):(this.livingTest?.watchActor()||this.residents?.watchActor()||this.community?.focusActor()||this.actor).position.clone().add(V(0,1,0));const followDt=this.ipadQuality?Math.min(frameDt,.5):dt;if(target)this.focus.lerp(target,1-Math.exp(-followDt*4));this.camera.position.copy(this.focus).add(V(...cameraOffset(this.viewYaw||0,this.overview,this.overview?0:this.viewPitch||0)));this.camera.lookAt(this.focus);if(this.camera.near!==-80){this.camera.near=-80;this.camera.far=260;this.camera.updateProjectionMatrix();}}
       this.livingTest?.arrival?.update(frameDt);
+      this.arrivals?.update(frameDt);
       this.livingTest?.garden?.updatePrompts();
       for(const p of this.particles){p.life-=dt;p.v.y-=dt*5;p.mesh.position.addScaledVector(p.v,dt);p.mesh.rotation.x+=dt*3;p.mesh.scale.multiplyScalar(1-dt*.6);if(p.life<=0)this.scene.remove(p.mesh);}this.particles=this.particles.filter(p=>p.life>0);
       if(now-this.lastRefresh>700){this.lastRefresh=now;const min=gameTime(this.store.state),sig=Object.entries(this.store.state.cells).flatMap(([key,c])=>{const g=c.seed?growth(c,min):null,bits=[];if(g)bits.push(`${key}:${g.stage}`);if(plotWeedy(c,min))bits.push(`${key}:weeds`);return bits;}).join('|');const view=this.viewPoint();if(sig!==this.fieldSignature.join('|')||dist(view,this.lastDrawPosition||{x:1e5,y:1e5})>6){this.refreshDynamic();this.lastDrawPosition={...view};}
@@ -1178,7 +1188,11 @@ export class HomeWorld {
       }
       if(now-this.lastSave>5000){this.lastSave=now;if(!document.hidden)this.persist();}
     }
-    this.renderer.render(this.scene,this.fishing?.firstPerson?this.fishing.camera:this.camera);
+    this.renderIsland(this.fishing?.firstPerson?this.fishing.camera:this.camera,now);
   }
-  dispose(){this.coastalLook?.dispose();this.livingTest?.dispose();this.disposed=true;clearTimeout(this.friendTimer);this.assetAbort?.abort();this.draco?.dispose();this.music?.dispose();this.buildAsk?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
+  renderIsland(camera,now){
+    if(this.cookingOpen&&now-(this.lastCookingFrame||0)<1000/20)return;
+    this.lastCookingFrame=now;this.renderer.render(this.scene,camera);
+  }
+  dispose(){this.arrivals?.dispose();this.coastalLook?.dispose();this.livingTest?.dispose();this.disposed=true;clearTimeout(this.friendTimer);this.assetAbort?.abort();this.draco?.dispose();this.music?.dispose();this.buildAsk?.dispose();this.residents?.dispose();this.animals?.dispose();this.farmer?.dispose();this.nightSky?.dispose();cancelAnimationFrame(this.raf);this.persist();this.observer.disconnect();this.mapGesture.dispose();for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])this.renderer.domElement.removeEventListener(type,this.onClearPointer,true);this.renderer.domElement.removeEventListener('pointerdown',this.onStrokePointer);this.renderer.domElement.removeEventListener('pointermove',this.onStrokePointer);this.renderer.domElement.removeEventListener('touchstart',this.onCanvasTouchStart);this.renderer.domElement.removeEventListener('touchmove',this.onCanvasTouchMove);this.renderer.domElement.removeEventListener('touchend',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('touchcancel',this.onCanvasTouchEnd);this.renderer.domElement.removeEventListener('gesturestart',this.blockGesture);this.renderer.domElement.removeEventListener('gesturechange',this.blockGesture);window.removeEventListener('blur',this.onBlur);window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onUnload);window.removeEventListener('storage',this.onStorage);this.renderer.domElement.remove();}
 }

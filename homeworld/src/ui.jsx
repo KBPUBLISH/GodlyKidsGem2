@@ -1,3 +1,4 @@
+import {CookingArt} from './cooking-art.jsx';
 import React,{useEffect,useRef,useState} from 'react';
 import {DISH_ICONS,RecipeIcon} from './recipe-icons.jsx';
 
@@ -22,6 +23,7 @@ export function Icon({type,size=44,className=''}){
   return <img className={`picture-icon higgsfield-icon ${className}`} src={`/icons/higgsfield/${id}.png`} width={size} height={size} alt="" aria-hidden="true" draggable={false} decoding="async" data-game-icon={id} data-icon-source="higgsfield" onError={()=>setFailed(id)}/>;
 }
 export function ItemIcon({id,...props}){
+  if(['potato','potato_seed','pumpkin_stew','garden_omelette','fish_chips'].includes(id))return <CookingArt id={id} size={props.size||44}/>;
   if(DISH_ICONS.has(id))return <RecipeIcon id={id} {...props}/>;
   return <Icon type={ITEM_ICONS[id]||(id?.endsWith('_wood')?'wood':id)} {...props}/>;
 }

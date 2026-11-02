@@ -25,7 +25,7 @@ export const BUILDINGS=[
   {id:'stable',name:'Stable',category:'Farm',size:[3,2],height:2.4,wood:20,stone:8,seconds:8,solid:true,instant:true,poster:'hut',description:'A night stable for sheep, cows and horses. Sheep left outside after day 7 can go missing.'},
   {id:'campfire',name:'Campfire',category:'Decorations',size:[2,2],height:1.3,wood:5,stone:3,seconds:7,solid:true,description:'A warm, flickering fire that glows at night.'},
   {id:'forge',name:'Forge',category:'Decorations',size:[2,2],height:1.8,wood:12,stone:16,seconds:18,solid:true,description:'A stone forge with a hot hearth. Copper, iron, and diamond tools, and metal shovels, are made here.'},
-  {id:'oven',name:'Clay Oven',category:'Decorations',size:[2,2],height:1.7,wood:0,stone:20,clay:6,seconds:600,solid:true,description:'A stone oven lined with clay bricks. Light it with a log, let it heat up, then bake wheat and water into manna.'},
+  {id:'oven',name:'Stone Oven',category:'Farm',size:[2,2],height:1.7,wood:0,stone:20,clay:6,seconds:600,solid:true,description:'Slice, stir and bake! Make stew, omelettes and fish and chips here. Includes a prep counter and cooking pot.'},
   {id:'well',name:'Water Well',category:'Gardens',size:[2,2],height:2.3,wood:8,stone:14,seconds:14,solid:true,requiresShovel:1,description:'Dig down to fresh water. With a well on the island, watering the garden costs no energy.'},
   ...FARM_BUILDINGS, // Adam's water trough and feed pile (farm-rules.mjs)
 ];

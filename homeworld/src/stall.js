@@ -1,5 +1,4 @@
-// The built Market stall. Sales credit the profile-scoped Friends World wallet.
-// Story and mini-game reward coins are intentionally never read or changed here.
+// The built Market stall. Embedded sales credit the selected app profile’s gold wallet.
 import {activeBuildings} from './building.mjs';
 import {sellCard, quoteSell} from './sell-prices.mjs';
 import {creditShipCoins} from './today-goals.mjs';

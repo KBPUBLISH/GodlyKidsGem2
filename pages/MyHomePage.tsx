@@ -1,3 +1,5 @@
+import { waitingStoryFriends } from '../shared/storyFriends.mjs';
+import { transactFriendsWallet } from '../shared/friendsWallet.mjs';
 import IslandFriendChat from '../components/crew/IslandFriendChat';
 import LivingJourneyGuide from '../components/onboarding/LivingJourneyGuide';
 import {useCharacterVoice} from '../utils/useCharacterVoice';
@@ -18,7 +20,7 @@ import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/p
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
 import { noteFriendsAction, noteFriendsVisit } from '../utils/journeyStudy';
-import { ensureLegacyMigration, getProfileScopeKey, onProfileScopeChange } from '../utils/profileScope';
+import { ensureLegacyMigration, getProfileScopeKey, profileScopeKeyFor, onProfileScopeChange } from '../utils/profileScope';
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRICES, ISLAND_SELL_MAX_QTY } from '../utils/islandShop';
 
@@ -38,22 +40,18 @@ const LOADING_FADE_MS = 520;
 const LOADING_FALLBACK_MS = 12000;
 const LOADING_LINES = ['Setting sail…', 'Rowing ashore…', 'Waking up your island…', 'Almost home…'];
 const ISLAND_COINS_KEY = 'gk_friends_world_coins_v1';
-const ISLAND_STARTING_COINS = 500;
+// Subtract the old allowance when importing legacy island earnings; never grant it to new users.
+const LEGACY_ISLAND_STARTING_COINS = 500;
 const islandCoinsKey = (scope: string) => `${ISLAND_COINS_KEY}:${scope}`;
 const readIslandCoins = (scope: string): number => {
   try {
     const raw = localStorage.getItem(islandCoinsKey(scope));
-    if (raw === null) return ISLAND_STARTING_COINS;
+    if (raw === null) return LEGACY_ISLAND_STARTING_COINS;
     const value = Number(raw);
     return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
   } catch {
     return 0;
   }
-};
-const writeIslandCoins = (scope: string, value: number): number => {
-  const next = Math.max(0, Math.floor(Number(value) || 0));
-  try { localStorage.setItem(islandCoinsKey(scope), String(next)); } catch { /* private mode */ }
-  return next;
 };
 
 const CARVED = '0 1px 0 #5C2E0B, 0 2px 0 #3E1F07, 0 2px 4px rgba(0,0,0,0.45)';
@@ -233,7 +231,7 @@ const MyHomePage: React.FC = () => {
   const firstArrival=livingTestMode&&!!(routeLocation.state as {firstArrival?:boolean}|null)?.firstArrival;
   useEffect(() => { if (livingTestMode) stopPreviewWarmup(); }, [livingTestMode]);
   const openingFirstFriend=useRef(false);
-  const { kids, currentProfileId, parentName } = useUser();
+  const { kids, currentProfileId, parentName, coins, getCoinBalance, addCoins, spendCoins, importFriendsCoins } = useUser();
   const playerAvatarId = livingAvatarForProfile(kids.find(kid=>kid.id===currentProfileId)).id;
   const playerName = useMemo(() => {
     const kid = currentProfileId ? kids.find((k) => k.id === currentProfileId) : null;
@@ -257,6 +255,8 @@ const MyHomePage: React.FC = () => {
       if (!islandRoot) return;
       const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-top')) || 0;
       islandRoot.style.setProperty('--host-safe-area-top', `${Math.max(0, top)}px`);
+      const bottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom')) || 0;
+      islandRoot.style.setProperty('--host-safe-area-bottom', `${Math.max(0, bottom)}px`);
     };
     syncSafeArea();
     const observer = new MutationObserver(syncSafeArea);
@@ -278,23 +278,36 @@ const MyHomePage: React.FC = () => {
   const [bedNotice, setBedNotice] = useState<string | null>(null);
   // Each kid profile owns its own island. The legacy (unscoped) island is handed to
   // the first profile that opens My Home after the per-profile change (copy, not move).
-  const [profileScope, setProfileScope] = useState<string>(() => ensureLegacyMigration().scope);
-  const [islandCoins, setIslandCoins] = useState<number>(() => readIslandCoins(getProfileScopeKey()));
-  const coinsRef = useRef(islandCoins);
-  coinsRef.current = islandCoins;
-  const setIslandBalance = useCallback((next: number) => {
-    const saved = writeIslandCoins(profileScope, next);
-    coinsRef.current = saved;
-    setIslandCoins(saved);
-    return saved;
-  }, [profileScope]);
-  const spendIslandCoins = useCallback((amount: number) => {
-    if (!Number.isFinite(amount) || amount < 0 || coinsRef.current < amount) return false;
-    setIslandBalance(coinsRef.current - amount);
-    return true;
-  }, [setIslandBalance]);
-  const addIslandCoins = useCallback((amount: number) => setIslandBalance(coinsRef.current + Math.max(0, Math.floor(amount))), [setIslandBalance]);
-  const [residents, setResidents] = useState<PlayersWorldResident[]>(() => readPlayersWorldResidents());
+  const [profileScope, setProfileScope] = useState<string>(() => ensureLegacyMigration(profileScopeKeyFor(currentProfileId)).scope);
+  const walletProfileRef = useRef(profileScopeKeyFor(currentProfileId));
+  walletProfileRef.current = profileScopeKeyFor(currentProfileId);
+  const spendIslandCoins = useCallback((amount: number) => spendCoins(amount, 'Friends World purchase'), [spendCoins]);
+  const addIslandCoins = useCallback((amount: number) => {
+    addCoins(amount, 'Friends World earnings', 'game');
+    return getCoinBalance();
+  }, [addCoins, getCoinBalance]);
+  useEffect(() => {
+    if ((profileScope !== getProfileScopeKey() || profileScope !== walletProfileRef.current)) return;
+    // Wait for UserProvider’s initial profile hydration before importing old earnings.
+    const migration = window.setTimeout(() => {
+      if (profileScope === getProfileScopeKey() && profileScope === walletProfileRef.current) importFriendsCoins(`${profileScope}:island`, Math.max(0, readIslandCoins(profileScope) - LEGACY_ISLAND_STARTING_COINS));
+    }, 0);
+    const onWallet = (event: Event) => {
+      const request = (event as CustomEvent).detail;
+      if (!request || request.source !== frameRef.current?.contentWindow || request.scope !== profileScope || (profileScope !== getProfileScopeKey() || profileScope !== walletProfileRef.current)) return;
+      if (request.action === 'read') {
+        const world = request.world === 'living-test' ? 'living-test' : 'normal';
+        importFriendsCoins(`${profileScope}:farm:${world}`, request.legacyCoins);
+        request.result = { ok: true, balance: getCoinBalance() };
+      } else if (request.action === 'transact') {
+        request.result = transactFriendsWallet(request, { balance: getCoinBalance, spend: spendCoins, earn: addCoins });
+      }
+    };
+    window.addEventListener('gk-friends-wallet', onWallet);
+    return () => { window.clearTimeout(migration); window.removeEventListener('gk-friends-wallet', onWallet); };
+  }, [profileScope, importFriendsCoins, getCoinBalance, spendCoins, addCoins]);
+  const [residents, setResidents] = useState<PlayersWorldResident[]>(() => livingTestMode ? [] : readPlayersWorldResidents());
+  const [livingAdamHome,setLivingAdamHome]=useState(false);
   const [collected, setCollected] = useState<UnlockedCharacter[]>(() => rewardsService.getUnlockedCharacters());
   const adamReward=useMemo(()=>collected.find(c=>/^adam$/i.test(c.name.trim())),[collected]);
   // A profile switch while this page is open: re-read this profile's data and reload the island.
@@ -303,20 +316,22 @@ const MyHomePage: React.FC = () => {
       onProfileScopeChange((scope) => {
         ensureLegacyMigration(scope);
         setProfileScope(scope);
-        const balance = readIslandCoins(scope);
-        coinsRef.current = balance;
-        setIslandCoins(balance);
+        pendingBuyRef.current = null;
+        pendingFarmRef.current = null;
         setCollected(rewardsService.getUnlockedCharacters());
-        setResidents(readPlayersWorldResidents());
+        setResidents(livingTestMode ? [] : readPlayersWorldResidents());
+        setLivingAdamHome(false);setReady(false);setFriendsOpen(false);
         setPlacing(null);
       }),
-    [],
+    [livingTestMode],
   );
   // Enter using the saved roster; newer CMS models sync in the background.
   const [modelsReady, setModelsReady] = useState(true);
-  const [friendChat,setFriendChat]=useState<{scope:string;session:number;mode:string;intro?:boolean;character:UnlockedCharacter;world:Record<string,unknown>;result?:{ok:boolean;line:string;serial:number}}|null>(null);
+  const [friendChat,setFriendChat]=useState<{scope:string;session:number;mode:string;intro?:boolean;arrival?:boolean;character:UnlockedCharacter;world:Record<string,unknown>;result?:{ok:boolean;line:string;serial:number}}|null>(null);
   useEffect(()=>setFriendChat(null),[profileScope]);
   const [chatCharacter, setChatCharacter] = useState<UnlockedCharacter | null>(null);
+  const [arrivalChat,setArrivalChat]=useState(false);
+  const [sitePicking,setSitePicking]=useState(false);
   const [chatWorld, setChatWorld] = useState<WorldBrief | null>(null);
 
   usePreventPullToRefresh(true);
@@ -462,15 +477,15 @@ const MyHomePage: React.FC = () => {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data as { type?: string; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
+      if (event.origin !== window.location.origin || event.source !== frameRef.current?.contentWindow || (profileScope !== getProfileScopeKey() || profileScope !== walletProfileRef.current)) return;
+      const data = event.data as { type?: string; arrival?: boolean; residents?: PlayersWorldResident[]; world?: WorldBrief | null; character?: { id?: string; name?: string; imageUrl?: string; sourceStoryId?: string }; beds?: number; canDrop?: boolean; need?: number; denied?: string } | null;
       if (!data?.type) return;
       if(livingTestMode&&event.source===frameRef.current?.contentWindow&&data.type.startsWith('gk-living-friend-')){
         const message=event.data;
         if(message.type==='gk-living-friend-open'&&Number.isInteger(message.session)&&message.character?.id==='adam'){
           adamVoice.stop();setCoach(null);
           const known=rewardsService.getUnlockedCharacters().find(c=>/^adam$/i.test(c.name.trim()));
-          setFriendChat({scope:profileScope,session:message.session,mode:message.intro?'chat':message.mode==='tasks'?'tasks':'chat',intro:message.intro===true,character:known||{id:'adam',name:'Adam',imageUrl:''},world:message.world||{}});
+          setFriendChat({scope:profileScope,session:message.session,mode:message.intro?'chat':message.mode==='tasks'?'tasks':'chat',intro:message.intro===true,arrival:message.arrival===true,character:known||{id:'adam',name:'Adam',imageUrl:''},world:message.world||{}});
         }
         if(message.type==='gk-living-friend-task-result'&&typeof message.line==='string'&&message.line.length<=500)setFriendChat(current=>current?.session===message.session?{...current,world:message.world||current.world,result:{ok:message.ok===true,line:message.line,serial:Date.now()}}:current);
         if(message.type==='gk-living-friend-ended')setFriendChat(current=>current?.session===message.session?null:current);
@@ -512,13 +527,14 @@ const MyHomePage: React.FC = () => {
       }
       if (data.type === 'gk-prayer-stop') stopPrayerAudio(typeof (data as { id?: unknown }).id === 'string' ? (data as { id: string }).id : undefined);
       if (data.type === 'gk-beds' && typeof data.beds === 'number') {
+        setLivingAdamHome(!!event.data.livingAdamHome);
         setBeds({ beds: data.beds, residents: Number((data as { residents?: unknown }).residents) || 0, canDrop: !!data.canDrop, need: Number(data.need) || 0 });
         if (data.denied) {
           setPlacing(null);
           setBedNotice(`${data.denied} needs a bed first. Build or upgrade a home on the island, then come back.`);
         }
       }
-      if (data.type === 'gk-site-view') setFriendsOpen(false);
+      if (data.type === 'gk-site-view') {setSitePicking(!!data.on);if(data.on){setFriendsOpen(false);setFriendChat(null);setChatCharacter(null);setArrivalChat(false);setCoach(null);}}
       if (data.type === 'gk-open-friends') {
         noteFriendsAction('list');
         setCollected(rewardsService.getUnlockedCharacters());
@@ -526,6 +542,7 @@ const MyHomePage: React.FC = () => {
       }
       if (data.type === 'gk-resident-talk' && data.character?.id && data.character.name) {
         noteFriendsAction('talk', data.character.name);
+        setArrivalChat(data.arrival===true);
         setChatWorld(data.world ?? null);
         const known = rewardsService.getUnlockedCharacters().find((c) => c.id === data.character?.id);
         setChatCharacter(known || {
@@ -543,25 +560,25 @@ const MyHomePage: React.FC = () => {
           placingRef.current = null;
           setPlacing(null);
         }
-        post({ type: 'gk-coins', balance: coinsRef.current });
+        post({ type: 'gk-coins', balance: getCoinBalance() });
       }
-      if (data.type === 'gk-coins-please') post({ type: 'gk-coins', balance: coinsRef.current });
+      if (data.type === 'gk-coins-please') post({ type: 'gk-coins', balance: getCoinBalance() });
       if (data.type === 'gk-buy') {
         const buy = data as { id?: unknown; cost?: unknown; item?: unknown };
         const id = typeof buy.id === 'string' ? buy.id : '';
         const price = ISLAND_ANIMAL_PRICES[id];
         const cost = Number(buy.cost);
         if (!id || price == null || cost !== price) {
-          post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: 'That animal is not for sale.' });
+          post({ type: 'gk-buy-result', ok: false, id, balance: getCoinBalance(), reason: 'That animal is not for sale.' });
           return;
         }
         if (!spendIslandCoins(price)) {
-          post({ type: 'gk-buy-result', ok: false, id, balance: coinsRef.current, reason: `Need ${price - coinsRef.current} coins.` });
+          post({ type: 'gk-buy-result', ok: false, id, balance: getCoinBalance(), reason: `Need ${price - getCoinBalance()} coins.` });
           return;
         }
         pendingBuyRef.current = { id, cost: price, at: Date.now() };
         noteFriendsAction('buy', id);
-        post({ type: 'gk-buy-result', ok: true, id, balance: coinsRef.current });
+        post({ type: 'gk-buy-result', ok: true, id, balance: getCoinBalance() });
       }
       if (data.type === 'gk-refund') {
         const refund = data as { id?: unknown; cost?: unknown };
@@ -569,12 +586,12 @@ const MyHomePage: React.FC = () => {
         if (pending && pending.id === refund.id && pending.cost === Number(refund.cost) && Date.now() - pending.at < 120000) {
           pendingBuyRef.current = null;
           addIslandCoins(pending.cost);
-          post({ type: 'gk-coins', balance: coinsRef.current });
+          post({ type: 'gk-coins', balance: getCoinBalance() });
         }
       }
       if (data.type === 'gk-buy-commit') pendingBuyRef.current = null;
       // Adam's farm spends the profile's Friends World coins, never story/mini-game rewards.
-      // Two steps so island coins are never lost on a failed landing:
+      // Two steps so gold coins are never lost on a failed landing:
       //   gk-buy-animal   → check the price and balance, approve (gk-animal-purchased), nothing spent yet
       //   gk-animal-received {qty} → the island placed the animals: spend unit × qty now
       //   gk-animal-refund → the boat could not land anything: drop the approval, nothing to give back
@@ -586,16 +603,16 @@ const MyHomePage: React.FC = () => {
         const unit = FARM_ANIMAL_PRICES[kind];
         const price = unit == null ? NaN : unit * qty;
         if (!requestId || unit == null || qty < 1 || qty > FARM_MAX_QTY || Number(buy.price) !== price) {
-          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, reason: 'Those animals are not for sale right now.' });
+          post({ type: 'gk-animal-denied', requestId, balance: getCoinBalance(), reason: 'Those animals are not for sale right now.' });
           return;
         }
-        if (coinsRef.current < price) {
-          const short = price - coinsRef.current;
-          post({ type: 'gk-animal-denied', requestId, balance: coinsRef.current, short, reason: `Need ${short} more island coins. Sell crops, fish, or gems at your market.` });
+        if (getCoinBalance() < price) {
+          const short = price - getCoinBalance();
+          post({ type: 'gk-animal-denied', requestId, balance: getCoinBalance(), short, reason: `Need ${short} more gold coins. Sell crops, fish, or gems at your market.` });
           return;
         }
         pendingFarmRef.current = { requestId, kind, unit, qty, at: Date.now() };
-        post({ type: 'gk-animal-purchased', requestId, kind, qty, balance: coinsRef.current });
+        post({ type: 'gk-animal-purchased', requestId, kind, qty, balance: getCoinBalance() });
       }
       if (data.type === 'gk-animal-received') {
         const got = data as { requestId?: unknown; qty?: unknown };
@@ -605,15 +622,15 @@ const MyHomePage: React.FC = () => {
         pendingFarmRef.current = null;
         const charged = Math.min(qty, pending.qty) * pending.unit;
         const spent = spendIslandCoins(charged);
-        post({ type: 'gk-coins', balance: coinsRef.current });
-        if (!spent) post({ type: 'gk-animal-denied', requestId: pending.requestId, balance: coinsRef.current, reason: 'Your island coin balance changed. Sell goods and try again.' });
+        post({ type: 'gk-coins', balance: getCoinBalance() });
+        if (!spent) post({ type: 'gk-animal-denied', requestId: pending.requestId, balance: getCoinBalance(), reason: 'Your gold coin balance changed. Sell goods and try again.' });
       }
       if (data.type === 'gk-animal-refund') {
         const pending = pendingFarmRef.current;
         if (pending && pending.requestId === (data as { requestId?: unknown }).requestId) pendingFarmRef.current = null;
       }
-      if (data.type === 'gk-earn-coins') post({ type: 'gk-coins', balance: coinsRef.current });
-      // Market stall credits this profile's Friends World wallet only.
+      if (data.type === 'gk-earn-coins') post({ type: 'gk-coins', balance: getCoinBalance() });
+      // Market sales credit the same profile wallet as the app shop.
       if (data.type === 'gk-sell') {
         const sale = data as { item?: unknown; qty?: unknown; coins?: unknown; name?: unknown };
         const item = typeof sale.item === 'string' ? sale.item : '';
@@ -621,7 +638,7 @@ const MyHomePage: React.FC = () => {
         const unit = ISLAND_SELL_PRICES[item];
         const coins = unit == null ? NaN : unit * qty;
         if (!item || unit == null || qty < 1 || qty > ISLAND_SELL_MAX_QTY || Number(sale.coins) !== coins) {
-          post({ type: 'gk-sell-result', ok: false, item, balance: coinsRef.current, reason: 'The stall does not buy that.' });
+          post({ type: 'gk-sell-result', ok: false, item, balance: getCoinBalance(), reason: 'The stall does not buy that.' });
           return;
         }
         const balance = addIslandCoins(coins);
@@ -637,7 +654,7 @@ const MyHomePage: React.FC = () => {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post,adamVoice.speak,spendIslandCoins,addIslandCoins]);
+  }, [navigate, speakPrayer, stopPrayerAudio,livingTestMode,profileScope,post,adamVoice.speak,spendIslandCoins,addIslandCoins,getCoinBalance]);
 
   useEffect(() => {
     if (!ready) return;
@@ -650,8 +667,8 @@ const MyHomePage: React.FC = () => {
 
   useEffect(() => {
     if (!ready) return;
-    post({ type: 'gk-coins', balance: islandCoins });
-  }, [post, ready, islandCoins]);
+    post({ type: 'gk-coins', balance: coins });
+  }, [post, ready, coins]);
 
   const visitRef = useRef<{ id: string; started: number; ended: boolean } | null>(null);
   useEffect(() => {
@@ -691,13 +708,26 @@ const MyHomePage: React.FC = () => {
 
   const residentIds = useMemo(() => new Set(residents.map((r) => r.id)), [residents]);
   /** Collected story friends not yet living on the island. */
-  const waiting = useMemo(() => collected.filter((c) => !residentIds.has(c.id)), [collected, residentIds]);
+  const [preferredFriendId] = useState(() => (routeLocation.state as {welcomeFriendId?:string}|null)?.welcomeFriendId);
+  const waiting = useMemo(() => waitingStoryFriends(collected, residents, livingTestMode && livingAdamHome).sort((a,b)=>Number(b.id===preferredFriendId)-Number(a.id===preferredFriendId)), [collected, residents, livingTestMode, livingAdamHome, preferredFriendId]);
+  const welcomeRequest=useRef('');
+  useEffect(()=>{
+    const id=(routeLocation.state as {welcomeFriendId?:string}|null)?.welcomeFriendId;
+    if(!ready||!id||welcomeRequest.current===routeLocation.key)return;
+    welcomeRequest.current=routeLocation.key;
+    setCollected(rewardsService.getUnlockedCharacters());
+    if(!residentIds.has(id))setFriendsOpen(true);
+    const {welcomeFriendId,...rest}=(routeLocation.state||{}) as Record<string,unknown>;
+    navigate(routeLocation.pathname+routeLocation.search,{replace:true,state:rest});
+  },[ready,routeLocation.key,routeLocation.state,routeLocation.pathname,routeLocation.search,navigate,residentIds]);
   const waitingCount = waiting.length;
   const nextFriend = waiting[0];
   useEffect(() => {
     if (!ready) return;
-    post({ type: 'gk-friends-waiting', count: waitingCount, name: nextFriend?.name || '' });
-  }, [post, ready, waitingCount, nextFriend?.name]);
+    post({ type: 'gk-friends-waiting', count: waitingCount, name: nextFriend?.name || '', imageUrl: nextFriend?.imageUrl || '' });
+  }, [post, ready, waitingCount, nextFriend?.name, nextFriend?.imageUrl]);
+
+  useEffect(()=>{if(ready)post({type:'gk-story-friends-open',open:friendsOpen});},[post,ready,friendsOpen]);
 
   const startDrop = (character: UnlockedCharacter) => {
     const payload: DropCharacter = {
@@ -730,7 +760,7 @@ const MyHomePage: React.FC = () => {
     const name = residents.find((resident) => resident.id === id)?.name
       || collected.find((character) => character.id === id)?.name;
     noteFriendsAction('play', name);
-    post({ type: 'gk-resident-select', id });
+    post({ type: livingTestMode?'gk-watch-story-friend':'gk-resident-select', id: livingTestMode&&/^adam$/i.test(name||'')?'adam':id });
     setFriendsOpen(false);
   };
 
@@ -740,13 +770,14 @@ const MyHomePage: React.FC = () => {
       className="fixed inset-0 h-[100dvh] min-h-0 bg-[#315d41] flex flex-col overflow-hidden overscroll-none"
       style={{ overscrollBehavior: 'none' }}
     >
-      {friendChat&&friendChat.scope===profileScope&&<IslandFriendChat key={`${profileScope}:${friendChat.session}`} character={friendChat.character} userName={playerName} world={friendChat.world} mode={friendChat.mode} intro={friendChat.intro} result={friendChat.result} onClose={()=>{post({type:'gk-living-friend-close',session:friendChat.session});setFriendChat(null);}} onTask={task=>post({type:'gk-living-friend-task',session:friendChat.session,task})} onIntro={answer=>post({type:'gk-living-friend-intro',session:friendChat.session,answer})}/>}
-      {chatCharacter && (
+      {!sitePicking&&friendChat&&friendChat.scope===profileScope&&<IslandFriendChat key={`${profileScope}:${friendChat.session}`} character={friendChat.character} userName={playerName} world={friendChat.world} mode={friendChat.mode} intro={friendChat.intro} arrival={friendChat.arrival} result={friendChat.result} onClose={()=>{post({type:'gk-living-friend-close',session:friendChat.session});setFriendChat(null);}} onTask={task=>post({type:'gk-living-friend-task',session:friendChat.session,task})} onIntro={answer=>post({type:'gk-living-friend-intro',session:friendChat.session,answer})}/>}
+      {!sitePicking&&chatCharacter && (
         <CrewChatPopup
           variant="island"
+          arrival={arrivalChat}
           character={chatCharacter}
           world={chatWorld}
-          onClose={() => setChatCharacter(null)}
+          onClose={() => {post({type:'gk-arrival-chat-close',id:chatCharacter.id});setChatCharacter(null);setArrivalChat(false);}}
           // Chat is just for talking. Jobs are given with the Task button beside the character on the island.
         />
       )}
@@ -825,8 +856,9 @@ const MyHomePage: React.FC = () => {
               </p>
             ) : (
               <ul className="max-h-[46vh] space-y-2 overflow-y-auto">
-                {collected.map((character) => {
-                  const home = residentIds.has(character.id);
+                {[...waiting,...collected.filter(c=>!waiting.some(w=>w.id===c.id))].map((character) => {
+                  const managedAdam=livingTestMode&&/^adam$/i.test(character.name.trim());
+                  const home = residentIds.has(character.id)||(managedAdam&&livingAdamHome);
                   return (
                     <li key={character.id} className="flex items-center gap-3 rounded-2xl bg-[#f7efe2] px-3 py-2">
                       <button
@@ -845,10 +877,10 @@ const MyHomePage: React.FC = () => {
                       </span>
                       <span className="min-w-0 flex-1">
                         <strong className="block truncate">{character.name}</strong>
-                        <small className="text-[#8a5a32]">{home ? 'On your island · tap to go to them' : 'From your stories'}</small>
+                        <small className="text-[#8a5a32]">{home ? 'On your island · tap to go to them' : 'Waiting to come ashore'}</small>
                       </span>
                       </button>
-                      {home ? (
+                      {home && managedAdam ? <span className="text-sm font-bold text-[#2f5a32]">Home ✓</span> : home ? (
                         <button type="button" className="rounded-full bg-white px-3 py-2 text-sm font-bold" onClick={() => bringBack(character.id)}>
                           Bring to Ship
                         </button>
@@ -886,7 +918,7 @@ const MyHomePage: React.FC = () => {
         </div>
       )}
 
-      {livingTestMode&&coach&&<LivingJourneyGuide key={coach.id} autoSpeak={coach.autoSpeak} line={coach.line} spoken={coach.spoken} label={coach.label} onAction={()=>post({type:'gk-living-coach-action',id:coach.id,action:'next'})} onDismiss={()=>post({type:'gk-living-coach-action',id:coach.id,action:'later'})}/>}
+      {livingTestMode&&!sitePicking&&coach&&<LivingJourneyGuide key={coach.id} autoSpeak={coach.autoSpeak} line={coach.line} spoken={coach.spoken} label={coach.label} onAction={()=>post({type:'gk-living-coach-action',id:coach.id,action:'next'})} onDismiss={()=>post({type:'gk-living-coach-action',id:coach.id,action:'later'})}/>}
       {overlayMounted && !livingTestMode && <MyHomeLoading hiding={!loading} frameLoaded={frameLoaded} />}
 
       {/* First visit: read a story → drop off a friend → the island runs its tour (components/home/HomeOnboarding.tsx).
@@ -915,7 +947,7 @@ const MyHomePage: React.FC = () => {
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
           allow="autoplay; fullscreen; pointer-lock"
-          onLoad={() => {setFrameLoaded(true);setFriendChat(null);}}
+          onLoad={() => {setFrameLoaded(true);setFriendChat(null);setSitePicking(false);}}
           style={{
             position: 'absolute',
             top: 0,

@@ -2,8 +2,8 @@
 export const PLAYER_ID = 'you';
 export const REQUESTS = [
   { id: 'first-camp', friend: 'you', name: 'You', item: 'wood', count: 3,
-    title: 'Build your prayer tent', ask: 'This is your island! Walk near 3 logs to pick them up, then bring them to the glowing circle.',
-    action: 'Walk near the fallen logs', delivery: 'Step onto your tent circle', thanks: 'You did it! Your prayer tent is ready.' },
+    title: 'Build your prayer tent', ask: 'This is your island! Cut down 3 trees, then bring the wood to the glowing circle.',
+    action: 'Cut down 3 trees', delivery: 'Step onto your tent circle', thanks: 'You did it! Your prayer tent is ready.' },
   { id: 'garden-carrots', friend: 'adam', name: 'Adam', item: 'carrot', count: 4,
     title: 'Something good to share', ask: 'I’m glad to be here! Will you pick 4 carrots? We can share a meal by your tent.',
     action: 'Walk near the ripe carrots', delivery: 'Step onto the tent circle', thanks: 'Thank you! It’s good to have a friend beside you.' },
@@ -12,19 +12,21 @@ export const REQUESTS = [
     action: 'Find a few more fallen logs', delivery: 'Step onto the home circle', thanks: 'Just what we needed. I’ll get started on our home!' },
 ];
 export const RESOURCE_IDS = Object.freeze({
+  'tree-1': 'wood', 'tree-2': 'wood', 'tree-3': 'wood',
   'log-1': 'wood', 'log-2': 'wood', 'log-3': 'wood',
   'log-4': 'wood', 'log-5': 'wood', 'log-6': 'wood',
   'carrot-1': 'carrot', 'carrot-2': 'carrot', 'carrot-3': 'carrot', 'carrot-4': 'carrot',
 });
 
 export function freshState() {
-  return { version: 2, player: { id: PLAYER_ID }, stage: 0, homeWork: 0, approvedBuildings: {}, adamUnlocked:false, adamArrived:false, inviteDismissed:false,welcomeSeen:false,
+  return { version: 2, treeBaseline:null, player: { id: PLAYER_ID }, stage: 0, homeWork: 0, approvedBuildings: {}, adamUnlocked:false, adamArrived:false, inviteDismissed:false,welcomeSeen:false,
     inventory: { wood: 0, carrot: 0 }, deposits: { 'first-camp':0,'garden-carrots':0,'home-wood':0 }, gathered: [], helpDone: [], helpJob: null };
 }
 
 export function restoreState(value) {
   const clean = freshState();
   if (!value || value.version !== 2) return clean;
+  clean.treeBaseline=Number.isInteger(value.treeBaseline)&&value.treeBaseline>=0?value.treeBaseline:null;
   clean.stage = Number.isInteger(value.stage) ? Math.max(0, Math.min(REQUESTS.length, value.stage)) : 0;
   clean.gathered = [...new Set(Array.isArray(value.gathered) ? value.gathered : [])].filter(id => Object.hasOwn(RESOURCE_IDS, id));
   // Reconstruct inventory from validated pickups and completed deliveries.
@@ -66,7 +68,22 @@ export function readyToDeliver(state) {
 }
 export function activeResourceIds(state){
   if(!currentRequest(state))return [];
-  return state.stage===0?['log-1','log-2','log-3']:state.stage===1?['carrot-1','carrot-2','carrot-3','carrot-4']:['log-4','log-5','log-6'];
+  return state.stage===0?[]:state.stage===1?['carrot-1','carrot-2','carrot-3','carrot-4']:['log-4','log-5','log-6'];
+}
+/** One durable starter wood receipt per fully felled tree, never per axe hit. */
+export function starterTrees(state){
+ return Math.min(3,state.gathered.filter(id=>/^(tree|log)-[123]$/.test(id)).length);
+}
+export function recordStarterTrees(state,totalTrees){
+ if(state.stage!==0||!Number.isInteger(totalTrees)||totalTrees<0)return state;
+ if(state.treeBaseline===null)return {...state,treeBaseline:totalTrees};
+ const earned=Math.min(3,Math.max(0,totalTrees-state.treeBaseline));
+ let next=state;
+ for(let i=1;i<=earned&&starterTrees(next)<3;i++){
+  const id=`tree-${i}`;if(next.gathered.includes(id))continue;
+  next={...next,gathered:[...next.gathered,id],inventory:{...next.inventory,wood:next.inventory.wood+1}};
+ }
+ return next;
 }
 export function collect(state, resourceId, actor = PLAYER_ID) {
   const item = Object.hasOwn(RESOURCE_IDS, resourceId) ? RESOURCE_IDS[resourceId] : null;
@@ -87,6 +104,7 @@ export function deliver(state, friendId, actor = PLAYER_ID) {
 export function guidance(state){
   const task=currentRequest(state);if(!task)return null;
   const found=state.deposits[task.id]+state.inventory[task.item],delivery=found>=task.count;
+  if(state.stage===0&&!delivery)return {found:starterTrees(state),delivery:false,noun:'trees',label:'Cut down 3 trees',instruction:'Tap a tree to cut it down with your axe.',progress:`${starterTrees(state)} / 3 trees cut`};
   const noun=task.item==='wood'?'logs':'carrots',place=state.stage<2?'tent':'home';
   return {found,delivery,noun,label:delivery?`Take ${noun} to ${place}`:task.item==='wood'?'Find a log':'Find a carrot',
     instruction:delivery?'Tap the glowing circle. Your supplies go in by themselves.':task.item==='wood'?'Tap a log. Walk close to pick it up.':'Tap a carrot. Walk close to pick it up.',

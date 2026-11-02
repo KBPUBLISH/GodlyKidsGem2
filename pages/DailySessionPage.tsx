@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Check, ChevronRight, Play, BookOpen, MessageCircle, Camera, Sparkles } from 'lucide-react';
@@ -1041,7 +1042,7 @@ const DailySessionPage: React.FC = () => {
         avatar: '/avatars/heads/head-1.png',
         frame: 'border-[#8B4513]',
         animation: 'anim-breathe',
-        coins: 500,
+        coins: STARTING_GOLD_COINS,
         coinTransactions: [],
         ownedItems: ['f1', 'anim1'],
         unlockedVoices: [],

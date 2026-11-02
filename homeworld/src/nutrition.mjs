@@ -1,3 +1,4 @@
+import {COOKING_RECIPES} from './cooking.mjs';
 import {TREE_MAX_HEALTH} from './resource-health.mjs';
 import {toolTier,MINING_ENERGY_PER_HIT} from './mining.mjs';
 import {buildingById} from './building.mjs';
@@ -5,6 +6,7 @@ import {hasWell,digPower} from './digging.mjs';
 export const MAX_ENERGY=100;
 export const LOW_ENERGY=20,SLEEP_SECONDS=12,SLEEP_HOURS=8;
 export const FOODS={
+  ...Object.fromEntries(COOKING_RECIPES.map(r=>[r.meal,{name:r.name,energy:r.energy,source:"Cook together at your stone oven."}])),
   lettuce:{name:'Lettuce',icon:'🥬',energy:15,source:'Pick lettuce from your garden.'},
   apple:{name:'Apple',icon:'🍎',energy:15,source:'Pick them from an apple tree · they grow back.'},
   carrot:{name:'Carrot',icon:'🥕',energy:20,source:'Harvest carrots from your garden.'},

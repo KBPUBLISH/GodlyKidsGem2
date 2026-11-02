@@ -1,3 +1,4 @@
+import {ADAM_MODEL_URL,currentAdamCharacter} from '../shared/adamModel.mjs';
 /**
  * Local persistence for Bible Map Rewards unlocks (characters, games,
  * book templates, coin claim tracking) + selected Crew deck roster.
@@ -130,7 +131,7 @@ export const ONBOARDING_ADAM_REWARD: RewardDefinition = {
   type: 'character',
   title: 'Adam',
   characterName: 'Adam',
-  modelUrl: '/models/test-character.glb',
+  modelUrl: ADAM_MODEL_URL,
   voiceId: 'pNInz6obpgDQGcFmaJgB',
   persona:
     'You are Adam, the first man God made in the Garden of Eden. Talk warmly and simply with kids. You are curious, kind, and thankful to God.',
@@ -166,7 +167,7 @@ function readStore(): RewardsStore {
     if (!raw) return { ...EMPTY, characters: [], games: [], bookTemplates: [], claimedKeys: [], selectedCrewIds: [] };
     const parsed = JSON.parse(raw) as Partial<RewardsStore>;
     return {
-      characters: Array.isArray(parsed.characters) ? parsed.characters : [],
+      characters: Array.isArray(parsed.characters) ? parsed.characters.map(currentAdamCharacter) : [],
       games: Array.isArray(parsed.games) ? parsed.games : [],
       bookTemplates: Array.isArray(parsed.bookTemplates) ? parsed.bookTemplates : [],
       claimedKeys: Array.isArray(parsed.claimedKeys) ? parsed.claimedKeys : [],

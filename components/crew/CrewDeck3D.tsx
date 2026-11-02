@@ -9,6 +9,9 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 import type { UnlockedCharacter } from '../../services/rewardsService';
 import { danceMusic } from '../../services/danceMusicService';
 import { getCrewLocation, setCrewLocation } from './basementCharacter';
+import { isAdamCharacter } from '../../utils/adamTour';
+
+const PLAYER_DECK_SCALE = 1.12;
 
 /**
  * Fullscreen transparent WebGL overlay for 3D crew characters over painted
@@ -883,7 +886,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
     const heightAt = (ny: number) =>
       baseCharacterHeight(viewH) * zoneScale * depthScale(ny);
     /** Same height, times this crew mate's deckScale (parrot is smaller). */
-    const sizedHeight = (f: Figure) => heightAt(f.pos.y) * (f.character.deckScale ?? 1);
+    const sizedHeight = (f: Figure) => heightAt(f.pos.y) * (isAdamCharacter(f.character) ? PLAYER_DECK_SCALE : (f.character.deckScale ?? 1));
 
     /** Which walk surface a point is on: a platform id or the main deck. */
     const levelOf = (p: Pt): string => {
@@ -1430,7 +1433,7 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
       const scout=createLivingPlayer(player.avatarId),inner=new THREE.Group();inner.add(scout.model);
       const box=new THREE.Box3().setFromObject(scout.model),size=box.getSize(new THREE.Vector3());
       scout.model.position.set(-(box.min.x+size.x/2),-box.min.y,-(box.min.z+size.z/2));inner.scale.setScalar(1/size.y);
-      addFigure({id:'ship-player',name:player.name||'You',imageUrl:'',unlockedAt:Date.now(),deckScale:1.12},0,inner,[],new THREE.AnimationMixer(inner),null,null,null,null,null,[],FALLBACK_STRIDE_HEIGHTS_PER_SEC,null,scout);
+      addFigure({id:'ship-player',name:player.name||'You',imageUrl:'',unlockedAt:Date.now(),deckScale:PLAYER_DECK_SCALE},0,inner,[],new THREE.AnimationMixer(inner),null,null,null,null,null,[],FALLBACK_STRIDE_HEIGHTS_PER_SEC,null,scout);
     }
 
     charactersRef.current.forEach((character, charIndex) => {
@@ -1557,9 +1560,13 @@ const CrewDeck3D = forwardRef<CrewDeckHandle, Props>(function CrewDeck3D(
             }
           });
           if (boneCount === 0) bounds.setFromObject(model); // static model fallback
+          // Adam should match the player's visible height, not a padded joint
+          // estimate. Measure his posed mesh once at load (never each frame).
+          const matchPlayerHeight = isAdamCharacter(character);
+          if (matchPlayerHeight) bounds.setFromObject(model, true);
           const size = bounds.getSize(new THREE.Vector3());
           // Bones stop at joints (skull base, ankles) — pad for head/feet flesh
-          let height = Math.max(size.y, 0.0001) * (boneCount > 0 ? 1.18 : 1);
+          let height = Math.max(size.y, 0.0001) * (boneCount > 0 && !matchPlayerHeight ? 1.18 : 1);
           if (!Number.isFinite(height) || height < 1e-4) {
             bounds.setFromObject(model);
             const meshSize = bounds.getSize(new THREE.Vector3());

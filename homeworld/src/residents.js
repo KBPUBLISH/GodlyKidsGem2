@@ -1,3 +1,4 @@
+import { LIVING_RESIDENT_MESSAGES } from '../../shared/storyFriends.mjs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -13,7 +14,7 @@ import { workPoint, completedFires, firesNeedingLog, fireCanTakeLog, bedCount } 
 import { communityClaim } from './community.mjs';
 import { advancePath, turnToward, resetAnimatedPose } from './character-motion.js';
 import { projectAssignments } from './construction-projects.mjs';
-import { normalizeCharacterModel } from './character-model.js';
+import { normalizeCharacterModel,islandBoneName,solidCharacterMaterial } from './character-model.js';
 import { emitWorkSweat } from './work-sweat.js';
 import { gatherSample, applyGatherPose, chopHandWeight, emitChopChips, shakeTreeInstance } from './gather-animation.js';
 import { scopeKey, migrateLegacyKeys, ensureFrameScope } from './storage-scope.mjs';
@@ -81,11 +82,12 @@ export class Residents {
       if (pruned !== game.store.state) { try { game.store.save(pruned); } catch { /* reported by the store */ } }
     }
     this.onMessage = (event) => {
-      if (game.livingTestMode) return; // Test worlds never sync real profiles or take remote character control.
-      if (event.origin !== location.origin || !event.data) return;
+      if (event.origin !== location.origin || event.source !== window.parent || !event.data) return;
+      // Story arrivals use this world's isolated storage; possession and remote jobs stay disabled.
+      if (game.livingTestMode && !LIVING_RESIDENT_MESSAGES.has(event.data.type)) return;
       const { type } = event.data;
       if (type === 'gk-profile') { if (ensureFrameScope(event.data.scope)) return; }
-      if (type === 'gk-residents-sync') this.show(readResidents());
+      if (type === 'gk-residents-sync') { this.show(readResidents()); tellParent('gk-players-ready', readResidents()); this.shareBeds(); }
       if (type === 'gk-resident-drop') this.beginDrop(event.data.character);
       if (type === 'gk-character-profile') this.profiles.receive(event.data);
       if (type === 'gk-resident-remove') this.remove(event.data.id);
@@ -100,7 +102,7 @@ export class Residents {
         else this.game.assign(task, event.data.characterId);
       }
       if (type === 'gk-prayer-voice') this.game.nutrition?.onPrayerVoice?.(event.data);
-      if (type === 'gk-friends-waiting') { this.waiting = { count: event.data.count | 0, name: event.data.name || '' }; this.game.notify?.(); }
+      if (type === 'gk-friends-waiting') { this.waiting = { count: event.data.count | 0, name: event.data.name || '', imageUrl: event.data.imageUrl || '' }; this.game.notify?.(); }
     };
     window.addEventListener('message', this.onMessage);
     this.show(readResidents());
@@ -109,11 +111,13 @@ export class Residents {
 
   /** Beds on the island versus friends living here. The first friend may always come ashore; after that everyone needs a bed. */
   bedStatus() {
-    const s = this.game.store?.state, beds = s ? bedCount(s) : 0, residents = readResidents().length;
-    return { beds, residents, canDrop: residents === 0 || residents < beds, need: Math.max(0, residents + 1 - beds) };
+    const s = this.game.store?.state, beds = s ? bedCount(s) : 0;
+    const livingAdamHome = !!this.game.livingTest?.friendEarned;
+    const saved = readResidents(), residents = saved.length + (livingAdamHome && !saved.some(r => /^adam$/i.test(r.name.trim())) ? 1 : 0);
+    return { beds, residents, livingAdamHome, canDrop: residents === 0 || residents < beds, need: Math.max(0, residents + 1 - beds) };
   }
   shareBeds() {
-    const b = this.bedStatus(), key = `${b.beds}:${b.residents}`;
+    const b = this.bedStatus(), key = `${b.beds}:${b.residents}:${b.livingAdamHome}`;
     if (key === this.lastBedKey) return;
     this.lastBedKey = key;
     if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'gk-beds', ...b }, location.origin);
@@ -124,6 +128,9 @@ export class Residents {
       this.placing = null;
       return;
     }
+    if (readResidents().some(r => r.id === character.id)) { tellParent('gk-resident-placed', readResidents()); return; }
+    // Adam's starter journey owns his built-in actor; never create a second Adam.
+    if (this.game.livingTestMode && /^adam$/i.test(character.name.trim())) { this.game.livingTest?.requestFirstFriend(); tellParent('gk-resident-placed', readResidents()); return; }
     const beds = this.bedStatus();
     if (!beds.canDrop) {
       this.placing = null;
@@ -134,7 +141,7 @@ export class Residents {
     }
     this.placing = character;
     this.profiles.prefetch(character); // so a Bible friend's card is ready by the time the kid taps the ground
-    this.game.toast(`Tap the grass to drop off ${character.name}.`);
+    if(window.parent===window)this.game.toast(`Tap the grass to drop off ${character.name}.`);
     this.game.notify?.();
   }
 
@@ -225,6 +232,7 @@ export class Residents {
       }
     }
     if (token !== this.token) return; // a newer sync is loading; it will pick who you play as
+    this.game.notify?.();
     if (this.game.playersOnly && !this.models.has(this.activeId)) {
       // Come back as the friend you last played as; otherwise the first one living here.
       const last = this.models.get(this.game.store?.state?.activeCharacter);
@@ -1653,6 +1661,7 @@ export class Residents {
     const night = !!game.store?.state?.night;
     this.updateReel();
     for (const actor of this.models.values()) {
+      if(game.arrivals?.owns(actor))continue;
       if ((game.livingTest?.friend?.chatOpen || game.livingTest?.friend?.job) && actor === game.community?.actors?.adam?.actor) continue;
       this.followCull(actor);
       if (game.dining?.owns(actor)) { game.dining.drive(actor, dt); continue; }
@@ -1706,6 +1715,7 @@ export class Residents {
       if (actor === game.actor) { this.idleActor(actor, dt); continue; }
       this.stroll(actor, dt);
     }
+    if (game.loaded && performance.now() - (this.lastBedCheck || 0) > 1000) { this.lastBedCheck = performance.now(); this.shareBeds(); }
     if (this.activeId && performance.now() - (this.lastSave || 0) > 2000) {
       this.lastSave = performance.now();
       this.remember();
@@ -1739,7 +1749,7 @@ export class Residents {
       const restPose = [];
       model.traverse((obj) => {
         if (obj.isBone) {
-          bones[obj.name.replace(/[^a-zA-Z0-9]/g, '')] = obj;
+          bones[islandBoneName(obj.name)] = obj;
           restPose.push({ bone: obj, position: obj.position.clone(), quaternion: obj.quaternion.clone() });
         }
         if (obj.isMesh) {
@@ -1749,6 +1759,7 @@ export class Residents {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           for (const material of mats) {
             if (!material) continue;
+            solidCharacterMaterial(material);
             material.metalness = 0;
             material.metalnessMap = null;
             material.roughness = Math.max(0.85, material.roughness || 0);

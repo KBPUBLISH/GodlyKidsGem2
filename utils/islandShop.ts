@@ -39,6 +39,7 @@ export const ISLAND_SELL_PRICES: Record<string, number> = {
   fish: 1,
   cooked_fish: 1,
   carrot: 3,
+  potato: 3,
   wheat: 2,
   sunflower: 3,
   pumpkin: 4,

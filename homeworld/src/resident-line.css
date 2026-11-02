@@ -44,3 +44,14 @@
   margin: 0;
   z-index: 1;
 }
+
+/* Selection owns the viewport: no task cards, chat trays, or floating world buttons. */
+.game-shell.site-view > :not(.world):not(.game-controls){display:none!important}
+.clear-area-ui{position:absolute;inset:0;z-index:70;pointer-events:none;color:#345443}
+.clear-area-heading{position:absolute;top:max(14px,env(safe-area-inset-top,0px),var(--host-safe-area-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#fffcf0f2;border:2px solid #e8dcbb;border-radius:20px;padding:12px 20px;box-shadow:0 4px 0 #283e3626;max-width:calc(100% - 32px);width:max-content;box-sizing:border-box}
+.clear-area-heading>span{font-size:32px;color:#377f59}.clear-area-heading strong{font-size:20px}.clear-area-heading p{margin:3px 0 0;font-size:14px}
+.clear-area-footer{position:absolute;bottom:max(14px,env(safe-area-inset-bottom,0px),var(--host-safe-area-bottom,0px));left:50%;transform:translateX(-50%);width:min(430px,calc(100% - 28px));box-sizing:border-box;padding:16px;background:#fffbed;border:2px solid #e7d8ae;border-radius:24px;box-shadow:0 5px 0 #475b3526;pointer-events:auto;text-align:center}
+.clear-area-footer>p{font-size:17px;font-weight:800;margin:0 0 5px;line-height:1.3}.clear-area-footer small{font-size:12px;color:#66765c}.clear-area-footer>div{display:flex;gap:12px;margin-top:14px}
+.clear-area-footer button{flex:1;min-width:0;min-height:50px;border:2px solid #d6d8be;border-radius:15px;background:#fffdf5;color:#405b48;font-family:inherit;font-size:17px;font-weight:800;padding:10px;box-shadow:0 3px 0 #d6d8be}
+.clear-area-footer button:last-child{background:#387b58;border-color:#387b58;color:white;box-shadow:0 3px 0 #25583d}.clear-area-footer button:disabled{opacity:.45}.clear-area-footer button:focus-visible{outline:3px solid #d79a30;outline-offset:3px}
+@media(max-height:500px){.clear-area-heading{padding:6px 14px}.clear-area-footer{padding:10px;bottom:max(8px,env(safe-area-inset-bottom,0px),var(--host-safe-area-bottom,0px))}.clear-area-footer>div{margin-top:8px}.clear-area-footer small{display:none}}

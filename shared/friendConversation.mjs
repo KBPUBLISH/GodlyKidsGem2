@@ -22,7 +22,7 @@ export function nearbyGreeting(name,index=0){
 export const FRIEND_TASKS=[
  {id:'water',label:'Water plants',icon:'💧'},
  {id:'harvest',label:'Pick veggies',icon:'🥕'},
- {id:'chop',label:'Chop a tree',icon:'🪓'},
+ {id:'chop',label:'Clear an area',icon:'🪓'},
  {id:'plow',label:'Dig a spot',icon:'🌱'},
  {id:'build',label:'Help build',icon:'🔨'},
 ];

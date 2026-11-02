@@ -1,3 +1,4 @@
+import {translate,getLanguage} from '../../localization/LocalizedText';
 import React,{useEffect,useRef,useState} from 'react';
 import {Mic,Send,Volume2,X,MessageCircle,Hammer} from 'lucide-react';
 import type {UnlockedCharacter} from '../../services/rewardsService';
@@ -9,7 +10,7 @@ import {friendPersona,friendRole,nearbyGreeting,repairFriendReply,FRIEND_TASKS} 
 import {useFriendDictation} from './useFriendDictation';
 import './islandFriendChat.css';
 
-export default function IslandFriendChat({character,userName,world,mode='chat',onClose,onTask,result}:{character:UnlockedCharacter;userName:string;world:Record<string,unknown>;mode?:string;onClose:()=>void;onTask:(task:string)=>void;result?:{ok:boolean;line:string;serial:number}}){
+export default function IslandFriendChat({character,userName,world,mode='chat',arrival=false,onClose,onTask,result}:{character:UnlockedCharacter;userName:string;world:Record<string,unknown>;mode?:string;arrival?:boolean;onClose:()=>void;onTask:(task:string)=>void;result?:{ok:boolean;line:string;serial:number}}){
  const [portraitFailed,setPortraitFailed]=useState(false);
  const [tab,setTab]=useState(mode),[turns,setTurns]=useState<ChatTurn[]>(()=>loadChatHistory(character.id).slice(-8)),[draft,setDraft]=useState(''),[thinking,setThinking]=useState(false),[error,setError]=useState(''),[suggestions,setSuggestions]=useState<string[]>([]),[confirm,setConfirm]=useState<string|null>(null),[taskPending,setTaskPending]=useState(false);
  const voice=useCharacterVoice(character.voiceId||(/^adam$/i.test(character.name)?ADAM_TOUR_FALLBACK_VOICE_ID:''));
@@ -32,7 +33,7 @@ export default function IslandFriendChat({character,userName,world,mode='chat',o
   }finally{clearTimeout(timeout);if(request.current===controller){request.current=null;if(alive.current)setThinking(false);}}
  };
  useEffect(()=>{
-  alive.current=true;const old=document.activeElement;panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();if(mode==='chat')void ask(GREETING_QUESTION);
+  alive.current=true;const old=document.activeElement;panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();if(mode==='chat'){if(arrival){void translate(`Woah, ${userName || 'friend'}! Your island is beautiful. Thank you for welcoming me! What shall we explore together?`,getLanguage()).then(text=>{if(!alive.current)return;remember([...history.current,{role:'character',text}]);void voice.speak(text);});}else void ask(GREETING_QUESTION);}
   const resize=()=>{const v=window.visualViewport;setBottom(v?Math.max(0,innerHeight-v.height-v.offsetTop):0);};window.visualViewport?.addEventListener('resize',resize);resize();
   return()=>{alive.current=false;request.current?.abort();if(taskTimer.current)clearTimeout(taskTimer.current);window.visualViewport?.removeEventListener('resize',resize);if(old instanceof HTMLElement)old.focus();};
  },[]);

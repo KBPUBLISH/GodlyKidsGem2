@@ -14,6 +14,7 @@ export const SELL_GROUPS = [
 ];
 
 export const SELL_ITEMS = [
+  {id:'potato',name:'Potato',price:3,group:'produce'},
   {id:'fish', name:'Raw fish', price:1, group:'fish'},
   {id:'cooked_fish', name:'Grilled fish', price:1, group:'fish'},
   {id:'carrot', name:'Carrot', price:3, group:'produce'},

@@ -1,3 +1,4 @@
+import {applyCooking} from './cooking.mjs';
 import {minutesAt,dayPhase,durationMilliseconds} from './island-clock.mjs';
 import {advanceNightCycle,validNight} from './night-cycle.mjs';
 // Gameplay coordinates are Blender metres (X/Y ground), independent of mesh faces.
@@ -28,6 +29,7 @@ export const GAME_MINUTES_PER_MS = 1440 / 600000;
 export const SEEDS = [
   // waterDays: one watering keeps the plant growing this many island days; after that it waits, thirsty, until watered again.
   {id:'carrot_seed', name:'Carrot', plant:'carrot', hours:18, kind:'crop', icon:'🥕', color:'#e89739', waterDays:2},
+  {id:'potato_seed',name:'Potato',plant:'potato',hours:18,kind:'crop',icon:'🥔',color:'#caa363',waterDays:2},
   {id:'wheat_seed', name:'Wheat', plant:'wheat', hours:24, kind:'crop', icon:'🌾', color:'#dbb84b', waterDays:2},
   {id:'sunflower_seed', name:'Sunflower', plant:'sunflower', hours:36, kind:'crop', icon:'🌻', color:'#e8bf35', waterDays:3},
   {id:'pumpkin_seed', name:'Pumpkin', plant:'pumpkin', hours:48, kind:'crop', icon:'🎃', color:'#d9843b', waterDays:1},
@@ -307,10 +309,12 @@ export function canPlow(world,state,key) {
   return !activeTrees(world,state,gameTime(state)).some(t=>dist(p,{x:t.position[0],y:t.position[1]})<t.radius+.6);
 }
 export function applyAction(state,a,world,minutes,wall=Date.now()) {
+  if(a.mealSession!==undefined&&(!['eat','share_food'].includes(a.type)||state.cooking?.session?.id!==a.mealSession||state.cooking.session.phase!=='collected'||state.cooking.session.used||state.cooking.session.recipe!==a.item))return state;
+  if(a.type?.startsWith('cooking_'))return applyCooking(state,a,wall);
   if(a.actionId&&state.recentActions?.includes(a.actionId))return state;
   if(state.clock.cycle===1&&(state.night||dayPhase({...state.clock,minutes,wall,paused:true},wall).night)&&!['read_report','pause_project','cancel_building','cancel_sleep','finish_forge','remove_building','sell'].includes(a.type))return state;
   if(a.type==='select_character'){if(a.previousId!==state.activeCharacter||typeof a.actionId!=='string'||!a.actionId)return state;const next=selectCharacter(state,a.id,a.position,minutes,wall);if(next!==state){next.recentActions=[...(next.recentActions||[]),a.actionId].slice(-256);}return next;}
-  if(['share_fish','eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building','sell'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
+  if(['share_food','share_fish','eat','serve_meal','fish','cook','craft_recipe','rest','pray','begin_sleep','finish_sleep','cancel_sleep','place_building','stack_piece','upgrade_building','begin_building','finish_building','cancel_building','move_building','pause_project','read_report','place_animal','remove_animal','remove_building','sell'].includes(a.type)&&!(typeof a.actionId==='string'&&a.actionId.length>0&&a.actionId.length<=128))return state;
   if(['plow','plant','water','harvest'].includes(a.type)){const claim=communityClaim(state,a.key);if(claim&&claim.id!==a.actionId)return state;}
   const character=activeCharacter(state),asleep=state.characters?.[character]?.sleep;
   if(asleep&&!['finish_sleep','cancel_sleep','finish_building','read_report','pause_project','finish_forge','sell'].includes(a.type))return state;
@@ -402,6 +406,8 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(b.kind==='garden'){const fp=footprint(world,b);if(fp)for(const key of fp.keys)delete next.cells[key];}
     for(const [key,cell] of Object.entries(next.cells||{}))if(cell?.buildingId===b.id)delete next.cells[key];
     b.status='cancelled';
+    // Dismantling an oven must not strand ingredients reserved by a saved recipe.
+    if(next.cooking?.session?.ovenId===b.id&&next.cooking.session.phase!=='collected')Object.assign(next,applyCooking(next,{type:'cooking_cancel',sessionId:next.cooking.session.id},wall));
     if(next.farm?.integrity)delete next.farm.integrity[b.id];
   } else if(a.type==='remove_fence') {
     // Take down one finished fence piece (or a lone path stone) and get the materials back: Abel moves
@@ -443,6 +449,9 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     if(!food||!bag||!(bag[a.item]>0))return state;
     const gain=mealGain(state,a.item,minutes);if(gain.total<=0)return state;
     bag[a.item]--;setEnergy(next,energyFor(state)+food.energy);setHunger(next,hungerFor(state,minutes)+foodFill(a.item),minutes);next.stats.mealsEaten=(next.stats.mealsEaten||0)+1;if(a.item==='cooked_fish')next.stats.fishEaten=(next.stats.fishEaten||0)+1;
+  } else if(a.type==='share_food') {
+    const food=FOODS[a.item];if(!food||a.recipient===character||!state.characters?.[a.recipient]||!(inv[a.item]>0)||mealGain(state,a.item,minutes,a.recipient).total<=0)return state;
+    inv[a.item]--;setEnergy(next,energyFor(next,a.recipient)+food.energy,a.recipient);setHunger(next,hungerFor(next,minutes,a.recipient)+foodFill(a.item),minutes,a.recipient);next.stats.sharedMeals=(next.stats.sharedMeals||0)+1;
   } else if(a.type==='share_fish') {
     if(a.recipient===character||!state.characters?.[a.recipient]||!(inv.cooked_fish>0))return state;
     inv.cooked_fish--;setEnergy(next,energyFor(next,a.recipient)+FOODS.cooked_fish.energy,a.recipient);setHunger(next,hungerFor(next,minutes,a.recipient)+foodFill('cooked_fish'),minutes,a.recipient);
@@ -552,6 +561,7 @@ export function applyAction(state,a,world,minutes,wall=Date.now()) {
     next.removedStumps=[...(state.removedStumps||[]),a.id];next.stats.stumps=(next.stats.stumps||0)+1;
   } else return state;
   if(cost)setEnergy(next,energyFor(next)-cost);
+  if(a.mealSession!==undefined)next.cooking.session.used=true;
   if(a.actionId)next.recentActions=[...(state.recentActions||[]),a.actionId].slice(-128);
   next.village=creditSkill(state.village,state.activeCharacter,a.type);
   return next;

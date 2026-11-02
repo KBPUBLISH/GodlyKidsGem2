@@ -129,3 +129,7 @@
 .living-task-hear{display:flex;align-items:center;gap:8px;font-weight:800}.living-task-hear>b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e64a2f;color:#fff9e5;border:2px solid #fff0c8;font-size:19px}
 .living-friend-hello{position:absolute;bottom:max(140px,calc(env(safe-area-inset-bottom) + 125px));left:12px;max-width:min(310px,calc(100% - 116px));display:flex;gap:9px;padding:12px;border:2px solid #d3b075;border-radius:22px;background:#fff4dfeF;color:#432d1f;box-shadow:0 6px 16px #163a3c40;pointer-events:auto}.living-friend-hello p{margin:3px 0 8px;font-size:14px;line-height:1.3}.living-friend-hello button{min-height:44px;border:1px solid #a9c9a0;border-radius:16px;padding:8px 13px;background:#e4f1d2;color:#344e2d;font-weight:800;margin-right:5px}.living-friend-face{font-size:27px}
 .living-chat-open .ship-button,.living-chat-open .topbar,.living-chat-open .side-buttons,.living-chat-open .living-ship-button,.living-chat-open .back-to-ship,.living-chat-open .living-profile,.living-chat-open .living-sound{visibility:hidden;pointer-events:none}
+
+/* Bare soil shows an explicit action, never a sprout that looks already planted. */
+.living-seed-prompt{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;min-height:42px;border:2px solid #e7d5a3;border-radius:14px;background:#fffbea;color:#36684b;box-shadow:0 2px 0 #b8a46b}
+.living-seed-prompt b{font-size:23px;line-height:20px}.living-seed-prompt small{font-size:10px;line-height:13px;font-weight:900}

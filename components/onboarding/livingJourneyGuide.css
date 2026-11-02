@@ -22,3 +22,16 @@
 @media(prefers-reduced-motion:reduce){.living-island-point{animation:none}}
 
 .living-journey-guide{animation:perry-guide-arrive .45s ease-out both}.living-perry-cue{position:relative}.living-perry-cue:has(.living-perry-dismiss){padding-right:36px}.living-perry-cue .living-perry-dismiss{position:absolute;right:0;top:-9px;min-width:44px;min-height:44px;padding:0;background:transparent;border:0;color:#694922;font-size:24px}.living-perry-listen{font-size:22px!important;color:#ae442b;font-weight:900!important}@keyframes perry-guide-arrive{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.living-journey-guide{animation:none}}
+
+/* On the first ship screen, leave the full wheel and tab bar visible. */
+.crew-living-onboarding .living-journey-guide{bottom:var(--ship-guide-bottom);max-width:440px;gap:8px;animation-name:ship-guide-arrive}
+.crew-living-onboarding .living-perry-portrait{width:80px;height:88px;flex-basis:80px}
+.crew-living-onboarding .living-perry-cue{max-height:calc(100dvh - var(--ship-guide-bottom) - max(16px,var(--safe-area-top,0px)) - 12px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.crew-living-onboarding .living-perry-cue strong,.crew-living-onboarding .living-perry-cue>div{flex-shrink:0}
+.crew-living-onboarding .living-perry-speech{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+@keyframes ship-guide-arrive{from{opacity:0}to{opacity:1}}
+@media(max-height:520px){
+  .crew-living-onboarding .living-journey-guide{max-width:310px;width:calc(50% - 120px);min-width:210px;left:12px;right:auto;bottom:max(16px,var(--safe-area-bottom,0px));gap:4px}
+  .crew-living-onboarding .living-perry-portrait{width:48px;height:60px;flex-basis:48px}
+  .crew-living-onboarding .living-perry-cue{max-height:calc(100dvh - max(16px,var(--safe-area-top,0px)) - max(16px,var(--safe-area-bottom,0px)) - 12px)}
+}

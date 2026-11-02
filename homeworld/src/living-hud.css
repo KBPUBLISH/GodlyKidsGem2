@@ -26,3 +26,29 @@
 .living-original-controls .living-progress{font-size:13px;gap:7px}.living-original-controls .living-pips{gap:4px}.living-original-controls .living-pips i{width:11px;height:11px}
 @media(min-height:521px) and (max-height:650px){.living-original-controls .side-buttons{top:164px;gap:8px}.living-original-controls .side-buttons button{min-height:62px;padding:4px;gap:1px}.living-original-controls .side-buttons .picture-icon{width:30px;height:30px}.living-original-controls .side-buttons button>span{font-size:12px;line-height:1.1}}
 @media(max-height:520px){.living-original-controls .side-buttons button{padding:3px;gap:1px;min-height:52px}.living-original-controls .side-buttons .picture-icon{width:24px;height:24px}.living-original-controls .side-buttons button>span{font-size:10px;line-height:1.1}}
+
+/* All HUD rows share the native safe-area origin. Sound is positioned inside
+   the topbar, while Tasks and the action rail are positioned in the shell. */
+.game-shell.living-original-controls{
+  --living-hud-top:max(12px,env(safe-area-inset-top,0px),var(--host-safe-area-top,0px));
+  --living-header-height:64px;
+  --living-tasks-height:54px;
+  --living-row-gap:12px;
+  --living-secondary-top:calc(var(--living-hud-top) + var(--living-header-height) + var(--living-row-gap));
+  --living-task-top:calc(var(--living-secondary-top) + var(--living-tasks-height) + var(--living-row-gap));
+  --living-rail-top:calc(var(--living-secondary-top) + 56px + var(--living-row-gap));
+}
+.game-shell.living-original-controls .topbar{top:var(--living-hud-top)}
+.game-shell.living-original-controls .island-profile-clock{height:var(--living-header-height)}
+.game-shell.living-original-controls .adventure-tasks-button{top:var(--living-secondary-top);min-height:var(--living-tasks-height)}
+.game-shell.living-original-controls .adventure-current-task,
+.game-shell.living-island-test.living-original-controls .living-request{top:var(--living-task-top)}
+.game-shell.living-original-controls .island-sound{top:calc(var(--living-header-height) + var(--living-row-gap));right:0;height:56px}
+.game-shell.living-original-controls .side-buttons{top:var(--living-rail-top);max-height:calc(100% - var(--living-rail-top) - 16px)}
+@media(max-width:600px){.game-shell.living-original-controls{--living-tasks-height:50px}}
+@media(max-width:480px){.game-shell.living-original-controls{--living-header-height:58px}}
+@media(max-height:520px){
+  .game-shell.living-original-controls{--living-header-height:55px;--living-tasks-height:46px;--living-row-gap:10px;--living-rail-top:var(--living-secondary-top)}
+  /* Landscape keeps Sound beside Bedtime so the four actions fit vertically. */
+  .game-shell.living-original-controls .island-sound{top:0;right:148px}
+}

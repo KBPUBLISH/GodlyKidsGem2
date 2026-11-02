@@ -12,6 +12,8 @@ import {
   footprintKeys, fenceFromTaps, extendFence, toggleKey, isStructure,
 } from './build-ask.mjs';
 
+import {clearRectangle,clearableKeys,clearTargets} from './clear-area.mjs';
+
 const TILE = 0.9;
 
 export class BuildAsk {
@@ -97,6 +99,57 @@ export class BuildAsk {
     return this.request({ id: 'fence', mode: 'fence', name: home?.name || 'Adam', text: fenceAskLine(), cap: FENCE_CAP });
   }
 
+  protectedClearKeys() {
+    return (this.g.livingTest?.garden?.plots || []).map(p=>cellAt(this.g.world,p.x,p.y).key);
+  }
+
+  startClearArea() {
+    if (this.busy() || this.state()?.night || this.state()?.village?.siteDraft) return false;
+    this.picking = {id:'help-clear', mode:'clear', name:'Adam', keys:[]};
+    this.g.path=[]; this.g.keys.clear();
+    this.g.livingTest?.stopWatching?.();
+    this.paint([]); this.g.enterSiteView?.(); this.g.notify?.();
+    return true;
+  }
+
+  clearSelection(start,end) {
+    const p=this.picking; if(p?.mode!=='clear')return;
+    const signature=`${start}|${end}`;if(p.selectionSignature===signature)return;p.selectionSignature=signature;
+    const all=clearRectangle(start,end);
+    p.tooLarge=!all.length;
+    p.keys=clearableKeys(this.g.world,this.state(),all,this.protectedClearKeys());
+    p.targets=clearTargets(this.g.world,this.state(),p.keys,this.protectedClearKeys());
+    this.paint(p.keys); this.g.notify?.();
+  }
+
+  // Capture these before MapGesture: a one-finger drag draws instead of rotating the island.
+  clearPointer(event) {
+    if(this.picking?.mode!=='clear')return false;
+    if(event.type==='pointerdown'&&event.isPrimary!==false&&event.button===0){
+      this.clearBefore=[...this.picking.keys];this.clearAnchor=this.eventCell(event);this.clearPointerId=event.pointerId;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      if(this.clearAnchor)this.clearSelection(this.clearAnchor,this.clearAnchor);
+    }else if(event.pointerId===this.clearPointerId){
+      if(event.type==='pointermove'&&!this.g.pinching&&this.clearAnchor){
+        const end=this.eventCell(event);if(end)this.clearSelection(this.clearAnchor,end);
+      }
+      if(event.type==='pointercancel')this.cancelClearDrag();
+      if(event.type==='pointerup'||event.type==='pointercancel'){
+        this.clearAnchor=null;this.clearPointerId=null;
+        if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    }
+    return true;
+  }
+
+  cancelClearDrag() {
+    if(this.picking?.mode!=='clear'||!this.clearAnchor)return;
+    this.picking.keys=this.clearBefore||[];
+    this.picking.targets=clearTargets(this.g.world,this.state(),this.picking.keys,this.protectedClearKeys());
+    this.picking.tooLarge=false;this.picking.selectionSignature=null;this.clearAnchor=null;this.clearPointerId=null;
+    this.paint(this.picking.keys);this.g.notify?.();
+  }
+
   startGardenPreset(id) {
     const preset = gardenPreset(id), s = this.state();
     if (!preset || !s) return false;
@@ -121,7 +174,7 @@ export class BuildAsk {
 
   /** The card ResidentLine draws. Null while Eve's meal ask is up, so the two never stack. */
   card() {
-    if (this.g.dining?.askCard?.()) return null;
+    if (this.picking?.mode !== 'clear' && this.g.dining?.askCard?.()) return null;
     if (this.picking) return this.pickCard();
     if (!this.open) return null;
     return { name: this.open.name, text: this.open.text, goLabel: "I'll show you", waitLabel: 'Not now', goEnabled: true };
@@ -129,6 +182,12 @@ export class BuildAsk {
 
   pickCard() {
     const p = this.picking;
+    if(p.mode==='clear'){
+      const targets=p.targets||[];
+      const trees=targets.filter(t=>t.type==='chop').length,rocks=targets.filter(t=>t.type==='mine_hit').length,stumps=targets.filter(t=>t.type==='dig_stump').length;
+      return {clearing:true,picking:true,name:'Clear with Adam',goEnabled:targets.length>0,
+        text:p.tooLarge?'That box is too big. Try a smaller area.':targets.length?`${trees} ${trees===1?'tree':'trees'} · ${rocks} ${rocks===1?'rock':'rocks'}${stumps?` · ${stumps} ${stumps===1?'stump':'stumps'}`:''}`:'Drag a box around trees and rocks.'};
+    }
     if (p.mode === 'gardenPreset') {
       return {
         name: p.name,
@@ -179,7 +238,7 @@ export class BuildAsk {
 
   decline() {
     const id = this.picking?.id || this.open?.id;
-    this.rememberSnooze(id);
+    if(this.picking?.mode!=='clear')this.rememberSnooze(id);
     this.open = null;
     this.picking = null;
     this.paint([]);
@@ -191,7 +250,10 @@ export class BuildAsk {
   confirm() {
     const p = this.picking;
     if (!p) return;
-    if (p.mode === 'gardenPreset') {
+    if (p.mode === 'clear') {
+      if(!this.g.livingTest?.friend?.clearArea(p.keys,this.protectedClearKeys()))return;
+      this.clearDraft();
+    } else if (p.mode === 'gardenPreset') {
       if (!p.plan) return;
       const saved = this.g.gardenPlan?.commitPreset(p.plan, p.crew);
       if (!saved) return;
@@ -352,6 +414,7 @@ export class BuildAsk {
 
   onCell(key) {
     const p = this.picking;
+    if(p?.mode==='clear'){this.clearSelection(key,key);return;}
     if (!p || !this.grass(key)) { this.g.toast?.('That needs to be grass.'); return; }
     if (p.mode === 'gardenPreset') {
       const origin = this.g.world?.grid?.origin || [0, 0];
@@ -389,7 +452,7 @@ export class BuildAsk {
   /** Write the squares the kid just tapped. They stay until the work is finished or the kid says not now. */
   persistDraft() {
     const s = this.state(), p = this.picking;
-    if (!s || !p || !this.g.store) return;
+    if (!s || !p || p.mode==='clear' || !this.g.store) return;
     const draft = { id: p.id, mode: p.mode, kind: p.kind || null, name: p.name, buildingName: p.buildingName || null, size: p.size || null, cap: p.cap || null, text: p.text || '', keys: [...(p.keys || [])], spot: p.spot ? { key: p.spot.key, rotation: p.spot.rotation || 0, keys: [...(p.spot.keys || [])] } : null, presetId: p.presetId || null, crew: p.crew || null, plan: p.plan || null };
     try { this.g.store.save({ ...s, village: { ...(s.village || {}), siteDraft: draft } }); }
     catch (e) { this.g.toast?.(e.message); }
@@ -407,6 +470,8 @@ export class BuildAsk {
   restoreDraft() {
     const draft = this.state()?.village?.siteDraft;
     if (!draft?.mode || !draft.id) return;
+    // Discard the old fake campfire request; it was never a building order.
+    if(draft.id==='help-clear'){this.clearDraft();return;}
     if (this.picking?.id === draft.id && (this.picking.keys || []).join() === (draft.keys || []).join()) return;
     this.open = null;
     this.picking = { ...draft, keys: [...(draft.keys || [])], spot: draft.spot ? { ...draft.spot, keys: [...(draft.spot.keys || [])] } : null };
@@ -440,14 +505,20 @@ export class BuildAsk {
       this.group.name = 'SiteAsk';
       g.scene.add(this.group);
       this.geo = new THREE.PlaneGeometry(TILE, TILE);
+      this.borderGeo = new THREE.EdgesGeometry(this.geo);
+      this.borderMat = new THREE.LineBasicMaterial({color:0xecffd3,depthTest:false,depthWrite:false});
       this.mat = new THREE.MeshBasicMaterial({ color: 0xb7e7a2, transparent: true, opacity: 0.72, depthWrite: false });
     }
+    this.mat.depthTest=this.picking?.mode!=='clear';
+    this.mat.opacity=this.picking?.mode==='clear'?.42:.72;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     for (const key of keys || []) {
       const p = cellFromKey(g.world, key);
       const mesh = new THREE.Mesh(this.geo, this.mat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(p.x, heightAt(g.world, p.x, p.y) + 0.07, -p.y);
+      mesh.renderOrder=this.picking?.mode==='clear'?100:0;
+      if(this.picking?.mode==='clear'){const border=new THREE.LineSegments(this.borderGeo,this.borderMat);border.renderOrder=101;mesh.add(border);}
       this.group.add(mesh);
     }
   }
@@ -478,7 +549,7 @@ export class BuildAsk {
 
   dispose() {
     if (this.group) this.g.scene?.remove(this.group);
-    this.geo?.dispose();
+    this.geo?.dispose();this.borderGeo?.dispose();this.borderMat?.dispose();
     this.mat?.dispose();
     this.group = null;
   }

@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, Check, Plus, Trash2, Mic, X, ChevronDown, ChevronUp, BookOpen, Music, Sparkles, Users, Loader2, Lock, Crown, ClipboardList, RefreshCw, Volume2, Eye, EyeOff, Ship } from 'lucide-react';
@@ -913,7 +914,7 @@ const OnboardingPage: React.FC = () => {
       age: kidAge ? parseInt(kidAge, 10) : undefined,
       avatarSeed: kidAvatar,
       // Initialize kid's own economy data
-      coins: 500, // Kids start with 500 coins
+      coins: STARTING_GOLD_COINS, // Kids start with 10 coins
       coinTransactions: [],
       ownedItems: ['f1', 'anim1'], // Default owned items
       unlockedVoices: [],
@@ -1489,14 +1490,15 @@ const OnboardingPage: React.FC = () => {
     // Mark as free user (not premium)
     localStorage.setItem('godlykids_premium', 'false');
     
-    // Calculate coins: base 500 + 200 if email bonus
-    const baseCoins = 500;
+    // Calculate coins: base allowance + 200 if email bonus
+    const baseCoins = STARTING_GOLD_COINS;
     const bonusCoins = awardedEmailBonus ? 200 : 0;
-    const totalCoins = baseCoins + bonusCoins;
+
     
     // IMPORTANT: Force save user data to localStorage before navigation
     const existingData = localStorage.getItem('godly_kids_data_v6');
     const currentData = existingData ? JSON.parse(existingData) : {};
+    const totalCoins = (currentData.coins ?? baseCoins) + bonusCoins;
     const dataToSave = {
       ...currentData,
       parentName: parentName || pName || currentData.parentName,

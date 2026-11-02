@@ -1367,8 +1367,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {/* Onboarding Tutorial Overlay */}
       <OnboardingTutorial />
 
-      {/* Bottom Safe Area Spacer - for pages without BottomNavigation */}
-      {(isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isBookReader || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating || isKaraokePage) && (
+      {/* The full-screen reader handles its own safe area. An outer spacer
+          clips its viewport and exposes the blue app background below the art. */}
+      {!isBookReader && (isBookDetail || isPlayer || isProfile || isCreateProfile || isEditProfile || isPaywall || isSettings || isAudioPage || isLessonPage || isLessonsPage || isBookSeries || isCreatePlaylist || isMyPlaylist || isBookCreating || isKaraokePage) && (
         <div 
           className="w-full bg-transparent pointer-events-none" 
           style={{ height: 'var(--safe-area-bottom, 0px)' }}

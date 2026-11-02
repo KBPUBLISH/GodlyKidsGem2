@@ -36,7 +36,12 @@ export function beginLivingFirstFriendJourney(){
  return record;
 }
 export function openLivingFirstFriendVoyage(scope:string){
- if(scope!==getProfileScopeKey()||!startFirstFriendVoyage(localStorage,firstFriendKey(scope)))throw Error('Finish your prayer tent first.');
+ if(scope!==getProfileScopeKey())throw Error('The active child changed.');
+ const record=readFirstFriend(localStorage,firstFriendKey(scope));
+ // A delayed iframe message must not send an already-collected Adam back
+ // through the voyage. The island resumes Bring Adam / placement itself.
+ if(record&&['aboard','placing','placed','unlocked'].includes(record.phase))return {path:'/my-home',state:{livingFirstFriend:true}};
+ if(!startFirstFriendVoyage(localStorage,firstFriendKey(scope)))throw Error('Finish your prayer tent first.');
  changed();return {path:'/crew',state:{livingFirstFriend:true}};
 }
 /** Tapping the ship's first island saves the pack before sailing. It does not start the reader. */
@@ -69,8 +74,8 @@ export function collectLivingFirstFriend(islandId:string,storyId:string,requirem
  if(['pack','reading'].includes(record.phase)){beginFirstFriendStory(localStorage,key,islandId,storyId);finishFirstFriendStory(localStorage,key,islandId,storyId);record=readFirstFriend(localStorage,key);}
  if(record?.phase!=='reward')return false;
  const findAdam=()=>rewardsService.getUnlockedCharacters().find(c=>c.id===ONBOARDING_ADAM_ID||/^adam$/i.test(c.name.trim()));
- // Use the same reward service as other story packs, with the already-packaged mobile model.
- if(!findAdam())rewardsService.collectReward(storyId,{...ONBOARDING_ADAM_REWARD,modelUrl:'/homeworld/assets/mobile/adam.glb?v=mobile-1'});
+ // Use the same reward service as other story packs, with the same current Adam model used on the ship.
+ if(!findAdam())rewardsService.collectReward(storyId,ONBOARDING_ADAM_REWARD);
  if(!findAdam()||!claimFirstFriend(localStorage,key,islandId,storyId))return false;
  changed();return true;
 }

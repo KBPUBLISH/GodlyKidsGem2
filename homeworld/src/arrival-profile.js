@@ -1,12 +1,6 @@
-/**
- * Welcome-ashore profile cards.
- *
- * When a story friend is dropped off (residents.js `consumeTap` → `game.arrivals.arrive`), a card
- * with their strengths, "still learning" list and the tasks they do pops up once. Which friends
- * already had their card is kept in `godlykids_island_profile_shown_v1`, scoped per kid profile
- * like every other island key, so a reload never repeats it and profiles never leak between
- * kids. The same card opens later from About on a friend's card (`open`) without being recorded.
- */
+import {CharacterWelcome} from './character-welcome.js';
+/** New residents get one close-up and chat per child profile. About still opens
+ * their reusable profile card; existing residents never replay an arrival. */
 import {scopeKey} from './storage-scope.mjs';
 import {RESIDENTS_KEY} from './residents.js';
 import {profileFor} from './character-profile.mjs';
@@ -28,6 +22,9 @@ function residentIds(storage){
 export class Arrivals{
   constructor(game,storage=typeof localStorage!=='undefined'?localStorage:null){
     this.game=game;this.storage=storage;
+    this.scene=null;
+    this.onChatClose=e=>{if(e.origin===location.origin&&e.source===window.parent&&e.data?.type==='gk-arrival-chat-close'&&e.data.id===this.card?.resident.id)this.dismiss();};
+    if(typeof window!=='undefined')window.addEventListener('message',this.onChatClose);
     this.card=null;      // {resident, mode:'arrival'|'about', at}
     this.queue=[];       // arrivals waiting while another card is up
     const shown=storage?readShown(storage):[];
@@ -48,6 +45,7 @@ export class Arrivals{
   }
   /** About <name> from a friend's card: same profile, no timer, not recorded. */
   open(id){
+    if(this.busy)return false;
     const actor=this.game.residents?.models?.get(id);
     const home=actor?.userData;
     if(!home?.residentId)return false;
@@ -56,10 +54,44 @@ export class Arrivals{
     return true;
   }
   dismiss(){
+    this.scene?.restore();this.scene=null;
     this.card=this.queue.shift()||null;
     if(this.card)this.card.at=Math.max(this.card.at,Date.now()+300);
     this.game.notify?.();
   }
+  get busy(){return this.card?.mode==='arrival';}
+  owns(actor){return !!this.scene&&this.scene.actor===actor;}
+  update(dt,now=Date.now()){
+    if(!this.busy)return;
+    const g=this.game,c=this.card;
+    if(!this.scene){
+      if(this.uiPaused||now<c.at||g.store?.state?.night||g.interior||g.mapOnly||g.siteView||g.fishing?.active||g.livingTest?.arrival?.active||g.livingTest?.friend?.chatOpen||g.action||g.order)return;
+      const helper=g.community?.actors?.[c.resident.id];
+      const actor=g.residents?.models?.get(c.resident.id)||(helper?.modelReady!==false?helper?.actor:null);
+      if(!actor&&now<c.at+12000)return;
+      this.scene=new CharacterWelcome(g,c.resident,actor,{reduced:typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,onHello:()=>this.startChat()});
+      g.notify?.();
+    }
+    this.scene.update(dt);
+  }
+  startChat(){
+    const g=this.game,c=this.card;if(!c||!this.scene)return;
+    const embedded=typeof window!=='undefined'&&window.parent!==window;
+    if(c.resident.id==='adam'&&g.livingTest?.state.adamUnlocked){
+      g.livingTest.welcomeAdam();g.livingTest.syncFirstFriend();
+      if(embedded){
+        // Restore before opening so Adam's chat saves the normal gameplay camera.
+        this.scene.restore();g.livingTest.friend.open('chat',true);
+        if(g.livingTest.friend.chatOpen){g.notify?.();return;}
+      }
+    }
+    if(embedded){
+      window.parent.postMessage({type:'gk-resident-talk',arrival:true,character:c.resident,world:g.autoWork?.brief?.()||null},location.origin);
+    }
+    g.notify?.();
+  }
+  hello(){this.scene?.hello();}
+  dispose(){this.scene?.restore();this.scene=null;if(typeof window!=='undefined')window.removeEventListener('message',this.onChatClose);}
   /** Lets a test or a grown-up tool show the welcome card again for one friend. */
   forget(id){this.shown.delete(id);this.persist();}
 
@@ -67,6 +99,6 @@ export class Arrivals{
   snapshot(){
     const c=this.card;if(!c)return null;
     const profile=profileFor(c.resident,this.game.store?.state);
-    return {...c.resident,mode:c.mode,at:c.at,autoDismissMs:c.mode==='arrival'?ARRIVAL_AUTO_DISMISS_MS:0,profile};
+    return {...c.resident,cinematic:c.mode==='arrival',phase:this.scene?.phase||'waiting',hasModel:!!this.scene?.actor,standalone:typeof window!=='undefined'&&window.parent===window,mode:c.mode,at:c.at,autoDismissMs:c.mode==='arrival'?ARRIVAL_AUTO_DISMISS_MS:0,profile};
   }
 }

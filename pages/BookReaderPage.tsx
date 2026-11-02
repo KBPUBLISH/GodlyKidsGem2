@@ -5848,7 +5848,10 @@ const BookReaderPage: React.FC = () => {
             )}
 
             {/* Page Counter - Bottom Right (Clickable for page navigation) */}
-            <div className="absolute bottom-4 right-4 z-50">
+            <div
+                className="absolute right-4 z-50"
+                style={{ bottom: 'max(calc(var(--safe-area-bottom, 0px) + 1rem), 1rem)' }}
+            >
                 <button
                     onClick={(e) => {
                         e.stopPropagation();

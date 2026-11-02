@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
@@ -54,6 +55,8 @@ const generateReferralCode = (): string => {
 
 interface UserContextType {
   coins: number;
+  getCoinBalance: () => number;
+  importFriendsCoins: (key: string, amount: number) => void;
   addCoins: (amount: number, reason?: string, source?: CoinTransaction['source']) => void;
   spendCoins: (amount: number, reason?: string) => boolean;
   coinTransactions: CoinTransaction[];
@@ -155,7 +158,9 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType>({
-  coins: 500,
+  coins: STARTING_GOLD_COINS,
+  getCoinBalance: () => STARTING_GOLD_COINS,
+  importFriendsCoins: () => {},
   addCoins: () => {},
   spendCoins: () => false,
   coinTransactions: [],
@@ -280,7 +285,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saved = loadState();
 
-  const [coins, setCoins] = useState(saved?.coins ?? 500); // Default 500 coins for new users
+  const [coins, setCoinsState] = useState<number>(saved?.coins ?? STARTING_GOLD_COINS);
+  // Wallet events can arrive several times before React renders again.
+  const coinsRef = useRef(coins);
+  const setCoins = useCallback((next: React.SetStateAction<number>) => {
+    const value = typeof next === 'function' ? next(coinsRef.current) : next;
+    coinsRef.current = value;
+    setCoinsState(value);
+  }, []);
+  const getCoinBalance = useCallback(() => coinsRef.current, []);
+  const [friendsWalletImports, setFriendsWalletImports] = useState<string[]>(saved?.friendsWalletImports ?? []);
+  const friendsImportsRef = useRef(new Set(friendsWalletImports));
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
   const [redeemedCodes, setRedeemedCodes] = useState<string[]>(saved?.redeemedCodes ?? []);
@@ -470,7 +485,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ownedItems: string[];
     unlockedVoices: string[];
     redeemedCodes: string[];
-  } | null>(saved?.parentEconomyData ?? null);
+  } | null>(saved?.parentEconomyData ?? {
+    // Older saves may not have a parent wallet yet. Never inherit the child's
+    // currently displayed coins when switching to the parent for the first time.
+    coins: saved?.currentProfileId ? STARTING_GOLD_COINS : (saved?.coins ?? STARTING_GOLD_COINS),
+    coinTransactions: saved?.currentProfileId ? [] : (saved?.coinTransactions ?? []),
+    ownedItems: saved?.currentProfileId ? ['f1', 'anim1', 'bg1'] : (saved?.ownedItems ?? ['f1', 'anim1', 'bg1']),
+    unlockedVoices: saved?.currentProfileId ? [] : (saved?.unlockedVoices ?? []),
+    redeemedCodes: saved?.currentProfileId ? [] : (saved?.redeemedCodes ?? []),
+  });
 
   // --- SYNC FULL PROFILE FROM CLOUD ON APP LOAD AND SIGN IN ---
   // This loads profile data from backend when signing in on a new device
@@ -505,7 +528,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const cloudHasData = cloudProfile.parentName || 
                             (cloudProfile.kids && cloudProfile.kids.length > 0) ||
-                            cloudProfile.coins > 500;
+                            cloudProfile.coins > STARTING_GOLD_COINS;
         
         // If this is a sign-in event (forceLoad=true) or cloud has meaningful data,
         // ALWAYS prioritize cloud data over local anonymous data
@@ -743,6 +766,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const stateToSave = {
       coins,
+      friendsWalletImports,
       coinTransactions,
       referralCode,
       redeemedCodes,
@@ -782,7 +806,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       savedCharacters,
       isSubscribed,
       parentAvatarData,
-      parentEconomyData
+      parentEconomyData: currentProfileId === null ? { coins, coinTransactions, ownedItems, unlockedVoices, redeemedCodes } : parentEconomyData
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     
@@ -819,7 +843,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       profileService.saveToCloud(userId, cloudPayload);
     }
   }, [
-    coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
+    coins, friendsWalletImports, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
@@ -889,36 +913,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isSubscribed]);
 
-  const addCoins = (amount: number, reason: string = 'Coins earned', source: CoinTransaction['source'] = 'other') => {
+  const addCoins = useCallback((amount: number, reason: string = 'Coins earned', source: CoinTransaction['source'] = 'other') => {
+    if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isSafeInteger(coinsRef.current + amount)) return;
     setCoins(prev => prev + amount);
-    
-    // Record transaction
-    const transaction: CoinTransaction = {
-      id: Date.now().toString(),
-      amount,
-      reason,
-      source,
-      timestamp: Date.now(),
-    };
-    setCoinTransactions(prev => [transaction, ...prev].slice(0, 100)); // Keep last 100 transactions
-  };
+    setCoinTransactions(prev => [{ id: crypto.randomUUID(), amount, reason, source, timestamp: Date.now() }, ...prev].slice(0, 100));
+  }, [setCoins]);
 
-  const spendCoins = (amount: number, reason: string = 'Purchase'): boolean => {
-    if (coins < amount) return false;
-    
+  const spendCoins = useCallback((amount: number, reason: string = 'Purchase'): boolean => {
+    if (!Number.isSafeInteger(amount) || amount < 0 || coinsRef.current < amount) return false;
+    if (amount === 0) return true;
     setCoins(prev => prev - amount);
-    
-    // Record transaction (negative amount)
-    const transaction: CoinTransaction = {
-      id: Date.now().toString(),
-      amount: -amount,
-      reason,
-      source: 'purchase',
-      timestamp: Date.now(),
-    };
-    setCoinTransactions(prev => [transaction, ...prev].slice(0, 100));
+    setCoinTransactions(prev => [{ id: crypto.randomUUID(), amount: -amount, reason, source: 'purchase' as const, timestamp: Date.now() }, ...prev].slice(0, 100));
     return true;
-  };
+  }, [setCoins]);
+
+  const importFriendsCoins = useCallback((key: string, amount: number) => {
+    if (friendsImportsRef.current.has(key) || !Number.isSafeInteger(amount) || amount < 0) return;
+    friendsImportsRef.current.add(key);
+    // Persist the receipt alongside the wallet, so reopening cannot award it twice.
+    setFriendsWalletImports([...friendsImportsRef.current]);
+    addCoins(amount, 'Existing Friends World earnings', 'game');
+  }, [addCoins]);
 
   const redeemCode = (code: string): { success: boolean; message: string } => {
     const normalizedCode = code.trim().toUpperCase();
@@ -1137,7 +1152,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Helper to get current economy state
   const getCurrentEconomyState = () => ({
-    coins,
+    coins: getCoinBalance(),
     coinTransactions: [...coinTransactions],
     ownedItems: [...ownedItems],
     unlockedVoices: [...unlockedVoices],
@@ -1333,7 +1348,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (kid) {
         // Restore kid's economy data (or defaults for new profiles)
         applyEconomyState({
-          coins: kid.coins ?? 500, // New kids start with 500 coins
+          coins: kid.coins ?? STARTING_GOLD_COINS, // New kids start with 10 coins
           coinTransactions: kid.coinTransactions ?? [],
           ownedItems: kid.ownedItems ?? ['f1', 'anim1', 'bg1'],
           unlockedVoices: kid.unlockedVoices ?? [],
@@ -1650,7 +1665,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('gk_last_hidden_ts');
     
     // Reset all in-memory state to defaults
-    setCoins(500); // New users start with 500 gold coins
+    setCoins(STARTING_GOLD_COINS); // New users start with 10 gold coins
     setCoinTransactions([]);
     setRedeemedCodes([]);
     setOwnedItems(['f1', 'anim1', 'bg1']);
@@ -1705,6 +1720,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coins,
       addCoins,
       spendCoins,
+      getCoinBalance,
+      importFriendsCoins,
       coinTransactions,
       referralCode,
       redeemedCodes,

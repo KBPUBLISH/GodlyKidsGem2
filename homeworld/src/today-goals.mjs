@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../../shared/economy.mjs';
 /**
  * Today's large goals — one per friend, plus a single extra the kid can add.
  *
@@ -299,8 +300,8 @@ export function journeyMeter(state,garden,project){
   };
 }
 
-/** Friends World coins are profile-scoped and never touch story or mini-game coins. */
-const ISLAND_STARTING_COINS=500;
+/** Legacy standalone-preview wallet; embedded play uses the parent app’s gold wallet. */
+const ISLAND_STARTING_COINS=STARTING_GOLD_COINS;
 const islandCoinKey=()=>{
   const scope=typeof location!=='undefined'?new URLSearchParams(location.search).get('profile')||'local':'local';
   return `gk_friends_world_coins_v1:${scope}`;

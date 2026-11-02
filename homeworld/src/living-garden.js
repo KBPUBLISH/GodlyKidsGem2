@@ -82,7 +82,7 @@ export class LivingGarden {
    this.test.noteHelp?.(w.kind);
    g.burst(p,w.kind==='water'?'water':'seed',.5);
    if(!before&&this.state.rewarded)this.test.celebrate('+10 coins!');
-   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':w.kind==='water'?'Watered!':`Picked a ${crop}!`,until:this.test.elapsed+2};}
+   else{this.test.pickupNotice={label:w.kind==='plant'?'Planted!':w.kind==='water'?'Watered!':`Picked a ${crop}! Plant new seeds here.`,until:this.test.elapsed+2};}
    g.notify();
   }
  }
@@ -117,9 +117,9 @@ export class LivingGarden {
   const watered=CARROT_SPOTS.filter(i=>s.wateredAt[i]!==null).length,picked=Object.values(s.picked).reduce((a,b)=>a+b,0);
   const crops=this.small?this.plots.map((p,i)=>({index:i,...gardenCrop(s,i,now),...this.test.project(p,.5)})):[];
   return {...s,busy:!!this.work,small:this.small,phase,seconds,timer:format(next?.remaining||0),
-   readyCount:crops.filter(c=>c.phase==='ready'&&s.planted===4).length,thirstyCount:crops.filter(c=>c.phase==='thirsty'&&s.planted===4).length,
-   label:phase==='plant'?'Plant a carrot seed':phase==='water'?`Water ${target.crop}`:phase==='harvest'?`Pick a ${target.crop}`:'Vegetables are growing',
-   instruction:phase==='plant'?'Tap a glowing spot to plant a carrot seed. Four seeds earn 10 coins!':phase==='water'?'Tap a blue drop to water your carrots. They need water to grow.':phase==='wait'?'Your carrots are growing. Gather logs or explore while you wait.':'Pick one carrot, one pumpkin and one lettuce.',
+   readyCount:crops.filter(c=>c.phase==='ready').length,thirstyCount:crops.filter(c=>c.phase==='thirsty').length,
+   label:phase==='plant'?`Plant a ${target?.crop||'carrot'} seed`:phase==='water'?`Water ${target.crop}`:phase==='harvest'?`Pick a ${target.crop}`:'Vegetables are growing',
+   instruction:phase==='plant'?(s.rewarded?'This patch is empty. Tap to plant new seeds, then water them.':'Tap a glowing spot to plant a carrot seed. Four seeds earn 10 coins!'):phase==='water'?'Tap a blue drop to water your carrots. They need water to grow.':phase==='wait'?'Your carrots are growing. Cut trees or explore while you wait.':'Pick one carrot, one pumpkin and one lettuce.',
    progress:phase==='plant'?`${s.planted} / 4 carrot seeds planted`:phase==='water'?`${watered} / 4 carrots watered`:`${picked} / 3 vegetables picked`,
    value:phase==='plant'?s.planted:phase==='water'?watered:picked,total:phase==='plant'||phase==='water'?4:3,
    spots:this.small?gardenAvailable(s).map(index=>{const job=gardenJob(s,index,now);return {...job,timer:format(job.remaining),...this.test.project(this.plots[index],.4)};}):[],

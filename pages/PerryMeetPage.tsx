@@ -1,3 +1,4 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NameTrialPaywall from '../components/onboarding/NameTrialPaywall';
@@ -163,7 +164,7 @@ const PerryMeetPage: React.FC = () => {
         age: Number.isFinite(parsedAge) ? parsedAge : undefined,
         avatarSeed: portrait,
         ...(LIVING_TEST_BUILD ? {worldAvatarId:chosen.id} : {}),
-        coins: 500,
+        coins: STARTING_GOLD_COINS,
         coinTransactions: [],
         ownedItems: ['f1', 'anim1'],
         unlockedVoices: [],

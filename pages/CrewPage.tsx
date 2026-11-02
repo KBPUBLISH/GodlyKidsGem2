@@ -586,6 +586,16 @@ const ShipTabLabel: React.FC<{ text: string; cell: number }> = ({ text, cell }) 
   );
 };
 
+/** Shared geometry keeps onboarding copy clear of the wheel and all four tabs. */
+function shipTabBarSize(stage: StageRect) {
+  const wideCrop = stage.height > stage.pageH + 1;
+  const barW = Math.min(stage.pageW * 1.12, stage.pageH * (wideCrop ? 0.52 : 0.66));
+  const barH = barW / BOW_ASPECT;
+  const wheelD = barW * 0.45;
+  const occupiedHeight = barH * (1 - BOW_STRIP_TOP - BOW_BOTTOM_PAD) + wheelD * 0.94;
+  return { barW, barH, wheelD, occupiedHeight };
+}
+
 const ShipDeckTabBar: React.FC<{
   tabs: ShipTab[];
   disabled?: boolean;
@@ -602,10 +612,7 @@ const ShipDeckTabBar: React.FC<{
   // smaller so the hatch and walkable planks stay in view. Wheel sits on the
   // strip's gold edge, its top third over the planks; the four tiles share
   // the plank strip in equal cells.
-  const wideCrop = stage.height > stage.pageH + 1;
-  const barW = Math.min(stage.pageW * 1.12, stage.pageH * (wideCrop ? 0.52 : 0.66));
-  const barH = barW / BOW_ASPECT;
-  const wheelD = barW * 0.45;
+  const { barW, barH, wheelD } = shipTabBarSize(stage);
   const cell = Math.min(barW * 0.19, barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) * 0.86);
   const stripW = Math.min(cell * 4 + 3 * Math.round(cell * 0.16), stage.pageW - 12);
   const stripBottom = barH * (1 - BOW_STRIP_BOTTOM) + (barH * (BOW_STRIP_BOTTOM - BOW_STRIP_TOP) - cell) / 2;
@@ -880,11 +887,10 @@ const CrewPage: React.FC = () => {
   // stays locked until the tour moves on.
   const jukeboxTourReady =
     tourBeat?.id === 'jukebox' && !!tour?.arrived && !tour.leaving;
-  // First-time experience: Home / Journey / Crew stay hidden until Adam has
-  // walked the kid through the ship. During the tour only the button he's
-  // talking about pops in.
+  // Legacy Adam tour reveals controls as he describes them. Perry's
+  // first-voyage welcome keeps the full wheel and tab bar visible.
   const firstTimeLock = (crewGuide || tapAdam) && !hasSeenAdamTour();
-  const navHidden = livingJourneyActive || firstTimeLock || !!tour;
+  const navHidden = firstTimeLock || !!tour;
   const tabBarTourBeat = !!tourBeat && TAB_BAR_TOUR_BEATS.has(tourBeat.id);
   const showJourneyBtn = !navHidden || tabBarTourBeat;
   const showCrewBtn = showJourneyBtn;
@@ -1836,7 +1842,8 @@ const CrewPage: React.FC = () => {
   };
 
   return (
-    <div ref={pageRef} className="relative w-full h-screen overflow-hidden">
+    <div ref={pageRef} className={`relative w-full h-screen overflow-hidden${livingJourneyActive ? ' crew-living-onboarding' : ''}`}
+      style={{ '--ship-guide-bottom': `calc(var(--safe-area-bottom, 0px) + ${Math.ceil(shipTabBarSize(stage).occupiedHeight + 12)}px)` } as React.CSSProperties}>
       {/* Sky/ocean slot — animated CSS scene behind a transparent-sky ship
           art (drifting cloud marquees, bobbing wave bands, sparkle drift).
           Skipped while the deck art paints its own sky. */}
@@ -2498,8 +2505,8 @@ const CrewPage: React.FC = () => {
         <FeatureSpotlight box={tourControlBox} shape={tourStaging?.shape} zIndex={34} />
       )}
 
-      {/* Wooden tab bar. Hidden until Adam's tour reaches Crew or Journey,
-          then the whole board stays so his spotlight has a target. */}
+      {/* Perry's welcome shows the complete ship controls from the start.
+          Adam's separate guided tour still reveals its controls by beat. */}
       {(showJourneyBtn || showCrewBtn) && (
         <ShipDeckTabBar
           onArtReady={() => setDeckArtReady(previous => ({...previous, bow:true}))}

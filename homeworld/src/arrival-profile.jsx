@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Icon} from './ui.jsx';
+import {Icon,useDialogFocus} from './ui.jsx';
+import './character-welcome.css';
 
 /**
  * "Welcome ashore!" profile card (arrival-profile.js). Slides up from the bottom when a friend is
@@ -11,10 +12,11 @@ export function ArrivalProfile({engine,card,enabled}){
   const button=useRef(null);
   const key=card?`${card.id}:${card.mode}:${card.at}`:'';
   const close=()=>{engine.current?.arrivals?.dismiss();};
+  useEffect(()=>{const arrivals=engine.current?.arrivals;if(arrivals)arrivals.uiPaused=!enabled;return()=>{if(arrivals)arrivals.uiPaused=false;};},[enabled,engine]);
   // Hold the card back until its `at` time (the friend is still being placed) and while the UI is busy.
   useEffect(()=>{
     setVisible(false);
-    if(!card||!enabled)return;
+    if(!card||!enabled||card.cinematic)return;
     const wait=Math.max(0,card.at-Date.now());
     const t=setTimeout(()=>setVisible(true),wait);
     return()=>clearTimeout(t);
@@ -27,6 +29,7 @@ export function ArrivalProfile({engine,card,enabled}){
     const t=card?.autoDismissMs?setTimeout(close,card.autoDismissMs):null;
     return()=>{window.removeEventListener('keydown',esc);if(t)clearTimeout(t);};
   },[visible,key]);
+  if(card?.cinematic&&enabled)return <CharacterWelcomeOverlay key={card.id} engine={engine} card={card}/>;
   if(!card||!enabled||!visible)return null;
   const p=card.profile,arrival=card.mode==='arrival';
   const plural=list=>list.length>1;
@@ -50,4 +53,22 @@ export function ArrivalProfile({engine,card,enabled}){
       <button ref={button} type="button" className="arrival-ok" onClick={close}>{arrival?'Welcome ashore!':'Got it'}{arrival?<i className="arrival-timer" aria-hidden="true"/>:null}</button>
     </section>
   </div>;
+}
+
+function CharacterWelcomeOverlay({engine,card}){
+ const [replied,setReplied]=useState(false),panel=useRef(null);
+ const chatting=card.phase==='chat',visible=card.phase!=='waiting'&&(!chatting||card.standalone);
+ const next=()=>chatting?engine.current?.arrivals?.dismiss():engine.current?.arrivals?.hello();
+ useDialogFocus(visible,panel,next);
+ if(!visible)return null;
+ return <section ref={panel} className="character-welcome" role="dialog" aria-modal="true" aria-label={`Welcome ${card.name}`} onPointerDown={e=>e.stopPropagation()}>
+  <div className="character-welcome-glow" aria-hidden="true"/><span className="character-welcome-star star-one" aria-hidden="true">✦</span><span className="character-welcome-star star-two" aria-hidden="true">✧</span>
+  <header><span>NEW FRIEND</span><h1>Welcome, {card.name}!</h1></header>
+  {!card.hasModel&&<div className="character-welcome-portrait">{card.imageUrl?<img src={card.imageUrl} alt={card.name}/>:<span aria-hidden="true">👋</span>}</div>}
+  <div className="character-welcome-caption"><p>{chatting?(replied?'Thank you for welcoming me! I can’t wait to explore with you.':`Hi! I’m ${card.name}. What should we explore together?`):'“Woah! What a beautiful island!”'}</p>
+   {chatting&&!replied&&<button onClick={()=>setReplied(true)}>Hi, {card.name}!</button>}
+   <button onClick={next}>{chatting?'Let’s explore':'Say hello'} <span aria-hidden="true">→</span></button>
+   {!chatting&&<small>Getting ready to chat…</small>}
+  </div>
+ </section>;
 }

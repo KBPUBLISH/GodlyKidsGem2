@@ -61,6 +61,7 @@ type Props = {
   onClose: () => void;
   /** Island talks stay to one short line and skip the portrait. */
   variant?: 'deck' | 'island';
+  arrival?: boolean;
   /** Island only: the kid agreed on a job, hand it to the world. */
   onTask?: (task: IslandTask) => void;
   /** Island only: what the character knows about their island right now. */
@@ -164,7 +165,7 @@ const FacePortrait: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => (
  * background once the typing is done. Degrades gracefully: no backend →
  * static friendly line, no suggestions.
  */
-const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', onTask, world = null }) => {
+const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', arrival = false, onTask, world = null }) => {
   const { kids, currentProfileId } = useUser();
 
   // Kid's first name from the active profile (same source as the Listen page
@@ -390,7 +391,7 @@ const CrewChatPopup: React.FC<Props> = ({ character, onClose, variant = 'deck', 
       setPendingTask(null);
       setSuggestions(onTask ? ISLAND_OPENERS : ISLAND_CHATS);
       const lastUser = [...saved].reverse().find((t) => t.role === 'user' && !ISLAND_OPENERS.includes(t.text))?.text || null;
-      showReply(islandGreeting({ characterId: character.id, userName, world, lastUserLine: lastUser }), true);
+      showReply(arrival ? `Woah, ${userName || 'friend'}! Your island is beautiful. Thank you for welcoming me! What shall we explore together?` : islandGreeting({ characterId: character.id, userName, world, lastUserLine: lastUser }), true);
       return;
     }
     setHistory(saved);

@@ -1,3 +1,4 @@
+import {ADAM_MODEL_URL} from '../shared/adamModel.mjs';
 /**
  * First-launch background preloader for the crew ship deck (#/crew).
  *
@@ -50,7 +51,7 @@ const CREW_IMAGE_URLS = [
 ];
 
 /** Adam — the first crew member every install gets (Draco-compressed GLB). */
-const ADAM_MODEL_URL = '/models/test-character.glb';
+
 /** Draco decoder the GLTFLoader fetches for compressed models. */
 const DRACO_URLS = ['/draco/draco_wasm_wrapper.js', '/draco/draco_decoder.wasm'];
 /** Known large models (>10 MB) — only on a good connection, and last. */

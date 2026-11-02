@@ -168,7 +168,7 @@ const appUserSchema = new mongoose.Schema({
     // Economy
     coins: {
         type: Number,
-        default: 500,
+        default: 10,
     },
     
     // Token balance for Godly Hub purchases

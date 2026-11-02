@@ -1,3 +1,4 @@
+import {selectBuildingGoal} from './adventure-goals.mjs';
 import * as THREE from 'three';
 import {cellAt,cellFromKey,heightAt,gameTime,buildSiteStatus,buildPlacementStatus,strokePlacementStatus,dist,Navigation,activeTrees,activeRocks,activeStumps,stumpRadius,buildMoveStatus,stateWithoutBuilding,buildUpgradeStatus} from './core.mjs';
 import {BUILDINGS,BUILD_ENERGY,buildingById,activeBuildings,footprint,workPoint,materialStatus,buildingProgress,buildingStage,woodTotal,upgradeDefinition,upgradeCost,upgradePlan,pointInBounds,fireFuelLeft,FIRE_LOW_MINUTES,layerCount,strokeRotation,strokeNeed} from './building.mjs';
@@ -97,7 +98,9 @@ export class Construction {
   g.notify();
  }
  startPreview(kind){
-  const g=this.g;this.sitePlan=null;if(buildingById(kind)?.stroke)return this.startStroke(kind);if(g.action||g.order||activeBuildings(g.store.state).some(b=>b.status!=='complete'&&!b.project)){g.toast('Let your character finish this building first.');return false;}
+  const g=this.g;
+  if(g.livingTestMode&&buildingById(kind)&&!buildingById(kind).stroke&&!materialStatus(g.store.state,kind).ok){selectBuildingGoal(g,kind);g.toast(`Goal set: ${buildingById(kind).name}. Gather supplies together, then choose its place.`);return false;}
+  this.sitePlan=null;if(buildingById(kind)?.stroke)return this.startStroke(kind);if(g.action||g.order||activeBuildings(g.store.state).some(b=>b.status!=='complete'&&!b.project)){g.toast('Let your character finish this building first.');return false;}
   if(!buildingById(kind))return false;g.persist();this.preview=this.findSpot(kind);if(projectPlan(kind))this.preview.crew=defaultCrew(g.store.state,kind);g.path=[];g.keys.clear();g.tool='build';g.overview=false;g.zoom=Math.max(g.zoom,19);g.resize();this.rebuildGhost();this.updatePreview();g.status='Tap the grass to move your building. Green means the spot is clear!';g.notify();return true;
  }
  moveExisting(id){

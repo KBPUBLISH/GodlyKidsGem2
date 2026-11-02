@@ -596,6 +596,7 @@ export class Residents {
       const outline = game.gardenPlan?.active(s);
       const kidFence = s.farm?.ranch?.kidFence;
       const keep = (o) => {
+        if(focus.id==='player-goal')return allowed.has(o.kind)&&(o.kind!=='build'||!focus.kind||s.buildings.find(b=>b.id===o.buildingId)?.kind===focus.kind);
         if (allowed.has(o.kind) || o.requestId === 'outline') return true;
         if (outline && (o.kind === 'plow' || o.kind === 'plant') && outline.keys.includes(o.cellKey)) return true;
         if (kidFence && (o.farm === 'stable' || o.farm === 'fence' || /for the stable|for the fence|Fencing the paddock/.test(o.label || ''))) return true;
@@ -604,7 +605,7 @@ export class Residents {
       for (let i = options.length - 1; i >= 0; i--) if (!keep(options[i])) options.splice(i, 1);
     }
     // A garden outline or a build site the kid already tapped is not cancelled by today's other goal.
-    if (game.gardenPlan && game.helpersLive) {
+    if (game.gardenPlan && game.helpersLive && (!focus||focus.id!=='player-goal'||focus.chores.includes('gardenWork'))) {
       const fence = game.gardenPlan.fenceChore(home);
       if (fence && !this.claims.has(fence.key) && !options.some((o) => o.key === fence.key)) options.push(fence);
       for (const c of game.gardenPlan.plantChores(home, s, this.claims) || []) if (!this.claims.has(c.key)) options.push(c);
@@ -722,7 +723,7 @@ export class Residents {
     }
     // Eve's own fishing. Chopping is her weakness, so between meals she fishes for the next one instead of touching an axe.
     // She stops once the bag already holds a meal's worth of raw fish.
-    if (skill?.id === 'cook' && !game.dining?.cooking() && (s.inventory?.fish || 0) < RAW_FISH_BUFFER && (auto.fish || 0) < SKILL_LIMITS.fish) {
+    if ((focus?.chores.includes('fish') || skill?.id === 'cook') && !game.dining?.cooking() && (s.inventory?.fish || 0) < RAW_FISH_BUFFER && (auto.fish || 0) < SKILL_LIMITS.fish) {
       const spot = game.world.fishingSpots?.[0];
       if (spot && free(`spot:${spot.id}`)) options.push({ kind: 'fish', key: `spot:${spot.id}`, spotId: spot.id, target: { x: spot.position[0], y: spot.position[1] }, reach: 1.05, dwell: 6, label: 'Fishing for the next meal', rank: 2.5, auto: 'fish' });
     }
@@ -1220,9 +1221,10 @@ export class Residents {
       buildings:(state.buildings || []).map(b => ({id:b.id,kind:b.kind,status:b.status,name:buildingById(b.kind)?.name || 'building'})),
     };
     try {
-      this.line = game.store.residentLine({id:home.residentId,name:home.name},context);
+      const focus=focusFor(state,home.id,home.name);
+      this.line = game.livingTestMode ? {id:'community-goal',residentId:home.residentId,text:focus?.id==='player-goal'?`We’re working together: ${focus.title}. I’ll help with what we need!`:'Choose a goal whenever you’re ready. We’ll help you work toward it.'} : game.store.residentLine({id:home.residentId,name:home.name},context);
       // The gardener speaks up about the garden first: fences, gate, scarecrow (garden-keeper.js, in Abel's voice).
-      const ask = game.gardenKeeper?.greeting(home);
+      const ask = game.livingTestMode ? null : game.gardenKeeper?.greeting(home);
       if (ask) this.line = ask;
     } catch (error) {
       game.toast?.(error.message);
@@ -1544,15 +1546,17 @@ export class Residents {
     const home = actor.userData, game = this.game;
     if (this.buildDuty(actor, dt)) return;
     if (game.store?.state?.night) { home.strollState = null; if (!game.gardenKeeper?.nightWatch(actor, dt, this)) this.idleActor(actor, dt); return; }
-    if (skillFor(home.name)?.id === 'cook' && (home.job?.type === 'chop' || home.job?.type === 'mine')) this.stopJob(actor, false);
+    if (!focusFor(game.store.state, home.id, home.name) && skillFor(home.name)?.id === 'cook' && (home.job?.type === 'chop' || home.job?.type === 'mine')) this.stopJob(actor, false);
     if (skillFor(home.name)?.id === 'cook' && (game.store?.state?.inventory?.fish || 0) >= RAW_FISH_BUFFER) {
       if (home.job?.type === 'fish' && !home.job.explicit) this.stopJob(actor, false);
       if (home.chore?.kind === 'fish') { this.claims.delete(home.chore.key); home.chore = null; home.strollState = { wait: 0 }; this.lastChoreScan = 0; }
     }
+    const sharedFocus=focusFor(game.store.state,home.id,home.name);
+    if(sharedFocus?.id==='player-goal'&&home.chore&&!sharedFocus.chores.includes(home.chore.kind)){this.claims.delete(home.chore.key);home.chore=null;home.strollState={wait:0};this.lastChoreScan=0;}
     if (home.chore) {
       const c = home.chore;
       // A cook never keeps a wood or stone chore. Drop it so the next pass can put her on a meal.
-      if ((c.kind === 'chop' || c.kind === 'mine') && skillFor(home.name)?.id === 'cook') {
+      if ((c.kind === 'chop' || c.kind === 'mine') && skillFor(home.name)?.id === 'cook' && !focusFor(game.store.state, home.id, home.name)) {
         this.claims.delete(c.key);
         home.chore = null;
         home.strollState = { wait: 0 };

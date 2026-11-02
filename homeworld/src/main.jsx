@@ -1,3 +1,4 @@
+import {selectBuildingGoal,goalById} from './adventure-goals.mjs';
 import {CookingGame} from './cooking-game.jsx';
 import {CoopGame} from './coop-game.jsx';
 import {AdventureGoals} from './adventure-goals.jsx';
@@ -259,6 +260,7 @@ function ToastLine({text,kind,className,style}){
 }
 function pinBuildGoal(g,kind){
   const def=BUILDINGS.find(b=>b.id===kind);if(!def||!g)return;
+  if(g.livingTestMode){selectBuildingGoal(g,kind);g.toast(`Goal set: ${def.name}. Your community will help gather supplies.`);return;}
   g.addTodayGoal({id:'raise',title:`Raising the ${def.name}`,kind});
   const ask=g.buildAsk;
   if(typeof ask?.requestBuilding==='function'){
@@ -415,7 +417,7 @@ function App(){
 
     {view.inside&&<div className="home-outside-bar"><button type="button" className="home-outside" onClick={()=>invoke(g=>g.building.leaveHome())}>Outside</button><span className="home-inside-status" role="status">Inside the {view.inside.name}</span></div>}
     {(view.playersOnly||LIVING_TEST)&&!panel&&!actionsOpen&&!view.fishing&&<button type="button" className="ship-button" aria-label="Back to the ship" onPointerUp={onBackToShip} onClick={onBackToShip}><img src={LIVING_TEST?LIVING_SHIP_ICON:SHIP_ICON} alt="" draggable={false}/><span>Back To Ship</span></button>}
-    {LIVING_TEST&&!panel&&!actionsOpen&&!mapOnly&&!view.fishing&&!view.night?.sleeping&&!view.livingTest?.arrival&&<button type="button" className="adventure-tasks-button" aria-label="Open my tasks" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);if(!goalActive&&view.livingTest?.tasks?.some(t=>!t.done)){invoke(g=>{g.building?.cancelPreview();g.livingTest.openTasks();});}else setGoalRequest(n=>n+1);}}><TasksIcon/><span>Tasks</span></button>}
+    {LIVING_TEST&&!panel&&!actionsOpen&&!mapOnly&&!view.fishing&&!view.night?.sleeping&&!view.livingTest?.arrival&&<button type="button" className="adventure-tasks-button" aria-label="Open my goal" disabled={!view.loaded} onClick={()=>{setPanel(null);setShowTime(false);setActionsOpen(false);setGoalRequest(n=>n+1);}}><TasksIcon/><span>Goal{view.state?.adventureGoals?.active?` · ${goalById(view.state.adventureGoals.active)?.title||'My goal'}`:' · Choose a goal'}</span></button>}
     <nav className="side-buttons" aria-label="Explore your island">
 
       {LIVING_TEST&&<button aria-label="Open Market" onClick={()=>openPanel('market')} disabled={!view.loaded}><img className="picture-icon" src="/assets/build_market.png" alt=""/><span>Market</span></button>}

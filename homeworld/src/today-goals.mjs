@@ -1,3 +1,4 @@
+import {communityGoalFocus} from './adventure-goals.mjs';
 import { STARTING_GOLD_COINS } from '../../shared/economy.mjs';
 /**
  * Today's large goals — one per friend, plus a single extra the kid can add.
@@ -139,6 +140,7 @@ export function withToday(village,bag){
  * today's goal and hasn't picked a new one yet.
  */
 export function focusFor(state,residentId,name,day=islandDay(state)){
+  const shared=communityGoalFocus(state);if(shared)return shared;
   const bag=todayBag(state,day);
   if(bag.overrides[residentId]==='off')return {id:'off',title:'Pick a new goal',chores:[],kind:null};
   const ov=normOverride(bag.overrides[residentId]);
@@ -150,11 +152,12 @@ export function focusFor(state,residentId,name,day=islandDay(state)){
 /** True when this friend should still run the meal (Eve fishes, Noah grills). A reassignment takes them off it. */
 export function servesMeal(state,residentId,name){
   const focus=focusFor(state,residentId,name);
-  return !focus||focus.id==='feed'||focus.id==='kitchen';
+  return !focus||focus.id==='feed'||focus.id==='kitchen'||focus.chores.includes('fish');
 }
 
 /** What the card shows for one friend. */
 export function displayGoal(state,residentId,name,day=islandDay(state)){
+  const shared=communityGoalFocus(state);if(shared)return {...shared,picked:true,yours:true,dismissed:false};
   const bag=todayBag(state,day);
   if(bag.overrides[residentId]==='off')return {id:'off',title:'Pick a new goal',picked:false,yours:false,dismissed:true};
   const ov=normOverride(bag.overrides[residentId]);

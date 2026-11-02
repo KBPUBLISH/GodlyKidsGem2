@@ -196,6 +196,7 @@ export class Dining {
   isPlayed(actor){return !!actor&&actor===this.g.actor;}
   /** Chat card while the kid is playing the cook and a meal is due. Null when she is not asking. */
   askCard(){
+    if(this.g.livingTestMode)return null;
     const a=this.routine?.ask;
     if(!a?.open||!a.text)return null;
     const name=a.name||'Eve';

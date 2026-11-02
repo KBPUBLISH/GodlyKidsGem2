@@ -17,3 +17,5 @@
 .game-shell.living-island-test.living-original-controls .living-request{top:160px}
 @media(max-width:600px){.game-shell.living-island-test.living-original-controls .living-request{top:156px}}
 @media(max-height:520px){.game-shell.living-island-test.living-original-controls .living-request{top:130px}}
+
+.adventure-tasks-button{max-width:calc(100% - 100px)}.adventure-tasks-button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.adventure-tasks-button svg{flex-shrink:0}

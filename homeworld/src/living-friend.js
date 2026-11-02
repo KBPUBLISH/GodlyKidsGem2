@@ -32,7 +32,7 @@ export class LivingFriend {
   this.helper.can.visible=false;this.helper.hammer.visible=false;this.helper.bench.visible=false;if(this.tool)this.tool.visible=false;
   this.savedCamera={zoom:this.g.zoom,yaw:this.g.viewYaw,pitch:this.g.viewPitch,overview:this.g.overview};this.g.overview=false;
   document.body.classList.add('living-chat-open');this.savedPlayerYaw=this.g.actor.rotation.y;this.chooseCamera();
-  this.post({type:'gk-living-friend-open',session:this.session,mode,arrival,intro:!this.t.state.fenceAsked,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
+  this.post({type:'gk-living-friend-open',session:this.session,mode,arrival,intro:false,character:{id:'adam',name:'Adam'},world:this.brief()});this.g.notify();
  }
  answerFence(answer){
   if(this.t.state.fenceAsked)return;

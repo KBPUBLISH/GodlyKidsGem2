@@ -7,7 +7,7 @@ The player chooses one shared goal. Characters do not create competing requests.
 1. Welcome a chicken: build a coop, buy a chicken, and discover the coop activity.
 2. Grow my garden: till, plant, water, and harvest five squares.
 3. Make a cottage: add wood storage if needed, gather 30 wood and 17 stone, then choose a site and build.
-4. Build my stone oven: gather 20 stone and six clay, then choose its site and build. The oven unlocks cooking activities.
+4. Build my first kitchen: gather 20 stone and six clay, then choose its site and build. The starter kitchen opens the pantry and cooking activities. Existing ovens count as starter kitchens and retain their cooking progress.
 5. Grill a fish: fish at the dock, build a campfire, grill, then eat or share the catch.
 
 Players can choose any of these immediately. They are suggestions rather than compulsory assignments. Completing goals unlocks additional storage, farm and community buildings. Completing garden milestones unlocks harvest goals of 12, 24, 48 and 96 crops in order. Existing progress survives goal switching and loading older cottage/church saves.

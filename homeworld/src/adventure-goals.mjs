@@ -38,7 +38,7 @@ export const GOALS=[
 // Building goals use the real catalogue costs, including clay and bundled materials.
 const existing=new Set(GOALS.map(g=>g.id));
 for(const b of BUILDINGS.filter(b=>!existing.has(b.id)&&!b.stroke)){
- GOALS.push({id:b.id,title:`Build my ${b.name.toLowerCase()}`,description:b.description,art:`build_${b.poster||b.id}.png`,emoji:'🏗️',color:'blue',later:!['oven'].includes(b.id),steps:[
+ GOALS.push({id:b.id,title:b.id==='oven'?'Build my first kitchen':`Build my ${b.name.toLowerCase()}`,description:b.description,art:`build_${b.poster||b.id}.png`,emoji:'🏗️',color:'blue',later:!['oven'].includes(b.id),steps:[
   ...[['wood',b.wood,'axe'],['stone',b.stone,'mine'],['clay',b.clay,'clay'],...Object.entries(b.bundle||{}).map(([id,n])=>[id,n,id==='wheat'?'plant':'bricks'])].filter(([,n])=>n>0).map(([id,n,action])=>({id,label:`Gather ${n} ${id.replaceAll('_',' ')}`,metric:id,count:n,action,stock:true})),
   {id:'build',label:`Place and finish your ${b.name.toLowerCase()}`,metric:`building:${b.id}`,count:1,action:`build:${b.id}`,stock:true}
  ]});

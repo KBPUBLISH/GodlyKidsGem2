@@ -40,11 +40,13 @@
   for = "/homeworld/index.html"
   [headers.values]
     Cache-Control = "no-cache"
+    Permissions-Policy = "camera=(), microphone=()"
 
 [[headers]]
   for = "/homeworld/living-test.html"
   [headers.values]
     Cache-Control = "no-cache"
+    Permissions-Policy = "camera=(), microphone=()"
 
 [[headers]]
   for = "/"

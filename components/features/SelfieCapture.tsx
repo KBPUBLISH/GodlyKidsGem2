@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, RotateCcw, Check, X, Sparkles, FlipHorizontal } from 'lucide-react';
 import WoodButton from '../ui/WoodButton';
+import { createSelfieCameraSession } from '../../utils/selfieCameraSession.mjs';
 
 interface SelfieCaptureProps {
   isOpen: boolean;
@@ -29,54 +30,38 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  // Check for multiple cameras
-  useEffect(() => {
-    const checkCameras = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        setHasMultipleCameras(videoDevices.length > 1);
-      } catch (e) {
-        console.log('Could not enumerate devices');
-      }
-    };
-    checkCameras();
-  }, []);
+  const cameraSession = useRef(createSelfieCameraSession());
 
   // Initialize camera
   const startCamera = useCallback(async () => {
-    try {
-      // Stop any existing stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+    if (!isOpen) return;
+    setHasMultipleCameras(false);
+    const constraints: MediaStreamConstraints = {
+      video: {
+        facingMode: facingMode,
+        width: { ideal: 720 },
+        height: { ideal: 720 }
       }
+    };
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 720 },
-          height: { ideal: 720 }
+    await cameraSession.current.start(navigator.mediaDevices, constraints, {
+      onStream: async (stream: MediaStream) => {
+        setError(null);
+        setState('preview');
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      },
+      onDevices: (devices: MediaDeviceInfo[]) => {
+        setHasMultipleCameras(devices.filter(device => device.kind === 'videoinput').length > 1);
+      },
+      onError: () => {
+        setError('Camera access is off. You can close this screen and keep playing, or allow camera access to take a selfie.');
+        setState('error');
       }
-      
-      setError(null);
-      setState('preview');
-    } catch (err) {
-      console.error('Camera access error:', err);
-      setError('Could not access camera. Please allow camera permissions and try again.');
-      setState('error');
-    }
-  }, [facingMode]);
+    });
+  }, [facingMode, isOpen]);
 
   // Hide bottom nav wheel while selfie modal is open
   useEffect(() => {
@@ -93,15 +78,14 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
     if (isOpen) {
       startCamera();
     } else {
-      // Cleanup when closed
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
       setState('preview');
       setCapturedImage(null);
       setCountdown(3);
     }
+    return () => {
+      cameraSession.current.stop();
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
   }, [isOpen, startCamera]);
 
   // Handle countdown
@@ -158,9 +142,7 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
     setState('captured');
 
     // Stop video stream to save resources
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
+    cameraSession.current.stop();
   };
 
   const retake = async () => {
@@ -214,6 +196,16 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
           {/* Hidden canvas for capturing */}
           <canvas ref={canvasRef} className="hidden" />
 
+          {/* Keep the video mounted so retrying permission can attach the stream
+              before React switches from the error screen back to preview. */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`${state === 'error' || state === 'captured' ? 'hidden ' : ''}w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+          />
+
           {state === 'error' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
               <Camera className="w-16 h-16 text-gray-500 mb-4" />
@@ -252,14 +244,6 @@ const SelfieCapture: React.FC<SelfieCaptureProps> = ({
             </>
           ) : (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-              />
-
               {/* Wood texture outside the port window (only when using porthole overlay) */}
               {frameOverlayImageUrl && (
                 <div

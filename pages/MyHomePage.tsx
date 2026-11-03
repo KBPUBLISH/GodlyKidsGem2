@@ -24,7 +24,7 @@ import { ensureLegacyMigration, getProfileScopeKey, profileScopeKeyFor, onProfil
 import { useUser } from '../context/UserContext';
 import { ISLAND_ANIMAL_PRICES, FARM_ANIMAL_PRICES, FARM_MAX_QTY, ISLAND_SELL_PRICES, ISLAND_SELL_MAX_QTY } from '../utils/islandShop';
 
-const HOMEWORLD_VERSION = 'players191';
+const HOMEWORLD_VERSION = 'players192';
 const HOMEWORLD_URL = `/homeworld/index.html?v=${HOMEWORLD_VERSION}&players=1`;
 /** The island namespaces its localStorage by this (homeworld/src/storage-scope.mjs). */
 const homeworldUrlFor = (scope: string, playerName: string, livingTest = false, avatarId = 'trail', friendModel = '', friendImage = '') =>
@@ -946,7 +946,7 @@ const MyHomePage: React.FC = () => {
           src={homeworldUrlFor(profileScope, playerName,livingTestMode,playerAvatarId,adamReward?.modelUrl||'',adamReward?.imageUrl||'')+(firstArrival?'&arrival=1':'')}
           title="Players World"
           className="w-full h-full border-0 overscroll-none"
-          allow="autoplay; fullscreen; pointer-lock"
+          allow="autoplay; fullscreen; pointer-lock; camera 'none'; microphone 'none'"
           onLoad={() => {setFrameLoaded(true);setFriendChat(null);setSitePicking(false);}}
           style={{
             position: 'absolute',

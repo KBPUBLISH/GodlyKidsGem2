@@ -40,6 +40,11 @@ const appUserSchema = new mongoose.Schema({
         index: true,
     },
     
+    // Persist legacy drip progress (also protected by the delivery ledger).
+    dripEmailsSent: { type: Map, of: Date, default: {} },
+    dripCompleted: { type: Boolean, default: false },
+    lastDripEmailAt: Date,
+
     // Subscription status
     subscriptionStatus: {
         type: String,

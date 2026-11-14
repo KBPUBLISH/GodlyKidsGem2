@@ -50,7 +50,6 @@ const EmailSubscriberSchema = new mongoose.Schema({
 });
 
 // Index for quick lookups
-EmailSubscriberSchema.index({ email: 1 });
 EmailSubscriberSchema.index({ createdAt: -1 });
 EmailSubscriberSchema.index({ source: 1 });
 

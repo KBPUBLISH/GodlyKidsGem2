@@ -17,13 +17,13 @@ async function enroll(campaign, dryRun = true) {
       if (!validEmail(email) || seen.has(email)) continue;
       seen.add(email);
       result.accounts++;
-      const subscriber = await EmailSubscriber.findOne({ email, optInUpdates: true, unsubscribedAt: null }).lean();
-      if (!subscriber) { result.excluded++; continue; }
+      if (!await delivery.isEligible(email)) { result.excluded++; continue; }
+      const subscriber = await EmailSubscriber.findOne({ email }).lean();
       result.eligible++;
       if (!dryRun) {
         try {
           const write = await Enrollment.updateOne({ campaign: campaign.key, email }, { $setOnInsert: {
-            parentName: subscriber.parentName || user.username || 'friend',
+            parentName: subscriber?.parentName || user.username || 'friend',
             dueAt: campaign.launchedAt, stage: 0, status: 'pending',
           } }, { upsert: true });
           result.enrolled += write.upsertedCount;

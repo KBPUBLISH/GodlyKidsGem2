@@ -81,6 +81,7 @@ test('welcome dry run sends nothing; parallel live runs persist one delivery and
 });
 test('existing audience excludes new accounts and opt-outs, normalizes duplicates, and enrolls idempotently', async () => {
   await subscriber(); await subscriber('new@example.com');
+  await subscriber('no-consent@example.com', { optInUpdates: false });
   const c = await campaign();
   await User.collection.insertMany([
     { username: 'parent', email: 'parent@example.com', createdAt: new Date(c.audienceCutoff - 1000) },
@@ -165,4 +166,32 @@ test('launch is repeatable, pause blocks sending, resume works, and batches reac
   for (let i = 0; i < 3; i++) await runUpdate(payload.key, { dryRun: false, limit: 1 });
   assert.equal(sent.length, 3);
   assert.equal(new Set(sent.map(m => m.to)).size, 3);
+});
+
+test('signup permission includes accounts without subscriber records and unsubscribe suppresses subsequent delivery', async () => {
+  await User.collection.insertOne({ username: 'signup', email: ' Signup@Example.com ', createdAt: new Date(0) });
+  const c = await campaign();
+  assert.equal(await Subscriber.countDocuments(), 0);
+  assert.equal((await enroll(c, true)).eligible, 1);
+  assert.equal(await sender.isEligible('signup@example.com'), true);
+  assert.equal(await sender.isEligible('anonymous@example.com'), false);
+  await enroll(c, false);
+  await runUpdate(c.key, { dryRun: false });
+  assert.equal(sent.length, 1);
+  const token = policy.tokenFor('signup@example.com', process.env.EMAIL_UNSUBSCRIBE_SECRET);
+  assert.equal((await request('/api/email-campaigns/unsubscribe', { token })).status, 200);
+  assert.equal(await sender.isEligible('signup@example.com'), false);
+  await Enrollment.updateOne({}, { $set: { dueAt: new Date(0) } });
+  await runUpdate(c.key, { dryRun: false });
+  assert.equal(sent.length, 1);
+  assert.equal((await Enrollment.findOne()).status, 'suppressed');
+});
+test('recorded opt-outs override signup permission even with legacy casing and whitespace', async () => {
+  await User.collection.insertOne({ username: 'optout', email: 'parent@example.com', createdAt: new Date(0) });
+  await Subscriber.collection.insertOne({ email: ' PARENT@EXAMPLE.COM ', optInUpdates: false });
+  assert.equal(await sender.isEligible('parent@example.com'), false);
+  assert.equal((await enroll(await campaign())).eligible, 0);
+  assert.equal(policy.eligible({ optInUpdates: true, unsubscribedAt: new Date() }, true), false);
+  assert.equal(policy.eligible(null, true), true);
+  assert.equal(policy.eligible(null, false), false);
 });

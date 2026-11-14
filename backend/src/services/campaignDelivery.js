@@ -1,7 +1,8 @@
 const nodemailer = require('nodemailer');
 const EmailSubscriber = require('../models/EmailSubscriber');
 const EmailDelivery = require('../models/EmailDelivery');
-const { normalizeEmail, eligible, tokenFor, escapeHtml } = require('./campaignPolicy');
+const User = require('../models/User');
+const { normalizeEmail, validEmail, emailFilter, eligible, tokenFor, escapeHtml } = require('./campaignPolicy');
 let transport;
 function configuration() {
   if (process.env.EMAIL_CAMPAIGNS_ENABLED !== 'true') throw new Error('Email campaigns are disabled');
@@ -12,7 +13,12 @@ function configuration() {
   return base.origin;
 }
 async function isEligible(email) {
-  return eligible(await EmailSubscriber.findOne({ email: normalizeEmail(email) }).lean());
+  if (!validEmail(email)) return false;
+  const filter = { email: emailFilter(email) };
+  const preferences = await EmailSubscriber.find(filter).lean();
+  if (preferences.some(p => p.unsubscribedAt || p.optInUpdates === false)) return false;
+  const account = await User.exists(filter);
+  return eligible(preferences.find(p => p.optInUpdates === true), Boolean(account));
 }
 async function deliver({ campaign, email, stage, subject, html }) {
   const base = configuration();

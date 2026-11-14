@@ -3,7 +3,13 @@ const DAY = 86400000;
 const normalizeEmail = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
 const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const eligible = subscriber => Boolean(subscriber && subscriber.optInUpdates === true && !subscriber.unsubscribedAt);
+// Account signup includes update permission, as confirmed by the owner on 2026-11-14.
+// Explicit later opt-outs always override either source of permission.
+const eligible = (subscriber, registeredAccount = false) => {
+  if (subscriber?.unsubscribedAt || subscriber?.optInUpdates === false) return false;
+  return registeredAccount || subscriber?.optInUpdates === true;
+};
+const emailFilter = email => ({ $regex: '^\\s*' + normalizeEmail(email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', $options: 'i' });
 const STAGES = ['day0_welcome', 'day2_tips', 'day4_features', 'day6_checkin', 'day7_final'];
 const DAYS = [0, 2, 4, 6, 7];
 function getDripStage(createdAt, sent = {}, lastSent, now = new Date()) {
@@ -36,4 +42,4 @@ function validateMessages(messages, appUrl) {
     if (/[\r\n]/.test(message.subject)) throw new Error('Subject must be a single line');
   }
 }
-module.exports = { DAY, STAGES, normalizeEmail, validEmail, escapeHtml, eligible, getDripStage, tokenFor, emailFromToken, validateMessages };
+module.exports = { DAY, STAGES, normalizeEmail, validEmail, escapeHtml, eligible, emailFilter, getDripStage, tokenFor, emailFromToken, validateMessages };

@@ -107,6 +107,7 @@ app.use('/api/music', require('./routes/music'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/drip', require('./routes/drip'));
+app.use('/api/email-campaigns', require('./routes/emailCampaigns'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/translate', require('./routes/translate'));
 app.use('/api/referrals', require('./routes/referrals'));
@@ -216,6 +217,21 @@ try {
 
 // Only set up cron jobs if cron loaded successfully
 if (cron) {
+// Opt-in scheduler; manual runs also require the same global sending switch.
+if (process.env.EMAIL_CAMPAIGNS_ENABLED === 'true') {
+  cron.schedule('15 * * * *', async () => {
+    try {
+      const { runWelcome } = require('./services/welcomeCampaign');
+      const { runUpdate } = require('./services/updateCampaign');
+      const Campaign = require('./models/UpdateCampaign');
+      if (process.env.EMAIL_WELCOME_ENABLED === 'true') await runWelcome({ dryRun: false });
+      for (const campaign of await Campaign.find({ status: 'active' }).lean()) {
+        await runUpdate(campaign.key, { dryRun: false });
+      }
+    } catch (error) { console.error('Email campaign job failed:', error.message); }
+  }, { timezone: 'UTC', noOverlap: true });
+}
+
 // Morning scripture at 7am Mountain Time - just uplifting, no call to action
 cron.schedule('0 7 * * *', async () => {
   console.log('🌅 [Cron] Running 7am morning scripture notifications...');

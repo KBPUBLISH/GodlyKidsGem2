@@ -2,23 +2,14 @@ const express = require('express');
 const router = express.Router();
 const EmailSubscriber = require('../models/EmailSubscriber');
 
-// Try to load auth middleware, but don't fail if missing
-let authenticateAdmin;
-try {
-  const auth = require('../middleware/auth');
-  authenticateAdmin = auth.authenticateAdmin;
-} catch (err) {
-  console.warn('⚠️ Auth middleware not found, using passthrough for admin routes');
-  // Fallback: allow all requests (temporary for debugging)
-  authenticateAdmin = (req, res, next) => next();
-}
+const { authenticateAdmin } = require('../middleware/auth');
 
 // POST /api/email-subscribers - Subscribe an email (public endpoint for app)
 router.post('/', async (req, res) => {
   try {
     const { email, source, platform, deviceId, parentName, kidsCount, optInUpdates } = req.body;
 
-    if (!email) {
+    if (typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
@@ -29,21 +20,15 @@ router.post('/', async (req, res) => {
     }
 
     // Check if email already exists
-    const existingSubscriber = await EmailSubscriber.findOne({ email: email.toLowerCase() });
+    const existingSubscriber = await EmailSubscriber.findOne({ email: email.trim().toLowerCase() });
     
     if (existingSubscriber) {
-      // If already subscribed but unsubscribed, re-subscribe
-      if (existingSubscriber.unsubscribedAt) {
-        existingSubscriber.unsubscribedAt = null;
-        existingSubscriber.optInUpdates = optInUpdates !== false;
+      // Preserve an unsubscribe unless the caller explicitly opts back in.
+      if (optInUpdates === false || optInUpdates === true) {
+        existingSubscriber.optInUpdates = optInUpdates;
+        existingSubscriber.unsubscribedAt = optInUpdates ? null : new Date();
         await existingSubscriber.save();
-        return res.status(200).json({ 
-          message: 'Re-subscribed successfully',
-          bonusAwarded: existingSubscriber.bonusAwarded,
-          isNewSubscriber: false
-        });
       }
-      
       // Already subscribed and active
       return res.status(200).json({ 
         message: 'Email already subscribed',
@@ -54,7 +39,7 @@ router.post('/', async (req, res) => {
 
     // Create new subscriber
     const subscriber = new EmailSubscriber({
-      email: email.toLowerCase(),
+      email: email.trim().toLowerCase(),
       source: source || 'onboarding_bonus',
       platform: platform || 'unknown',
       deviceId,
@@ -202,7 +187,7 @@ router.post('/unsubscribe', async (req, res) => {
   try {
     const { email } = req.body;
     
-    const subscriber = await EmailSubscriber.findOne({ email: email?.toLowerCase() });
+    const subscriber = await EmailSubscriber.findOne({ email: email?.trim().toLowerCase() });
     if (!subscriber) {
       return res.status(404).json({ error: 'Email not found' });
     }

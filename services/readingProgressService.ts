@@ -1,5 +1,6 @@
 // Reading Progress Service - Tracks reading progress for each book PER PROFILE
 import { profileService } from './profileService';
+import { progressSyncService } from './progressSyncService';
 
 const BASE_KEY = 'godlykids_reading_progress';
 
@@ -43,6 +44,7 @@ class ReadingProgressService {
         lastReadAt: Date.now()
       };
       localStorage.setItem(this.getKey(), JSON.stringify(allProgress));
+      progressSyncService.reportReadingProgress(bookId, currentPageIndex);
     } catch (error) {
       console.error('Error saving progress:', error);
     }

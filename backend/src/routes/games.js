@@ -3,6 +3,24 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Game = require('../models/Game');
 const GamePlayEvent = require('../models/GamePlayEvent');
+const AppUser = require('../models/AppUser');
+
+/** First completion of a game feeds progression unlocks (e.g. Creation Week day N -> N+1). */
+const recordCompletedGame = async (userId, gameId, completedAt) => {
+    const id = String(userId);
+    const who = id.includes('@')
+        ? { email: id.toLowerCase() }
+        : mongoose.Types.ObjectId.isValid(id) && id.length === 24
+            ? { $or: [{ _id: id }, { deviceId: id }] }
+            : { deviceId: id };
+    await AppUser.updateOne(
+        { ...who, 'learningProgress.completedGames.gameId': { $ne: String(gameId) } },
+        {
+            $push: { 'learningProgress.completedGames': { gameId: String(gameId), completedAt } },
+            $set: { 'learningProgress.updatedAt': new Date() },
+        },
+    );
+};
 
 // GET all games
 router.get('/', async (req, res) => {
@@ -293,6 +311,11 @@ router.post('/play-event', async (req, res) => {
         });
         
         await playEvent.save();
+
+        if (completed) {
+            await recordCompletedGame(userId, gameId, playEvent.playedAt).catch((error) =>
+                console.error('Error recording completed game progress:', error.message));
+        }
         
         console.log(`🎮 Game play recorded: ${gameId} by ${userId} - ${sessionDurationSeconds}s, ${starsEarned}⭐, ${coinsEarned}🪙`);
         

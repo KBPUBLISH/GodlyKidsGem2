@@ -945,6 +945,7 @@ import NotificationService from './services/notificationService';
 import { activityTrackingService } from './services/activityTrackingService';
 import { DespiaService } from './services/despiaService';
 import { authService } from './services/authService';
+import { bookCompletionService } from './services/bookCompletionService';
 import { metaAttributionService } from './services/metaAttributionService';
 import DemoTimer from './components/features/DemoTimer';
 import ReadyToJumpInPage from './pages/ReadyToJumpInPage';
@@ -1449,6 +1450,12 @@ const App: React.FC = () => {
       DespiaService.setOneSignalUserId(userId);
     }
   }, [isDespia]);
+
+  // Upload book completions saved on this device before progress sync existed (for personalised notifications)
+  useEffect(() => {
+    const timer = setTimeout(() => bookCompletionService.backfillProgressSync(), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Schedule daily 9am notification for Daily Verse (DeSpia only)
   useEffect(() => {

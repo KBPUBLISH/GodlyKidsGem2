@@ -12,6 +12,7 @@
 
 const AppUser = require('../models/AppUser');
 const { sendNotificationByPlayerId, sendNotificationToUser } = require('../services/notificationService');
+const { getConfig: getSmartConfig, createDefaultSmartNotifier, SMART_USER_FIELDS } = require('../services/smartNotifications');
 
 // Notification message pool - rotates daily
 // Morning scripture messages - uplifting, no call to action
@@ -336,6 +337,7 @@ async function runDailyEngagementNotifications(options = {}) {
     sent: 0,
     skipped: 0,
     failed: 0,
+    smartSent: 0,
     timezonesChecked: [],
     mode: ignoreTimezone ? 'all_users' : 'timezone_based'
   };
@@ -380,9 +382,20 @@ async function runDailyEngagementNotifications(options = {}) {
       };
     }
     
+    // Afternoon slot: a behaviour-based message (next story, game unlock, island tip) replaces the
+    // generic rotation when one applies, so personalisation never adds extra notifications.
+    let smartNotifier = null;
+    if (!morningScripture && getSmartConfig().enabled) {
+      try {
+        smartNotifier = await createDefaultSmartNotifier();
+      } catch (e) {
+        console.error('⚠️ Smart notifications unavailable, using generic messages:', e.message);
+      }
+    }
+
     // Find users matching the query
     const users = await AppUser.find(query)
-      .select('_id email parentName oneSignalPlayerId timezone reverseTrialActive reverseTrialStartDate reverseTrialConverted');
+      .select(`_id email deviceId parentName oneSignalPlayerId timezone reverseTrialActive reverseTrialStartDate reverseTrialConverted${smartNotifier ? ` ${SMART_USER_FIELDS}` : ''}`);
     
     results.total = users.length;
     console.log(`📊 Found ${users.length} users to notify`);
@@ -395,6 +408,17 @@ async function runDailyEngagementNotifications(options = {}) {
       
       const batchPromises = batch.map(async (user) => {
         try {
+          if (smartNotifier) {
+            const smart = await smartNotifier.notifyUser(user).catch((e) => {
+              console.error(`Smart notification error for ${user._id}:`, e.message);
+              return { sent: false };
+            });
+            if (smart.sent) {
+              await AppUser.findByIdAndUpdate(user._id, { $set: { [dateField]: today } });
+              return { sent: true, smart: true };
+            }
+          }
+
           const message = getDailyMessage(user, dayOfYear, { morningScripture });
           const sendResult = await sendDailyNotification(user, message);
           
@@ -417,6 +441,7 @@ async function runDailyEngagementNotifications(options = {}) {
       
       for (const result of batchResults) {
         if (result.sent) results.sent++;
+        if (result.smart) results.smartSent++;
         else if (result.failed) results.failed++;
         else results.skipped++;
       }
@@ -429,7 +454,7 @@ async function runDailyEngagementNotifications(options = {}) {
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✨ Daily engagement job completed in ${duration}s`);
-    console.log(`   Total: ${results.total}, Sent: ${results.sent}, Failed: ${results.failed}`);
+    console.log(`   Total: ${results.total}, Sent: ${results.sent} (personalised: ${results.smartSent}), Failed: ${results.failed}`);
     
     return { success: true, duration: `${duration}s`, ...results };
     

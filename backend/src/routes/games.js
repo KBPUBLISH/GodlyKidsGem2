@@ -66,6 +66,52 @@ router.get('/daily-tasks', async (req, res) => {
     }
 });
 
+// GET enabled arcade games (ship basement cabinet, 3×3 menu)
+router.get('/arcade', async (req, res) => {
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(500).json({
+                message: 'Database not connected. Please check MONGO_URI in .env file.',
+                error: 'Database connection not established'
+            });
+        }
+
+        const games = await Game.find({
+            enabled: true,
+            gameType: 'arcade',
+        }).sort({ createdAt: 1 }).lean();
+
+        const priced = await Game.find({
+            enabled: true,
+            goldCoinPrice: { $gt: 0 },
+        }).select('gameId name url goldCoinPrice isPurchasable').lean();
+
+        const normName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const normUrl = (value) => String(value || '').trim().replace(/\/+$/, '').toLowerCase();
+        const withPrice = games.map((game) => {
+            if ((game.goldCoinPrice || 0) > 0) return game;
+            const sibling = priced.find((other) => {
+                if (!other || other.gameId === game.gameId) return false;
+                const sameName = game.name && normName(other.name) === normName(game.name);
+                const sameUrl = game.url && normUrl(other.url) === normUrl(game.url);
+                return sameName || sameUrl;
+            });
+            if (!sibling) return game;
+            return {
+                ...game,
+                isPurchasable: true,
+                goldCoinPrice: sibling.goldCoinPrice,
+            };
+        });
+
+        res.set('Cache-Control', 'no-store');
+        res.json(withPrice);
+    } catch (error) {
+        console.error('Error fetching arcade games:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // GET single game by ID
 router.get('/:gameId', async (req, res) => {
     try {

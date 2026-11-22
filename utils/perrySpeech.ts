@@ -1,0 +1,65 @@
+import {getLanguage} from '../localization/LocalizedText';
+import { fetchTtsAudioUrl } from '../services/characterChatService';
+import { ONBOARDING_GUIDE_DEFAULT_NAME, ONBOARDING_GUIDE_VOICE_ID } from './onboardingJourney';
+
+const cache = new Map<string, string>();
+
+export const PERRY_VOICE_ID = ONBOARDING_GUIDE_VOICE_ID;
+
+export const PERRY_HELLO_LINE = 'Woah... hello! Who are you?';
+export const PERRY_HELLO_TTS = '[startled] Woah... [happily] Hello! [curiously] Who are you?';
+export const PERRY_ASK_LINE = "Hello! My name is Perry. What is your child's name?";
+export const PERRY_ASK_TTS =
+  "[happily] Hello! [warmly] My name is Perry. [gently] What is your child's name?";
+export const PERRY_ASK_KID_LINE = "Hi! My name is Perry. What's your name?";
+export const PERRY_ASK_KID_TTS =
+  "[happily] Hi! [warmly] My name is Perry. [excitedly] What's your name?";
+export const PERRY_WOOHOO_LINE = 'Woohoo!';
+export const PERRY_WOOHOO_TTS = '[excitedly] Woohoo!';
+
+export function perryFirstName(kidName?: string | null): string {
+  const first = String(kidName || '')
+    .trim()
+    .split(/\s+/)[0];
+  return first || ONBOARDING_GUIDE_DEFAULT_NAME;
+}
+
+export function buildPerryAvatarAskCopy(kidName: string): { line: string; tts: string } {
+  const name = perryFirstName(kidName);
+  return {
+    line: `${name}, what a great name! Would you like to try out our selfie to avatar?`,
+    tts: `[happily] ${name}, [excitedly] what a great name! [warmly] Would you like to try out our selfie to avatar?`,
+  };
+}
+
+export function buildPerryReadyCopy(kidName: string): { line: string; tts: string } {
+  const name = perryFirstName(kidName);
+  return {
+    line: `Hi ${name}, are you ready to start your adventure!`,
+    tts: `[happily] Hi ${name}, [excitedly] are you ready to start your adventure!`,
+  };
+}
+
+export function buildPerryIslandCopy(kidName?: string | null): { line: string; tts: string } {
+  const name = perryFirstName(kidName);
+  return {
+    line: `${name}! This is your crew ship. You unlock characters. Let me show you how.`,
+    tts: `[excitedly] ${name}! [happily] This is your crew ship. [warmly] You unlock characters. [pause] Let me show you how.`,
+  };
+}
+
+export function fetchPerrySpeech(text: string): Promise<string | null> {
+  const source = text.trim();
+  const key = getLanguage() + '\0' + source;
+  if (!source) return Promise.resolve(null);
+  const hit = cache.get(key);
+  if (hit) return Promise.resolve(hit);
+  return fetchTtsAudioUrl(PERRY_VOICE_ID, source).then((url) => {
+    if (url) cache.set(key, url);
+    return url;
+  });
+}
+
+export function preloadPerrySpeech(text: string): void {
+  void fetchPerrySpeech(text);
+}

@@ -1,6 +1,8 @@
+import { languageDirection } from '../localization/languageDirection';
+import {translate as translateStoryText} from '../localization/LocalizedText';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Play, Pause, Volume2, Mic, Check, Music, Speaker, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, X, Play, Pause, Volume2, Mic, Check, Music, Home, Heart, Star, RotateCcw, Lock, Sparkles, HelpCircle, Share2, Copy, Smartphone, Grid3X3, Loader2, Globe, BookOpen, SkipForward, FileText, RefreshCw, Crown } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { voiceCloningService, ClonedVoice } from '../services/voiceCloningService';
 import { translationService, SUPPORTED_LANGUAGES } from '../services/translationService';
@@ -13,6 +15,11 @@ import { favoritesService } from '../services/favoritesService';
 import { readCountService } from '../services/readCountService';
 import { analyticsService } from '../services/analyticsService';
 import { bookCompletionService } from '../services/bookCompletionService';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
+import { storyPackUnlockUxService } from '../services/storyPackUnlockUxService';
+import { isLibraryFromBasement } from '../utils/libraryFromBasement';
+import { getLibraryMode } from '../utils/libraryMode';
+import {completeLivingFirstFriendReading} from '../utils/livingFirstFriend';
 import { incrementActivityCounter } from '../components/features/ReviewPromptModal';
 import { BookPageRenderer, ScrollState } from '../components/features/BookPageRenderer';
 import WebViewPageRenderer from '../components/features/WebViewPageRenderer';
@@ -22,8 +29,46 @@ import { authService } from '../services/authService';
 import { useTutorial } from '../context/TutorialContext';
 import { isValidBookId } from '../utils/bookUtils';
 import { attachReliableLoop } from '../utils/audioLoop';
+import { bibleMapScrollBandPct, splitStoryWords, wordForSpeech } from '../utils/bibleMapReader';
+import {
+    buildIslandLessonHubPath,
+    buildIslandSceneNavState,
+    buildIslandScenePath,
+    resolveIslandSceneReturn,
+    type IslandSceneReaderState,
+} from '../utils/islandSceneReturn';
+import { shouldShowFullscreenHint, recordFullscreenHintUse } from '../utils/islandReaderPrefs';
+import TapToFullscreenHint from '../components/features/TapToFullscreenHint';
+import { cacheAssetUrls } from '../utils/assetCache';
+import { filterVisibleVoices } from '../services/voiceManagementService';
+import { cleanVoiceDescription } from '../utils/voiceUtils';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+
+type ReadingLevelKey = 'ages_3_5' | 'ages_6_7' | 'ages_8_plus';
+const READING_LEVEL_KEYS: ReadingLevelKey[] = ['ages_3_5', 'ages_6_7', 'ages_8_plus'];
+
+function parseReadingLevel(raw: unknown): ReadingLevelKey | null {
+    if (typeof raw !== 'string') return null;
+    return READING_LEVEL_KEYS.includes(raw as ReadingLevelKey) ? (raw as ReadingLevelKey) : null;
+}
+
+function readingLevelFontSize(level: ReadingLevelKey): number {
+    if (level === 'ages_3_5') return 28;
+    if (level === 'ages_6_7') return 24;
+    return 22;
+}
+
+/** True while the kid is still on `/read/:bookId` (BrowserRouter pathname or HashRouter hash). */
+function isBookReaderLocation(): boolean {
+    try {
+        const path = window.location.pathname || '';
+        const hash = window.location.hash || '';
+        return /\/read\/[^/?#]+/.test(path) || /\/read\/[^/?#]+/.test(hash);
+    } catch {
+        return false;
+    }
+}
 
 interface TextBox {
     text: string;
@@ -109,19 +154,45 @@ interface Page {
     backgroundAudioUrl?: string;
     backgroundTrimStartSec?: number;
     backgroundTrimEndSec?: number;
+    readingLevels?: {
+        ages_3_5?: { text?: string };
+        ages_6_7?: { text?: string };
+        ages_8_plus?: { text?: string };
+    };
 }
 
-/** Page has authored layered video soundtrack (kid reader can toggle independently of narration). */
-function pageHasLayeredVideoSound(page: Page | null | undefined): boolean {
-    if (!page) return false;
-    if ((page.backgroundAudioUrl || '').trim()) return true;
-    if (
-        page.useVideoSequence &&
-        Array.isArray(page.videoSequence) &&
-        page.videoSequence.some((v) => (v.audioUrl || '').trim())
-    )
-        return true;
-    return false;
+/** Prefer age-leveled text when present; otherwise leave page as-is (legacy textBoxes). */
+function applyReadingLevelToPage(page: Page, level: ReadingLevelKey | null): Page {
+    if (!level || !page.readingLevels) return page;
+    const entry = page.readingLevels[level];
+    const text = typeof entry?.text === 'string' ? entry.text.trim() : '';
+    if (!text) return page;
+    const textBox: TextBox = {
+        text,
+        x: 10,
+        y: 38,
+        width: 80,
+        fontSize: readingLevelFontSize(level),
+        fontFamily: 'Patrick Hand',
+        color: '#4a3b2a',
+        alignment: 'center',
+    };
+    return {
+        ...page,
+        textBoxes: [textBox],
+        content: {
+            ...(page.content || {}),
+            text,
+            textBoxes: [textBox],
+        },
+    };
+}
+
+/** Translate the selected age variant, not the CMS page's default text. */
+async function translateReaderPage(page: Page, language: string) {
+    const boxes = page.content?.textBoxes?.length ? page.content.textBoxes : page.textBoxes?.length ? page.textBoxes : [{text:page.content?.text || ''}];
+    const translatedTextBoxes = await Promise.all(boxes.map(async box => ({translatedText: await translateStoryText(box.text || '', language)})));
+    return {translatedText: translatedTextBoxes.map(box=>box.translatedText).join(' '),translatedTextBoxes};
 }
 
 /**
@@ -146,9 +217,18 @@ interface TextSegment {
 
 
 // Wood Button Component
-const WoodButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React.ReactNode; className?: string }> = ({ onClick, icon, className = '' }) => (
+const WoodButton: React.FC<{
+    onClick: (e: React.MouseEvent) => void;
+    icon: React.ReactNode;
+    className?: string;
+    disabled?: boolean;
+    title?: string;
+}> = ({ onClick, icon, className = '', disabled = false, title }) => (
     <button
+        type="button"
         onClick={onClick}
+        disabled={disabled}
+        title={title}
         className={`
             relative w-14 h-14 flex items-center justify-center
             bg-gradient-to-b from-[#C17F44] to-[#8B4513]
@@ -156,6 +236,7 @@ const WoodButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
             shadow-[inset_2px_2px_4px_rgba(255,255,255,0.3),inset_-2px_-2px_4px_rgba(0,0,0,0.4),0_4px_8px_rgba(0,0,0,0.5)]
             active:translate-y-0.5 active:shadow-[inset_2px_2px_8px_rgba(0,0,0,0.4),0_2px_4px_rgba(0,0,0,0.5)]
             transition-all duration-100 group
+            disabled:pointer-events-none
             ${className}
         `}
     >
@@ -182,24 +263,163 @@ const BookReaderPage: React.FC = () => {
     const location = useLocation();
     const fromDailySession = (location.state as any)?.fromDailySession || false;
     const [searchParams] = useSearchParams();
+    const readingLevel =
+        parseReadingLevel(searchParams.get('readingLevel')) ||
+        parseReadingLevel((location.state as { readingLevel?: string } | null)?.readingLevel);
     const readerShareToken = searchParams.get('share') || undefined;
     const bookDetailUrl = bookId ? `/book/${bookId}${readerShareToken ? `?share=${encodeURIComponent(readerShareToken)}` : ''}` : '';
+    const islandSceneReturn = resolveIslandSceneReturn(
+        location.state as IslandSceneReaderState | null,
+        searchParams,
+    );
+    const hasBibleMapReturnParams = !!(
+        searchParams.get('returnIslandId')?.trim() ||
+        searchParams.get('returnStoryId')?.trim()
+    );
+    const navigateBackFromReader = useCallback(() => {
+        stopBookAudioRef.current();
+
+
+        if (islandSceneReturn) {
+            // If the book was already finished, ensure scene unlock progress is saved
+            // even when returning without re-hitting The End this session.
+            if (
+                bookId &&
+                islandSceneReturn.storyId &&
+                bookCompletionService.isBookCompleted(bookId)
+            ) {
+                storyPackUnlockUxService.markActivityAndFlagUnlock(
+                    islandSceneReturn.islandId,
+                    islandSceneReturn.storyId,
+                    'read',
+                );
+            }
+            const path = buildIslandScenePath(islandSceneReturn);
+            if (path) {
+                navigate(path, { state: buildIslandSceneNavState(islandSceneReturn) });
+                return;
+            }
+        }
+        if (fromDailySession) {
+            navigate('/daily-session');
+            return;
+        }
+        const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : null);
+        if (detailUrl) {
+            navigate(detailUrl, {
+                state: isLibraryFromBasement()
+                    ? { from: '/listen', libraryMode: getLibraryMode() }
+                    : undefined,
+            });
+        } else if (isLibraryFromBasement()) {
+            navigate('/listen', { state: { libraryMode: getLibraryMode() } });
+        } else {
+            navigate('/read');
+        }
+    }, [islandSceneReturn, fromDailySession, bookDetailUrl, bookId, navigate]);
     const { setGameMode, setMusicPaused, currentPlaylist, isPlaying, togglePlayPause } = useAudio();
-    const { isVoiceUnlocked, isSubscribed, kids, currentProfileId, skipPuzzles } = useUser();
+    const { isVoiceUnlocked, unlockVoice, isSubscribed, kids, currentProfileId, skipPuzzles } = useUser();
+
+    const isIslandRead = !!islandSceneReturn;
+    /**
+     * Island stories open full screen: art fills the phone and the page text
+     * rides over it as karaoke captions (ReaderCaptions) instead of the
+     * parchment. "↑ Show text" brings the parchment back at any time.
+     */
+    const ISLAND_OPENS_FULLSCREEN = true;
+    const startsFullscreen = isIslandRead && ISLAND_OPENS_FULLSCREEN;
+
+    // Finger cue: "tap the picture/video for full screen". Island reads that
+    // open with the parchment up only, until the kid has done it a few times.
+    const [fullscreenHintVisible, setFullscreenHintVisible] = useState<boolean>(
+        () => isIslandRead && !startsFullscreen && shouldShowFullscreenHint(),
+    );
     const { isTutorialActive, isStepActive, onPageSwipe, onBookEndModalOpen, onQuizStart, onBookQuizComplete, currentStep, goToStep } = useTutorial();
     const wasMusicEnabledRef = useRef<boolean>(false);
     const [pages, setPages] = useState<Page[]>([]);
+    const pagesRef = useRef<Page[]>([]);
+    useEffect(() => {
+        pagesRef.current = pages;
+    }, [pages]);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [loading, setLoading] = useState(true);
-    
+    /** Bible Map tap-words: keys `${boxIndex}:${wordIndex}` revealed on the *current* page */
+
+    const getPageTextBoxes = useCallback((page: Page | undefined) => {
+        if (!page) return [] as TextBox[];
+        const contentBoxes = page.content?.textBoxes;
+        return contentBoxes && contentBoxes.length > 0
+            ? contentBoxes
+            : page.textBoxes || [];
+    }, []);
+
+    const bibleMapEndHandledRef = useRef(false);
+    /** When false, kill-interval / loop must not restart book BGM (prevents sticky music). */
+    const bookMusicAliveRef = useRef(true);
+    const stopBookAudioRef = useRef<() => void>(() => {});
+    useEffect(() => {
+        bibleMapEndHandledRef.current = false;
+    }, [bookId]);
+
     // Premium preview state
     const [isBookPremium, setIsBookPremium] = useState(false);
     const [showPreviewLimitModal, setShowPreviewLimitModal] = useState(false);
-    const [scrollState, setScrollState] = useState<ScrollState>('mid'); // Default mid (30%) — matches portal reader preview
+    const [scrollState, setScrollState] = useState<ScrollState>(
+        startsFullscreen ? 'hidden' : 'mid', // Default mid (30%) — matches portal reader preview
+    );
+
+    // Fullscreen finger cue: the kid followed it (art now fills the screen) →
+    // count it and hide. Otherwise it quietly times out so it never nags.
+    useEffect(() => {
+        if (!fullscreenHintVisible || loading) return;
+        if (scrollState === 'hidden') {
+            recordFullscreenHintUse();
+            setFullscreenHintVisible(false);
+            return;
+        }
+        const t = window.setTimeout(() => setFullscreenHintVisible(false), 20000);
+        return () => window.clearTimeout(t);
+    }, [fullscreenHintVisible, scrollState, loading]);
+    const [readerNarrow, setReaderNarrow] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
+    );
     const [isKidMonthlyBook, setIsKidMonthlyBook] = useState(false);
+    const [isBibleMapBook, setIsBibleMapBook] = useState(false);
+    // Hide language pill on Bible Map stories (bookType, return params, or island scene context)
+    const hideLanguageSelector =
+        isBibleMapBook || !!islandSceneReturn || hasBibleMapReturnParams;
     const [bookTitle, setBookTitle] = useState<string>('Book');
     const [bookOrientation, setBookOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [invalidBookId, setInvalidBookId] = useState(false);
+
+    /** Adaptive parchment band for Bible Map (short text → lower scroll → more art). */
+    const bibleMapScrollBandForPage = useCallback(
+        (page: Page | undefined): { mid: number; max: number } | null => {
+            if (!page || !isBibleMapBook) return null;
+            const boxes = getPageTextBoxes(page);
+            const wordCount = boxes.reduce(
+                (sum, box) => sum + splitStoryWords(box?.text || '').length,
+                0,
+            );
+            return bibleMapScrollBandPct(wordCount, { mobile: readerNarrow });
+        },
+        [getPageTextBoxes, isBibleMapBook, readerNarrow],
+    );
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 639px)');
+        const onChange = () => setReaderNarrow(mq.matches);
+        onChange();
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
+
+    const bibleMapScrollBoot = React.useRef(false);
+    useEffect(() => {
+        if (!isBibleMapBook || bibleMapScrollBoot.current || startsFullscreen) return;
+        bibleMapScrollBoot.current = true;
+        if (window.matchMedia('(max-width: 639px)').matches) setScrollState('mid');
+    }, [isBibleMapBook]);
     
     // Character overlay state (for showing kid's character in the book)
     const [showCharacterOverlay, setShowCharacterOverlay] = useState(false);
@@ -229,7 +449,7 @@ const BookReaderPage: React.FC = () => {
     const introVideoRef = useRef<HTMLVideoElement>(null);
 
     // Keep ref in sync with state
-    const scrollStateRef = useRef<ScrollState>('mid');
+    const scrollStateRef = useRef<ScrollState>(startsFullscreen ? 'hidden' : 'mid');
     const scrollBeforeHideRef = useRef<ScrollState>('mid');
     useEffect(() => {
         scrollStateRef.current = scrollState;
@@ -238,7 +458,7 @@ const BookReaderPage: React.FC = () => {
     // Tutorial: Auto-jump to end page when book_end_quiz step starts
     // Also handles case where user swiped too fast - ensures they're on the end page
     useEffect(() => {
-        if (isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
+        if (!isIslandRead && !isBibleMapBook && isTutorialActive && currentStep === 'book_end_quiz' && pages.length > 0) {
             const lastPageIndex = pages.length - 1;
             const isAlreadyAtEnd = currentPageIndex === lastPageIndex;
             
@@ -254,7 +474,7 @@ const BookReaderPage: React.FC = () => {
                 onBookEndModalOpen();
             }, 100);
         }
-    }, [isTutorialActive, currentStep, pages.length, currentPageIndex, onBookEndModalOpen]);
+    }, [isIslandRead, isBibleMapBook, isTutorialActive, currentStep, pages.length, currentPageIndex, onBookEndModalOpen]);
 
     // Pause audiobook playlist when entering book reader to prevent audio overlap
     useEffect(() => {
@@ -294,9 +514,10 @@ const BookReaderPage: React.FC = () => {
     const [voices, setVoices] = useState<any[]>([]);
     const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
     // Load user's voice preference immediately from localStorage (sync) to avoid race condition
+    // Default matches portal BookReader: Aria (then Jessica) from ElevenLabs
     const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
         const savedVoice = localStorage.getItem('godlykids_default_voice');
-        return savedVoice || '21m00Tcm4TlvDq8ikWAM'; // Fallback to Rachel if no saved preference
+        return savedVoice || '9BWtsMINqrJLrRacOk9x'; // Fallback to Aria if no saved preference
     });
     
     // Book-specific voice settings (from portal)
@@ -747,8 +968,17 @@ const BookReaderPage: React.FC = () => {
     const [wordAlignment, setWordAlignment] = useState<{ words: Array<{ word: string; start: number; end: number }> } | null>(null);
     const [currentWordIndex, setCurrentWordIndex] = useState<number>(-1);
     const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
+    /** First listen: pick a narrator before the story plays. No dismiss. */
+    const [showNarratorPick, setShowNarratorPick] = useState(false);
+    /** True until a first-time listener confirms a voice. Blocks story autoplay. */
+    const [awaitingNarratorChoice, setAwaitingNarratorChoice] = useState(
+        () => !localStorage.getItem('godlykids_default_voice'),
+    );
+    const [narratorPickId, setNarratorPickId] = useState<string | null>(null);
+    const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+    const narratorPreviewRef = useRef<HTMLAudioElement | null>(null);
     
-    // Translation state
+    // Translation state (language selector shown for regular books; hidden on Bible Map)
     const [selectedLanguage, setSelectedLanguage] = useState<string>(() => translationService.getPreferredLanguage());
     const selectedLanguageRef = useRef<string>(selectedLanguage); // Ref to track language for closures
     const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -772,6 +1002,17 @@ const BookReaderPage: React.FC = () => {
     const [autoPlayMode, setAutoPlayMode] = useState(false);
     const autoPlayModeRef = useRef(false);
     const currentPageIndexRef = useRef(0); // Track page index to avoid closure issues
+
+    // Leaving mid-story keeps this page so Continue can reopen it.
+    useEffect(() => {
+        return () => {
+            const id = bookId;
+            const page = currentPageIndexRef.current;
+            if (!id || page < 0) return;
+            if (bookCompletionService.isBookCompleted(id)) return;
+            readingProgressService.saveProgress(id, page);
+        };
+    }, [bookId]);
     const isAutoPlayingRef = useRef(false); // Prevent multiple simultaneous auto-play calls
     const userStoppedPlaybackRef = useRef(false); // Track when user explicitly stopped playback (prevents auto-resume)
     const alignmentWarningShownRef = useRef(false); // Prevent alignment warning spam
@@ -813,13 +1054,15 @@ const BookReaderPage: React.FC = () => {
     const audioPreloadCacheRef = useRef<Map<string, { audioUrl: string; alignment: any }>>(new Map());
     const preloadingInProgressRef = useRef<Set<string>>(new Set());
     const desiredScrollStateRef = useRef<ScrollState | null>(null); // Track desired scroll state for next page turn
+    /** Short single-word TTS for tappable parchment words (separate from page narration). */
+    const spokenWordAudioRef = useRef<HTMLAudioElement | null>(null);
     
     // Background preloading cache refs - prevents black flash between pages
     const preloadedBackgroundsRef = useRef<Set<string>>(new Set());
     
     const [bookMusicEnabled, setBookMusicEnabled] = useState(true); // Default to enabled
-    /** Kid toggle for layered soundtrack from uploaded video (`backgroundAudioUrl` / clip `audioUrl`), separate from narration. */
-    const [pageVideoSoundEnabled, setPageVideoSoundEnabled] = useState(true);
+    /** Layered soundtrack from uploaded video (`backgroundAudioUrl` / clip `audioUrl`) always plays; the kid-facing speaker toggle was removed from the reader toolbar. */
+    const pageVideoSoundEnabled = true;
     const [musicVolume] = useState(0.4); // Fixed volume at 40%
 
     // Use ref to track music enabled state for intervals/callbacks
@@ -1103,6 +1346,9 @@ const BookReaderPage: React.FC = () => {
     // Effect 1: Initialization, Book Data Fetching, and Cleanup
     useEffect(() => {
         console.log('📖 BookReaderPage MOUNTED - KILLING ALL APP MUSIC');
+        let cancelled = false;
+        /** Local handle so late async work cannot orphan a playing element after leave. */
+        let activeBookMusic: HTMLAudioElement | null = null;
 
         // Pause app background music immediately (if any)
         setGameMode(false);
@@ -1111,14 +1357,21 @@ const BookReaderPage: React.FC = () => {
         // 4. Nuclear Option: Kill all other audio elements (more aggressive)
         // BUT preserve book background music
         const killAllAudio = () => {
+            if (cancelled || !bookMusicAliveRef.current) return;
             const allAudio = document.querySelectorAll('audio');
             allAudio.forEach(audio => {
                 // Don't kill our own book music - it should play!
                 if (bookBackgroundMusicRef.current && audio === bookBackgroundMusicRef.current) {
                     return;
                 }
-                // App-wide background loop is owned by AudioContext — pause only via setMusicPaused / settings
-                if (audio.getAttribute('data-gk-role') === 'app-background') {
+                // App-owned players — pause Listen/sail, never zero their volume
+                // (the playlist <audio> lives on document.body for the whole session).
+                const role = audio.getAttribute('data-gk-role');
+                if (role === 'app-background') {
+                    return;
+                }
+                if (role === 'playlist' || role === 'sail-music') {
+                    audio.pause();
                     return;
                 }
                 // Force pause and mute stray page / plugin audio outside our readers
@@ -1130,11 +1383,25 @@ const BookReaderPage: React.FC = () => {
         killAllAudio();
 
         // 5. Keep killing app background audio aggressively, but preserve book music
+        bookMusicAliveRef.current = true;
         let killCount = 0;
         let killInterval: NodeJS.Timeout | null = setInterval(() => {
+            if (cancelled || !bookMusicAliveRef.current) {
+                if (killInterval) {
+                    clearInterval(killInterval);
+                    killInterval = null;
+                }
+                return;
+            }
             killAllAudio();
             // Ensure book music continues playing if it should be
-            if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
+            if (
+                !cancelled &&
+                bookMusicAliveRef.current &&
+                bookBackgroundMusicRef.current &&
+                bookMusicEnabledRef.current &&
+                bookBackgroundMusicRef.current.paused
+            ) {
                 bookBackgroundMusicRef.current.play().catch(() => {
                     // Ignore play errors - might be user interaction required
                 });
@@ -1144,9 +1411,22 @@ const BookReaderPage: React.FC = () => {
             if (killCount === 20 && killInterval) {
                 clearInterval(killInterval);
                 killInterval = setInterval(() => {
+                    if (cancelled || !bookMusicAliveRef.current) {
+                        if (killInterval) {
+                            clearInterval(killInterval);
+                            killInterval = null;
+                        }
+                        return;
+                    }
                     killAllAudio();
                     // Keep book music playing
-                    if (bookBackgroundMusicRef.current && bookMusicEnabledRef.current && bookBackgroundMusicRef.current.paused) {
+                    if (
+                        !cancelled &&
+                        bookMusicAliveRef.current &&
+                        bookBackgroundMusicRef.current &&
+                        bookMusicEnabledRef.current &&
+                        bookBackgroundMusicRef.current.paused
+                    ) {
                         bookBackgroundMusicRef.current.play().catch(() => { });
                     }
                 }, 200);
@@ -1160,6 +1440,8 @@ const BookReaderPage: React.FC = () => {
                 const userId = authService.getUserIdForBackend();
                 const shareToken = searchParams.get('share') || undefined;
                 const book = await ApiService.getBookById(bookId, userId, shareToken || null);
+                // Leave / bookId change: do not start sticky BGM after unmount
+                if (cancelled) return;
                 
                 // Shared link: recipient can read full book without subscription
                 const allowSharedRead = (book as any)?.allowSharedRead === true;
@@ -1216,6 +1498,8 @@ const BookReaderPage: React.FC = () => {
                     console.log('📖 Book orientation:', orientation);
                     const kidMonthly = rawData?.bookType === 'kids_monthly' || (book as any)?.isUserCreated === true;
                     setIsKidMonthlyBook(!!kidMonthly);
+                    const bibleMap = rawData?.bookType === 'bible_map' || (book as any)?.bookType === 'bible_map';
+                    setIsBibleMapBook(!!bibleMap);
                     // Check if book should show character overlay (never for Create Your Story: characters are already in the art)
                     const hasCharacterOverlay = !kidMonthly && (rawData?.showCharacterOverlay || (book as any)?.showCharacterOverlay || false);
                     setShowCharacterOverlay(hasCharacterOverlay);
@@ -1281,10 +1565,12 @@ const BookReaderPage: React.FC = () => {
                 const rawData = (book as any)?.rawData;
                 const files = rawData?.files || (book as any)?.files;
 
+                if (cancelled) return;
+
                 if (files?.audio && Array.isArray(files.audio) && files.audio.length > 0) {
                     const defaultIdx = Math.max(0, Math.min(files.defaultAudioIndex ?? 0, files.audio.length - 1));
                     const musicUrl = files.audio[defaultIdx]?.url;
-                    if (musicUrl) {
+                    if (musicUrl && !cancelled) {
                         console.log('🎵 Found book music:', musicUrl);
                         setHasBookMusic(true);
 
@@ -1298,45 +1584,60 @@ const BookReaderPage: React.FC = () => {
                         const audio = new Audio(musicUrl);
                         audio.loop = true;
                         audio.preload = 'auto';
+                        audio.setAttribute('data-gk-role', 'book-background');
+                        if (cancelled) {
+                            try {
+                                audio.pause();
+                                audio.removeAttribute('src');
+                                audio.src = '';
+                                audio.load?.();
+                            } catch { }
+                            return;
+                        }
+                        activeBookMusic = audio;
+                        bookMusicAliveRef.current = true;
                         bookBackgroundMusicRef.current = audio;
-                        bookMusicLoopDetachRef.current = attachReliableLoop(audio, true);
+                        bookMusicLoopDetachRef.current = attachReliableLoop(
+                            audio,
+                            () =>
+                                !cancelled &&
+                                bookMusicAliveRef.current &&
+                                bookMusicEnabledRef.current,
+                        );
                         ensureBookMusicGraph(audio);
 
-                        // Start playing book music automatically when loaded
-                        audio.addEventListener('canplaythrough', async () => {
+                        const startBookMusicIfAlive = async () => {
+                            if (cancelled || !bookMusicAliveRef.current) return;
                             await resumeBookMusicContext();
-                            if (bookMusicEnabledRef.current) {
-                                console.log('🎵 Book music ready - starting playback');
-                                // Set volume directly for cross-origin audio (CORS-safe)
-                                audio.volume = musicVolume;
-                                audio.muted = false;
-                                audio.play().catch(err => {
-                                    console.warn('⚠️ Book music auto-play prevented:', err);
-                                    // Update UI to reflect that music isn't actually playing
-                                    setBookMusicEnabled(false);
-                                });
+                            if (cancelled || !bookMusicAliveRef.current || !bookMusicEnabledRef.current) {
+                                try {
+                                    audio.pause();
+                                } catch { }
+                                return;
                             }
+                            console.log('🎵 Book music ready - starting playback');
+                            audio.volume = musicVolume;
+                            audio.muted = false;
+                            audio.play().catch(err => {
+                                if (cancelled || !bookMusicAliveRef.current) return;
+                                console.warn('⚠️ Book music auto-play prevented:', err);
+                                setBookMusicEnabled(false);
+                            });
+                        };
+
+                        // Start playing book music automatically when loaded
+                        audio.addEventListener('canplaythrough', () => {
+                            void startBookMusicIfAlive();
                         }, { once: true });
 
                         // Try to play immediately if already loaded
                         if (audio.readyState >= 3 && bookMusicEnabledRef.current) {
-                            await resumeBookMusicContext();
-                            audio.volume = musicVolume;
-                            audio.muted = false;
-                            audio.play().catch(err => {
-                                console.warn('⚠️ Book music immediate play prevented:', err);
-                                // Update UI to reflect that music isn't actually playing
-                                setBookMusicEnabled(false);
-                            });
+                            await startBookMusicIfAlive();
                         }
-
-                        // Trigger a state update to notify the second effect that music is ready
-                        // We can use setHasBookMusic(true) which we already did, 
-                        // but we might need to force a re-check if it was already true.
-                        // For now, the dependency on hasBookMusic in the second effect should handle it.
                     }
                 }
             } catch (err) {
+                if (cancelled) return;
                 console.error('Failed to fetch book data:', err);
                 // Still mark intro video as checked on error
                 setIntroVideoChecked(true);
@@ -1348,23 +1649,33 @@ const BookReaderPage: React.FC = () => {
         // Cleanup function
         return () => {
             console.log('📖 BookReaderPage UNMOUNTING - Cleanup');
-            if (killInterval) clearInterval(killInterval);
+            cancelled = true;
+            bookMusicAliveRef.current = false;
+            if (killInterval) {
+                clearInterval(killInterval);
+                killInterval = null;
+            }
 
-            // Stop and destroy book background music
+            // Stop book-owned BGM (local + ref) without touching Listen/MiniPlayer playlist
             bookMusicLoopDetachRef.current?.();
             bookMusicLoopDetachRef.current = null;
-            if (bookBackgroundMusicRef.current) {
-                bookBackgroundMusicRef.current.pause();
-                bookBackgroundMusicRef.current.src = '';
-                bookBackgroundMusicRef.current = null;
-            }
-            // Disconnect WebAudio graph for book music source
-            if (bookMusicSourceRef.current) {
-                try { bookMusicSourceRef.current.disconnect(); } catch { }
-                bookMusicSourceRef.current = null;
-            }
+            const stopEl = (el: HTMLAudioElement | null) => {
+                if (!el) return;
+                try {
+                    el.pause();
+                    el.removeAttribute('src');
+                    el.src = '';
+                    el.load?.();
+                } catch { }
+            };
+            stopEl(activeBookMusic);
+            activeBookMusic = null;
+            stopEl(bookBackgroundMusicRef.current);
+            bookBackgroundMusicRef.current = null;
+            // Full book TTS / WebAudio teardown (idempotent)
+            stopBookAudioRef.current();
 
-            // Resume app music
+            // Resume app ambient only (not MiniPlayer playlist)
             setMusicPaused(false);
         };
     }, [bookId, searchParams, setGameMode, setMusicPaused, ensureBookMusicGraph, resumeBookMusicContext]); // searchParams for ?share= token
@@ -1392,6 +1703,8 @@ const BookReaderPage: React.FC = () => {
     // Helper function to stop all book audio (call on unmount/navigate-away)
     const stopAllBookAudio = useCallback(() => {
         console.log('📖 Stopping ALL book audio');
+        // Prevent kill-interval / reliable-loop from restarting BGM after leave
+        bookMusicAliveRef.current = false;
         // Stop TTS narration
         if (currentAudioRef.current) {
             try {
@@ -1416,6 +1729,15 @@ const BookReaderPage: React.FC = () => {
                 console.warn('Error stopping multi-segment audio:', e);
             }
         }
+        // Tapped-word TTS
+        if (spokenWordAudioRef.current) {
+            try {
+                spokenWordAudioRef.current.pause();
+                spokenWordAudioRef.current.src = '';
+                spokenWordAudioRef.current.load?.();
+            } catch (e) { }
+            spokenWordAudioRef.current = null;
+        }
         // Cancel any in-progress multi-segment playback
         isPlayingMultiSegmentRef.current = false;
         multiSegmentPlaybackIdRef.current += 1; // Invalidate any in-flight segments
@@ -1425,10 +1747,24 @@ const BookReaderPage: React.FC = () => {
         if (bookBackgroundMusicRef.current) {
             try {
                 bookBackgroundMusicRef.current.pause();
+                bookBackgroundMusicRef.current.removeAttribute('src');
                 bookBackgroundMusicRef.current.src = '';
                 bookBackgroundMusicRef.current.load?.();
             } catch (e) { }
+            bookBackgroundMusicRef.current = null;
         }
+        // Also kill any stray book-background audio nodes left in the DOM
+        try {
+            document.querySelectorAll('audio[data-gk-role="book-background"]').forEach((el) => {
+                const audio = el as HTMLAudioElement;
+                try {
+                    audio.pause();
+                    audio.removeAttribute('src');
+                    audio.src = '';
+                    audio.load?.();
+                } catch { }
+            });
+        } catch { }
         // Disconnect and close book music AudioContext/WebAudio graph
         try {
             if (bookMusicSourceRef.current) {
@@ -1466,6 +1802,8 @@ const BookReaderPage: React.FC = () => {
         }
     }, [clearSequentialTextBoxQueue]);
 
+    stopBookAudioRef.current = stopAllBookAudio;
+
     // Keep playingRef in sync with playing state for use in closures
     useEffect(() => {
         playingRef.current = playing;
@@ -1481,9 +1819,9 @@ const BookReaderPage: React.FC = () => {
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
 
-        // Listen for hash changes (React Router navigation with HashRouter)
+        // HashRouter hash changes and BrowserRouter history updates
         const handleHashChange = () => {
-            if (!window.location.hash.includes('/read/')) {
+            if (!isBookReaderLocation()) {
                 console.log('📖 Navigated away from book reader - stopping audio');
                 stopAllBookAudio();
             }
@@ -1492,7 +1830,7 @@ const BookReaderPage: React.FC = () => {
 
         // Listen for popstate (back/forward) - may fire before unmount
         const handlePopState = () => {
-            if (!window.location.hash.includes('/read/')) {
+            if (!isBookReaderLocation()) {
                 console.log('📖 PopState - left book reader, stopping audio');
                 stopAllBookAudio();
             }
@@ -1592,7 +1930,7 @@ const BookReaderPage: React.FC = () => {
     // Effect 2: Handle Music Toggle (Play/Pause)
     useEffect(() => {
         const audio = bookBackgroundMusicRef.current;
-        if (!audio) return;
+        if (!audio || !bookMusicAliveRef.current) return;
 
         if (bookMusicEnabled) {
             console.log('🎵 Book music enabled - attempting to play');
@@ -1689,8 +2027,11 @@ const BookReaderPage: React.FC = () => {
                     textBoxes: [], // Empty - no text on the page itself, modal will show on top
                 };
 
+                // Apply age-leveled text when opened from Bible Map READ STORY age picker
+                const leveledPages = regularPages.map((p: Page) => applyReadingLevelToPage(p, readingLevel));
+
                 // Regular pages + inline coloring pages + The End page
-                setPages([...regularPages, theEndPage]);
+                setPages([...leveledPages, theEndPage]);
 
                 // Check if page is specified in URL (from Continue button)
                 // URL param "page" = continue from specific page
@@ -1707,7 +2048,7 @@ const BookReaderPage: React.FC = () => {
                     if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= data.length) {
                         let pageIndex = pageNum - 1; // Convert to 0-based
                         // Enforce preview limit for non-subscribed users on premium books
-                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                        if (isBookPremium && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
                             console.log(`📖 Preview limit enforced: redirecting from page ${pageNum} to page ${BOOK_PREVIEW_PAGES}`);
                             pageIndex = BOOK_PREVIEW_PAGES - 1;
                         }
@@ -1722,7 +2063,7 @@ const BookReaderPage: React.FC = () => {
                     if (progress && progress.currentPageIndex >= 0 && progress.currentPageIndex < data.length) {
                         let pageIndex = progress.currentPageIndex;
                         // Enforce preview limit for non-subscribed users on premium books
-                        if (bookIsMembersOnly && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
+                        if (isBookPremium && !isSubscribed && pageIndex >= BOOK_PREVIEW_PAGES) {
                             console.log(`📖 Preview limit enforced: redirecting from saved page ${pageIndex + 1} to page ${BOOK_PREVIEW_PAGES}`);
                             pageIndex = BOOK_PREVIEW_PAGES - 1;
                         }
@@ -1773,9 +2114,9 @@ const BookReaderPage: React.FC = () => {
                 // Find an unlocked voice to use as default
                 const unlockedVoices = finalVoiceList.filter((v: any) => isVoiceUnlocked(v.voice_id));
 
-                // Priority for voice selection:
+                // Priority for voice selection (matches portal BookReader):
                 // 1. User's saved default voice (from onboarding)
-                // 2. "Mary" voice (our app default)
+                // 2. Aria or Jessica (portal default)
                 // 3. First unlocked voice
                 // 4. First voice in list
                 
@@ -1784,18 +2125,18 @@ const BookReaderPage: React.FC = () => {
                     setSelectedVoiceId(defaultVoiceId);
                     console.log(`🎤 Using user's saved default voice: ${defaultVoiceId}`);
                 } else {
-                    // No saved preference - default to Mary
-                    const maryVoice = finalVoiceList.find((v: any) => 
-                        v.name?.toLowerCase() === 'mary' || 
-                        v.customName?.toLowerCase() === 'mary'
-                    );
-                    if (maryVoice) {
-                        setSelectedVoiceId(maryVoice.voice_id);
-                        console.log(`🎤 Using default Mary voice (${maryVoice.voice_id})`);
+                    // No saved preference - default to Aria/Jessica (same as portal)
+                    const portalDefaultVoice = finalVoiceList.find((v: any) => {
+                        const name = (v.name || v.customName || '').toLowerCase();
+                        return name.includes('aria') || name.includes('jessica');
+                    });
+                    if (portalDefaultVoice) {
+                        setSelectedVoiceId(portalDefaultVoice.voice_id);
+                        console.log(`🎤 Using portal default voice ${portalDefaultVoice.name || portalDefaultVoice.customName} (${portalDefaultVoice.voice_id})`);
                     } else if (unlockedVoices.length > 0) {
                         // Fallback to first unlocked voice
                         setSelectedVoiceId(unlockedVoices[0].voice_id);
-                        console.log(`🎤 Mary not found, using first unlocked voice: ${unlockedVoices[0].name}`);
+                        console.log(`🎤 Aria/Jessica not found, using first unlocked voice: ${unlockedVoices[0].name}`);
                     } else if (finalVoiceList.length > 0) {
                         // Last fallback: first voice (may be locked)
                         setSelectedVoiceId(finalVoiceList[0].voice_id);
@@ -1803,6 +2144,17 @@ const BookReaderPage: React.FC = () => {
                     }
                 }
                 console.log(`✅ Loaded ${finalVoiceList.length} voice(s), ${unlockedVoices.length} unlocked`);
+
+                const alreadyChose = !!localStorage.getItem('godlykids_default_voice');
+                const starters = filterVisibleVoices(
+                    finalVoiceList.filter((v: any) => v.showInApp !== false && !v.isOnboardingVoice),
+                );
+                if (!alreadyChose && starters.length > 0) {
+                    setShowNarratorPick(true);
+                    setAwaitingNarratorChoice(true);
+                } else {
+                    setAwaitingNarratorChoice(false);
+                }
             } else {
                 console.warn('⚠️ No voices enabled in portal. Please enable voices in the portal first.');
                 setVoices([]);
@@ -1817,7 +2169,8 @@ const BookReaderPage: React.FC = () => {
             console.log(`✅ Loaded ${cloned.length} cloned voice(s) from local storage`);
         };
         loadClonedVoices();
-    }, [bookId]);
+    }, [bookId, readingLevel]);
+
 
     // Deep link: /read/:bookId?coloring=<pageNumber|pageId> opens coloring modal directly
     useEffect(() => {
@@ -1868,6 +2221,53 @@ const BookReaderPage: React.FC = () => {
         };
     }, [showVoiceDropdown]);
 
+    const starterNarratorVoices = filterVisibleVoices(
+        voices.filter((v: any) => v.showInApp !== false && !v.isOnboardingVoice),
+    );
+
+    const previewNarratorVoice = async (voiceId: string) => {
+        setNarratorPickId(voiceId);
+        if (narratorPreviewRef.current) {
+            narratorPreviewRef.current.pause();
+            narratorPreviewRef.current.src = '';
+            narratorPreviewRef.current = null;
+        }
+        setPreviewingVoiceId(voiceId);
+        try {
+            const result = await ApiService.generateTTS(
+                'Hello Godly Kid! Are you ready for an adventure?',
+                voiceId,
+            );
+            if (!result?.audioUrl) {
+                setPreviewingVoiceId(null);
+                return;
+            }
+            const audio = new Audio(result.audioUrl);
+            narratorPreviewRef.current = audio;
+            audio.onended = () => setPreviewingVoiceId(null);
+            audio.onerror = () => setPreviewingVoiceId(null);
+            await audio.play();
+        } catch {
+            setPreviewingVoiceId(null);
+        }
+    };
+
+    const confirmNarratorPick = () => {
+        if (!narratorPickId) return;
+        if (narratorPreviewRef.current) {
+            narratorPreviewRef.current.pause();
+            narratorPreviewRef.current.src = '';
+            narratorPreviewRef.current = null;
+        }
+        setPreviewingVoiceId(null);
+        unlockVoice(narratorPickId);
+        localStorage.setItem('godlykids_default_voice', narratorPickId);
+        setSelectedVoiceId(narratorPickId);
+        setUseBookDefaultVoice(false);
+        setShowNarratorPick(false);
+        setAwaitingNarratorChoice(false);
+    };
+
     // Close language dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -1900,9 +2300,9 @@ const BookReaderPage: React.FC = () => {
             if (translatedContent.has(cacheKey)) return;
 
             if (showLoading) setIsTranslating(true);
-            
+
             try {
-                const result = await translationService.getTranslatedPage(page._id, selectedLanguage);
+                const result = await translateReaderPage(page, selectedLanguage);
                 if (result) {
                     setTranslatedContent(prev => {
                         const newMap = new Map(prev);
@@ -1944,12 +2344,8 @@ const BookReaderPage: React.FC = () => {
         // Save language preference
         translationService.setPreferredLanguage(selectedLanguage);
         
-        // Clear audio cache when translations are being fetched for non-English
-        // This ensures we don't use cached English audio
-        if (selectedLanguage !== 'en') {
-            audioPreloadCacheRef.current.clear();
-            preloadingInProgressRef.current.clear();
-        }
+        // Audio keys include language; the language-change effect clears old entries.
+        // Keep preloaded clips when only the page changes.
     }, [selectedLanguage, currentPageIndex, pages]);
 
     // Track if this is the first render for voice change effect
@@ -2034,20 +2430,78 @@ const BookReaderPage: React.FC = () => {
     const isTheEndPage = currentPage?.id === 'the-end-page' || currentPageIndex === pages.length - 1;
 
     // Trigger voice unlock when user reaches "The End" page
+    // Bible Map: skip The End modal — persist stars and return to lesson hub
     useEffect(() => {
-        if (isTheEndPage && pages.length > 0 && bookId) {
-            console.log('🎁 User reached The End page - triggering voice unlock check');
-            // Mark book as completed
-            bookCompletionService.markBookCompleted(bookId);
-            // Trigger voice unlock
-            handleUnlockRewardVoice();
+        if (!isTheEndPage || pages.length === 0 || !bookId) return;
+
+        console.log('🎁 User reached The End page - triggering voice unlock check');
+        bookCompletionService.markBookCompleted(bookId);
+
+        const bibleMapFlow =
+            isBibleMapBook || !!islandSceneReturn || hasBibleMapReturnParams;
+
+        if (islandSceneReturn?.islandId && islandSceneReturn.storyId) {
+            storyPackUnlockUxService.markActivityAndFlagUnlock(
+                islandSceneReturn.islandId,
+                islandSceneReturn.storyId,
+                'read',
+            );
         }
-    }, [isTheEndPage, pages.length, bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+        handleUnlockRewardVoice();
+
+        if (!bibleMapFlow || bibleMapEndHandledRef.current) return;
+        bibleMapEndHandledRef.current = true;
+
+        // Finishing the story earns the full three stars on the island hub.
+        const stars = 3;
+
+        if (islandSceneReturn?.islandId && islandSceneReturn.storyId) {
+            islandStoryProgressService.setReadStars(
+                islandSceneReturn.islandId,
+                islandSceneReturn.storyId,
+                stars,
+            );
+        }
+
+        stopBookAudioRef.current();
+
+        if(islandSceneReturn?.islandId&&islandSceneReturn.storyId)completeLivingFirstFriendReading(islandSceneReturn.islandId,islandSceneReturn.storyId,pages.filter(p=>p._id!=='the-end-page'&&!p.isColoringPage).length);
+
+        const hubPath = islandSceneReturn
+            ? buildIslandLessonHubPath(islandSceneReturn)
+            : '';
+        if (!hubPath) {
+            console.warn('📖 Bible Map end: no island hub — leaving reader');
+            navigate(bookDetailUrl || (bookId ? `/book/${bookId}` : '/read'), {
+                replace: true,
+            });
+            return;
+        }
+
+        console.log(`🏝️ Bible Map complete → hub (${stars}★)`);
+        navigate(hubPath, {
+            replace: true,
+            state: {
+                ...buildIslandSceneNavState(islandSceneReturn),
+                celebrateRead: true,
+                readStars: stars,
+            },
+        });
+    }, [
+        isTheEndPage,
+        pages,
+        bookId,
+        isBibleMapBook,
+        hasBibleMapReturnParams,
+        islandSceneReturn,
+        navigate,
+    ]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Tutorial: Automatically advance to quiz step when user naturally reaches The End page
     // This handles the case where user reads through the whole book without clicking "Skip to Quiz"
     useEffect(() => {
-        if (!isTutorialActive || !isTheEndPage || pages.length === 0) return;
+        if (isIslandRead || isBibleMapBook || !isTutorialActive || !isTheEndPage || pages.length === 0) return;
         
         // List of book reading steps where we should auto-advance to quiz
         const bookReadingSteps = ['book_controls_intro', 'book_swipe_intro', 'book_swipe_1', 'book_swipe_2', 'book_swipe_3'];
@@ -2056,7 +2510,7 @@ const BookReaderPage: React.FC = () => {
             console.log('📖 Tutorial: User reached The End naturally - advancing to quiz step');
             goToStep('book_end_quiz');
         }
-    }, [isTutorialActive, isTheEndPage, pages.length, currentStep, goToStep]);
+    }, [isIslandRead, isBibleMapBook, isTutorialActive, isTheEndPage, pages.length, currentStep, goToStep]);
 
     // Handle unlocking the reward voice when book is completed
     const handleUnlockRewardVoice = async () => {
@@ -2117,7 +2571,7 @@ const BookReaderPage: React.FC = () => {
     const handleNext = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isPageTurning) return;
-        
+
         // Auto-play if user had narration going and did not explicitly stop it
         const shouldAutoPlayOnSwipe =
             hasStartedTTSRef.current && !userStoppedPlaybackRef.current;
@@ -2296,7 +2750,8 @@ const BookReaderPage: React.FC = () => {
             // Re-fetch pages
             const freshPages = await ApiService.getBookPages(bookId);
             if (freshPages && freshPages.length > 0) {
-                setPages(freshPages);
+                const leveled = freshPages.map((p: Page) => applyReadingLevelToPage(p, readingLevel));
+                setPages(leveled);
                 console.log('✅ Book refreshed with', freshPages.length, 'pages');
             }
         } catch (error) {
@@ -2594,6 +3049,45 @@ const BookReaderPage: React.FC = () => {
         isAutoPlayingRef.current = false; // Reset auto-play flag
     };
 
+    /** Speak a single word with the active narrator voice (parchment word taps). */
+    const speakWord = useCallback(
+        async (rawWord: string) => {
+            const spoken = wordForSpeech(rawWord);
+            if (!spoken) return;
+            try {
+                const lang = selectedLanguageRef.current;
+                const result = await ApiService.generateTTS(
+                    spoken,
+                    effectiveNarratorVoiceId,
+                    bookId || undefined,
+                    lang !== 'en' ? lang : undefined,
+                    currentPageIndexRef.current + 1,
+                    0,
+                );
+                if (!result?.audioUrl) return;
+                if (spokenWordAudioRef.current) {
+                    spokenWordAudioRef.current.pause();
+                    spokenWordAudioRef.current = null;
+                }
+                const audio = new Audio(result.audioUrl);
+                spokenWordAudioRef.current = audio;
+                const finished = new Promise<void>((resolve) => {
+                    const done = () => {
+                        if (spokenWordAudioRef.current === audio) spokenWordAudioRef.current = null;
+                        resolve();
+                    };
+                    audio.onended = done;
+                    audio.onerror = done;
+                });
+                await audio.play();
+                await finished;
+            } catch (err) {
+                console.warn('Word TTS failed:', err);
+            }
+        },
+        [effectiveNarratorVoiceId, bookId],
+    );
+
     const handlePlayPage = async (e: React.MouseEvent) => {
         e.stopPropagation();
 
@@ -2630,7 +3124,7 @@ const BookReaderPage: React.FC = () => {
             console.warn('⚠️ No text boxes found on current page');
         }
     };
-    
+
     // Play the next pending text box in the sequential queue
     // Returns true if there was a next text box to play, false if queue is empty
     const playNextPendingTextBox = (): boolean => {
@@ -2789,7 +3283,7 @@ const BookReaderPage: React.FC = () => {
         
         // IMPORTANT: Don't preload until voice settings are loaded
         // This prevents preloading with wrong voice before book's custom voice is applied
-        if (!voiceSettingsLoaded) {
+        if (!voiceSettingsLoaded || awaitingNarratorChoice) {
             console.log('⏳ Waiting for voice settings before preloading audio...');
             return;
         }
@@ -2804,7 +3298,7 @@ const BookReaderPage: React.FC = () => {
             console.log(`🎵 Starting audio preload for ${currentLang}, page ${currentPageIndex + 1}`);
             preloadUpcomingAudio(currentPageIndex);
         }
-    }, [currentPageIndex, effectiveVoiceId, pages.length, selectedLanguage, translatedContent.size, voiceSettingsLoaded]);
+    }, [currentPageIndex, effectiveVoiceId, pages.length, selectedLanguage, translatedContent.size, voiceSettingsLoaded, awaitingNarratorChoice]);
 
     useEffect(() => {
         multiBoxBatchDataRef.current = null;
@@ -2821,6 +3315,7 @@ const BookReaderPage: React.FC = () => {
         // - No voice selected
         // - No pages loaded
         // - Voice settings not loaded yet (prevents wrong voice on first play)
+        // - First-time listener still choosing a narrator
         if (
             hasAutoPlayedOnStartRef.current ||
             loading ||
@@ -2829,10 +3324,13 @@ const BookReaderPage: React.FC = () => {
             currentPageIndex !== 0 ||
             !effectiveVoiceId ||
             pages.length === 0 ||
-            !voiceSettingsLoaded
+            !voiceSettingsLoaded ||
+            awaitingNarratorChoice
         ) {
             // Log why we're waiting
-            if (!voiceSettingsLoaded && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
+            if (awaitingNarratorChoice && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
+                console.log('⏳ Auto-play: Waiting for the listener to choose a voice...');
+            } else if (!voiceSettingsLoaded && !hasAutoPlayedOnStartRef.current && pages.length > 0) {
                 console.log('⏳ Auto-play: Waiting for book voice settings to load...');
             }
             return;
@@ -2855,9 +3353,6 @@ const BookReaderPage: React.FC = () => {
             return;
         }
 
-        // Mark as auto-played to prevent repeating
-        hasAutoPlayedOnStartRef.current = true;
-        
         console.log('▶️ Auto-playing TTS on book start (intro video finished)');
         
         // Enable auto-play mode based on ttsMode setting
@@ -2866,8 +3361,12 @@ const BookReaderPage: React.FC = () => {
         autoPlayModeRef.current = shouldAutoPlay;
         
         // Longer delay to ensure intro video transition is complete
-        // and the first page is fully rendered
-        setTimeout(() => {
+        // and the first page is fully rendered. Mark played only when this
+        // timer actually starts, so a voice change can cancel it first.
+        let cancelled = false;
+        const timer = window.setTimeout(() => {
+            if (cancelled) return;
+            hasAutoPlayedOnStartRef.current = true;
             void (async () => {
                 const translatedTextBoxes = getTranslatedTextBoxes(currentPage);
                 setupSequentialTextBoxQueue(translatedTextBoxes);
@@ -2882,53 +3381,64 @@ const BookReaderPage: React.FC = () => {
                 handlePlayText(firstBoxText, 0, syntheticEvent, shouldAutoPlay);
             })();
         }, 1500); // 1.5s delay to let intro video fade out and page fully settle
-        
-    }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded]);
 
-    // Preload background images/videos for upcoming pages to prevent black flash
-    const preloadBackgrounds = (startPageIndex: number) => {
-        const PAGES_TO_PRELOAD = 3;
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
         
-        for (let i = 1; i <= PAGES_TO_PRELOAD; i++) {
+    }, [loading, introVideoChecked, showIntroVideo, currentPageIndex, effectiveVoiceId, pages, translatedContent.size, voiceSettingsLoaded, awaitingNarratorChoice]);
+
+    // Preload background images/videos for upcoming pages to prevent black flash.
+    // A story pack preloads every remaining page as soon as the book opens.
+    const preloadBackgrounds = (startPageIndex: number) => {
+        const storyPack = Boolean(islandSceneReturn) || hasBibleMapReturnParams || isBibleMapBook;
+        const pagesAhead = storyPack ? pages.length : 3;
+        const cacheUrls: string[] = [];
+
+        const remember = (url: string | undefined, kind: 'image' | 'video') => {
+            const src = (url || '').trim();
+            if (!src || preloadedBackgroundsRef.current.has(src)) return;
+            preloadedBackgroundsRef.current.add(src);
+            cacheUrls.push(src);
+            if (kind === 'video') {
+                const video = document.createElement('video');
+                video.preload = 'auto';
+                video.muted = true;
+                video.src = src;
+                video.load();
+            } else {
+                const img = new Image();
+                img.src = src;
+            }
+        };
+        
+        for (let i = 1; i <= pagesAhead; i++) {
             const pageIndex = startPageIndex + i;
             if (pageIndex >= pages.length) break;
             
             const page = pages[pageIndex];
             if (!page) continue;
-            
+
             const backgroundUrl = page.backgroundUrl || page.files?.background?.url;
             const backgroundType = page.backgroundType || page.files?.background?.type || 'image';
-            
-            if (!backgroundUrl || preloadedBackgroundsRef.current.has(backgroundUrl)) {
-                continue; // Skip if no URL or already preloaded
+            const backgroundIsVideo =
+                backgroundType === 'video' ||
+                /\.(mp4|webm|mov|m4v)(\?|$)/i.test(backgroundUrl || '');
+            remember(backgroundUrl, backgroundIsVideo ? 'video' : 'image');
+            remember(page.scrollUrl || page.files?.scroll?.url, 'image');
+            remember(page.backgroundAudioUrl, 'video');
+            for (const clip of page.videoSequence || []) {
+                remember(clip.url, 'video');
+                remember(clip.audioUrl, 'video');
             }
-            
-            // Mark as preloaded
-            preloadedBackgroundsRef.current.add(backgroundUrl);
-            
-            if (backgroundType === 'video') {
-                // Preload video
-                const video = document.createElement('video');
-                video.preload = 'auto';
-                video.muted = true;
-                video.src = backgroundUrl;
-                video.load();
-                console.log(`🎬 Preloading video for page ${pageIndex + 1}`);
-            } else {
-                // Preload image
-                const img = new Image();
-                img.src = backgroundUrl;
-                console.log(`🖼️ Preloading image for page ${pageIndex + 1}`);
+            for (const frame of page.imageSequence || []) {
+                remember(frame.url, 'image');
             }
-            
-            // Also preload scroll image if exists
-            const scrollUrl = page.scrollUrl || page.files?.scroll?.url;
-            if (scrollUrl && !preloadedBackgroundsRef.current.has(scrollUrl)) {
-                preloadedBackgroundsRef.current.add(scrollUrl);
-                const scrollImg = new Image();
-                scrollImg.src = scrollUrl;
-                console.log(`📜 Preloading scroll for page ${pageIndex + 1}`);
-            }
+        }
+
+        if (storyPack && cacheUrls.length > 0) {
+            void cacheAssetUrls(cacheUrls);
         }
     };
 
@@ -3393,9 +3903,6 @@ const BookReaderPage: React.FC = () => {
     const handlePlayText = async (text: string, index: number, e: React.MouseEvent, isAutoPlay: boolean = false) => {
         e.stopPropagation();
         
-        // Mark that TTS has been started at least once (for auto-play on swipe feature)
-        hasStartedTTSRef.current = true;
-        
         console.log('🎤 handlePlayText called:', { 
             isAutoPlay, 
             autoPlayModeRef: autoPlayModeRef.current,
@@ -3432,6 +3939,10 @@ const BookReaderPage: React.FC = () => {
             setCurrentWordIndex(-1);
             return;
         }
+
+        // Mark that TTS has been started at least once (for auto-play on swipe feature)
+        hasStartedTTSRef.current = true;
+
         // Use ref for playing check to avoid stale closure issues in auto-play callbacks
         if (playingRef.current || isPlayingMultiSegmentRef.current) {
             console.log('⏹️ Stopping previous playback before starting new');
@@ -3484,10 +3995,17 @@ const BookReaderPage: React.FC = () => {
             
             // Get translated text if available
             const currentPage = pages[actualPageIndex];
-            const rawTextToSpeak = currentPage?._id 
+            let rawTextToSpeak = currentPage?._id
                 ? getTranslatedText(currentPage._id, index, text) 
                 : text;
             
+            if(currentLang !== 'en' && currentPage && !translatedContent.has(`${currentPage._id}_${currentLang}`)) {
+                const translated = await translateReaderPage(currentPage,currentLang);
+                if(playRequestId !== playRequestIdRef.current || selectedLanguageRef.current !== currentLang || currentPageIndexRef.current !== actualPageIndex) return;
+                rawTextToSpeak = translated.translatedTextBoxes[index]?.translatedText || rawTextToSpeak;
+                setTranslatedContent(prev=>new Map(prev).set(`${currentPage._id}_${currentLang}`,{text:translated.translatedText,textBoxes:translated.translatedTextBoxes}));
+            }
+
             // ============ MULTI-SEGMENT TTS ============
             // Parse text into segments for alternating narrator/character voices
             console.log('🔍 RAW TEXT for parsing:', rawTextToSpeak);
@@ -4190,7 +4708,7 @@ const BookReaderPage: React.FC = () => {
                 autoPlayModeRef.current = false;
                 setActiveTextBoxIndex(null);
                 setShowLoadingPopup(false);
-                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
+                alert(await translateStoryText("Sorry, the story narration couldn't start right now. Please try again later.", selectedLanguageRef.current));
             }
         } catch (error) {
             console.error('Failed to play audio:', error);
@@ -4202,7 +4720,7 @@ const BookReaderPage: React.FC = () => {
             ) {
                 setAutoPlayMode(false);
                 autoPlayModeRef.current = false;
-                alert("Sorry, the story narration couldn't start right now. Please try again in a moment.");
+                alert(await translateStoryText("Sorry, the story narration couldn't start right now. Please try again later.", selectedLanguageRef.current));
             }
             setActiveTextBoxIndex(null);
             setShowLoadingPopup(false);
@@ -4220,11 +4738,23 @@ const BookReaderPage: React.FC = () => {
                     Check your connection and try again. If you just started a daily session, wait for books to load first.
                 </p>
                 <button
-                    onClick={() => navigate(fromDailySession ? '/daily-session' : '/')}
+                    onClick={() => {
+                        if (islandSceneReturn) {
+                            navigateBackFromReader();
+                            return;
+                        }
+                        stopBookAudioRef.current();
+                        navigate(fromDailySession ? '/daily-session' : '/');
+                    }}
                     className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold rounded-xl flex items-center gap-2"
                 >
                     <Home className="w-5 h-5" />
-                    Back to {fromDailySession ? 'Daily Session' : 'Home'}
+                    Back to{' '}
+                    {islandSceneReturn
+                        ? 'Island Scene'
+                        : fromDailySession
+                          ? 'Daily Session'
+                          : 'Home'}
                 </button>
             </div>
         );
@@ -4282,19 +4812,7 @@ const BookReaderPage: React.FC = () => {
             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4">
                 <h2 className="text-2xl font-bold mb-4">No pages found</h2>
                 <button
-                    onClick={() => {
-                        if (fromDailySession) {
-                            navigate('/daily-session');
-                        } else {
-                            // Always navigate back to book detail page
-                            const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : null);
-                            if (detailUrl) {
-                                navigate(detailUrl);
-                            } else {
-                                navigate('/read');
-                            }
-                        }
-                    }}
+                    onClick={() => navigateBackFromReader()}
                     className="bg-indigo-600 px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                     Go Back
@@ -4322,6 +4840,7 @@ const BookReaderPage: React.FC = () => {
 
     return (
         <div
+            dir="ltr"
             className={`relative bg-gray-900 overflow-hidden flex flex-col ${isLandscape ? '' : 'w-full h-screen'}`}
             style={{
                 ...landscapeContainerStyle,
@@ -4429,20 +4948,9 @@ const BookReaderPage: React.FC = () => {
                         // For web view pages, go to previous page in the book
                         if (currentPage?.isWebViewPage && currentPageIndex > 0) {
                             handlePrev(e as unknown as React.MouseEvent);
-                        } else if (fromDailySession) {
-                            // Return to Daily Session if accessed from lesson (without completing)
-                            navigate('/daily-session');
-                        } else {
-                            // Always navigate back to book detail page (shows book info and library)
-                            // Preserve share param so details show Featuring / before-after
-                            const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : null);
-                            if (detailUrl) {
-                                navigate(detailUrl);
-                            } else {
-                                // Fallback to /read (library) if no book ID
-                                navigate('/read');
-                            }
+                            return;
                         }
+                        navigateBackFromReader();
                     }}
                     className="pointer-events-auto bg-black/40 backdrop-blur-md text-white p-2 rounded-full hover:bg-black/60 transition"
                 >
@@ -4453,7 +4961,8 @@ const BookReaderPage: React.FC = () => {
                 {/* Right: Language Selector, Voice Selector and Music Toggle - Hidden for Web View pages */}
                 {!currentPage?.isWebViewPage && (
                 <div className="pointer-events-auto flex items-center gap-2">
-                    {/* Language Selector */}
+                    {/* Language Selector — regular books only (hidden on Bible Map stories) */}
+                    {!hideLanguageSelector && (
                     <div
                         ref={languageDropdownRef}
                         className="relative"
@@ -4484,6 +4993,8 @@ const BookReaderPage: React.FC = () => {
                                     {Object.entries(SUPPORTED_LANGUAGES).map(([code, lang]) => (
                                         <button
                                             key={code}
+                                        lang={code}
+                                        dir={languageDirection(code)}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedLanguage(code);
@@ -4509,6 +5020,7 @@ const BookReaderPage: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Background Music Toggle - Simple on/off */}
                     {hasBookMusic ? (
@@ -4614,31 +5126,6 @@ const BookReaderPage: React.FC = () => {
                             )}
                         </div>
                     )}
-
-                    {pageHasLayeredVideoSound(currentPage) ? (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPageVideoSoundEnabled((v) => !v);
-                            }}
-                            className={`bg-black/50 backdrop-blur-md rounded-full p-3 hover:bg-black/70 transition-all border ${
-                                pageVideoSoundEnabled
-                                    ? 'border-cyan-400/50 shadow-lg shadow-cyan-400/20'
-                                    : 'border-white/20'
-                            }`}
-                            title={
-                                pageVideoSoundEnabled
-                                    ? 'Mute video soundtrack on this page'
-                                    : 'Play video soundtrack on this page'
-                            }
-                            aria-label={
-                                pageVideoSoundEnabled ? 'Mute page video soundtrack' : 'Unmute page video soundtrack'
-                            }
-                        >
-                            <Speaker className={`w-6 h-6 ${pageVideoSoundEnabled ? 'text-cyan-300' : 'text-white/50'}`} />
-                        </button>
-                    ) : null}
 
                     {/* Voice Selector */}
                     <div
@@ -4771,30 +5258,6 @@ const BookReaderPage: React.FC = () => {
                                         </>
                                     )}
 
-                                    {/* Locked Voices Section (only show if not premium) */}
-                                    {!isSubscribed && voices.filter(v => !isVoiceUnlocked(v.voice_id)).length > 0 && (
-                                        <>
-                                            <div className="border-t border-white/20 my-1"></div>
-                                            <div className="px-4 py-1 text-xs text-white/50 uppercase tracking-wider">Locked</div>
-                                            {voices.filter(v => !isVoiceUnlocked(v.voice_id)).map(v => (
-                                                <button
-                                                    key={v.voice_id}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        // Navigate to profile page with shop modal open to voices tab
-                                                        setShowVoiceDropdown(false);
-                                                        navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
-                                                    }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-white/50 hover:bg-white/5 transition-colors flex items-center gap-2"
-                                                >
-                                                    <Lock className="w-4 h-4 text-white/30" />
-                                                    <span>{v.name}</span>
-                                                    <span className="ml-auto text-xs text-[#FFD700]">Unlock</span>
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-
                                     {/* Create Voice Option - Hidden until feature is ready */}
                                     {false && (
                                         <>
@@ -4806,26 +5269,11 @@ const BookReaderPage: React.FC = () => {
                                     )}
 
                                     {/* No voices message */}
-                                    {voices.length === 0 && clonedVoices.length === 0 && (
+                                    {voices.filter(v => isVoiceUnlocked(v.voice_id)).length === 0 && clonedVoices.length === 0 && !bookDefaultVoiceId && (
                                         <div className="px-4 py-2 text-sm text-white/70 text-center">
-                                            No voices available
+                                            No voices unlocked yet
                                         </div>
                                     )}
-
-                                    {/* Unlock New Voice Button - Always visible */}
-                                    <div className="border-t border-white/20 mt-1 pt-1">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setShowVoiceDropdown(false);
-                                                navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
-                                            }}
-                                            className="w-full px-4 py-3 text-sm font-bold text-[#FFD700] hover:bg-[#FFD700]/10 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <Sparkles className="w-4 h-4" />
-                                            <span>Unlock New Voices</span>
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         )}
@@ -4849,6 +5297,16 @@ const BookReaderPage: React.FC = () => {
                 onTouchEnd={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
                 onTouchCancel={currentPage?.isWebViewPage ? undefined : (e) => handleTouchEnd(e)}
             >
+                {/* Island reads: finger cue over the art — tap the picture/video for full screen */}
+                {fullscreenHintVisible &&
+                    !loading &&
+                    pages.length > 0 &&
+                    !showIntroVideo &&
+                    scrollState !== 'hidden' &&
+                    !currentPage?.isWebViewPage && (
+                        <TapToFullscreenHint top={scrollState === 'max' ? '18%' : '30%'} />
+                    )}
+
                 {/* Style for high-sheen 3D glossy white page curl animation */}
                 <style>{`
                     /* Enhanced 3D page curl with more dramatic rotation */
@@ -5064,6 +5522,7 @@ const BookReaderPage: React.FC = () => {
                         ) : (
                             /* Regular Book Page - renders background, scroll, text boxes */
                             <BookPageRenderer
+                                language={selectedLanguage}
                                 page={{
                                     ...currentPage,
                                     // Use translated textBoxes if available
@@ -5072,7 +5531,19 @@ const BookReaderPage: React.FC = () => {
                                     ...(isKidMonthlyBook && currentPage && (currentPage.scrollMidHeight == null)
                                         ? { scrollMidHeight: 25 }
                                         : {}),
+                                    // Bible Map: adaptive parchment band (short text → lower scroll → more art)
+                                    ...(isBibleMapBook && currentPage
+                                        ? (() => {
+                                              const band = bibleMapScrollBandForPage(currentPage);
+                                              if (!band) return {};
+                                              return {
+                                                  scrollMidHeight: band.mid,
+                                                  scrollMaxHeight: band.max,
+                                              };
+                                          })()
+                                        : {}),
                                 }}
+                                bibleMapLayout={isBibleMapBook}
                                 activeTextBoxIndex={activeTextBoxIndex}
                                 scrollState={scrollState}
                                 onScrollStateChange={handleScrollStateChange}
@@ -5082,14 +5553,62 @@ const BookReaderPage: React.FC = () => {
                                 wordAlignment={wordAlignment}
                                 isTTSPlaying={playing}
                                 ambientVideoSoundEnabled={pageVideoSoundEnabled}
+                                ambientVolume={hideLanguageSelector ? 0.5 : 0.7}
                                 sequentialMultiBoxTts={sequentialMultiBoxTts}
                                 skipPuzzles={skipPuzzles}
                                 // Character overlay props
                                 showCharacterOverlay={showCharacterOverlay && !!currentKidPoses}
                                 characterPoses={currentKidPoses || undefined}
+                                onSpeakWord={isBibleMapBook ? speakWord : undefined}
+                                pageNav={
+                                    isBibleMapBook
+                                        ? {
+                                              onPrev: handlePrev,
+                                              onNext: handleNext,
+                                              canGoPrev: currentPageIndex > 0,
+                                              canGoNext: currentPageIndex < pages.length - 1,
+                                              disabled: isPageTurning,
+                                          }
+                                        : undefined
+                                }
                             />
                         )}
                     </div>
+
+                    {/* Page nav arrows — non–Bible Map books keep mid-screen side arrows.
+                        Bible Map uses pageNav chrome above the parchment (in BookPageRenderer). */}
+                    {!isBibleMapBook && !currentPage?.isWebViewPage && !isTheEndPage && (
+                        <div className="absolute inset-x-0 top-[42%] -translate-y-1/2 z-[42] flex justify-between px-2 sm:px-3 pointer-events-none">
+                            <button
+                                type="button"
+                                onClick={(e) => handlePrev(e)}
+                                disabled={currentPageIndex === 0 || isPageTurning}
+                                className={`pointer-events-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm border-2 border-white/30 transition active:scale-95 ${
+                                    currentPageIndex === 0 || isPageTurning
+                                        ? 'opacity-0 pointer-events-none'
+                                        : 'opacity-100 bg-black/35 text-white hover:bg-black/50'
+                                }`}
+                                aria-label="Previous page"
+                                title="Previous page"
+                            >
+                                <ChevronLeft className="w-9 h-9 sm:w-10 sm:h-10" strokeWidth={2.5} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => handleNext(e)}
+                                disabled={isPageTurning || currentPageIndex >= pages.length - 1}
+                                className={`pointer-events-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
+                                    isPageTurning || currentPageIndex >= pages.length - 1
+                                        ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
+                                        : 'opacity-100 border-emerald-300/50 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                                }`}
+                                aria-label="Next page"
+                                title="Next page"
+                            >
+                                <ChevronRight className="w-9 h-9 sm:w-10 sm:h-10" strokeWidth={2.5} />
+                            </button>
+                        </div>
+                    )}
 
                     {/* High-sheen glossy white page that curls over */}
                     {flipState && (
@@ -5257,28 +5776,25 @@ const BookReaderPage: React.FC = () => {
                 {/* Navigation is now swipe-only - removed click zones */}
             </div>
 
-            {/* Wood Play Button with Auto-Play Toggle - Positioned above the scroll based on scroll state */}
+            {/* Wood Play Button with Auto-Play Toggle — fixed bottom-left of reader viewport */}
             {/* Hidden for Web View pages */}
-            {/* Fixed to bottom when no scroll is present on the page */}
             {!currentPage?.isWebViewPage && (
             <div
-                className={`absolute left-4 z-40 transition-all duration-500 flex items-center gap-3`}
+                data-testid="story-narration"
+                data-language={selectedLanguage}
+                data-page={currentPageIndex + 1}
+                data-state={loadingAudio ? 'loading' : playing ? 'playing' : 'paused'}
+                data-translation-ready={selectedLanguage === 'en' || translatedContent.has(`${currentPage?._id}_${selectedLanguage}`)}
+                className="absolute left-4 z-40 flex items-center gap-3"
                 style={{
-                    // If no scroll URL (or empty string), always fix to bottom
-                    // Otherwise position based on scroll state: hidden = bottom, mid = above mid scroll, max = above max scroll
-                    bottom: (!currentPage?.scrollUrl || currentPage.scrollUrl.trim() === '') 
-                        ? '1rem' // No scroll on page - fix to bottom
-                        : scrollState === 'hidden' 
-                            ? '1rem' 
-                            : scrollState === 'max'
-                                ? `calc(${currentPage.scrollMaxHeight || 60}% + ${currentPage.scrollOffsetY || 0}% + 1.5rem)` // Above max scroll + offset
-                                : `calc(${currentPage.scrollMidHeight || 30}% + ${currentPage.scrollOffsetY || 0}% + 1.5rem)` // Above mid scroll + offset
+                    bottom: 'max(calc(var(--safe-area-bottom, 0px) + 1rem), 1rem)',
                 }}
             >
                 {/* Main Play Button */}
                 <WoodButton
                     onClick={handlePlayPage}
                     className="p-3"
+                    title={playing ? 'Pause' : 'Play narration'}
                     icon={
                         loadingAudio ? (
                             <div className="w-6 h-6 border-4 border-[#3e2723] border-t-transparent rounded-full animate-spin" />
@@ -5292,6 +5808,8 @@ const BookReaderPage: React.FC = () => {
                 
                 {/* Auto-Play Toggle Switch - Beside play button */}
                 <button
+                    data-testid="story-auto-turn"
+                    data-mode={ttsMode}
                     onClick={toggleTtsMode}
                     className="flex flex-col items-center gap-1"
                     title={ttsMode === 'auto' ? 'Auto Page Turn ON - Tap to disable' : 'Auto Page Turn OFF - Tap to enable'}
@@ -5326,11 +5844,15 @@ const BookReaderPage: React.FC = () => {
                         {ttsMode === 'auto' ? 'AUTO' : 'OFF'}
                     </span>
                 </button>
+
             </div>
             )}
 
             {/* Page Counter - Bottom Right (Clickable for page navigation) */}
-            <div className="absolute bottom-4 right-4 z-50">
+            <div
+                className="absolute right-4 z-50"
+                style={{ bottom: 'max(calc(var(--safe-area-bottom, 0px) + 1rem), 1rem)' }}
+            >
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -5435,8 +5957,8 @@ const BookReaderPage: React.FC = () => {
                 </div>
             )}
 
-            {/* The End Page Overlay */}
-            {isTheEndPage && (
+            {/* The End Page Overlay — non–Bible Map books only */}
+            {isTheEndPage && !(isBibleMapBook || !!islandSceneReturn || hasBibleMapReturnParams) && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_0.3s_ease-out]">
                     <div className="relative bg-[#DEB887] p-8 rounded-3xl shadow-2xl border-8 border-[#5D4037] max-w-md w-full mx-4 transform animate-[scaleUp_0.4s_cubic-bezier(0.175,0.885,0.32,1.275)] overflow-hidden">
                         {/* Realistic Wood Texture Background */}
@@ -5599,6 +6121,7 @@ const BookReaderPage: React.FC = () => {
                                                 console.log('📖 Book content length:', bookContent.length);
                                                 console.log('📖 Book content preview:', bookContent.substring(0, 200));
                                                 
+                                                stopBookAudioRef.current();
                                                 navigate('/daily-session', { 
                                                     state: { 
                                                         stepCompleted: 'book',
@@ -5617,11 +6140,25 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                stopBookAudioRef.current();
                                                 navigate('/home');
                                             }}
                                             className="bg-white/10 hover:bg-white/20 text-white/80 p-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 col-span-2"
                                         >
                                             <span>Exit Session</span>
+                                        </button>
+                                    </>
+                                ) : islandSceneReturn ? (
+                                    <>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigateBackFromReader();
+                                            }}
+                                            className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group col-span-2"
+                                        >
+                                            <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                            Back to Island Scene
                                         </button>
                                     </>
                                 ) : (
@@ -5630,6 +6167,7 @@ const BookReaderPage: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                stopBookAudioRef.current();
                                                 navigate(bookDetailUrl || `/book/${bookId}`);
                                             }}
                                             className="bg-[#8B4513] hover:bg-[#A0522D] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
@@ -5638,12 +6176,11 @@ const BookReaderPage: React.FC = () => {
                                             Back to Book
                                         </button>
 
-                                        {/* Go Home */}
+                                        {!isLibraryFromBasement() && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                // Restore music before navigating
-                                                // Background music toggle has been removed from Header. Nothing to restore here.
+                                                stopBookAudioRef.current();
                                                 navigate('/home');
                                             }}
                                             className="bg-[#2196F3] hover:bg-[#1E88E5] text-white p-4 rounded-xl font-bold shadow-lg border-b-4 border-[#5D4037] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
@@ -5651,6 +6188,7 @@ const BookReaderPage: React.FC = () => {
                                             <Home className="w-6 h-6 group-hover:scale-110 transition-transform" />
                                             <span>Home</span>
                                         </button>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -5808,6 +6346,7 @@ const BookReaderPage: React.FC = () => {
                     if (isTutorialActive && isStepActive('quiz_in_progress')) {
                         // Navigate to home and show coins tutorial
                         setTimeout(() => {
+                            stopBookAudioRef.current();
                             onBookQuizComplete();
                             navigate('/home');
                         }, 1500); // Allow time for quiz results animation
@@ -5815,6 +6354,93 @@ const BookReaderPage: React.FC = () => {
                 }}
             />
             
+            {/* First listen — pick the narrator. No close, no shop, no way back to profile. */}
+            {showNarratorPick && (
+                <div
+                    className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/75 px-5"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="narrator-pick-title"
+                >
+                    <div className="w-full max-w-md rounded-3xl bg-[#1a237e] border-4 border-[#8B4513] px-5 pt-5 pb-4 shadow-2xl flex flex-col max-h-[88vh]">
+                        <div className="text-center mb-3">
+                            <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center border-4 border-[#8B4513]">
+                                <Mic className="text-[#8B4513]" size={28} />
+                            </div>
+                            <h2 id="narrator-pick-title" className="text-xl font-bold text-white">
+                                Choose Your First Voice!
+                            </h2>
+                            <p className="text-[#eecaa0] text-sm mt-1">Tap a voice to hear a preview</p>
+                        </div>
+                        <div className="relative flex-1 min-h-0 mb-3">
+                            <div className="space-y-2.5 max-h-[42vh] overflow-y-auto pb-6">
+                                {starterNarratorVoices.map((voice: any) => (
+                                    <button
+                                        key={voice.voice_id}
+                                        type="button"
+                                        onClick={() => previewNarratorVoice(voice.voice_id)}
+                                        disabled={previewingVoiceId === voice.voice_id}
+                                        className={`w-full p-3 rounded-xl border-2 transition-all text-left ${
+                                            narratorPickId === voice.voice_id
+                                                ? 'bg-[#FFD700]/20 border-[#FFD700]'
+                                                : 'bg-[#3E1F07]/50 border-[#5c2e0b]'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            {voice.characterImage ? (
+                                                <img
+                                                    src={voice.characterImage}
+                                                    alt=""
+                                                    className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
+                                                />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-full bg-[#5c2e0b] flex items-center justify-center border-2 border-white/20">
+                                                    <Mic className="text-[#eecaa0]" size={18} />
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-white font-bold truncate">{voice.name || voice.customName}</div>
+                                                {cleanVoiceDescription(voice.description) && (
+                                                    <div className="text-[#eecaa0] text-xs mt-0.5 line-clamp-1">
+                                                        {cleanVoiceDescription(voice.description)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {previewingVoiceId === voice.voice_id ? (
+                                                <Loader2 className="w-5 h-5 text-[#FFD700] animate-spin shrink-0" />
+                                            ) : narratorPickId === voice.voice_id ? (
+                                                <Check className="text-[#FFD700] shrink-0" size={22} />
+                                            ) : (
+                                                <Volume2 className="text-white/40 shrink-0" size={18} />
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            {starterNarratorVoices.length > 3 && (
+                                <div className="absolute bottom-0 left-0 right-0 pointer-events-none flex justify-center pb-0.5">
+                                    <span className="inline-flex items-center gap-1 text-[#FFD700] text-[11px] font-medium">
+                                        Scroll for more voices
+                                        <ChevronDown size={14} />
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        {!narratorPickId && (
+                            <p className="text-center text-[#FFD700] text-sm mb-2">Select a voice above to continue</p>
+                        )}
+                        <button
+                            type="button"
+                            onClick={confirmNarratorPick}
+                            disabled={!narratorPickId}
+                            className="w-full py-3.5 rounded-full font-extrabold text-lg text-[#3E1F07] bg-[#FFD700] disabled:opacity-40 disabled:grayscale"
+                        >
+                            {narratorPickId ? 'Continue' : 'Select a voice'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Voice Unlock Celebration Modal */}
             {showVoiceUnlockModal && unlockedVoice && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
@@ -5916,6 +6542,7 @@ const BookReaderPage: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         setShowPreviewLimitModal(false);
+                                        stopBookAudioRef.current();
                                         navigate('/paywall', { state: { from: `/book/${bookId}` } });
                                     }}
                                     className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#5c2e0b] font-bold px-8 py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity text-lg"
@@ -5925,13 +6552,11 @@ const BookReaderPage: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         setShowPreviewLimitModal(false);
-                                        // Navigate back to book detail page
-                                        const detailUrl = bookDetailUrl || (bookId ? `/book/${bookId}` : '/read');
-                                        navigate(detailUrl);
+                                        navigateBackFromReader();
                                     }}
                                     className="w-full bg-white/10 text-white/70 font-medium px-8 py-3 rounded-xl hover:bg-white/20 transition-colors"
                                 >
-                                    Back to Book Details
+                                    {islandSceneReturn ? 'Back to Island Scene' : 'Back to Book Details'}
                                 </button>
                             </div>
                             

@@ -1,9 +1,16 @@
 import { API_BASE_URL, MOCK_BOOKS } from '../constants';
 import { Book, FeaturedEpisode, AmazonBook } from '../types';
+import { applySiblingGoldPrice } from '../utils/arcadeGoldPrice';
 import { isValidBookId } from '../utils/bookUtils';
 import { authService } from './authService';
 import { DespiaService } from './despiaService';
 import NotificationService from './notificationService';
+
+
+type NarrationResult = {audioUrl:string; alignment:any};
+const narrationCache = new Map<string,{result:NarrationResult;expires:number}>();
+const narrationRequests = new Map<string,Promise<NarrationResult|null>>();
+let narrationRetryAt = 0;
 
 // ============================================
 // LocalStorage-backed caching to survive WebView restarts
@@ -61,11 +68,15 @@ const clearCacheByPattern = (pattern: string): void => {
 // Get API base URL from environment or use default
 export const getApiBaseUrl = (): string => {
   // Check for environment variable (Vite uses import.meta.env)
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
-  const baseUrl = envUrl || API_BASE_URL;
+  const baseUrl = API_BASE_URL;
 
-  // Ensure URL ends with a slash
-  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  // Auth and most routes mount under /api (e.g. /api/authentication/sign-in).
+  // Accept host-only VITE_API_BASE_URL values like http://127.0.0.1:5001.
+  let base = (baseUrl || '').replace(/\/$/, '');
+  if (!base.endsWith('/api')) {
+    base = `${base}/api`;
+  }
+  return `${base}/`;
 };
 
 /** Base URL for monthly-book routes; always includes /api so path is .../api/monthly-book/... */
@@ -89,6 +100,29 @@ const normalizeCoverUrl = (url: string | undefined | null): string => {
   const cleanBase = baseUrl.replace(/\/$/, '');
   const cleanUrl = url.startsWith('/') ? url : `/${url}`;
   return `${cleanBase}${cleanUrl}`;
+};
+
+/** Category icon/cover URLs — GCS absolute, or /uploads on the API origin (not /api). */
+const resolveCategoryMediaUrl = (url: string | undefined | null, version?: string): string => {
+  if (!url || !url.trim()) return '';
+  const trimmed = url.trim();
+  let resolved = trimmed;
+  if (
+    !(
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('blob:') ||
+      trimmed.startsWith('/assets/')
+    )
+  ) {
+    const base = getApiBaseUrl().replace(/\/$/, '');
+    const origin = base.replace(/\/api$/, '');
+    const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    resolved = `${origin}${path}`;
+  }
+  if (!version) return resolved;
+  const sep = resolved.includes('?') ? '&' : '?';
+  return `${resolved}${sep}v=${encodeURIComponent(version)}`;
 };
 
 // Transform API response to match Book interface
@@ -828,6 +862,8 @@ export const ApiService = {
           password: credentials.password,
           deviceInfo: {
             deviceId: getDeviceId(),
+            // Id used as RevenueCat external_id for purchases made before signing in (guest checkout)
+            purchaseDeviceId: localStorage.getItem('godlykids_device_id') || undefined,
             pushToken: '', // Can be set later if needed
             platform: getPlatform()
           }
@@ -1055,6 +1091,8 @@ export const ApiService = {
         ...additionalData,
         deviceInfo: {
           deviceId: getDeviceId(),
+          // Id used as RevenueCat external_id for purchases made before creating the account (guest checkout)
+          purchaseDeviceId: localStorage.getItem('godlykids_device_id') || undefined,
           pushToken: '',
           platform: getPlatform()
         }
@@ -1381,6 +1419,12 @@ export const ApiService = {
     pageNumber?: number,
     textBoxIndex?: number
   ): Promise<{ audioUrl: string; alignment: any } | null> => {
+    const requestKey = JSON.stringify([text,voiceId,languageCode || 'en']);
+    const cached = narrationCache.get(requestKey);
+    if(cached && cached.expires > Date.now()) return cached.result;
+    if(narrationRequests.has(requestKey)) return narrationRequests.get(requestKey)!;
+    if(Date.now() < narrationRetryAt) return null;
+    const request = (async () => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetchWithTimeout(`${baseUrl}tts/generate`, {
@@ -1392,7 +1436,13 @@ export const ApiService = {
 
       if (response.ok) {
         const result = await response.json();
+        if(narrationCache.size >= 200) narrationCache.delete(narrationCache.keys().next().value!);
+        narrationCache.set(requestKey,{result,expires:Date.now()+60*60*1000});
         return result;
+      }
+      if(response.status === 429) {
+        const retrySeconds = Number(response.headers.get('Retry-After') || response.headers.get('RateLimit-Reset') || 60);
+        narrationRetryAt = Date.now() + Math.max(1,Number.isFinite(retrySeconds)?retrySeconds:60)*1000;
       }
       console.error('TTS Generation failed:', await response.text());
       return null;
@@ -1405,6 +1455,9 @@ export const ApiService = {
       console.error('TTS Error:', error);
       return null;
     }
+    })();
+    narrationRequests.set(requestKey,request);
+    return request.finally(()=>narrationRequests.delete(requestKey));
   },
 
   /** One HTTP request: synthesize multiple text boxes (sequential narration). Uses same caches as singles. */
@@ -1626,12 +1679,27 @@ export const ApiService = {
   // Get all categories (returns full category objects with name, color, icon, etc.)
   // Optional type parameter: 'book' or 'audio' to filter categories by contentType
   // Optional explore parameter: true to get only categories that show on explore page
-  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>> => {
-    const cacheKey = `categories_${type || 'all'}_${explore ? 'explore' : 'all'}`;
-    const cached = getCached<Array<{ _id: string; name: string; description?: string; color: string; icon?: string; showOnExplore?: boolean; contentType?: 'Book' | 'Audio' }>>(cacheKey);
-    if (cached) return cached;
-
+  getCategories: async (type?: 'book' | 'audio', explore?: boolean): Promise<Array<{
+    _id: string;
+    name: string;
+    description?: string;
+    color: string;
+    icon?: string;
+    iconImage?: string;
+    image?: string;
+    gradientFrom?: string;
+    gradientTo?: string;
+    showOnExplore?: boolean;
+    contentType?: 'Book' | 'Audio';
+  }>> => {
     try {
+      try {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(`${API_CACHE_PREFIX}categories`))
+          .forEach((key) => localStorage.removeItem(key));
+      } catch {
+        /* private mode */
+      }
       const baseUrl = getApiBaseUrl();
       console.log(`🔍 Fetching categories from API${type ? ` (type: ${type})` : ''}${explore ? ' (explore: true)' : ''}`);
 
@@ -1662,16 +1730,22 @@ export const ApiService = {
             if (categories.length > 0) {
               console.log(`✅ Found ${categories.length} categories${type ? ` (filtered by type: ${type})` : ''}${explore ? ' (explore page)' : ''}`);
               // Return full category objects
-              const result = categories.map((cat: any) => ({
-                _id: cat._id || cat.id || '',
-                name: String(cat.name || cat.title || cat),
-                description: cat.description,
-                color: cat.color || '#6366f1',
-                icon: cat.icon,
-                showOnExplore: cat.showOnExplore || false,
-                contentType: cat.contentType || 'Book',
-              }));
-              setCache(cacheKey, result);
+              const result = categories.map((cat: any) => {
+                const version = cat.updatedAt ? String(new Date(cat.updatedAt).getTime()) : '';
+                return {
+                  _id: cat._id || cat.id || '',
+                  name: String(cat.name || cat.title || cat),
+                  description: cat.description,
+                  color: cat.color || '#6366f1',
+                  icon: cat.icon,
+                  iconImage: resolveCategoryMediaUrl(cat.iconImage || cat.image, version),
+                  image: resolveCategoryMediaUrl(cat.image, version),
+                  gradientFrom: cat.gradientFrom,
+                  gradientTo: cat.gradientTo,
+                  showOnExplore: cat.showOnExplore || false,
+                  contentType: cat.contentType || 'Book',
+                };
+              });
               return result;
             }
           }
@@ -1692,7 +1766,6 @@ export const ApiService = {
           name: String(name),
           color: '#6366f1',
         }));
-      setCache(cacheKey, fallbackResult);
       return fallbackResult;
     } catch (error) {
       console.error(`❌ Failed to fetch categories:`, error);
@@ -1961,6 +2034,45 @@ export const ApiService = {
       return [];
     } catch (error) {
       console.error('❌ Failed to fetch daily task games:', error);
+      return [];
+    }
+  },
+
+  getArcadeGames: async (options?: { forceRefresh?: boolean }): Promise<any[]> => {
+    if (options?.forceRefresh) {
+      ApiService.invalidateGamesCache();
+    }
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const [arcadeResponse, catalogResponse] = await Promise.all([
+        fetchWithTimeout(`${baseUrl}games/arcade`, {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+        fetchWithTimeout(`${baseUrl}games/enabled`, {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+      ]);
+
+      if (arcadeResponse.ok) {
+        const data = await arcadeResponse.json();
+        const games = Array.isArray(data) ? data : [];
+        let catalog: any[] = [];
+        if (catalogResponse.ok) {
+          const catalogData = await catalogResponse.json();
+          catalog = Array.isArray(catalogData) ? catalogData : [];
+        }
+        return applySiblingGoldPrice(games, catalog).map((game: any) => ({
+          ...game,
+          coverImage: resolveCategoryMediaUrl(game.coverImage),
+          logo: resolveCategoryMediaUrl(game.logo),
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch arcade games:', error);
       return [];
     }
   },

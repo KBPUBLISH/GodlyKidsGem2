@@ -6,7 +6,7 @@
  * also shows subscriptionStatus: 'active'.
  * 
  * Usage:
- *   node sync-premium-status.js [--dry-run]
+ *   MONGO_URI=... node sync-premium-status.js [--dry-run]
  * 
  * Options:
  *   --dry-run    Preview what would be synced without making changes
@@ -15,8 +15,18 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-// Force Production database (env var might not specify database name)
-const MONGO_URI = 'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error('❌ MONGO_URI is not set. Export it or add it to backend/.env before running this script.');
+  process.exit(1);
+}
+
+// The URI must name the target database explicitly; a bare cluster URI would sync the wrong one.
+if (!/mongodb(\+srv)?:\/\/[^/]+\/[^/?]+/.test(MONGO_URI)) {
+  console.error('❌ MONGO_URI must include a database name (e.g. .../Production?retryWrites=true).');
+  process.exit(1);
+}
 
 const isDryRun = process.argv.includes('--dry-run');
 

@@ -1,0 +1,8 @@
+{
+  "name": "godly-kids-homeworld",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "characters:md": "node scripts/gen-characters-md.mjs"
+  }
+}

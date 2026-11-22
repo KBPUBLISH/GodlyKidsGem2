@@ -1,0 +1,135 @@
+/* Small action controls retain the island's existing illustrated icons and button palette. */
+.living-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.living-island-test .living-request{position:absolute;left:14px;right:72px;top:var(--island-hud-top);display:flex;align-items:flex-start;gap:8px;max-width:280px;z-index:10;pointer-events:none;flex-wrap:wrap}
+.living-help{position:relative;flex-basis:100%;box-sizing:border-box;padding:10px 12px;border:2px solid #91ad70;border-radius:16px;background:#fffbed;color:#314b35;box-shadow:0 4px 0 #38533726}
+.living-help strong{display:block;color:#57723d;font-size:12px}
+.living-help p{margin:4px 0 0;font-size:15px;font-weight:750;line-height:1.3}
+.living-help small{display:block;margin-top:4px;font-weight:800}
+.living-help-actions{display:flex;gap:8px;margin-top:8px}
+.living-help-actions button{flex:1;min-height:40px;border:2px solid #91ad70;border-radius:12px;background:#fffdf2;font-weight:800}
+.living-help-actions button:first-child{background:#e7f3d4}
+.living-help-job{padding-right:42px}
+.living-help-x{position:absolute;top:2px;right:2px;width:36px;height:36px;border:0;background:transparent;color:#57723d;font-size:24px}
+.living-request>*{pointer-events:auto}
+.living-island-test .living-guide{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex:1;min-width:0;max-width:204px;min-height:64px;padding:8px 12px;border-radius:22px;background:#eaf3d8;border:2px solid #c9d7ad;box-shadow:0 4px 0 #69815180,0 4px 12px #29482022}
+.living-guide>.picture-icon,.living-guide>.icon-fallback{flex-shrink:0}
+.living-action-copy{display:grid;justify-items:start;gap:4px;min-width:0}
+.living-action-copy>strong{font-size:17px;line-height:1.15;font-weight:900}
+.living-action-emoji{font-size:33px;line-height:1;display:inline-grid;place-items:center;width:38px;height:38px}
+.living-progress{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.2}
+.living-pips{display:flex;gap:3px}
+.living-pips i{width:9px;height:9px;border:1.5px solid #7b9463;border-radius:50%;background:#fff9e9}
+.living-pips .filled{background:#58963b;border-color:#437d2b}
+.living-island-test .living-round{display:grid;place-items:center;flex:0 0 46px;min-width:46px;width:46px;height:46px;min-height:46px;padding:0;border-radius:50%;background:#fff4d6e8;border:2px solid #eddbac;box-shadow:0 3px 0 #856d3e55;font-size:20px}
+.living-island-test .living-listen{font-size:18px;margin-top:7px}
+.living-island-test .living-later{font-size:11px;font-weight:900;margin-top:7px}
+.living-island-test .living-sound{position:absolute;right:14px;top:var(--island-hud-top);z-index:11}
+.living-building{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:900;padding:9px 13px;border-radius:20px;background:#eaf3d8e8}
+.living-island-test .living-target{position:absolute;z-index:7;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;width:50px;height:50px;min-height:50px;padding:6px;border-radius:50%;background:#ffedab;border:2px solid #d8af48;box-shadow:0 3px 0 #9d803c,0 4px 14px #263d2729}
+.living-point-arrow{position:absolute;bottom:-15px;left:0;width:100%;text-align:center;color:#ffde68;text-shadow:0 2px #776239;font-size:18px;line-height:1;pointer-events:none;animation:living-point 1.3s ease-in-out infinite}
+.living-resource-hit{position:absolute;z-index:6;width:44px;height:44px;min-height:44px;transform:translate(-50%,-50%);background:transparent;border:0;border-radius:50%;padding:0;box-shadow:none}
+.living-island-test button:focus-visible{outline:3px solid #ffcb47;outline-offset:3px}
+.living-island-test .farm-ready{width:auto;min-width:50px;gap:3px;border-radius:22px;font-size:13px}
+.farm-ready>span{font-size:25px}
+.living-pocket-actions{position:absolute;inset:0;z-index:12;pointer-events:none}
+.living-pocket-actions>button{position:absolute;pointer-events:auto}
+.living-island-test .living-pocket{min-width:60px;min-height:60px;display:flex;align-items:center;justify-content:center;gap:5px;padding:8px;border-radius:22px;border:2px solid #e4cea0;background:#fff0cce8;box-shadow:0 4px 0 #8d76484d,0 4px 12px #263d2722;bottom:max(16px,env(safe-area-inset-bottom,0px))}
+.living-bag{left:14px}
+.living-farm{right:14px}
+.living-island-test .living-friends{right:14px;bottom:calc(max(16px,env(safe-area-inset-bottom,0px)) + 74px)}
+.living-island-test .living-return{left:14px;bottom:max(16px,env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:4px;padding:8px 12px;background:#fff0cc;font-size:20px}
+.living-badge{position:absolute;right:-5px;top:-6px;display:grid;place-items:center;min-width:24px;height:24px;padding:0 4px;border-radius:50%;background:#e9bb55;border:2px solid #fff5ce;font-size:12px;color:#44311e}
+.living-coins{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:14px;vertical-align:middle}
+.living-coins>i{width:20px;height:20px;display:inline-block;flex-shrink:0;background:url('./assets/island-coin.png') center/contain no-repeat;filter:drop-shadow(0 1px 0 #7b581e)}
+.living-coins>b{font-weight:900}
+.living-island-test .living-pickup,.living-island-test .living-celebration{position:absolute;z-index:15;left:50%;transform:translateX(-50%);width:max-content;max-width:85%;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:22px;background:#fff0cce8;color:#36522e;font-size:14px;font-weight:900;box-shadow:0 3px 9px #1e352d33;pointer-events:none;text-align:center}
+.living-island-test .living-celebration{bottom:100px}
+.living-island-test .living-pickup{top:57%}
+.living-greeting{position:absolute;z-index:16;transform:translate(-50%,-100%);padding:7px 12px;border-radius:18px;background:#fff5dc;max-width:190px;text-align:center;font-size:14px;font-weight:800;pointer-events:none;box-shadow:0 2px 9px #233c2633}
+.living-watch{position:absolute;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:7px;z-index:20}
+.living-watch>span{font-size:13px;font-weight:900;color:#fff9e5;text-shadow:0 1px 3px #203c2b,0 0 5px #203c2b}
+.living-watch button{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:14px;background:#fff0cc}
+.game-shell:has(.living-watch) .toast{bottom:max(112px,calc(env(safe-area-inset-bottom,0px) + 112px))}
+.living-island-test .living-toast{bottom:100px;max-width:85%;font-size:13px;padding:8px 12px;pointer-events:none}
+.living-loading{position:absolute;z-index:30;left:50%;top:45%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:8px;text-align:center;color:#fff9e5;text-shadow:0 1px 3px #294231;font-size:17px;width:min(300px,90vw)}
+.living-loading p{font-size:13px}
+/* Menus open only on demand and leave the world visible above a short bottom sheet. */
+.living-island-test .living-sheet-shade{display:flex;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));background:linear-gradient(transparent 40%,#283e2522);backdrop-filter:none}
+.living-island-test .living-sheet{position:relative;inset:auto;width:min(100%,410px);height:auto;max-height:58dvh;overflow:auto;overscroll-behavior:contain;border-radius:24px;padding:14px 16px 16px;background:#fff4dfee;border:2px solid #e8d2a5;box-shadow:0 6px 24px #21362233;margin:0}
+.living-sheet .drawer-header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0;margin:0 0 10px;background:transparent}
+.living-island-test .living-sheet h1{font-size:21px;line-height:1.2;margin:0;font-weight:900}
+.living-island-test .living-sheet .close{position:static;display:grid;place-items:center;min-width:44px;width:44px;min-height:44px;height:44px;padding:0;font-size:24px;line-height:1;border:0;border-radius:50%;background:#ebdfc3;box-shadow:none;flex-shrink:0}
+.living-choice-preview{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0 14px;font-size:14px;font-weight:900}
+.living-choice-preview>.picture-icon{flex-shrink:0}
+.living-choice-preview>span[aria-hidden]{font-size:23px}
+.living-emoji{font-size:48px!important;line-height:1.15}
+.living-sheet .food-actions{display:flex;gap:8px;margin:10px 0 0}
+.living-sheet .food-actions>button{display:flex;align-items:center;justify-content:center;gap:7px;flex:1;min-width:0;min-height:48px;padding:9px 12px;font-size:15px;background:#e2efcd;border-color:#b8cf9c;box-shadow:0 3px 0 #91a37655;border-radius:16px}
+.living-sheet .food-actions>button+button{background:#f7ecd5;border-color:#dfcdab;box-shadow:0 3px 0 #b29e7755}
+.living-error{font-size:13px;line-height:1.35;background:#fff4dc;border-radius:12px;padding:8px 10px;color:#70422c;margin:8px 0 0}
+.living-request>.living-error{flex-basis:100%;max-width:230px}
+.living-bag-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #d3d7bb;font-size:15px}
+.living-bag-row>b{margin-left:auto}
+.living-empty-bag{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px;font-size:14px}
+.farm-purchase-hero{display:flex;align-items:center;gap:15px;margin:4px 0 12px}
+.farm-name{display:grid;gap:5px;flex:1;min-width:0;font-size:13px;font-weight:800}
+.farm-name input{width:100%;min-height:46px;background:#fffdf4;color:#344731;border:2px solid #cbd9b0;border-radius:12px;padding:8px 10px;font:inherit;font-size:16px;touch-action:manipulation}
+.farm-price,.farm-wallet{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:800}
+.farm-price>span{display:flex;gap:6px;align-items:center}
+.farm-wallet{margin:4px 0 12px}
+.farm-wallet .living-coins{font-size:18px}
+.farm-animal{gap:10px}.farm-emoji{font-size:30px;line-height:1.1}.farm-animal div{min-width:0;flex:1}.farm-animal strong{overflow-wrap:anywhere}.farm-animal small{display:block;font-size:12px;margin-top:5px}.farm-animal button{font-size:13px;padding:8px 12px}.living-island-test .farm-shop{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:14px;gap:7px}.farm-shop>button{flex-direction:column;padding:9px 5px!important;font-size:12px!important}.farm-shop small{display:block;margin-top:5px;font-size:11px}.farm-shop .living-coins{font-size:12px}.farm-food{padding:10px 0;border-bottom:1px solid #d3d7bb}.farm-food>strong{display:flex;align-items:center;gap:7px;font-size:16px}.living-island-test .friends-list .friend-row{width:100%;min-height:56px;display:flex;align-items:center;gap:12px;padding:10px;font-size:16px;margin-top:10px}.friend-row>span:last-child{margin-left:auto}
+@keyframes living-point{50%{transform:translateY(4px)}}
+@media(prefers-reduced-motion:reduce){.living-point-arrow{animation:none}}
+@media(max-width:360px){.living-island-test .living-request{left:10px;right:66px;gap:6px}.living-island-test .living-sound{right:10px}.living-island-test .living-guide{padding:8px;gap:6px;min-height:60px}.living-action-copy>strong{font-size:15px}.living-island-test .living-sheet{padding:12px}.living-choice-preview{gap:7px}.living-choice-preview .living-coins{font-size:13px}.living-island-test .living-sheet h1{font-size:19px}}
+@media(max-height:520px){.living-island-test{--island-hud-top:max(12px,env(safe-area-inset-top,0px));min-height:0}.living-island-test .living-sheet{max-height:calc(100dvh - 24px);max-width:360px}.living-sheet .drawer-header{margin-bottom:6px}.living-choice-preview{margin-bottom:8px}.living-island-test .living-celebration{bottom:82px}.living-island-test .living-friends{bottom:86px}}
+
+/* Instructions float directly over the island; the familiar controls form one side rail. */
+.living-island-test .living-guide{background:transparent;border:0;box-shadow:none;padding:4px 0;color:#fffbe8;text-shadow:0 2px 3px #24432e,0 0 5px #24432e;max-width:190px}
+.living-island-test .living-guide:hover{background:transparent}
+.living-island-test .living-building{background:transparent;color:#fffbe8;text-shadow:0 2px 3px #24432e}
+.living-pocket-actions{inset:auto 12px auto auto;top:var(--island-hud-top);display:flex;flex-direction:column;align-items:center;gap:10px;max-height:calc(100% - var(--island-hud-top) - 12px);overflow-y:auto;overflow-x:hidden;padding:4px 6px 8px;scrollbar-width:none}
+.living-pocket-actions>button,.living-island-test .living-pocket,.living-island-test .living-return,.living-island-test .living-friends{position:relative;left:auto;right:auto;bottom:auto;flex-shrink:0;width:54px;min-width:54px;min-height:54px;padding:5px;border-radius:18px}
+.living-island-test .living-farm{flex-direction:column;gap:0}
+.living-farm .living-coins{font-size:11px}
+.living-island-test .living-garden-spot{position:absolute;z-index:8;transform:translate(-50%,-50%);width:44px;height:44px;min-height:44px;padding:6px;display:grid;place-items:center;background:transparent;border:0;box-shadow:none;filter:drop-shadow(0 2px 2px #334526)}
+.living-garden-spot:not(:disabled):hover{background:#ffdf7366}
+.living-garden-spot:disabled{opacity:.45}
+@media(max-height:460px){.living-pocket-actions{gap:7px}.living-island-test .living-pocket,.living-island-test .living-pocket-actions .living-round{width:46px;min-width:46px;min-height:46px;height:46px}.living-farm .living-action-emoji{font-size:24px;height:25px}.living-pocket .picture-icon{width:30px;height:30px}}
+
+/* The original game shell owns its toolbar, clock, drawers and placement controls. */
+.living-intro-layer{position:absolute;inset:0;pointer-events:none}
+.living-intro-layer button,.living-intro-layer .drawer-shade{pointer-events:auto}
+.living-original-controls .living-request{top:112px;left:14px;right:96px;max-width:240px}
+.living-original-controls .living-guide{max-width:168px}
+.living-original-controls .side-buttons{grid-template-columns:1fr;max-height:calc(100dvh - 190px);overflow-y:auto;scrollbar-width:none;padding:4px 5px 7px}
+.living-original-controls .side-buttons .picture-icon{object-fit:contain}
+.market-seeds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.market-seeds button{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+@media(max-height:520px){.living-original-controls .living-request{top:95px}.living-original-controls .side-buttons{grid-template-columns:1fr;max-height:calc(100dvh - 115px)}}
+/* Keep map markers under the finger while pressed. */
+.living-island-test .living-target:active:not(:disabled),.living-island-test .living-resource-hit:active:not(:disabled),.living-island-test .living-garden-spot:active:not(:disabled){transform:translate(-50%,calc(-50% + 2px))}
+.living-sheet-tasks{max-height:min(440px,72dvh);padding:16px 18px!important}
+.living-task-list{display:grid;gap:8px}
+.living-task-row{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;text-align:left;background:#fff4d7;border-color:#ddc58e;min-height:62px}
+.living-task-row .living-task-copy{flex:1;min-width:0;display:grid;gap:4px}
+.living-task-row strong{font-size:16px;line-height:1.2}
+.living-task-row small{font-size:13px}
+.living-task-row.done{background:#e8f4d9;color:#3c703c;border-color:#afcf88}
+.living-task-crops{display:flex;gap:14px;font-size:13px}
+.living-task-crops>span{display:flex;align-items:center;gap:4px}
+.living-task-crops>span>span{font-size:22px}
+.living-task-hear{margin-top:10px;background:transparent;border:0;min-height:44px;padding:6px 10px}
+.living-tasks-done{margin:6px 0;text-align:center;color:#397241}
+@media(max-height:520px){.living-sheet-tasks{max-height:88dvh}.living-task-row{min-height:52px;padding:7px 10px}.living-task-row strong{font-size:14px}.living-task-hear{margin-top:0}}
+
+.living-garden-timer{position:absolute;z-index:7;transform:translate(-50%,-50%);display:flex;align-items:center;gap:3px;pointer-events:none;color:#fff8df;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px #203e20,1px 0 2px #203e20}
+
+.living-island-test .living-garden-spot:active:not(:disabled){transform:translate(-50%,-50%)}
+.living-task-hear{display:flex;align-items:center;gap:8px;font-weight:800}.living-task-hear>b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e64a2f;color:#fff9e5;border:2px solid #fff0c8;font-size:19px}
+.living-friend-hello{position:absolute;bottom:max(140px,calc(env(safe-area-inset-bottom) + 125px));left:12px;max-width:min(310px,calc(100% - 116px));display:flex;gap:9px;padding:12px;border:2px solid #d3b075;border-radius:22px;background:#fff4dfeF;color:#432d1f;box-shadow:0 6px 16px #163a3c40;pointer-events:auto}.living-friend-hello p{margin:3px 0 8px;font-size:14px;line-height:1.3}.living-friend-hello button{min-height:44px;border:1px solid #a9c9a0;border-radius:16px;padding:8px 13px;background:#e4f1d2;color:#344e2d;font-weight:800;margin-right:5px}.living-friend-face{font-size:27px}
+.living-chat-open .ship-button,.living-chat-open .topbar,.living-chat-open .side-buttons,.living-chat-open .living-ship-button,.living-chat-open .back-to-ship,.living-chat-open .living-profile,.living-chat-open .living-sound{visibility:hidden;pointer-events:none}
+
+/* Bare soil shows an explicit action, never a sprout that looks already planted. */
+.living-seed-prompt{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;min-height:42px;border:2px solid #e7d5a3;border-radius:14px;background:#fffbea;color:#36684b;box-shadow:0 2px 0 #b8a46b}
+.living-seed-prompt b{font-size:23px;line-height:20px}.living-seed-prompt small{font-size:10px;line-height:13px;font-weight:900}

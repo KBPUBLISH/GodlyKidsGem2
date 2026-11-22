@@ -55,6 +55,39 @@ const saveAudioFile = async (buffer, filename, bookId = null, pageNumber = null)
     }
 };
 
+/**
+ * Drop [emotion] / [sfx] characters from ElevenLabs alignment so word timings
+ * still match the on-screen copy (tags stay in the audio request for v4).
+ */
+const stripBracketCharsFromAlignment = (alignment) => {
+    if (!alignment || !Array.isArray(alignment.characters)) return alignment;
+    const characters = [];
+    const starts = [];
+    const ends = [];
+    let inBracket = false;
+    for (let i = 0; i < alignment.characters.length; i++) {
+        const ch = alignment.characters[i];
+        if (ch === '[') {
+            inBracket = true;
+            continue;
+        }
+        if (ch === ']') {
+            inBracket = false;
+            continue;
+        }
+        if (inBracket) continue;
+        characters.push(ch);
+        starts.push(alignment.character_start_times_seconds?.[i]);
+        ends.push(alignment.character_end_times_seconds?.[i]);
+    }
+    return {
+        ...alignment,
+        characters,
+        character_start_times_seconds: starts,
+        character_end_times_seconds: ends,
+    };
+};
+
 /** Normalize text for cache key so minor whitespace/trim differences don't cause cache misses. */
 const normalizeTextForCache = (str) => {
     if (typeof str !== 'string') return '';
@@ -175,9 +208,11 @@ async function generateSingleCachedTTS(opts) {
     }
 
     const normalizedText = normalizeTextForCache(text);
+    // Book read-aloud uses Eleven v4. Include model in the cache key so v3 clips are not reused.
+    const modelId = 'eleven_v4';
     const cacheKey = languageCode && languageCode !== 'en'
-        ? `${normalizedText}${voiceId}${languageCode}`
-        : `${normalizedText}${voiceId}`;
+        ? `${normalizedText}${voiceId}${languageCode}${modelId}`
+        : `${normalizedText}${voiceId}${modelId}`;
     const textHash = crypto.createHash('md5').update(cacheKey).digest('hex');
     const cached = await TTSCache.findOne({ textHash, voiceId });
 
@@ -200,25 +235,25 @@ async function generateSingleCachedTTS(opts) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw new Error('apiKey is not defined');
 
-    const isMultilingual = languageCode && languageCode !== 'en';
-    const modelId = isMultilingual ? 'eleven_multilingual_v2' : 'eleven_v3';
-
-    let processedText = text;
     const bracketRegex = /\[[^\]]+\]/g;
     const brackets = text.match(bracketRegex);
+    const displayText = brackets
+        ? text.replace(bracketRegex, '').replace(/\s+/g, ' ').trim()
+        : text;
+    // eleven_v4 interprets [giggles]/[happily] style tags — keep them in the spoken request.
+    const spokenText = text;
     if (brackets && brackets.length > 0) {
-        processedText = text.replace(bracketRegex, '').replace(/\s+/g, ' ').trim();
-        console.log(`🔧 Stripped ${brackets.length} bracketed expression(s): ${brackets.join(', ')}`);
+        console.log(`🎭 Keeping ${brackets.length} emotion tag(s) for v4: ${brackets.join(', ')}`);
     }
 
     console.log(`🎤 Generating TTS with ElevenLabs model: ${modelId} (language: ${languageCode || 'en'})`);
-    console.log(`📝 Text length: ${processedText.length} chars`);
+    console.log(`📝 Text length: ${spokenText.length} chars`);
 
     try {
         const response = await axios.post(
             `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
             {
-                text: processedText,
+                text: spokenText,
                 model_id: modelId,
                 voice_settings: { stability: 0.5, similarity_boost: 0.75 },
             },
@@ -233,7 +268,10 @@ async function generateSingleCachedTTS(opts) {
         );
         const { audio_base64, alignment } = response.data;
         audioBuffer = Buffer.from(audio_base64, 'base64');
-        alignmentData = processAlignmentToWords(processedText, alignment);
+        alignmentData = processAlignmentToWords(
+            displayText,
+            stripBracketCharsFromAlignment(alignment),
+        );
         console.log('✅ Got alignment:', { chars: alignment?.characters?.length || 0, words: alignmentData?.words?.length || 0 });
     } catch (error) {
         console.error('❌ ElevenLabs API Error:', error.response?.status, error.response?.data);
@@ -253,7 +291,7 @@ async function generateSingleCachedTTS(opts) {
             const fallbackVoice = shouldUseFallback ? FALLBACK_VOICE_ID : voiceId;
             const fallbackResponse = await axios.post(
                 `https://api.elevenlabs.io/v1/text-to-speech/${fallbackVoice}`,
-                { text: processedText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
+                { text: spokenText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
                 {
                     headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
                     responseType: 'arraybuffer',
@@ -261,7 +299,7 @@ async function generateSingleCachedTTS(opts) {
                 },
             );
             audioBuffer = fallbackResponse.data;
-            const words = processedText.split(/\s+/).filter((w) => w.length > 0);
+            const words = displayText.split(/\s+/).filter((w) => w.length > 0);
             const estimatedDurationPerWord = 0.4;
             alignmentData = {
                 words: words.map((word, index) => ({
@@ -275,7 +313,7 @@ async function generateSingleCachedTTS(opts) {
             if (!shouldUseFallback && voiceId !== FALLBACK_VOICE_ID) {
                 const lastResortResponse = await axios.post(
                     `https://api.elevenlabs.io/v1/text-to-speech/${FALLBACK_VOICE_ID}`,
-                    { text: processedText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
+                    { text: spokenText, model_id: modelId, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
                     {
                         headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
                         responseType: 'arraybuffer',
@@ -283,7 +321,7 @@ async function generateSingleCachedTTS(opts) {
                     },
                 );
                 audioBuffer = lastResortResponse.data;
-                const words = processedText.split(/\s+/).filter((w) => w.length > 0);
+                const words = displayText.split(/\s+/).filter((w) => w.length > 0);
                 alignmentData = {
                     words: words.map((word, index) => ({
                         word,

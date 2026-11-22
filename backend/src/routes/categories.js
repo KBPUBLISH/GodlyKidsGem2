@@ -69,12 +69,12 @@ router.get('/:id', async (req, res) => {
 // Create category
 router.post('/', async (req, res) => {
     try {
-        const { name, description, color, gradientFrom, gradientTo, icon, image, contentType } = req.body;
+        const { name, description, color, gradientFrom, gradientTo, icon, iconImage, image, contentType } = req.body;
         
-        // Check if category already exists
-        const existing = await Category.findOne({ name: name.trim() });
+        const type = contentType || 'Book';
+        const existing = await Category.findOne({ name: name.trim(), contentType: type });
         if (existing) {
-            return res.status(400).json({ error: 'Category already exists' });
+            return res.status(400).json({ error: `A ${type} category with this name already exists` });
         }
 
         const category = new Category({
@@ -84,15 +84,25 @@ router.post('/', async (req, res) => {
             gradientFrom: gradientFrom || color || '#6366f1',
             gradientTo: gradientTo || '#8b5cf6',
             icon,
+            iconImage,
             image,
             contentType: contentType || 'Book', // Default to Book if not specified
         });
 
-        await category.save();
+        try {
+            await category.save();
+        } catch (error) {
+            if (error.code === 11000) {
+                await Category.dropLegacyNameIndex();
+                await category.save();
+            } else {
+                throw error;
+            }
+        }
         res.status(201).json(category);
     } catch (error) {
         if (error.code === 11000) {
-            res.status(400).json({ error: 'Category name must be unique' });
+            res.status(400).json({ error: 'A category with this name already exists for that library (Read or Listen)' });
         } else {
             res.status(500).json({ error: error.message });
         }
@@ -102,18 +112,22 @@ router.post('/', async (req, res) => {
 // Update category
 router.put('/:id', async (req, res) => {
     try {
-        const { name, description, color, gradientFrom, gradientTo, icon, image, contentType } = req.body;
+        const { name, description, color, gradientFrom, gradientTo, icon, iconImage, image, contentType } = req.body;
         
         const category = await Category.findById(req.params.id);
         if (!category) {
             return res.status(404).json({ error: 'Category not found' });
         }
 
-        // Check if new name conflicts with existing category
-        if (name && name.trim() !== category.name) {
-            const existing = await Category.findOne({ name: name.trim() });
+        const nextType = contentType || category.contentType || 'Book';
+        if (name && (name.trim() !== category.name || nextType !== category.contentType)) {
+            const existing = await Category.findOne({
+                name: name.trim(),
+                contentType: nextType,
+                _id: { $ne: category._id },
+            });
             if (existing) {
-                return res.status(400).json({ error: 'Category name already exists' });
+                return res.status(400).json({ error: `A ${nextType} category with this name already exists` });
             }
         }
 
@@ -123,15 +137,25 @@ router.put('/:id', async (req, res) => {
         category.gradientFrom = gradientFrom !== undefined ? gradientFrom : category.gradientFrom;
         category.gradientTo = gradientTo !== undefined ? gradientTo : category.gradientTo;
         category.icon = icon !== undefined ? icon : category.icon;
+        category.iconImage = iconImage !== undefined ? iconImage : category.iconImage;
         category.image = image !== undefined ? image : category.image;
         category.contentType = contentType || category.contentType;
         category.updatedAt = Date.now();
 
-        await category.save();
+        try {
+            await category.save();
+        } catch (error) {
+            if (error.code === 11000) {
+                await Category.dropLegacyNameIndex();
+                await category.save();
+            } else {
+                throw error;
+            }
+        }
         res.json(category);
     } catch (error) {
         if (error.code === 11000) {
-            res.status(400).json({ error: 'Category name must be unique' });
+            res.status(400).json({ error: 'A category with this name already exists for that library (Read or Listen)' });
         } else {
             res.status(500).json({ error: error.message });
         }

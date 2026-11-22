@@ -1,15 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
-import { useSubscription } from '../context/SubscriptionContext';
+import { useUser } from '../context/UserContext';
+import {LIVING_TEST_BUILD} from '../utils/livingTestMode';
+import {completeWelcome} from '../utils/welcomeProgress';
 
 const PaymentSuccessPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { subscribe } = useSubscription();
+  const { subscribe } = useUser();
+  const subscribeRef=useRef(subscribe);subscribeRef.current=subscribe;
+  const [welcomeReturn]=useState(()=>LIVING_TEST_BUILD&&searchParams.get('onboarding')==='1');
   
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
+  const isCreditPack = searchParams.get('credits') === '1';
+  const continueAfterSubscription=()=>{if(welcomeReturn){completeWelcome('trial');navigate('/onboarding',{replace:true});}else navigate('/home',{replace:true});};
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -33,18 +39,34 @@ const PaymentSuccessPage: React.FC = () => {
           
           console.log('🔍 Verification response:', data);
 
+          if (data.success && data.kind === 'token_pack') {
+            setStatus('success');
+            setTimeout(() => {
+              navigate('/listen', { replace: true, state: { libraryMode: 'creators' } });
+            }, 2000);
+            return;
+          }
+
           if (data.success && data.isPremium) {
             console.log('✅ Payment verified! Granting premium...');
             localStorage.setItem('godlykids_premium', 'true');
-            subscribe();
+            subscribeRef.current();
             setStatus('success');
             
             // Redirect to home after 2 seconds
             setTimeout(() => {
-              navigate('/home', { replace: true });
+              continueAfterSubscription();
             }, 2000);
             return;
           }
+        }
+
+        if (isCreditPack) {
+          setStatus('success');
+          setTimeout(() => {
+            navigate('/listen', { replace: true, state: { libraryMode: 'creators' } });
+          }, 2000);
+          return;
         }
 
         // Fallback: Check user's purchase status via webhook endpoint
@@ -60,11 +82,11 @@ const PaymentSuccessPage: React.FC = () => {
           if (statusData.isPremium) {
             console.log('✅ User is premium! Granting access...');
             localStorage.setItem('godlykids_premium', 'true');
-            subscribe();
+            subscribeRef.current();
             setStatus('success');
             
             setTimeout(() => {
-              navigate('/home', { replace: true });
+              continueAfterSubscription();
             }, 2000);
             return;
           }
@@ -72,10 +94,11 @@ const PaymentSuccessPage: React.FC = () => {
 
         // If we get here, payment might still be processing
         // Give user option to retry or go home
+        if(welcomeReturn){setErrorMessage('Your trial is not confirmed yet. You can try again or continue setup without it.');setStatus('error');return;}
         console.log('⚠️ Payment not yet confirmed');
         setStatus('success'); // Still show success - webhook might be delayed
         localStorage.setItem('godlykids_premium', 'true');
-        subscribe();
+        subscribeRef.current();
         
         setTimeout(() => {
           navigate('/home', { replace: true });
@@ -89,7 +112,7 @@ const PaymentSuccessPage: React.FC = () => {
     };
 
     verifyPayment();
-  }, [searchParams, navigate, subscribe]);
+  }, [searchParams, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center px-6">
@@ -110,8 +133,12 @@ const PaymentSuccessPage: React.FC = () => {
                 <CheckCircle size={80} className="text-green-500/30 mx-auto" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome to Premium! 🎉</h1>
-            <p className="text-white/60 mb-4">Your subscription is now active.</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {isCreditPack ? 'Credits added!' : 'Welcome to Premium! 🎉'}
+            </h1>
+            <p className="text-white/60 mb-4">
+              {isCreditPack ? 'Your credit pack is ready to spend on creator stories.' : 'Your subscription is now active.'}
+            </p>
             <p className="text-[#FFD700] font-semibold">Redirecting to app...</p>
           </>
         )}
@@ -126,10 +153,10 @@ const PaymentSuccessPage: React.FC = () => {
               Please try the "Restore Purchases" option.
             </p>
             <button
-              onClick={() => navigate('/home', { replace: true })}
+              onClick={() => {if(welcomeReturn)completeWelcome('tour');navigate(welcomeReturn?'/onboarding':'/home', { replace: true });}}
               className="bg-[#FFD700] text-[#1a1a2e] px-6 py-3 rounded-xl font-bold"
             >
-              Go to App
+              {welcomeReturn?'Continue setup':'Go to App'}
             </button>
           </>
         )}

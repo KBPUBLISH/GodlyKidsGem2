@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const connectDB = require('./config/db');
+const { assertJwtSecret } = require('./config/jwt');
+const { warnIfNoAdminEmails } = require('./config/adminEmails');
 const { 
   generalLimiter, 
   authLimiter, 
@@ -11,6 +13,12 @@ const {
   uploadLimiter,
   analyticsLimiter 
 } = require('./middleware/rateLimiter');
+
+// Crash on boot (not on the first login) if the deploy has no JWT secret
+assertJwtSecret();
+// Admin allowlist has no default. Missing it locks the admin portal rather than
+// killing the app, so this logs loudly instead of throwing.
+warnIfNoAdminEmails();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -114,6 +122,7 @@ app.use('/api/featured', require('./routes/featured'));
 app.use('/api/stripe', require('./routes/stripe'));
 app.use('/api/user-playlists', require('./routes/userPlaylists'));
 app.use('/api/ai', require('./routes/aiGenerate'));
+app.use('/api/ai', require('./routes/aiInsights'));
 app.use('/api/book-comments', require('./routes/bookComments'));
 app.use('/api/playlist-comments', require('./routes/playlistComments'));
 app.use('/api/play-events', require('./routes/playEvents'));
@@ -162,6 +171,9 @@ app.use('/api/story-backgrounds', require('./routes/story-backgrounds'));
 
 // Monthly Custom Book (create your story with Bible character)
 app.use('/api/monthly-book', require('./routes/monthly-book'));
+
+// Bible Map voyage (islands + story packs)
+app.use('/api/bible-map', require('./routes/bibleMap'));
 
 // ===========================================
 // HEALTH & STATUS ENDPOINTS

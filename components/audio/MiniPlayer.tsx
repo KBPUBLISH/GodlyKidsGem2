@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, Music, SkipBack, SkipForward, Crown, Lock } from 'lucide-react';
 import { useAudio } from '../../context/AudioContext';
 import { useUser } from '../../context/UserContext';
-import { getCoverThumb } from '../../utils/coverImage';
+import CoverImage from '../ui/CoverImage';
+import AudioScrubber from './AudioScrubber';
 
 const MiniPlayer: React.FC = () => {
     const {
         currentPlaylist,
         currentTrackIndex,
         isPlaying,
-        progress,
         currentTime,
         duration,
         togglePlayPause,
@@ -18,7 +18,6 @@ const MiniPlayer: React.FC = () => {
         nextTrack,
         prevTrack,
         seek,
-        isPreviewMode,
         previewLimitReached,
         previewTimeRemaining,
         dismissPreviewLimit
@@ -27,7 +26,6 @@ const MiniPlayer: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isSubscribed } = useUser();
-    const [isDragging, setIsDragging] = useState(false);
 
     // Don't show mini player if:
     // 1. No playlist is active
@@ -51,49 +49,6 @@ const MiniPlayer: React.FC = () => {
 
     const handleOpenFullPlayer = () => {
         navigate(`/audio/playlist/${currentPlaylist._id}/play/${currentTrackIndex}`);
-    };
-
-    const seekToPosition = (clientX: number, element: HTMLDivElement) => {
-        const rect = element.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const percentage = Math.max(0, Math.min(1, x / rect.width));
-        seek(percentage * duration);
-    };
-
-    const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        seekToPosition(e.clientX, e.currentTarget);
-    };
-
-    const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        setIsDragging(true);
-        seekToPosition(e.clientX, e.currentTarget);
-    };
-
-    const handleProgressMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isDragging) {
-            seekToPosition(e.clientX, e.currentTarget);
-        }
-    };
-
-    const handleProgressMouseUp = () => {
-        setIsDragging(false);
-    };
-
-    const handleProgressTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-        setIsDragging(true);
-        const touch = e.touches[0];
-        seekToPosition(touch.clientX, e.currentTarget);
-    };
-
-    const handleProgressTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-        if (isDragging && e.touches.length > 0) {
-            const touch = e.touches[0];
-            seekToPosition(touch.clientX, e.currentTarget);
-        }
-    };
-
-    const handleProgressTouchEnd = () => {
-        setIsDragging(false);
     };
 
     const formatTime = (seconds: number) => {
@@ -127,21 +82,13 @@ const MiniPlayer: React.FC = () => {
                 <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
 
                 {/* Progress Bar */}
-                <div
-                    onClick={handleProgressClick}
-                    onMouseDown={handleProgressMouseDown}
-                    onMouseMove={handleProgressMouseMove}
-                    onMouseUp={handleProgressMouseUp}
-                    onMouseLeave={handleProgressMouseUp}
-                    onTouchStart={handleProgressTouchStart}
-                    onTouchMove={handleProgressTouchMove}
-                    onTouchEnd={handleProgressTouchEnd}
-                    className={`absolute top-0 left-0 right-0 h-1 bg-[#3e1f07] z-10 group ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
-                >
-                    <div
-                        className="h-full bg-[#FFD700] transition-all duration-100"
-                        style={{ width: `${progress}%` }}
-                    ></div>
+                <div className="absolute top-0 left-0 right-0 z-20">
+                    <AudioScrubber
+                        currentTime={currentTime}
+                        duration={duration}
+                        onSeek={seek}
+                        variant="mini"
+                    />
                 </div>
 
                 {/* Main Content */}
@@ -152,10 +99,11 @@ const MiniPlayer: React.FC = () => {
                         className="w-12 h-12 rounded-lg border-2 border-[#d4a373] overflow-hidden shrink-0 cursor-pointer"
                     >
                         {currentTrack.coverImage || currentPlaylist.coverImage ? (
-                            <img
-                                src={getCoverThumb(currentTrack.coverImage || currentPlaylist.coverImage)}
+                            <CoverImage
+                                src={currentTrack.coverImage || currentPlaylist.coverImage}
                                 alt={currentTrack.title}
                                 className="w-full h-full object-cover"
+                                loading="eager"
                             />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -260,7 +208,7 @@ const MiniPlayer: React.FC = () => {
                                 <div className="flex items-center justify-center gap-3">
                                     <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-[#FFD700]/50">
                                         {currentPlaylist?.coverImage ? (
-                                            <img src={currentPlaylist.coverImage} alt="" className="w-full h-full object-cover" />
+                                            <CoverImage src={currentPlaylist.coverImage} alt="" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                                                 <Music className="w-6 h-6 text-white/50" />

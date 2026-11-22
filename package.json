@@ -7,6 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "main": "vite --port 3000",
     "build": "vite build",
+    "homeworld:build": "vite build --config homeworld/vite.config.js",
+    "living-test:build": "VITE_LIVING_TEST=1 npm run build && npm run homeworld:build && node scripts/build-living-test.mjs && NODE_USE_ENV_PROXY=1 node scripts/build-preview-islands.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "portal": "cd projects-portal && npm run dev",
     "bookstore": "cd bookstore && npm run dev",
@@ -16,6 +18,7 @@
     "branch": "./scripts/create-work-branch.sh"
   },
   "dependencies": {
+    "@types/three": "^0.185.4",
     "audio-recorder-polyfill": "^0.4.1",
     "capacitor-rate-app": "^4.0.3",
     "despia-native": "^1.0.14",
@@ -26,11 +29,15 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-onesignal": "^3.4.0",
-    "react-router-dom": "^7.9.6"
+    "react-router-dom": "^7.9.6",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "postcss": "8.5.6",
+    "sharp": "0.34.2",
+    "tailwindcss": "3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

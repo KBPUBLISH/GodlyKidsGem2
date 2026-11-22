@@ -27,7 +27,9 @@ import {
     Scissors,
     Globe,
     Gamepad2,
-    Users
+    Users,
+    MousePointerClick,
+    Check
 } from 'lucide-react';
 import {
     APP_BOOK_REF_VIEWPORT_WIDTH,
@@ -37,6 +39,11 @@ import {
     appStoryParagraphExtras,
     scaleAuthoredFontToCanvas,
 } from '../utils/appBookTypography';
+import {
+    sanitizeInteractiveWordIndices,
+    splitInteractiveWords,
+    toggleInteractiveWordIndex,
+} from '../utils/interactiveWords';
 
 interface TextBox {
     id: string;
@@ -52,6 +59,8 @@ interface TextBox {
     shadowColor?: string;
     fontSize: number;
     color: string;
+    /** Bible Map: word indices (whitespace-split) that must be tapped in the reader */
+    interactiveWordIndices?: number[];
 }
 
 interface VideoSequenceItem {
@@ -165,7 +174,7 @@ const PageEditor: React.FC = () => {
     // Character voices for @ autocomplete
     const [characterVoices, setCharacterVoices] = useState<Array<{ characterName: string; voiceId: string; color?: string }>>([]);
     // Kids Monthly Book: optional scene prompt for on-demand background image generation
-    const [bookType, setBookType] = useState<'standard' | 'kids_monthly'>('standard');
+    const [bookType, setBookType] = useState<'standard' | 'kids_monthly' | 'bible_map'>('standard');
     const [readerLayout, setReaderLayout] = useState<'side_swipe' | 'swipe_up'>('side_swipe');
     const [pageKind, setPageKind] = useState<'text' | 'media'>('media');
     const [videoAutoAdvance, setVideoAutoAdvance] = useState<boolean>(false);
@@ -335,7 +344,8 @@ const PageEditor: React.FC = () => {
             alignment: 'center',
             fontFamily: 'Patrick Hand', // Google Font - works on all platforms including iOS
             fontSize: 24,
-            color: '#4a3b2a'
+            color: '#4a3b2a',
+            interactiveWordIndices: [],
         };
         setTextBoxes([...textBoxes, newBox]);
         setSelectedBoxId(newBox.id);
@@ -367,7 +377,13 @@ const PageEditor: React.FC = () => {
             });
             
             if (response.data.enhancedText) {
-                updateTextBox(boxId, { text: response.data.enhancedText });
+                updateTextBox(boxId, {
+                    text: response.data.enhancedText,
+                    interactiveWordIndices: sanitizeInteractiveWordIndices(
+                        response.data.enhancedText,
+                        box.interactiveWordIndices,
+                    ),
+                });
                 alert('Text enhanced with emotion prompts!');
             }
         } catch (error) {
@@ -380,7 +396,11 @@ const PageEditor: React.FC = () => {
 
     // Handle text change in textarea with @ detection
     const handleTextChange = (boxId: string, newText: string) => {
-        updateTextBox(boxId, { text: newText });
+        const box = textBoxes.find(b => b.id === boxId);
+        updateTextBox(boxId, {
+            text: newText,
+            interactiveWordIndices: sanitizeInteractiveWordIndices(newText, box?.interactiveWordIndices),
+        });
         
         // Check for @ character to show suggestions
         const textarea = textareaRef.current;
@@ -420,7 +440,10 @@ const PageEditor: React.FC = () => {
             const before = text.substring(0, lastAtIndex);
             const after = text.substring(cursorPosition);
             const newText = `${before}@${characterName} ${after}`;
-            updateTextBox(boxId, { text: newText });
+            updateTextBox(boxId, {
+                text: newText,
+                interactiveWordIndices: sanitizeInteractiveWordIndices(newText, box.interactiveWordIndices),
+            });
         }
         
         setShowCharacterSuggestions(false);
@@ -448,7 +471,13 @@ const PageEditor: React.FC = () => {
             });
             
             if (response.data.enhancedText) {
-                updateTextBox(boxId, { text: response.data.enhancedText });
+                updateTextBox(boxId, {
+                    text: response.data.enhancedText,
+                    interactiveWordIndices: sanitizeInteractiveWordIndices(
+                        response.data.enhancedText,
+                        box.interactiveWordIndices,
+                    ),
+                });
                 alert('Text enhanced with sound effect prompts!');
             }
         } catch (error) {
@@ -574,7 +603,11 @@ const PageEditor: React.FC = () => {
                 fontFamily: box.fontFamily || 'Comic Sans MS',
                 fontSize: coerceTextBoxFontPx(box.fontSize),
                 color: box.color || '#4a3b2a',
-                width: box.width || 30
+                width: box.width || 30,
+                interactiveWordIndices: sanitizeInteractiveWordIndices(
+                    box.text || '',
+                    box.interactiveWordIndices,
+                ),
             }));
             console.log('📝 Loaded text boxes:', boxesWithIds);
             setTextBoxes(boxesWithIds);
@@ -1105,7 +1138,13 @@ const PageEditor: React.FC = () => {
                 scrollOffsetX, // Horizontal offset from center
                 scrollWidth, // Width as percentage (100 = full width)
                 soundEffectUrl, // Sound effect bubble audio
-                textBoxes: textBoxes.map(({ id, ...rest }) => rest), // Remove ID before sending
+                textBoxes: textBoxes.map(({ id, ...rest }) => ({
+                    ...rest,
+                    interactiveWordIndices: sanitizeInteractiveWordIndices(
+                        rest.text || '',
+                        rest.interactiveWordIndices,
+                    ),
+                })), // Remove ID before sending; keep valid tap-word indices
                 // Swipe Up (vertical feed) layout per-page settings
                 pageKind: readerLayout === 'swipe_up' ? pageKind : 'media',
                 videoAutoAdvance: readerLayout === 'swipe_up' && pageKind === 'media' && backgroundType === 'video' ? videoAutoAdvance : false,
@@ -1183,7 +1222,8 @@ const PageEditor: React.FC = () => {
                                 // Copy text boxes but update the text content from existing page
                                 textBoxes: textBoxes.map(({ id, ...rest }) => ({
                                     ...rest,
-                                    text: '' // Empty text - user fills in for each page
+                                    text: '', // Empty text - user fills in for each page
+                                    interactiveWordIndices: [],
                                 })),
                             };
                             
@@ -1367,10 +1407,21 @@ const PageEditor: React.FC = () => {
                         {/* Book type: controls visibility of Image prompt & Reference characters */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-gray-500">Book type:</span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${bookType === 'kids_monthly' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'}`}>
-                                {bookType === 'kids_monthly' ? 'Kids Monthly' : 'Standard'}
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                bookType === 'kids_monthly'
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : bookType === 'bible_map'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-gray-100 text-gray-600'
+                            }`}>
+                                {bookType === 'kids_monthly' ? 'Kids Monthly' : bookType === 'bible_map' ? 'Bible Map' : 'Standard'}
                             </span>
-                            {bookType !== 'kids_monthly' && bookId && (
+                            {bookType === 'bible_map' && (
+                                <p className="text-xs text-emerald-700 w-full">
+                                    Select a text box, then tap words below to mark them as tappable in the reader.
+                                </p>
+                            )}
+                            {bookType !== 'kids_monthly' && bookType !== 'bible_map' && bookId && (
                                 <p className="text-xs text-gray-500 w-full">
                                     Image prompt & reference characters available for Kids Monthly. <Link to={`/books/edit/${bookId}`} className="text-indigo-600 hover:underline">Set in Book settings →</Link>
                                 </p>
@@ -2930,6 +2981,61 @@ const PageEditor: React.FC = () => {
                             <p className="text-xs text-gray-500 text-center">
                                 Emotion: [laughs], [whispers] • SFX: [birds chirping], [thunder]
                             </p>
+
+                            {/* Bible Map: mark tappable words */}
+                            {bookType === 'bible_map' && (
+                                <div className="space-y-2 p-2 bg-emerald-50 rounded border border-emerald-200">
+                                    <div className="flex items-center gap-1.5">
+                                        <MousePointerClick className="w-3.5 h-3.5 text-emerald-700" />
+                                        <label className="text-xs font-semibold text-emerald-800">
+                                            Tappable words
+                                        </label>
+                                    </div>
+                                    <p className="text-[11px] text-emerald-700/90">
+                                        Click words to circle them. Readers must tap these before turning the page.
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {splitInteractiveWords(selectedBox.text).map((word, wIdx) => {
+                                            const selected = (selectedBox.interactiveWordIndices || []).includes(wIdx);
+                                            return (
+                                                <button
+                                                    key={`${selectedBox.id}-word-${wIdx}`}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        updateTextBox(selectedBox.id, {
+                                                            interactiveWordIndices: toggleInteractiveWordIndex(
+                                                                selectedBox.interactiveWordIndices,
+                                                                wIdx,
+                                                            ),
+                                                        })
+                                                    }
+                                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition ${
+                                                        selected
+                                                            ? 'bg-white border-emerald-500 text-emerald-900 shadow-sm'
+                                                            : 'bg-white/60 border-emerald-200 text-gray-700 hover:border-emerald-400'
+                                                    }`}
+                                                >
+                                                    {word}
+                                                    {selected && (
+                                                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500 text-white">
+                                                            <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {(selectedBox.interactiveWordIndices?.length ?? 0) > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => updateTextBox(selectedBox.id, { interactiveWordIndices: [] })}
+                                            className="text-[11px] text-emerald-700 hover:underline"
+                                        >
+                                            Clear all ({selectedBox.interactiveWordIndices!.length})
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                             
                             <div className="flex gap-1 bg-white p-1 rounded border border-gray-200">
                                 <button
@@ -3446,7 +3552,33 @@ const PageEditor: React.FC = () => {
                                 </div>
                             )}
 
-                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>{box.text}</p>
+                            <p style={{ whiteSpace: 'pre-wrap', margin: 0, ...appStoryParagraphExtras() }}>
+                                {bookType === 'bible_map' && (box.interactiveWordIndices?.length ?? 0) > 0 ? (
+                                    splitInteractiveWords(box.text).map((word, wIdx) => {
+                                        const isInteractive = (box.interactiveWordIndices || []).includes(wIdx);
+                                        return (
+                                            <span key={`${box.id}-preview-${wIdx}`}>
+                                                {isInteractive ? (
+                                                    <span
+                                                        className="inline-flex items-center gap-0.5 mx-0.5 px-1.5 py-0.5 rounded-md border-2 border-emerald-500 bg-white/90 align-baseline"
+                                                        style={{ boxShadow: '0 1px 2px rgba(16,185,129,0.25)' }}
+                                                    >
+                                                        {word}
+                                                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500 text-white">
+                                                            <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    word
+                                                )}
+                                                {' '}
+                                            </span>
+                                        );
+                                    })
+                                ) : (
+                                    box.text
+                                )}
+                            </p>
                         </div>
                         );
                     })}

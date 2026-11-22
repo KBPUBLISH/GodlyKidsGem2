@@ -7,6 +7,7 @@ import { playCountService } from '../services/playCountService';
 import { useAudio, Playlist } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import AddToPlaylistModal from '../components/features/AddToPlaylistModal';
+import AudioScrubber from '../components/audio/AudioScrubber';
 
 // CSS for the pulse/heartbeat animation synced with music
 const pulseStyles = `
@@ -106,7 +107,6 @@ const PlaylistPlayerPage: React.FC = () => {
         currentPlaylist,
         currentTrackIndex,
         isPlaying,
-        progress,
         currentTime,
         duration,
         playPlaylist,
@@ -282,51 +282,6 @@ const PlaylistPlayerPage: React.FC = () => {
                 prompt('Copy this link to share:', shareUrl);
             }
         }
-    };
-
-    const [isDragging, setIsDragging] = useState(false);
-
-    const seekToPosition = (clientX: number, element: HTMLDivElement) => {
-        const rect = element.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const percentage = Math.max(0, Math.min(1, x / rect.width));
-        seek(percentage * duration);
-    };
-
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-        seekToPosition(e.clientX, e.currentTarget);
-    };
-
-    const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        setIsDragging(true);
-        seekToPosition(e.clientX, e.currentTarget);
-    };
-
-    const handleProgressMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isDragging) {
-            seekToPosition(e.clientX, e.currentTarget);
-        }
-    };
-
-    const handleProgressMouseUp = () => {
-        setIsDragging(false);
-    };
-
-    const handleProgressTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-        setIsDragging(true);
-        const touch = e.touches[0];
-        seekToPosition(touch.clientX, e.currentTarget);
-    };
-
-    const handleProgressTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-        if (isDragging && e.touches.length > 0) {
-            const touch = e.touches[0];
-            seekToPosition(touch.clientX, e.currentTarget);
-        }
-    };
-
-    const handleProgressTouchEnd = () => {
-        setIsDragging(false);
     };
 
     const formatTime = (seconds: number) => {
@@ -578,25 +533,13 @@ const PlaylistPlayerPage: React.FC = () => {
                 ></div>
 
                 {/* Progress Slider - Draggable */}
-                <div
-                    onClick={handleSeek}
-                    onMouseDown={handleProgressMouseDown}
-                    onMouseMove={handleProgressMouseMove}
-                    onMouseUp={handleProgressMouseUp}
-                    onMouseLeave={handleProgressMouseUp}
-                    onTouchStart={handleProgressTouchStart}
-                    onTouchMove={handleProgressTouchMove}
-                    onTouchEnd={handleProgressTouchEnd}
-                    className={`relative w-full h-2 sm:h-3 bg-[#3E1F07] rounded-full mb-2 sm:mb-3 mt-2 sm:mt-4 z-40 group shadow-inner ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
-                >
-                    <div
-                        className="absolute top-0 left-0 h-full bg-[#FFD700] rounded-full"
-                        style={{ width: `${progress}%` }}
-                    ></div>
-                    <div
-                        className={`absolute top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 bg-[#f3e5ab] border-3 sm:border-4 border-[#8B4513] rounded-full shadow-lg transition-transform ${isDragging ? 'scale-125' : 'group-hover:scale-110'}`}
-                        style={{ left: `${progress}%`, transform: 'translate(-50%, -50%)' }}
-                    ></div>
+                <div className="relative w-full mb-2 sm:mb-3 mt-2 sm:mt-4 z-40">
+                    <AudioScrubber
+                        currentTime={currentTime}
+                        duration={duration}
+                        onSeek={seek}
+                        variant="full"
+                    />
                 </div>
 
                 {/* Time Labels */}

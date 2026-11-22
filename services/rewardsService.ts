@@ -1,0 +1,1093 @@
+import {ADAM_MODEL_URL,currentAdamCharacter} from '../shared/adamModel.mjs';
+/**
+ * Local persistence for Bible Map Rewards unlocks (characters, games,
+ * book templates, coin claim tracking) + selected Crew deck roster.
+ *
+ * TODO(later): sync unlocks to user API; full parrot-shop coin spend beyond
+ * grant.
+ */
+
+import { getApiBaseUrl } from './apiService';
+import { islandStoryProgressService } from './islandStoryProgressService';
+import {
+  applyCharacterAppearanceToResidents,
+  readPlayersWorldResidents,
+} from '../utils/playersWorld';
+import { scopedKey } from '../utils/profileScope';
+
+export type RewardType = 'character' | 'game' | 'coins' | 'book_template' | 'puzzle' | 'coloring';
+
+/** CMS / default pool entry (story-pack rewards config). */
+export type RewardDefinition = {
+  id: string;
+  type: RewardType;
+  title: string;
+  imageUrl?: string;
+  /** character */
+  characterName?: string;
+  /** character — optional GLB model for 3D walking on the crew deck */
+  modelUrl?: string;
+  /** character — optional ElevenLabs voice id for spoken chat replies */
+  voiceId?: string;
+  /** character — optional freeform speech-style description for AI chat */
+  persona?: string;
+  /** game — 1:1 icon + link */
+  gameUrl?: string;
+  /** game — portal Games catalog id, so the arcade can unlock that cabinet */
+  catalogGameId?: string;
+  /** book_template — Kids Monthly Book id */
+  bookId?: string;
+  bookCoverUrl?: string;
+  /** coins range (inclusive) */
+  coinMin?: number;
+  coinMax?: number;
+};
+
+export const CREW_WAVE_ANIMATION = 'waving';
+
+export type UnlockedCharacter = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  /** Absolute GLB URL — when present the character walks the deck in 3D */
+  modelUrl?: string;
+  /** ElevenLabs voice id — when present chat replies are spoken via TTS */
+  voiceId?: string;
+  /** Freeform speech-style description passed to the AI chat endpoint */
+  persona?: string;
+  /**
+   * Extra size multiplier on the ship deck. 1 is a full-height crew mate.
+   * The ship parrot stays well below that so it reads as a bird.
+   */
+  deckScale?: number;
+  /** Flies a lap around the ship and lands on a perch instead of strolling. */
+  flyer?: boolean;
+  /** Clip names this crew mate has earned (e.g. waving from a ship visit). */
+  unlockedAnimations?: string[];
+  sourceStoryId?: string;
+  unlockedAt: number;
+};
+
+export type UnlockedRewardGame = {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  url: string;
+  /** Portal Games catalog id, when the reward was picked from that list */
+  catalogGameId?: string;
+  sourceStoryId?: string;
+  unlockedAt: number;
+  /** Show NEW until dismissed / opened */
+  isNew: boolean;
+  /** Reward games are one-play-only; set when the kid launches it. */
+  playedAt?: number;
+};
+
+export type UnlockedBookTemplate = {
+  id: string;
+  bookId: string;
+  title: string;
+  coverUrl?: string;
+  sourceStoryId?: string;
+  unlockedAt: number;
+  isNew: boolean;
+};
+
+/** Result of one auto-grant sync pass (see syncNewRewardsForClaimedStories). */
+export type RewardSyncSummary = {
+  /** Claimed story ids the sync attempted to check. */
+  checkedStoryIds: string[];
+  /** Subset whose CMS pool actually fetched OK. */
+  fetchedStoryIds: string[];
+  granted: RewardDefinition[];
+  skippedAlreadyClaimed: number;
+  skippedCoins: number;
+};
+
+type RewardsStore = {
+  characters: UnlockedCharacter[];
+  games: UnlockedRewardGame[];
+  bookTemplates: UnlockedBookTemplate[];
+  /** storyId:rewardId keys already collected */
+  claimedKeys: string[];
+  /** Selected crew character ids (max 12) for sail deck */
+  selectedCrewIds: string[];
+};
+
+/**
+ * Base key. Every read/write goes through `storageKey()` so each kid profile
+ * keeps its own collected characters / crew (see utils/profileScope.ts).
+ */
+const STORAGE_KEY = 'godlykids_rewards_v1';
+const storageKey = () => scopedKey(STORAGE_KEY);
+export const MAX_CREW = 12;
+/** Legacy built-in ship parrot. No longer aboard; kept only to scrub old saves. */
+export const SHIP_PARROT_ID = 'ship-parrot';
+
+/** Fallback first crew mate if the Creation pack pool has no Adam yet. */
+export const ONBOARDING_ADAM_ID = 'onboarding-adam';
+export const ONBOARDING_ADAM_REWARD: RewardDefinition = {
+  id: ONBOARDING_ADAM_ID,
+  type: 'character',
+  title: 'Adam',
+  characterName: 'Adam',
+  modelUrl: ADAM_MODEL_URL,
+  voiceId: 'pNInz6obpgDQGcFmaJgB',
+  persona:
+    'You are Adam, the first man God made in the Garden of Eden. Talk warmly and simply with kids. You are curious, kind, and thankful to God.',
+};
+
+const EMPTY: RewardsStore = {
+  characters: [],
+  games: [],
+  bookTemplates: [],
+  claimedKeys: [],
+  selectedCrewIds: [],
+};
+
+const claimKey = (storyId: string, rewardId: string) =>
+  `${storyId.trim()}:${rewardId.trim()}`;
+
+/** Put a newly unlocked character on the ship if a roster slot is free. */
+function seatOnCrew(store: RewardsStore, characterId: string): void {
+  const id = String(characterId || '').trim();
+  if (!id) return;
+  if (!store.characters.some((c) => c.id === id)) return;
+  if (store.selectedCrewIds.includes(id)) return;
+  // Empty roster means "everyone unlocked walks". Don't collapse that to
+  // only the new character — Adam (and anyone else) would vanish.
+  if (store.selectedCrewIds.length === 0) return;
+  if (store.selectedCrewIds.length >= MAX_CREW) return;
+  store.selectedCrewIds = [...store.selectedCrewIds, id];
+}
+
+function readStore(): RewardsStore {
+  try {
+    const raw = localStorage.getItem(storageKey());
+    if (!raw) return { ...EMPTY, characters: [], games: [], bookTemplates: [], claimedKeys: [], selectedCrewIds: [] };
+    const parsed = JSON.parse(raw) as Partial<RewardsStore>;
+    return {
+      characters: Array.isArray(parsed.characters) ? parsed.characters.map(currentAdamCharacter) : [],
+      games: Array.isArray(parsed.games) ? parsed.games : [],
+      bookTemplates: Array.isArray(parsed.bookTemplates) ? parsed.bookTemplates : [],
+      claimedKeys: Array.isArray(parsed.claimedKeys) ? parsed.claimedKeys : [],
+      selectedCrewIds: Array.isArray(parsed.selectedCrewIds)
+        ? parsed.selectedCrewIds.slice(0, MAX_CREW)
+        : [],
+    };
+  } catch {
+    return { ...EMPTY, characters: [], games: [], bookTemplates: [], claimedKeys: [], selectedCrewIds: [] };
+  }
+}
+
+function writeStore(store: RewardsStore): void {
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify(store));
+  } catch (err) {
+    console.error('rewardsService: failed to save', err);
+  }
+}
+
+/** Default pool when CMS rewards.pool is empty — gold coins always available. */
+export function defaultRewardPool(storyId?: string): RewardDefinition[] {
+  const suffix = storyId ? `-${storyId.slice(-6)}` : '';
+  return [
+    {
+      id: `default-coins${suffix}`,
+      type: 'coins',
+      title: 'Gold Coins',
+      imageUrl: '/assets/ui/coin.png',
+      coinMin: 100,
+      coinMax: 1000,
+    },
+  ];
+}
+
+export function randomCoinAmount(min = 100, max = 1000): number {
+  const lo = Math.max(1, Math.floor(min));
+  const hi = Math.max(lo, Math.floor(max));
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+
+function labelForType(type: RewardType): string {
+  switch (type) {
+    case 'character':
+      return 'Character';
+    case 'game':
+      return 'New Game';
+    case 'coins':
+      return 'Gold Coins';
+    case 'book_template':
+      return 'Story Template';
+    case 'puzzle':
+      return 'Puzzle';
+    case 'coloring':
+      return 'Coloring Page';
+    default:
+      return 'Reward';
+  }
+}
+
+const PUZZLE_ICON = '/assets/images/island-activity-puzzle.png';
+const COLORING_ICON = '/assets/images/island-activity-coloring.png';
+
+type RewardStoryShape = {
+  _id?: string;
+  heroImageUrl?: string;
+  rewards?: {
+    enabled?: boolean;
+    pool?: RewardDefinition[];
+  };
+  game?: {
+    enabled?: boolean;
+    kind?: string;
+    gameId?: string;
+    webview?: { title?: string; url?: string; coverImage?: string };
+  };
+  puzzle?: {
+    enabled?: boolean;
+    type?: string;
+    imageUrl?: string;
+  };
+  coloringPageIds?: Array<
+    | string
+    | {
+        _id?: string;
+        backgroundUrl?: string;
+        files?: { background?: { url?: string } };
+      }
+  >;
+};
+
+export function storyHasPuzzleLoot(story: RewardStoryShape | null | undefined): boolean {
+  return Boolean(
+    story?.puzzle?.enabled &&
+      story.puzzle?.type === 'sliding_image' &&
+      String(story.puzzle?.imageUrl || '').trim(),
+  );
+}
+
+export function storyHasColoringLoot(story: RewardStoryShape | null | undefined): boolean {
+  return Array.isArray(story?.coloringPageIds) && story!.coloringPageIds!.length > 0;
+}
+
+function firstColoringThumb(story: RewardStoryShape | null | undefined): string {
+  const ids = story?.coloringPageIds;
+  if (!Array.isArray(ids)) return '';
+  for (const item of ids) {
+    if (!item || typeof item === 'string') continue;
+    const url =
+      String(item.backgroundUrl || '').trim() ||
+      String(item.files?.background?.url || '').trim();
+    if (url) return url;
+  }
+  return '';
+}
+
+/** Puzzle + coloring page loot when the pack already has those activities. */
+export function defaultActivityLoot(story?: RewardStoryShape | null): RewardDefinition[] {
+  const storyId = story?._id ? String(story._id) : '';
+  const suffix = storyId ? `-${storyId.slice(-6)}` : '';
+  const items: RewardDefinition[] = [];
+  if (storyHasPuzzleLoot(story)) {
+    items.push({
+      id: `default-puzzle${suffix}`,
+      type: 'puzzle',
+      title: 'Puzzle',
+      imageUrl: resolveRewardImageUrl(story?.puzzle?.imageUrl) || PUZZLE_ICON,
+    });
+  }
+  if (storyHasColoringLoot(story)) {
+    items.push({
+      id: `default-coloring${suffix}`,
+      type: 'coloring',
+      title: 'Coloring Page',
+      imageUrl: resolveRewardImageUrl(firstColoringThumb(story)) || COLORING_ICON,
+    });
+  }
+  return items;
+}
+
+function withActivityLoot(
+  pool: RewardDefinition[],
+  story?: RewardStoryShape | null,
+): RewardDefinition[] {
+  const extras = defaultActivityLoot(story);
+  const out = [...pool];
+  for (const extra of extras) {
+    if (!out.some((r) => r.type === extra.type)) out.push(extra);
+  }
+  return out;
+}
+
+/**
+ * Resolve CMS media URLs (GCS absolute or /uploads relative) so reward images
+ * load inside <img> anywhere — including the buried treasure game iframe on
+ * mobile WebViews, where the app origin differs from the API origin.
+ */
+function resolveRewardImageUrl(url: string | undefined | null): string {
+  if (!url || !String(url).trim()) return '';
+  const trimmed = String(url).trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('/assets/')
+  ) {
+    return trimmed;
+  }
+  const base = getApiBaseUrl().replace(/\/$/, '');
+  const origin = base.replace(/\/api$/, '');
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${origin}${path}`;
+}
+
+/**
+ * Normalize MapStory.rewards (or legacy game) into a pool for the loot modal.
+ * Rewards missing their own image fall back to the story pack hero image.
+ * Coin rewards always use the home-screen gold coin icon.
+ * Puzzle and coloring are added when the pack already has those activities.
+ */
+export function resolveRewardPool(
+  story: RewardStoryShape | null | undefined,
+): RewardDefinition[] {
+  const storyId = story?._id ? String(story._id) : '';
+  const heroImage = (story?.heroImageUrl || '').trim();
+  const cmsPool = Array.isArray(story?.rewards?.pool) ? story!.rewards!.pool! : [];
+  const cleaned = cmsPool
+    .filter((r) => r && r.id && r.type)
+    .map((r) => {
+      const type = r.type as RewardType;
+      const ownImage =
+        type === 'coins'
+          ? '/assets/ui/coin.png'
+          : (r.imageUrl && String(r.imageUrl).trim()) || '';
+      const fallbackImage =
+        type === 'coins'
+          ? '/assets/ui/coin.png'
+          : (type === 'game' ? (story?.game?.webview?.coverImage || '').trim() : '') ||
+            heroImage;
+      return {
+        ...r,
+        id: String(r.id),
+        type,
+        title: (r.title && String(r.title).trim()) || labelForType(type),
+        imageUrl: resolveRewardImageUrl(ownImage || fallbackImage) || undefined,
+        bookCoverUrl: resolveRewardImageUrl(r.bookCoverUrl) || undefined,
+        // 3D crew fields — modelUrl resolves relative CMS paths just like images
+        modelUrl: resolveRewardImageUrl(r.modelUrl) || undefined,
+        voiceId: (r.voiceId && String(r.voiceId).trim()) || undefined,
+        persona: (r.persona && String(r.persona).trim()) || undefined,
+        catalogGameId: (r.catalogGameId && String(r.catalogGameId).trim()) || undefined,
+      };
+    });
+
+  if (cleaned.length > 0) {
+    const withCoins = cleaned.some((r) => r.type === 'coins')
+      ? cleaned
+      : [...cleaned, ...defaultRewardPool(storyId)];
+    return withActivityLoot(withCoins, story);
+  }
+
+  const pool = defaultRewardPool(storyId);
+  const g = story?.game;
+  if (g?.enabled && g.kind === 'webview' && g.webview?.url?.trim()) {
+    pool.unshift({
+      id: `legacy-game-${storyId || 'pack'}`,
+      type: 'game',
+      title: (g.webview.title && g.webview.title.trim()) || 'New Game',
+      imageUrl:
+        resolveRewardImageUrl((g.webview.coverImage || '').trim() || heroImage) ||
+        undefined,
+      gameUrl: g.webview.url.trim(),
+    });
+  }
+  return withActivityLoot(pool, story);
+}
+
+class RewardsService {
+  getUnlockedCharacters(): UnlockedCharacter[] {
+    return readStore().characters;
+  }
+
+  /**
+   * Fetch the current CMS reward pool for each story id. Offline / fetch
+   * errors are silent — failed stories are simply absent from the result.
+   */
+  private async fetchRewardPoolsByStory(
+    storyIds: string[],
+  ): Promise<Map<string, RewardDefinition[]>> {
+    const pools = new Map<string, RewardDefinition[]>();
+    const apiRoot = getApiBaseUrl().replace(/\/$/, '');
+    await Promise.all(
+      storyIds.map(async (sid) => {
+        try {
+          // no-store: WebView/proxy HTTP caches must never serve a stale
+          // story doc here — this fetch is what propagates CMS edits
+          // (replaced GLB modelUrl, persona, voiceId…) to stored rewards.
+          const res = await fetch(
+            `${apiRoot}/bible-map/stories/${encodeURIComponent(sid)}`,
+            { cache: 'no-store' },
+          );
+          if (!res.ok) return;
+          const json = await res.json();
+          // GET /bible-map/stories/:id wraps the doc: { story, coloringPages }
+          const story = json?.story ?? json;
+          pools.set(sid, resolveRewardPool(story));
+        } catch {
+          /* offline / CMS unreachable — keep stored snapshot */
+        }
+      }),
+    );
+    return pools;
+  }
+
+  /**
+   * Story ids whose treasure the user already dug up. A story counts as
+   * claimed when EITHER a claimedKey carries its `storyId:` prefix OR the
+   * user already holds any reward item stamped with that sourceStoryId —
+   * holding Adam proves the Adam & Eve dig happened even if the claimedKeys
+   * entries are missing or shaped differently (older app builds wrote claim
+   * state through flows that have since changed).
+   */
+  getClaimedStoryIds(): string[] {
+    const store = readStore();
+    const ids = new Set<string>();
+    for (const key of store.claimedKeys) {
+      const idx = key.indexOf(':');
+      if (idx > 0) ids.add(key.slice(0, idx));
+    }
+    const held: { sourceStoryId?: string }[] = [
+      ...store.characters,
+      ...store.games,
+      ...store.bookTemplates,
+    ];
+    for (const item of held) {
+      const sid = (item.sourceStoryId || '').trim();
+      if (sid) ids.add(sid);
+    }
+    try {
+      for (const sid of islandStoryProgressService.getStoryIdsWithRewardsComplete()) {
+        if (sid) ids.add(sid);
+      }
+    } catch {
+      /* progress store unavailable */
+    }
+    return Array.from(ids);
+  }
+
+  /**
+   * Rewards added to a story pack in the CMS AFTER the kid dug its treasure
+   * would otherwise be unreachable (the REWARDS activity is one-shot). For
+   * every already-claimed story, re-fetch the current pool and auto-collect
+   * items the user doesn't hold yet, via the same collectReward path the dig
+   * uses so records look identical. Stories not yet claimed are untouched —
+   * their dig stays meaningful. New coins entries are skipped: retroactive
+   * coin grants need the UserContext balance and aren't the point of this
+   * sync; leaving them unclaimed is harmless.
+   */
+  async syncNewRewardsForClaimedStories(): Promise<RewardSyncSummary> {
+    const checkedStoryIds = this.getClaimedStoryIds();
+    const summary: RewardSyncSummary = {
+      checkedStoryIds,
+      fetchedStoryIds: [],
+      granted: [],
+      skippedAlreadyClaimed: 0,
+      skippedCoins: 0,
+    };
+    if (checkedStoryIds.length === 0) {
+      console.log('⚓ rewards sync: no claimed stories yet — nothing to check');
+      return summary;
+    }
+
+    const pools = await this.fetchRewardPoolsByStory(checkedStoryIds);
+    summary.fetchedStoryIds = Array.from(pools.keys());
+    for (const [storyId, pool] of pools) {
+      for (const def of pool) {
+        if (def.type === 'coins') {
+          summary.skippedCoins += 1;
+          continue;
+        }
+        if (this.isClaimed(storyId, def.id)) {
+          summary.skippedAlreadyClaimed += 1;
+          if (def.type === 'character') {
+            const store = readStore();
+            seatOnCrew(store, def.id);
+            writeStore(store);
+          }
+          continue;
+        }
+        const result = this.collectReward(storyId, def);
+        if (result.ok) summary.granted.push(def);
+      }
+    }
+
+    const failed = checkedStoryIds.length - summary.fetchedStoryIds.length;
+    console.log(
+      `⚓ rewards sync: fetched ${summary.fetchedStoryIds.length}/${checkedStoryIds.length} claimed stories` +
+        (failed > 0 ? ` (${failed} fetch failed — will retry next launch)` : '') +
+        `, granted ${summary.granted.length}` +
+        (summary.granted.length > 0
+          ? ` (${summary.granted
+              .map((g) => `${g.type}: ${g.characterName || g.title}`)
+              .join(', ')})`
+          : '') +
+        `, skipped ${summary.skippedAlreadyClaimed} already-claimed + ${summary.skippedCoins} coins`,
+    );
+    return summary;
+  }
+
+  /**
+   * App-start sync: auto-collect newly added CMS rewards for claimed stories
+   * and refresh stored character fields.
+   *
+   * The character-field refresh (modelUrl / voiceId / persona / name / image
+   * of already-unlocked characters) runs on EVERY startup — it's one
+   * lightweight story fetch per source story, and throttling it is exactly
+   * how a replaced GLB kept walking the deck with the old model for up to an
+   * hour after a CMS edit.
+   *
+   * Only the auto-grant pass (collecting rewards newly ADDED to a claimed
+   * story's pool) is throttled to once per hour so app reloads don't hammer
+   * the API with grant bookkeeping. The throttle timestamp is persisted only
+   * after a pass where EVERY claimed story fetched successfully, so an
+   * offline / cold-start failure retries on the next launch instead of being
+   * silently locked out for an hour. The throttle is also bypassed when the
+   * claimed-story set changed since the last successful sync (a new dig
+   * happened) or when `localStorage.debugForceRewardSync = '1'` is set.
+   */
+  async syncClaimedRewardsAtStartup(): Promise<void> {
+    // Per profile too: each kid's claimed-story set is its own sync.
+    const AT_KEY = scopedKey('godlykids_rewards_cms_sync_at');
+    const STORIES_KEY = scopedKey('godlykids_rewards_cms_sync_stories');
+    const THROTTLE_MS = 60 * 60 * 1000;
+
+    const claimedSig = this.getClaimedStoryIds().sort().join(',');
+    let force = false;
+    let lastAt = 0;
+    let lastSig = '';
+    try {
+      force = localStorage.getItem('debugForceRewardSync') === '1';
+      lastAt = parseInt(localStorage.getItem(AT_KEY) || '0', 10) || 0;
+      lastSig = localStorage.getItem(STORIES_KEY) || '';
+    } catch {}
+
+    // Never throttled: CMS edits to already-unlocked characters must reach
+    // the app on the next launch, not the next hour.
+    try {
+      await this.refreshUnlockedCharactersFromCms();
+    } catch {
+      /* offline — stored snapshot stays; crew page retries on mount */
+    }
+
+    const withinThrottle = lastAt > 0 && Date.now() - lastAt < THROTTLE_MS;
+    if (withinThrottle && !force && claimedSig === lastSig) {
+      const minutesLeft = Math.ceil((THROTTLE_MS - (Date.now() - lastAt)) / 60000);
+      console.log(
+        `⚓ rewards sync: auto-grant throttled, ${minutesLeft}min left ` +
+          `(localStorage.debugForceRewardSync='1' to force; character fields were refreshed)`,
+      );
+      return;
+    }
+
+    try {
+      const summary = await this.syncNewRewardsForClaimedStories();
+      const allFetched =
+        summary.checkedStoryIds.length > 0 &&
+        summary.fetchedStoryIds.length === summary.checkedStoryIds.length;
+      if (allFetched) {
+        localStorage.setItem(AT_KEY, String(Date.now()));
+        localStorage.setItem(STORIES_KEY, claimedSig);
+      }
+    } catch {
+      /* offline — silently retry on a future launch */
+    }
+  }
+
+  /**
+   * Unlocked characters snapshot CMS reward data at unlock time, so records
+   * stored before a CMS edit (e.g. a persona added later) go stale forever.
+   * Re-fetch each character's source story and sync name/imageUrl/modelUrl/
+   * voiceId/persona from the current CMS reward pool. Offline / fetch errors
+   * are silent — stored data stays as-is. Returns true when anything changed.
+   *
+   * Matching: primarily by reward id — but portal editors sometimes delete a
+   * reward row and re-add it, which mints a NEW id for the same character
+   * (this is exactly how Noah kept his old GLB + persona forever: the held
+   * record's id no longer existed in the pool, so the refresh skipped him).
+   * When the id lookup misses, fall back to same source story + same
+   * character name, adopt the new id, and stamp its claim key so the
+   * auto-grant pass doesn't collect the renamed reward as a duplicate. Any
+   * duplicate an earlier launch already granted under the new id is merged
+   * away (earliest unlock wins).
+   */
+  async refreshUnlockedCharactersFromCms(): Promise<boolean> {
+    const held = readStore();
+    const storyIds = Array.from(
+      new Set(
+        [
+          ...this.getClaimedStoryIds(),
+          ...held.characters.map((c) => (c.sourceStoryId || '').trim()),
+        ].filter(Boolean),
+      ),
+    );
+    if (storyIds.length === 0) return false;
+
+    const normName = (s: string | undefined | null) =>
+      (s || '').trim().toLowerCase();
+
+    const pools = await this.fetchRewardPoolsByStory(storyIds);
+    const freshById = new Map<string, RewardDefinition>();
+    const freshByStoryAndName = new Map<string, RewardDefinition>();
+    const storyOfReward = new Map<string, string>();
+    const nameHits = new Map<string, RewardDefinition[]>();
+    for (const [storyId, pool] of pools) {
+      for (const def of pool) {
+        if (def.type !== 'character') continue;
+        freshById.set(def.id, def);
+        storyOfReward.set(def.id, storyId);
+        const name = normName(def.characterName || def.title);
+        if (!name) continue;
+        freshByStoryAndName.set(`${storyId}\u0000${name}`, def);
+        const hits = nameHits.get(name) || [];
+        hits.push(def);
+        nameHits.set(name, hits);
+      }
+    }
+    if (freshById.size === 0) return false;
+
+    const storyIdFromClaim = (characterId: string) => {
+      const suffix = `:${characterId}`;
+      const key = held.claimedKeys.find((k) => k.endsWith(suffix));
+      return key ? key.slice(0, -suffix.length) : '';
+    };
+
+    const store = readStore();
+    let changed = false;
+    /** old held id → new CMS id, for records whose reward id was re-minted */
+    const idRemap = new Map<string, string>();
+    const migratedClaimKeys: string[] = [];
+
+    store.characters = store.characters.map((c) => {
+      let def = freshById.get(c.id);
+      if (!def) {
+        const sid = (c.sourceStoryId || '').trim() || storyIdFromClaim(c.id);
+        const named = normName(c.name);
+        const fallback = sid
+          ? freshByStoryAndName.get(`${sid}\u0000${named}`)
+          : named && (nameHits.get(named) || []).length === 1
+            ? nameHits.get(named)![0]
+            : undefined;
+        if (fallback) {
+          def = fallback;
+          idRemap.set(c.id, def.id);
+          const storyId = storyOfReward.get(def.id) || sid;
+          if (storyId) migratedClaimKeys.push(claimKey(storyId, def.id));
+          console.log(
+            `⚓ rewards refresh: reward id changed in CMS for "${c.name}" (${c.id} → ${def.id}) — migrating`,
+          );
+        }
+      }
+      if (!def) return c;
+      const next: UnlockedCharacter = {
+        ...c,
+        id: def.id,
+        name: def.characterName || def.title || c.name,
+        imageUrl: def.imageUrl || c.imageUrl,
+        sourceStoryId: storyOfReward.get(def.id) || c.sourceStoryId,
+        // CMS is the source of truth — a newly uploaded GLB replaces the
+        // model this kid already collected.
+        modelUrl: def.modelUrl,
+        voiceId: def.voiceId,
+        persona: def.persona,
+      };
+      if (JSON.stringify(next) !== JSON.stringify(c)) changed = true;
+      return next;
+    });
+
+    if (idRemap.size > 0) {
+      // A migrated record can collide with a duplicate the auto-grant pass
+      // already collected under the new id — keep the earliest unlock.
+      const byId = new Map<string, UnlockedCharacter>();
+      for (const c of store.characters) {
+        const held = byId.get(c.id);
+        if (!held || c.unlockedAt < held.unlockedAt) byId.set(c.id, c);
+      }
+      store.characters = Array.from(byId.values());
+
+      // Follow the rename everywhere the old id lives: crew roster picks
+      // and claim bookkeeping (so isClaimed(new id) is true from now on).
+      store.selectedCrewIds = Array.from(
+        new Set(store.selectedCrewIds.map((id) => idRemap.get(id) ?? id)),
+      ).slice(0, MAX_CREW);
+      store.claimedKeys = Array.from(
+        new Set([...store.claimedKeys, ...migratedClaimKeys]),
+      );
+    }
+
+    if (changed) writeStore(store);
+    applyCharacterAppearanceToResidents(store.characters, idRemap);
+    return changed;
+  }
+
+  getUnlockedGames(): UnlockedRewardGame[] {
+    return readStore().games;
+  }
+
+  getUnlockedBookTemplates(): UnlockedBookTemplate[] {
+    return readStore().bookTemplates;
+  }
+
+  getSelectedCrewIds(): string[] {
+    return readStore().selectedCrewIds;
+  }
+
+  isClaimed(storyId: string, rewardId: string): boolean {
+    if (!storyId?.trim() || !rewardId?.trim()) return false;
+    return readStore().claimedKeys.includes(claimKey(storyId, rewardId));
+  }
+
+  setSelectedCrewIds(ids: string[]): string[] {
+    const store = readStore();
+    const unlocked = new Set(store.characters.map((c) => c.id));
+    const next = ids.filter((id) => unlocked.has(id)).slice(0, MAX_CREW);
+    store.selectedCrewIds = next;
+    writeStore(store);
+    return next;
+  }
+
+  toggleCrewMember(characterId: string): { selectedCrewIds: string[]; error?: string } {
+    const store = readStore();
+    const exists = store.characters.some((c) => c.id === characterId);
+    if (!exists) return { selectedCrewIds: store.selectedCrewIds, error: 'Character not unlocked' };
+    const idx = store.selectedCrewIds.indexOf(characterId);
+    if (idx >= 0) {
+      store.selectedCrewIds = store.selectedCrewIds.filter((id) => id !== characterId);
+    } else {
+      if (store.selectedCrewIds.length >= MAX_CREW) {
+        return {
+          selectedCrewIds: store.selectedCrewIds,
+          error: `You can pick up to ${MAX_CREW} crew members`,
+        };
+      }
+      store.selectedCrewIds = [...store.selectedCrewIds, characterId];
+    }
+    writeStore(store);
+    return { selectedCrewIds: store.selectedCrewIds };
+  }
+
+  /** Add a clip name to every selected crew mate (and all unlocked if none selected). */
+  unlockCrewAnimation(animationId: string): string[] {
+    const id = String(animationId || '').trim();
+    if (!id) return [];
+    const store = readStore();
+    const targetIds = new Set(
+      store.selectedCrewIds.length > 0
+        ? store.selectedCrewIds
+        : store.characters.map((c) => c.id),
+    );
+    const granted: string[] = [];
+    store.characters = store.characters.map((c) => {
+      if (!targetIds.has(c.id)) return c;
+      const have = Array.isArray(c.unlockedAnimations) ? c.unlockedAnimations : [];
+      if (have.includes(id)) return c;
+      granted.push(c.id);
+      return { ...c, unlockedAnimations: [...have, id] };
+    });
+    if (granted.length > 0) writeStore(store);
+    return granted;
+  }
+
+  markGameSeen(gameId: string): void {
+    const store = readStore();
+    store.games = store.games.map((g) =>
+      g.id === gameId ? { ...g, isNew: false } : g,
+    );
+    writeStore(store);
+  }
+
+  /** Consume a reward game's single play (no-op if already played). */
+  markGamePlayed(gameId: string): void {
+    const store = readStore();
+    store.games = store.games.map((g) =>
+      g.id === gameId && !g.playedAt ? { ...g, playedAt: Date.now() } : g,
+    );
+    writeStore(store);
+  }
+
+  /**
+   * Whether this story pack's treasure chest was already dug up — i.e. any of
+   * its rewards were collected (claimedKeys are written per storyId:rewardId
+   * when the buried-treasure flow calls collectReward). Drives the island
+   * REWARDS activity check-mark / not-clickable state.
+   */
+  hasCollectedStoryRewards(storyId: string): boolean {
+    const sid = (storyId || '').trim();
+    if (!sid) return false;
+    const prefix = `${sid}:`;
+    return readStore().claimedKeys.some((k) => k.startsWith(prefix));
+  }
+
+  markBookTemplateSeen(templateId: string): void {
+    const store = readStore();
+    store.bookTemplates = store.bookTemplates.map((t) =>
+      t.id === templateId ? { ...t, isNew: false } : t,
+    );
+    writeStore(store);
+  }
+
+  /**
+   * Collect a reward from a story pack loot box.
+   * Returns coin amount when type is coins; otherwise null.
+   */
+  collectReward(
+    storyId: string,
+    def: RewardDefinition,
+  ): { ok: boolean; coinsGranted?: number; error?: string; alreadyClaimed?: boolean } {
+    if (!storyId?.trim() || !def?.id) {
+      return { ok: false, error: 'Missing story or reward' };
+    }
+    const store = readStore();
+    const key = claimKey(storyId, def.id);
+    if (store.claimedKeys.includes(key)) {
+      return { ok: false, alreadyClaimed: true, error: 'Already collected' };
+    }
+
+    const now = Date.now();
+
+    if (def.type === 'coins') {
+      const amount = randomCoinAmount(def.coinMin ?? 100, def.coinMax ?? 1000);
+      store.claimedKeys = [...store.claimedKeys, key];
+      writeStore(store);
+      return { ok: true, coinsGranted: amount };
+    }
+
+    if (def.type === 'character') {
+      const charId = def.id;
+      if (!store.characters.some((c) => c.id === charId)) {
+        store.characters = [
+          ...store.characters,
+          {
+            id: charId,
+            name: def.characterName || def.title || 'Crew Friend',
+            imageUrl: def.imageUrl || '',
+            modelUrl: def.modelUrl,
+            voiceId: def.voiceId,
+            persona: def.persona,
+            sourceStoryId: storyId,
+            unlockedAt: now,
+          },
+        ];
+      }
+      store.claimedKeys = [...store.claimedKeys, key];
+      seatOnCrew(store, charId);
+      writeStore(store);
+      return { ok: true };
+    }
+
+    if (def.type === 'game') {
+      const url = (def.gameUrl || '').trim();
+      if (!url) return { ok: false, error: 'Game URL missing' };
+      if (!store.games.some((g) => g.id === def.id)) {
+        store.games = [
+          ...store.games,
+          {
+            id: def.id,
+            name: def.title || 'New Game',
+            imageUrl: def.imageUrl,
+            url,
+            catalogGameId: (def.catalogGameId || '').trim() || undefined,
+            sourceStoryId: storyId,
+            unlockedAt: now,
+            isNew: true,
+          },
+        ];
+      }
+      store.claimedKeys = [...store.claimedKeys, key];
+      writeStore(store);
+      return { ok: true };
+    }
+
+    if (def.type === 'book_template') {
+      const bookId = (def.bookId || '').trim();
+      if (!bookId) return { ok: false, error: 'Book template id missing' };
+      if (!store.bookTemplates.some((t) => t.id === def.id || t.bookId === bookId)) {
+        store.bookTemplates = [
+          ...store.bookTemplates,
+          {
+            id: def.id,
+            bookId,
+            title: def.title || 'Dive Deeper Story',
+            coverUrl: def.bookCoverUrl || def.imageUrl,
+            sourceStoryId: storyId,
+            unlockedAt: now,
+            isNew: true,
+          },
+        ];
+      }
+      store.claimedKeys = [...store.claimedKeys, key];
+      writeStore(store);
+      return { ok: true };
+    }
+
+    if (def.type === 'puzzle' || def.type === 'coloring') {
+      store.claimedKeys = [...store.claimedKeys, key];
+      writeStore(store);
+      return { ok: true };
+    }
+
+    return { ok: false, error: 'Unknown reward type' };
+  }
+
+  /** Fill in a missing GLB so a newly unlocked character can stand on the 3D deck. */
+  ensureModelUrl(characterId: string, modelUrl: string): void {
+    if (!characterId || !modelUrl) return;
+    const store = readStore();
+    let changed = false;
+    store.characters = store.characters.map((c) => {
+      if (c.id !== characterId || c.modelUrl) return c;
+      changed = true;
+      return { ...c, modelUrl };
+    });
+    if (changed) writeStore(store);
+  }
+
+  /** Wipe loot / crew unlocks — used when a guest restarts onboarding. */
+  resetLocal(): void {
+    writeStore({
+      ...EMPTY,
+      characters: [],
+      games: [],
+      bookTemplates: [],
+      claimedKeys: [],
+      selectedCrewIds: [],
+    });
+  }
+}
+
+export const rewardsService = new RewardsService();
+
+/** Drop the retired ship parrot from saves that still carry it. */
+function purgeShipParrot(): void {
+  const store = readStore();
+  const hadCharacter = store.characters.some((c) => c.id === SHIP_PARROT_ID);
+  const hadSelection = store.selectedCrewIds.includes(SHIP_PARROT_ID);
+  if (!hadCharacter && !hadSelection) return;
+  store.characters = store.characters.filter((c) => c.id !== SHIP_PARROT_ID);
+  store.selectedCrewIds = store.selectedCrewIds.filter((id) => id !== SHIP_PARROT_ID);
+  writeStore(store);
+}
+
+/** Noah animation test from noahnewanimationg.glb, shown on the ship for a look. */
+const NOAH_HQ_MODEL = '/models/noah-new-anim.glb?v=1';
+const isNoahCharacter = (c: { name?: string }) =>
+  /^noah$/i.test(String(c.name || '').trim());
+
+/** One deck slot per friend: same reward id, or same name from the same story. */
+const crewIdentityKey = (c: UnlockedCharacter) =>
+  `${String(c.name || '').trim().toLowerCase()}\u0000${(c.sourceStoryId || '').trim()}`;
+
+/**
+ * Crew currently standing on the ship (selected roster, or everyone when
+ * none is picked). Friends already dropped off on the My Home island live
+ * there now, so they are not aboard.
+ */
+export function getOnDeckCrew(): UnlockedCharacter[] {
+  purgeShipParrot();
+  const ashore = new Set(readPlayersWorldResidents().map((r) => r.id));
+  const seenIds = new Set<string>();
+  const seenIdentity = new Set<string>();
+  const characters = rewardsService
+    .getUnlockedCharacters()
+    .filter((c) => c.id !== SHIP_PARROT_ID && !ashore.has(c.id))
+    .filter((c) => {
+      // A re-minted reward can leave the same friend twice in the save;
+      // keep the first (oldest) so he never walks the deck twice.
+      const identity = String(c.name || '').trim() ? crewIdentityKey(c) : '';
+      if (seenIds.has(c.id) || (identity && seenIdentity.has(identity))) return false;
+      seenIds.add(c.id);
+      if (identity) seenIdentity.add(identity);
+      return true;
+    });
+  const selected = rewardsService.getSelectedCrewIds();
+  const roster = selected.length
+    ? characters.filter((c) => selected.includes(c.id))
+    : characters;
+  let onDeck = roster.slice(0, MAX_CREW).map((c) =>
+    isNoahCharacter(c) ? { ...c, modelUrl: NOAH_HQ_MODEL } : c,
+  );
+  // DEV ONLY debug hook: `localStorage.debugCrewModelUrl = '/models/x.glb'`
+  const debugModelUrl =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('debugCrewModelUrl') : null;
+  if (debugModelUrl && onDeck.length > 0 && !onDeck.some((c) => c.modelUrl)) {
+    onDeck = onDeck.map((c, i) => (i === 0 ? { ...c, modelUrl: debugModelUrl } : c));
+  }
+  // The ship tour happens after Adam has moved to the island. Bring him back
+  // aboard for that visit only (utils/adamTour.ts SHIP_TOUR_PENDING_KEY).
+  if (adamAboardForShipTour()) {
+    const adam = rewardsService
+      .getUnlockedCharacters()
+      .find((c) => c.id === ONBOARDING_ADAM_ID || /^adam$/i.test(String(c.name || '').trim()));
+    if (adam && !onDeck.some((c) => c.id === adam.id)) {
+      onDeck = [adam, ...onDeck].slice(0, MAX_CREW);
+    }
+  }
+  return onDeck;
+}
+
+/** Keep in sync with SHIP_TOUR_PENDING_KEY and TOUR_KEY in utils/adamTour.ts. */
+function adamAboardForShipTour(): boolean {
+  try {
+    if (
+      localStorage.getItem('godlykids_adam_tour_v1') === '1' ||
+      sessionStorage.getItem('godlykids_adam_tour_v1') === '1'
+    ) {
+      return false;
+    }
+    return (
+      localStorage.getItem('godlykids_ship_tour_pending_v1') === '1' ||
+      sessionStorage.getItem('godlykids_ship_tour_pending_v1') === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+const isAdamCharacter = (name?: string, id?: string) =>
+  /^adam$/i.test(String(name || '').trim()) || id === ONBOARDING_ADAM_ID;
+
+/**
+ * Unlock Creation-pack characters (and Adam if the pool has none), then put
+ * Adam first on the crew roster so the onboarding ship visit shows him.
+ */
+export function ensureOnboardingAdam(
+  storyId: string,
+  pool: RewardDefinition[] = [],
+): UnlockedCharacter | null {
+  const sid = (storyId || 'onboarding-genesis').trim();
+  for (const def of pool) {
+    if (def?.type === 'character' && def.id) {
+      rewardsService.collectReward(sid, def);
+    }
+  }
+  let chars = rewardsService.getUnlockedCharacters();
+  let adam =
+    chars.find((c) => isAdamCharacter(c.name, c.id)) ||
+    chars[0] ||
+    null;
+  if (!adam) {
+    rewardsService.collectReward(sid, ONBOARDING_ADAM_REWARD);
+    chars = rewardsService.getUnlockedCharacters();
+    adam = chars.find((c) => c.id === ONBOARDING_ADAM_ID) || chars[0] || null;
+  }
+  if (adam && !adam.modelUrl) {
+    rewardsService.ensureModelUrl(adam.id, ONBOARDING_ADAM_REWARD.modelUrl || '');
+    adam =
+      rewardsService.getUnlockedCharacters().find((c) => c.id === adam!.id) || adam;
+  }
+  if (adam) {
+    const selected = rewardsService.getSelectedCrewIds().filter((id) => id !== adam!.id);
+    rewardsService.setSelectedCrewIds([adam.id, ...selected]);
+  }
+  return adam;
+}

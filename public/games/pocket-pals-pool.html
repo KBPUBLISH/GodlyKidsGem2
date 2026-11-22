@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#16233A">
+<title>Pocket Pals — Pool for Kids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#16233A;
+    --navy-2:#0E1728;
+    --felt:#17A398;
+    --felt-dk:#0E7A72;
+    --rail:#E8B87D;
+    --rail-dk:#B9814A;
+    --cream:#FFF8EE;
+    --sun:#FFD166;
+    --coral:#FF6B6B;
+    --display:"Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+    --body:"Nunito", system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% 0%, #24365A 0%, var(--navy) 45%, var(--navy-2) 100%);
+    font-family:var(--body);
+    color:var(--cream);
+    overflow:hidden;
+    touch-action:none;
+    user-select:none;
+    overscroll-behavior:none;
+  }
+  #app{
+    position:relative;
+    height:100dvh;
+    max-width:480px;
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    padding:max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
+    gap:8px;
+  }
+
+  /* ---------- HUD ---------- */
+  #hud{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    align-items:center;
+    gap:8px;
+    flex:0 0 auto;
+    /* clear the app's floating back button (top-left, ~48px + margins) */
+    padding-left:60px;
+  }
+  .chip{
+    background:rgba(255,255,255,.07);
+    border:2px solid rgba(255,255,255,.12);
+    border-radius:16px;
+    padding:6px 10px;
+    line-height:1;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
+  }
+  .chip .k{
+    font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+    color:rgba(255,248,238,.55); font-weight:900;
+  }
+  .chip .v{
+    font-family:var(--display); font-weight:800; font-size:20px; color:var(--cream);
+  }
+  .chip.right{align-items:flex-end; text-align:right;}
+  #timer{
+    font-family:var(--display);
+    font-weight:800;
+    font-size:34px;
+    letter-spacing:.02em;
+    padding:4px 16px;
+    border-radius:18px;
+    background:rgba(255,209,102,.12);
+    border:2px solid rgba(255,209,102,.35);
+    color:var(--sun);
+    font-variant-numeric:tabular-nums;
+  }
+  #timer.low{
+    color:var(--coral);
+    background:rgba(255,107,107,.14);
+    border-color:rgba(255,107,107,.45);
+    animation:tick .9s ease-in-out infinite;
+  }
+  @keyframes tick{50%{transform:scale(1.06);}}
+
+  /* ---------- Table ---------- */
+  #stage{position:relative; flex:1 1 auto; min-height:0;}
+  canvas{
+    display:block; width:100%; height:100%;
+    border-radius:26px;
+    box-shadow:0 18px 40px rgba(0,0,0,.45), 0 2px 0 rgba(255,255,255,.06) inset;
+  }
+
+  /* ---------- Footer hint + aim assist ---------- */
+  #footer{
+    flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  }
+  #hint{
+    flex:1 1 auto; text-align:center; font-size:12px; font-weight:700;
+    color:rgba(255,248,238,.45); letter-spacing:.02em; min-height:16px;
+  }
+  #assistBtn{
+    flex:0 0 auto;
+    font-family:var(--display); font-weight:800; font-size:13px; line-height:1;
+    color:#FFF8EE;
+    padding:9px 14px; border-radius:14px;
+    background-image:url('/assets/images/wheel-background-wood.png');
+    background-size:cover; background-position:center;
+    border:2px solid #6B4423;
+    box-shadow:0 3px 0 #5c3a1a, 0 4px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,230,180,.35);
+    text-shadow:0 1px 2px rgba(0,0,0,.55);
+  }
+  #assistBtn:active{transform:translateY(2px); box-shadow:0 1px 0 #5c3a1a, 0 2px 6px rgba(0,0,0,.35);}
+  #assistBtn[aria-pressed="true"]{
+    border-color:var(--sun);
+    box-shadow:0 3px 0 #5c3a1a, 0 0 0 2px rgba(255,209,102,.55), 0 4px 10px rgba(0,0,0,.35);
+    color:var(--sun);
+  }
+
+  /* ---------- Overlays ---------- */
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; text-align:center; padding:24px;
+    background:rgba(14,23,40,.86);
+    backdrop-filter:blur(6px);
+    border-radius:26px;
+    z-index:5;
+  }
+  .screen[hidden]{display:none;}
+  .screen h1{
+    font-family:var(--display); font-weight:800; margin:0;
+    font-size:clamp(34px,11vw,52px); line-height:.95; color:var(--sun);
+    text-shadow:0 4px 0 rgba(0,0,0,.35);
+  }
+  .screen h1 small{display:block; font-size:.38em; color:var(--cream); letter-spacing:.22em; margin-top:10px; font-weight:600;}
+  .screen p{margin:0; font-size:15px; font-weight:700; color:rgba(255,248,238,.75); max-width:20rem; line-height:1.5;}
+  .rules{list-style:none; padding:0; margin:0; display:grid; gap:8px; font-size:14px; font-weight:700; color:rgba(255,248,238,.8);}
+  .rules li{display:flex; gap:10px; align-items:center; justify-content:center;}
+  .dot{width:12px; height:12px; border-radius:50%; flex:0 0 auto; box-shadow:0 1px 0 rgba(255,255,255,.5) inset;}
+  button{
+    font-family:var(--display); font-weight:800; font-size:22px;
+    color:#16233A; background:var(--sun);
+    border:none; border-radius:999px; padding:14px 40px;
+    box-shadow:0 6px 0 #C99B33; cursor:pointer;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  button:active{transform:translateY(4px); box-shadow:0 2px 0 #C99B33;}
+  button:focus-visible{outline:3px solid var(--cream); outline-offset:3px;}
+  .score{font-family:var(--display); font-size:64px; font-weight:800; color:var(--cream); line-height:1;}
+  .score small{display:block; font-size:.22em; letter-spacing:.2em; color:rgba(255,248,238,.5); font-weight:600;}
+  .lvlLine{font-size:14px; font-weight:700; color:rgba(255,248,238,.6);}
+  .best{font-size:15px; font-weight:800; color:var(--sun); min-height:18px;}
+
+  /* ---------- leaderboard & score submit ---------- */
+  button.ghost{
+    font-size:17px; padding:10px 26px;
+    color:var(--cream); background:rgba(255,255,255,.10);
+    border:2px solid rgba(255,255,255,.18);
+    box-shadow:0 4px 0 rgba(0,0,0,.35);
+  }
+  button.ghost:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.35);}
+  #submitRow{display:flex; gap:8px; align-items:stretch; justify-content:center; flex-wrap:wrap;}
+  #submitRow[hidden]{display:none;}
+  #nameInput{
+    font-family:var(--display); font-size:16px; font-weight:700; color:var(--cream);
+    background:rgba(11,20,32,.75); border:2px solid rgba(255,209,102,.35);
+    border-radius:14px; padding:10px 14px; width:150px; outline:none;
+    user-select:text; -webkit-user-select:text;
+  }
+  #nameInput::placeholder{color:rgba(255,248,238,.4);}
+  #nameInput:focus{border-color:var(--sun);}
+  #lbScreen{z-index:6;}
+  #lbList{display:flex; flex-direction:column; gap:6px; width:min(300px,84vw); max-height:52vh; overflow-y:auto;}
+  .lbRow{
+    display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.07); border:2px solid rgba(255,209,102,.2);
+    border-radius:14px; padding:8px 14px; font-weight:700; font-size:15px;
+  }
+  .lbRow .rank{font-family:var(--display); font-weight:800; color:var(--sun); width:26px; flex:0 0 26px; text-align:center;}
+  .lbRow .name{flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lbRow .pts{font-family:var(--display); font-weight:800; color:#7CE7C7;}
+  .lbEmpty{color:rgba(255,248,238,.5); font-size:14px; padding:14px 0;}
+
+  /* level-up banner */
+  #banner{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; z-index:4;
+  }
+  #banner[hidden]{display:none;}
+  #banner .inner{
+    font-family:var(--display); font-weight:800; font-size:clamp(30px,10vw,46px);
+    color:var(--sun); text-shadow:0 5px 0 rgba(0,0,0,.4);
+    background:rgba(14,23,40,.55); padding:18px 30px; border-radius:24px;
+    animation:pop .45s cubic-bezier(.2,1.4,.4,1);
+    text-align:center;
+  }
+  #banner .inner span{display:block; font-size:.4em; color:var(--cream); font-weight:600; letter-spacing:.1em; margin-top:6px;}
+  @keyframes pop{from{transform:scale(.6); opacity:0;} to{transform:scale(1); opacity:1;}}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="hud">
+    <div class="chip"><span class="k">Level</span><span class="v" id="lvl">1</span></div>
+    <div id="timer">2:00</div>
+    <div class="chip right"><span class="k">Balls left</span><span class="v" id="left">4</span><span class="k" id="pottedLine">Potted 0</span></div>
+  </div>
+
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <div id="banner" hidden><div class="inner" id="bannerText"></div></div>
+
+    <div class="screen" id="startScreen">
+      <h1>Pocket Pals<small>POOL FOR KIDS</small></h1>
+      <ul class="rules">
+        <li><span class="dot" style="background:#FF6B6B"></span>Pull back from the white ball, let go to shoot</li>
+        <li><span class="dot" style="background:#FFD166"></span>Sink every colour ball before time runs out</li>
+        <li><span class="dot" style="background:#7CD3FF"></span>Each new level adds one more ball</li>
+      </ul>
+      <div class="best" id="titleBest" hidden></div>
+      <button id="startBtn">Start playing</button>
+      <button class="ghost" id="lbBtn">Leaderboard</button>
+    </div>
+
+    <div class="screen" id="overScreen" hidden>
+      <h1>Time's up!</h1>
+      <div class="score"><span id="finalScore">0</span><small>BALLS POTTED</small></div>
+      <div class="lvlLine" id="finalLvlLine">Level 1 reached</div>
+      <div class="best" id="bestLine"></div>
+      <div id="submitRow" hidden>
+        <input id="nameInput" maxlength="24" placeholder="Your name" aria-label="Your name" autocomplete="off">
+        <button class="ghost" id="submitBtn">Submit score</button>
+      </div>
+      <div class="best" id="submitMsg" hidden></div>
+      <p id="overMsg">Nice shooting. Ready for another round?</p>
+      <button id="againBtn">Play again</button>
+    </div>
+
+    <div class="screen" id="lbScreen" hidden>
+      <h1 style="font-size:clamp(26px,8vw,38px)">Leaderboard</h1>
+      <div class="best" id="lbRankLine" hidden></div>
+      <div id="lbList"></div>
+      <button class="ghost" id="lbCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <div id="footer">
+    <div id="hint">Drag back from the white ball to aim</div>
+    <button id="assistBtn" type="button" aria-pressed="false">Aim help: Off</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   Setup
+============================================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const elLvl = document.getElementById('lvl');
+const elLeft = document.getElementById('left');
+const elTimer = document.getElementById('timer');
+const elHint = document.getElementById('hint');
+const startScreen = document.getElementById('startScreen');
+const overScreen = document.getElementById('overScreen');
+const banner = document.getElementById('banner');
+const bannerText = document.getElementById('bannerText');
+const finalScore = document.getElementById('finalScore');
+const finalLvlLine = document.getElementById('finalLvlLine');
+const overMsg = document.getElementById('overMsg');
+const titleBest = document.getElementById('titleBest');
+const bestLine = document.getElementById('bestLine');
+const submitRow = document.getElementById('submitRow');
+const submitMsg = document.getElementById('submitMsg');
+const nameInput = document.getElementById('nameInput');
+const submitBtn = document.getElementById('submitBtn');
+const lbScreen = document.getElementById('lbScreen');
+const lbList = document.getElementById('lbList');
+const lbRankLine = document.getElementById('lbRankLine');
+const pottedLine = document.getElementById('pottedLine');
+
+const START_BALLS = 4;
+const LEVEL_TIME = 120;          // two minutes
+const FRICTION = 0.988;          // per 1/60s
+const STOP = 12;                 // px/s
+const CUSHION_BOUNCE = 0.86;
+const BALL_BOUNCE = 0.96;
+
+// One colour per level, cycling. All balls in a level share it.
+const PALETTE = [
+  {name:'coral',  hi:'#FF9E9E', mid:'#FF6B6B', lo:'#C43D3D'},
+  {name:'violet', hi:'#C7A6FF', mid:'#9B6BFF', lo:'#6437C4'},
+  {name:'sky',    hi:'#AEE6FF', mid:'#57C4F5', lo:'#2189BE'},
+  {name:'lime',   hi:'#D6F58C', mid:'#A8D93F', lo:'#6E9A17'},
+  {name:'mango',  hi:'#FFD79B', mid:'#FFA53C', lo:'#C2690A'},
+  {name:'bubble', hi:'#FFC2E8', mid:'#FF74C0', lo:'#C33C8C'}
+];
+
+let W=0,H=0,DPR=1;
+let RAIL=16, PL=0,PR=0,PT=0,PB=0, R=16, POCKET=24, MAXSPEED=1200, MAXDRAG=160;
+let pockets = [];
+let MIDY=0, JAWR=8, MOUTH=40, jaws=[], mouths=[];
+
+const G = {
+  phase:'idle',        // idle | ready | aiming | rolling | levelup | over
+  level:1,
+  time:LEVEL_TIME,
+  runScore:0,          // balls potted across the whole run (the score)
+  balls:[],
+  cue:null,
+  aim:null,            // {x,y} pointer position
+  assist:false,        // target-assist guide lines while aiming
+  toast:null, toastT:0,
+  bannerT:0,
+  confetti:[],
+  last:0
+};
+
+/* ---------- storage & leaderboard API ---------- */
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+// Mirrors the app's backend resolution (godlykids_api_url override, localhost dev, prod Render).
+const API_BASE = (()=>{
+  const o = lsGet('godlykids_api_url');
+  if(o) return o.replace(/\/+$/,'').replace(/\/api$/,'');
+  return location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com';
+})();
+const SCORES_URL = API_BASE + '/api/games/pocket-pals-pool/scores';
+let bestScore = parseInt(lsGet('pocketPalsBestScore')||'0',10) || 0;
+function syncTitleBest(){
+  titleBest.hidden = bestScore <= 0;
+  if(bestScore > 0) titleBest.textContent = 'Best: ' + bestScore;
+}
+// Shared name across GK games; fall back to the darts game's older key.
+function getPlayerName(){
+  return lsGet('godlykids_player_name') || lsGet('poptimez_player_name') || '';
+}
+
+/* ---------- Aim assist toggle (persisted) ---------- */
+const ASSIST_KEY = 'pocketPalsAimAssist';
+const assistBtn = document.getElementById('assistBtn');
+try{ G.assist = localStorage.getItem(ASSIST_KEY) === '1'; }catch(e){}
+function syncAssistBtn(){
+  assistBtn.textContent = 'Aim help: ' + (G.assist ? 'On' : 'Off');
+  assistBtn.setAttribute('aria-pressed', G.assist ? 'true' : 'false');
+}
+assistBtn.addEventListener('click', ()=>{
+  G.assist = !G.assist;
+  try{ localStorage.setItem(ASSIST_KEY, G.assist ? '1' : '0'); }catch(e){}
+  syncAssistBtn();
+});
+syncAssistBtn();
+
+/* ============================================================
+   Layout
+============================================================ */
+function layout(){
+  const rect = canvas.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(240, rect.width);
+  H = Math.max(320, rect.height);
+  canvas.width = Math.round(W*DPR);
+  canvas.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  RAIL = Math.max(12, Math.min(22, W*0.05));
+  PL = RAIL; PR = W-RAIL; PT = RAIL; PB = H-RAIL;
+  const pw = PR-PL, ph = PB-PT;
+  R = Math.max(7, pw/26);
+  // True pocket radius: balls sink only when their centre rolls inside it.
+  // Also used as the drawn pocket size so capture matches what kids see.
+  POCKET = R*1.75;
+  MAXSPEED = ph*2.3;
+  MAXDRAG = ph*0.28;
+
+  MIDY = (PT+PB)/2;
+  // Side pockets recessed into the rail so they don't bulge onto the felt.
+  const sideInset = R*0.55;
+  pockets = [
+    {x:PL, y:PT}, {x:PR, y:PT},
+    {x:PL-sideInset, y:MIDY}, {x:PR+sideInset, y:MIDY},
+    {x:PL, y:PB}, {x:PR, y:PB}
+  ];
+
+  // Rounded cushion jaws at every pocket mouth. Each cap is a circle recessed
+  // exactly its own radius behind the cushion face, making its collision
+  // surface tangent to the wall lane: balls rolling flush along a rail graze
+  // it with no impulse (rail shots into corners still pot), while balls
+  // crossing into the mouth strike the rounded flank and deflect toward the
+  // hole. MOUTH is the half-width of the wall opening, sized so balls aimed
+  // within ~1.5R of the pocket centre reach capture before touching a jaw.
+  JAWR = R*0.6;
+  MOUTH = R*1.5 + Math.sqrt((R+JAWR)*(R+JAWR) - JAWR*JAWR);
+  jaws = [
+    {x:PL+MOUTH, y:PT-JAWR}, {x:PL-JAWR, y:PT+MOUTH},
+    {x:PR-MOUTH, y:PT-JAWR}, {x:PR+JAWR, y:PT+MOUTH},
+    {x:PL+MOUTH, y:PB+JAWR}, {x:PL-JAWR, y:PB-MOUTH},
+    {x:PR-MOUTH, y:PB+JAWR}, {x:PR+JAWR, y:PB-MOUTH},
+    {x:PL-JAWR, y:MIDY-MOUTH}, {x:PL-JAWR, y:MIDY+MOUTH},
+    {x:PR+JAWR, y:MIDY-MOUTH}, {x:PR+JAWR, y:MIDY+MOUTH}
+  ];
+  // Dark throat recesses drawn behind each mouth so the rounded caps read
+  // as real pocket jaws (one rect per open wall segment).
+  mouths = [
+    {x:PL, y:PT-JAWR, w:MOUTH, h:JAWR}, {x:PL-JAWR, y:PT, w:JAWR, h:MOUTH},
+    {x:PR-MOUTH, y:PT-JAWR, w:MOUTH, h:JAWR}, {x:PR, y:PT, w:JAWR, h:MOUTH},
+    {x:PL, y:PB, w:MOUTH, h:JAWR}, {x:PL-JAWR, y:PB-MOUTH, w:JAWR, h:MOUTH},
+    {x:PR-MOUTH, y:PB, w:MOUTH, h:JAWR}, {x:PR, y:PB-MOUTH, w:JAWR, h:MOUTH},
+    {x:PL-JAWR, y:MIDY-MOUTH, w:JAWR, h:2*MOUTH},
+    {x:PR, y:MIDY-MOUTH, w:JAWR, h:2*MOUTH}
+  ];
+}
+
+/* ============================================================
+   Level building
+============================================================ */
+function rackPositions(n, cx, topY, d){
+  const out = []; let row = 0;
+  while(out.length < n){
+    const count = row+1;
+    const y = topY + row*d*0.88;
+    const startX = cx - (count-1)*d/2;
+    for(let i=0; i<count && out.length<n; i++) out.push({x:startX + i*d, y:y});
+    row++;
+  }
+  return out;
+}
+
+// X / cross: one ball in the middle, then the four diagonal arms fill outward.
+function xPositions(n, cx, cy, d){
+  const out = [{x:cx, y:cy}];
+  const k = Math.SQRT1_2;
+  const dirs = [[k,-k],[-k,-k],[k,k],[-k,k]];
+  let m = 1;
+  while(out.length < n){
+    for(const dir of dirs){
+      if(out.length >= n) break;
+      out.push({x:cx + dir[0]*m*d, y:cy + dir[1]*m*d});
+    }
+    m++;
+  }
+  return out;
+}
+
+// Diamond: concentric diamond rings on a grid (nearest neighbours >= d apart).
+// Exactly 4 balls form the first ring alone (a clean small diamond).
+function diamondPositions(n, cx, cy, d){
+  const out = n === 4 ? [] : [{x:cx, y:cy}];
+  let ring = 1;
+  while(out.length < n){
+    const cells = [];
+    for(let i=-ring; i<=ring; i++){
+      const j = ring - Math.abs(i);
+      cells.push([i,j]);
+      if(j !== 0) cells.push([i,-j]);
+    }
+    cells.sort((a,b)=>Math.atan2(a[1],a[0])-Math.atan2(b[1],b[0]));
+    for(const c of cells){
+      if(out.length >= n) break;
+      out.push({x:cx + c[0]*d, y:cy + c[1]*d});
+    }
+    ring++;
+  }
+  return out;
+}
+
+// Circle: a single ring (plus a centre ball when there are enough).
+function circlePositions(n, cx, cy, d){
+  const out = [];
+  let ringN = n;
+  if(n >= 8){ out.push({x:cx, y:cy}); ringN = n-1; }
+  const r = Math.max(d, d/(2*Math.sin(Math.PI/ringN)));
+  for(let i=0; i<ringN; i++){
+    const a = -Math.PI/2 + i*2*Math.PI/ringN;
+    out.push({x:cx + Math.cos(a)*r, y:cy + Math.sin(a)*r});
+  }
+  return out;
+}
+
+const SHAPES = ['triangle','x','diamond','circle'];
+const SHAPE_LABEL = {triangle:'Triangle rack', x:'X rack', diamond:'Diamond rack', circle:'Circle rack'};
+// Small counts get the shapes that suit them (an X needs 5: centre + 4 arms),
+// then the four shapes cycle from 7 balls up.
+function shapeForCount(n){
+  if(n <= 4) return 'diamond';
+  if(n === 5) return 'x';
+  if(n === 6) return 'circle';
+  return SHAPES[((n - 7) % SHAPES.length + SHAPES.length) % SHAPES.length];
+}
+
+// Keep every ball on the felt and clear of pocket mouths.
+function clampToTable(pts){
+  const m = R + 4;
+  for(const p of pts){
+    p.x = Math.min(PR-m, Math.max(PL+m, p.x));
+    p.y = Math.min(PB-m, Math.max(PT+m, p.y));
+    for(const pk of pockets){
+      const dx = p.x-pk.x, dy = p.y-pk.y;
+      const dist = Math.hypot(dx,dy);
+      const min = POCKET + R;
+      if(dist > 0 && dist < min){
+        p.x = pk.x + dx/dist*min;
+        p.y = pk.y + dy/dist*min;
+      }
+    }
+  }
+  return pts;
+}
+
+function cueHome(){
+  return {x:(PL+PR)/2, y:PB - (PB-PT)*0.16};
+}
+
+function buildLevel(){
+  const n = START_BALLS + (G.level-1);
+  const col = PALETTE[(G.level-1) % PALETTE.length];
+  const d = 2*R + 2;
+  const cx = (PL+PR)/2;
+  const topY = PT + (PB-PT)*0.12 + R;
+  const cy = PT + (PB-PT)*0.30;
+
+  const shape = shapeForCount(n);
+  let pts;
+  if(shape === 'x') pts = xPositions(n, cx, cy, d);
+  else if(shape === 'diamond') pts = diamondPositions(n, cx, cy, d);
+  else if(shape === 'circle') pts = circlePositions(n, cx, cy, d);
+  else pts = rackPositions(n, cx, topY, d);
+
+  G.balls = clampToTable(pts).map(p => ({
+    x:p.x, y:p.y, vx:0, vy:0, col:col, cue:false, potted:false
+  }));
+
+  const home = cueHome();
+  G.cue = {x:home.x, y:home.y, vx:0, vy:0, col:null, cue:true, potted:false};
+  G.balls.push(G.cue);
+
+  G.time = LEVEL_TIME;
+  G.phase = 'ready';
+  syncHUD();
+}
+
+function ballsLeft(){
+  let c=0;
+  for(const b of G.balls) if(!b.cue && !b.potted) c++;
+  return c;
+}
+
+function syncHUD(){
+  elLvl.textContent = G.level;
+  elLeft.textContent = ballsLeft();
+  pottedLine.textContent = 'Potted ' + G.runScore;
+  const t = Math.max(0, Math.ceil(G.time));
+  const m = Math.floor(t/60), s = t%60;
+  elTimer.textContent = m + ':' + String(s).padStart(2,'0');
+  elTimer.classList.toggle('low', t <= 30);
+}
+
+/* ============================================================
+   Physics
+============================================================ */
+function anyMoving(){
+  for(const b of G.balls){
+    if(!b.potted && (b.vx!==0 || b.vy!==0)) return true;
+  }
+  return false;
+}
+
+function step(dt){
+  const SUB = 5;
+  const h = dt/SUB;
+  for(let s=0; s<SUB; s++){
+    const decay = Math.pow(FRICTION, h*60);
+    for(const b of G.balls){
+      if(b.potted) continue;
+      b.x += b.vx*h; b.y += b.vy*h;
+      b.vx *= decay; b.vy *= decay;
+      if(Math.hypot(b.vx,b.vy) < STOP){ b.vx=0; b.vy=0; }
+    }
+    // pockets first so balls fall in instead of bouncing out
+    for(const b of G.balls){
+      if(b.potted) continue;
+      for(const p of pockets){
+        const dist = Math.hypot(b.x-p.x, b.y-p.y);
+        if(dist < POCKET){ pot(b, p); break; }
+      }
+    }
+    // cushions — the straight walls now stop at each pocket mouth (open for
+    // |along-rail offset| < MOUTH) and rounded jaw caps guard the openings,
+    // so near-miss balls deflect toward the hole instead of bouncing flat.
+    for(const b of G.balls){
+      if(b.potted) continue;
+      const mouthLR = (b.y-PT) < MOUTH || (PB-b.y) < MOUTH || Math.abs(b.y-MIDY) < MOUTH;
+      const mouthTB = (b.x-PL) < MOUTH || (PR-b.x) < MOUTH;
+      if(!mouthLR){
+        if(b.x - R < PL){ b.x = PL+R; b.vx = Math.abs(b.vx)*CUSHION_BOUNCE; }
+        else if(b.x + R > PR){ b.x = PR-R; b.vx = -Math.abs(b.vx)*CUSHION_BOUNCE; }
+      }
+      if(!mouthTB){
+        if(b.y - R < PT){ b.y = PT+R; b.vy = Math.abs(b.vy)*CUSHION_BOUNCE; }
+        else if(b.y + R > PB){ b.y = PB-R; b.vy = -Math.abs(b.vy)*CUSHION_BOUNCE; }
+      }
+      // rounded jaws: reflect along the cap's surface normal
+      for(const jw of jaws){
+        const dx = b.x-jw.x, dy = b.y-jw.y;
+        const dist = Math.hypot(dx,dy) || 0.01;
+        if(dist < R+JAWR){
+          const nx = dx/dist, ny = dy/dist;
+          b.x = jw.x + nx*(R+JAWR); b.y = jw.y + ny*(R+JAWR);
+          const vn = b.vx*nx + b.vy*ny;
+          if(vn < 0){
+            b.vx -= (1+CUSHION_BOUNCE)*vn*nx;
+            b.vy -= (1+CUSHION_BOUNCE)*vn*ny;
+          }
+        }
+      }
+      // backstop: nothing wanders deep into the wood through a mouth
+      const deep = POCKET*0.6;
+      if(b.x < PL-deep){ b.x = PL-deep; b.vx = Math.abs(b.vx)*CUSHION_BOUNCE; }
+      else if(b.x > PR+deep){ b.x = PR+deep; b.vx = -Math.abs(b.vx)*CUSHION_BOUNCE; }
+      if(b.y < PT-deep){ b.y = PT-deep; b.vy = Math.abs(b.vy)*CUSHION_BOUNCE; }
+      else if(b.y > PB+deep){ b.y = PB+deep; b.vy = -Math.abs(b.vy)*CUSHION_BOUNCE; }
+    }
+    // ball to ball
+    for(let i=0;i<G.balls.length;i++){
+      const a = G.balls[i]; if(a.potted) continue;
+      for(let j=i+1;j<G.balls.length;j++){
+        const b = G.balls[j]; if(b.potted) continue;
+        let dx = b.x-a.x, dy = b.y-a.y;
+        let dist = Math.hypot(dx,dy);
+        if(dist === 0){ dx = 0.01; dy = 0; dist = 0.01; }
+        if(dist < 2*R){
+          let nx = dx/dist, ny = dy/dist;
+          const rvx = b.vx-a.vx, rvy = b.vy-a.vy;
+          let vn = rvx*nx + rvy*ny;
+          if(vn < 0){
+            // Rewind both balls to the exact instant their surfaces touched,
+            // so the bounce normal matches true impact geometry. Without this
+            // the normal is taken at the penetrated position (up to a whole
+            // substep deep) and shots drift off the aim-assist line.
+            const A = rvx*rvx + rvy*rvy;
+            const B = dx*rvx + dy*rvy;
+            const C = dist*dist - 4*R*R;
+            let tau = 0;
+            if(A > 1e-9){
+              const disc = B*B - A*C;
+              if(disc > 0){
+                tau = (B + Math.sqrt(disc))/A;
+                if(!(tau > 0) || tau > h*2) tau = 0;
+              }
+            }
+            if(tau > 0){
+              a.x -= a.vx*tau; a.y -= a.vy*tau;
+              b.x -= b.vx*tau; b.y -= b.vy*tau;
+              dx = b.x-a.x; dy = b.y-a.y;
+              dist = Math.hypot(dx,dy) || 0.01;
+              nx = dx/dist; ny = dy/dist;
+              vn = (b.vx-a.vx)*nx + (b.vy-a.vy)*ny;
+            }
+            if(vn < 0){
+              const imp = -(1+BALL_BOUNCE)*vn/2;
+              a.vx -= imp*nx; a.vy -= imp*ny;
+              b.vx += imp*nx; b.vy += imp*ny;
+              if(imp > 90) sfx('click', Math.min(1, imp/MAXSPEED*3));
+            }
+            if(tau > 0){
+              // replay the rewound time with post-impact velocities
+              a.x += a.vx*tau; a.y += a.vy*tau;
+              b.x += b.vx*tau; b.y += b.vy*tau;
+              dx = b.x-a.x; dy = b.y-a.y;
+              dist = Math.hypot(dx,dy) || 0.01;
+            }
+          }
+          if(dist < 2*R){
+            const px = dx/dist, py = dy/dist;
+            const push = (2*R - dist)/2 + 0.01;
+            a.x -= px*push; a.y -= py*push;
+            b.x += px*push; b.y += py*push;
+          }
+        }
+      }
+    }
+  }
+}
+
+function pot(b, p){
+  b.potted = true; b.vx = 0; b.vy = 0;
+  b.x = p.x; b.y = p.y;
+  if(b.cue){
+    sfx('miss');
+    toast('Oops — free shot!');
+  }else{
+    G.runScore++;
+    sfx('pop');
+    burst(p.x, p.y, b.col.mid);
+    const cheers = ['Nice!','Great shot!','Wow!','Boom!','Sweet!','Yes!'];
+    toast(cheers[Math.floor(Math.random()*cheers.length)]);
+  }
+  syncHUD();
+}
+
+function resetCue(){
+  const home = cueHome();
+  let x = home.x, y = home.y;
+  for(let tries=0; tries<40; tries++){
+    let clash = false;
+    for(const b of G.balls){
+      if(b.cue || b.potted) continue;
+      if(Math.hypot(b.x-x, b.y-y) < 2*R+2){ clash = true; break; }
+    }
+    if(!clash) break;
+    x = PL + R + Math.random()*(PR-PL-2*R);
+    y = PB - R - Math.random()*(PB-PT)*0.3;
+  }
+  G.cue.x = x; G.cue.y = y; G.cue.vx = 0; G.cue.vy = 0; G.cue.potted = false;
+}
+
+/* ============================================================
+   Aiming
+============================================================ */
+function aimVector(){
+  if(!G.aim) return null;
+  const dx = G.cue.x - G.aim.x, dy = G.cue.y - G.aim.y;
+  const len = Math.hypot(dx,dy);
+  if(len < 6) return null;
+  const power = Math.min(len, MAXDRAG)/MAXDRAG;
+  return {dx:dx/len, dy:dy/len, power:power, pull:Math.min(len, MAXDRAG)};
+}
+
+function predict(dirx, diry){
+  let px = G.cue.x, py = G.cue.y;
+  const stepLen = 5;
+  for(let i=0;i<500;i++){
+    px += dirx*stepLen; py += diry*stepLen;
+    if(px-R < PL || px+R > PR || py-R < PT || py+R > PB) return {x:px, y:py};
+    for(const b of G.balls){
+      if(b.potted || b.cue) continue;
+      const dx=b.x-px, dy=b.y-py;
+      if(dx*dx+dy*dy < (2*R)*(2*R)) return {x:px, y:py};
+    }
+  }
+  return {x:px, y:py};
+}
+
+// Exact ghost-ball hit: first object ball whose surface the cue ball reaches
+// travelling along (dirx,diry). Returns {t, ball} or null.
+function firstBallHit(dirx, diry){
+  let best = null;
+  const rr = (2*R)*(2*R);
+  for(const b of G.balls){
+    if(b.potted || b.cue) continue;
+    const rx = b.x - G.cue.x, ry = b.y - G.cue.y;
+    const proj = rx*dirx + ry*diry;
+    if(proj <= 0) continue;
+    const perp2 = rx*rx + ry*ry - proj*proj;
+    if(perp2 > rr) continue;
+    const t = proj - Math.sqrt(rr - perp2);
+    if(t > 0 && (!best || t < best.t)) best = {t:t, ball:b};
+  }
+  return best;
+}
+
+// Distance from (x,y) along (dx,dy) until a ball centre reaches a cushion.
+function railDist(x, y, dx, dy){
+  let t = Infinity;
+  if(dx > 0) t = Math.min(t, (PR-R-x)/dx);
+  else if(dx < 0) t = Math.min(t, (PL+R-x)/dx);
+  if(dy > 0) t = Math.min(t, (PB-R-y)/dy);
+  else if(dy < 0) t = Math.min(t, (PT+R-y)/dy);
+  return Math.max(0, t === Infinity ? 0 : t);
+}
+
+function pointerPos(e){
+  const rect = canvas.getBoundingClientRect();
+  return {x:e.clientX-rect.left, y:e.clientY-rect.top};
+}
+
+canvas.addEventListener('pointerdown', e=>{
+  if(G.phase !== 'ready') return;
+  canvas.setPointerCapture(e.pointerId);
+  G.aim = pointerPos(e);
+  G.phase = 'aiming';
+  elHint.textContent = 'Pull further for more power — let go to shoot';
+});
+canvas.addEventListener('pointermove', e=>{
+  if(G.phase !== 'aiming') return;
+  G.aim = pointerPos(e);
+});
+function release(){
+  if(G.phase !== 'aiming') return;
+  const a = aimVector();
+  G.aim = null;
+  if(!a || a.power < 0.06){
+    G.phase = 'ready';
+    elHint.textContent = 'Drag back from the white ball to aim';
+    return;
+  }
+  const speed = MAXSPEED * (0.18 + 0.82*a.power);
+  G.cue.vx = a.dx*speed; G.cue.vy = a.dy*speed;
+  G.phase = 'rolling';
+  sfx('hit', a.power);
+  elHint.textContent = 'Go go go!';
+}
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
+
+/* ============================================================
+   Game flow
+============================================================ */
+function settle(){
+  if(ballsLeft() === 0){
+    levelUp();
+    return;
+  }
+  if(G.cue.potted) resetCue();
+  G.phase = 'ready';
+  elHint.textContent = 'Drag back from the white ball to aim';
+}
+
+function levelUp(){
+  sfx('level');
+  G.phase = 'levelup';
+  G.bannerT = 1.7;
+  const nextN = START_BALLS + G.level;
+  bannerText.innerHTML = 'Level ' + (G.level+1) + '!<span>' + nextN + ' balls · ' + SHAPE_LABEL[shapeForCount(nextN)] + ' · 2:00 on the clock</span>';
+  banner.hidden = false;
+  for(let i=0;i<40;i++) burst((PL+PR)/2 + (Math.random()-0.5)*(PR-PL)*0.7, (PT+PB)/2, PALETTE[Math.floor(Math.random()*PALETTE.length)].mid);
+}
+
+function gameOver(){
+  G.phase = 'over';
+  const score = G.runScore;
+  finalScore.textContent = score;
+  finalLvlLine.textContent = 'Level ' + G.level + ' reached';
+  const cleared = G.level-1;
+  overMsg.textContent = cleared === 0
+    ? 'That rack is tricky. Give it another go!'
+    : 'You cleared ' + cleared + (cleared === 1 ? ' rack' : ' racks') + '. Beat it next time?';
+  if(score > 0 && score > bestScore){
+    bestScore = score;
+    lsSet('pocketPalsBestScore', String(bestScore));
+    bestLine.textContent = 'New best!';
+    bestLine.style.color = '#7CE7C7';
+  }else{
+    bestLine.textContent = 'Best: ' + bestScore;
+    bestLine.style.color = 'rgba(255,248,238,.55)';
+  }
+  submitMsg.hidden = true;
+  submitRow.hidden = score <= 0;
+  if(score > 0){
+    nameInput.value = getPlayerName();
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit score';
+  }
+  overScreen.hidden = false;
+  sfx('over');
+}
+
+function startGame(){
+  G.level = 1;
+  G.runScore = 0;
+  G.confetti.length = 0;
+  startScreen.hidden = true;
+  overScreen.hidden = true;
+  banner.hidden = true;
+  layout();
+  buildLevel();
+  elHint.textContent = 'Drag back from the white ball to aim';
+}
+document.getElementById('startBtn').addEventListener('click', ()=>{ audioOn(); startGame(); });
+document.getElementById('againBtn').addEventListener('click', ()=>{ audioOn(); startGame(); });
+
+/* ============================================================
+   Leaderboard
+============================================================ */
+async function showLeaderboard(rankTxt){
+  lbRankLine.hidden = !rankTxt;
+  if(rankTxt) lbRankLine.textContent = rankTxt;
+  lbList.innerHTML = '<div class="lbEmpty">Loading\u2026</div>';
+  lbScreen.hidden = false;
+  try{
+    const res = await fetch(SCORES_URL + '/top?limit=10');
+    const data = await res.json();
+    if(!res.ok || !data.success) throw new Error('bad response');
+    lbList.innerHTML = '';
+    if(!data.scores || !data.scores.length){
+      lbList.innerHTML = '<div class="lbEmpty">No scores yet \u2014 be the first!</div>';
+      return;
+    }
+    data.scores.forEach((s,i)=>{
+      const row = document.createElement('div'); row.className = 'lbRow';
+      const rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = i+1;
+      const name = document.createElement('span'); name.className = 'name'; name.textContent = s.playerName;
+      const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = s.score;
+      row.append(rank, name, pts);
+      lbList.appendChild(row);
+    });
+  }catch(e){
+    lbList.innerHTML = '<div class="lbEmpty">Leaderboard unavailable</div>';
+  }
+}
+
+async function submitScore(){
+  const name = (nameInput.value||'').trim().slice(0,24);
+  if(!name){ nameInput.focus(); return; }
+  lsSet('godlykids_player_name', name);
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending\u2026';
+  try{
+    const res = await fetch(SCORES_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({playerName:name, score:G.runScore})
+    });
+    const data = await res.json();
+    if(!res.ok || !data.success) throw new Error('bad response');
+    submitRow.hidden = true;
+    submitMsg.hidden = false;
+    submitMsg.textContent = "You're #" + data.rank + "!";
+    submitMsg.style.color = '#7CE7C7';
+    showLeaderboard("You're #" + data.rank + "!");
+  }catch(e){
+    submitMsg.hidden = false;
+    submitMsg.textContent = 'Leaderboard unavailable';
+    submitMsg.style.color = 'rgba(255,248,238,.55)';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit score';
+  }
+}
+
+document.getElementById('lbBtn').addEventListener('click', ()=> showLeaderboard(null));
+document.getElementById('lbCloseBtn').addEventListener('click', ()=>{ lbScreen.hidden = true; });
+submitBtn.addEventListener('click', submitScore);
+nameInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') submitScore(); });
+
+/* ============================================================
+   Toast + confetti
+============================================================ */
+function toast(text){ G.toast = text; G.toastT = 1.1; }
+function burst(x,y,color){
+  for(let i=0;i<12;i++){
+    const a = Math.random()*Math.PI*2, s = 60+Math.random()*220;
+    G.confetti.push({x:x, y:y, vx:Math.cos(a)*s, vy:Math.sin(a)*s-90, life:1, col:color, r:2+Math.random()*3});
+  }
+}
+
+/* ============================================================
+   Sound
+============================================================ */
+let AC = null;
+function audioOn(){
+  if(AC) { if(AC.state === 'suspended') AC.resume(); return; }
+  try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC = null; }
+}
+function tone(freq, dur, type, vol, slideTo){
+  if(!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, AC.currentTime);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, AC.currentTime+dur);
+  g.gain.setValueAtTime(0.0001, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(vol, AC.currentTime+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(); o.stop(AC.currentTime+dur+0.02);
+}
+function sfx(kind, amt){
+  if(!AC) return;
+  amt = amt || 0.6;
+  if(kind === 'hit') tone(180+amt*160, 0.09, 'triangle', 0.14+amt*0.1);
+  else if(kind === 'click') tone(420+Math.random()*180, 0.05, 'square', 0.05+amt*0.05);
+  else if(kind === 'pop') tone(520, 0.16, 'sine', 0.16, 980);
+  else if(kind === 'miss') tone(300, 0.22, 'sawtooth', 0.09, 130);
+  else if(kind === 'level'){ [523,659,784,1047].forEach((f,i)=> setTimeout(()=>tone(f,0.22,'triangle',0.16), i*110)); }
+  else if(kind === 'over'){ [440,370,294].forEach((f,i)=> setTimeout(()=>tone(f,0.3,'sine',0.14), i*160)); }
+}
+
+/* ============================================================
+   Drawing
+============================================================ */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawTable(){
+  ctx.clearRect(0,0,W,H);
+
+  // rail
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#F2C994'); g.addColorStop(0.5,'#E8B87D'); g.addColorStop(1,'#C98F53');
+  ctx.fillStyle = g;
+  roundRect(0,0,W,H,26); ctx.fill();
+
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+  roundRect(1,1,W-2,H-2,25); ctx.stroke();
+
+  // felt
+  const fg = ctx.createRadialGradient((PL+PR)/2,(PT+PB)/2,20,(PL+PR)/2,(PT+PB)/2,Math.max(W,H)*0.7);
+  fg.addColorStop(0,'#1FBBAB'); fg.addColorStop(1,'#0E7A72');
+  ctx.fillStyle = fg;
+  roundRect(PL,PT,PR-PL,PB-PT,10); ctx.fill();
+
+  // felt inner shadow
+  ctx.save();
+  roundRect(PL,PT,PR-PL,PB-PT,10); ctx.clip();
+  ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 8;
+  roundRect(PL-4,PT-4,PR-PL+8,PB-PT+8,12); ctx.stroke();
+
+  // baulk line + spot, quiet detail
+  ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 2;
+  const bl = PB - (PB-PT)*0.24;
+  ctx.beginPath(); ctx.moveTo(PL,bl); ctx.lineTo(PR,bl); ctx.stroke();
+  ctx.restore();
+
+  // pockets
+  for(const p of pockets){
+    ctx.save();
+    roundRect(0,0,W,H,26); ctx.clip();
+    ctx.fillStyle = '#0B1420';
+    ctx.beginPath(); ctx.arc(p.x,p.y,POCKET,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x,p.y,POCKET,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // pocket mouths: dark throat recesses cut into the rail, capped by rounded
+  // wood jaws that match the physics colliders exactly
+  ctx.save();
+  roundRect(0,0,W,H,26); ctx.clip();
+  ctx.fillStyle = '#0B1420';
+  for(const m of mouths) ctx.fillRect(m.x, m.y, m.w, m.h);
+  for(const jw of jaws){
+    const jg = ctx.createRadialGradient(jw.x-JAWR*0.3, jw.y-JAWR*0.3, JAWR*0.15, jw.x, jw.y, JAWR);
+    jg.addColorStop(0,'#F0C287'); jg.addColorStop(1,'#C08A4E');
+    ctx.fillStyle = jg;
+    ctx.beginPath(); ctx.arc(jw.x, jw.y, JAWR, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(jw.x, jw.y, JAWR, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBall(b){
+  const c = b.cue
+    ? {hi:'#FFFFFF', mid:'#FFF3DE', lo:'#C9B79B'}
+    : b.col;
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(b.x+R*0.16, b.y+R*0.28, R*0.96, R*0.86, 0, 0, Math.PI*2); ctx.fill();
+
+  const g = ctx.createRadialGradient(b.x-R*0.35, b.y-R*0.4, R*0.1, b.x, b.y, R*1.05);
+  g.addColorStop(0, c.hi); g.addColorStop(0.55, c.mid); g.addColorStop(1, c.lo);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(b.x,b.y,R,0,Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,.75)';
+  ctx.beginPath(); ctx.ellipse(b.x-R*0.34, b.y-R*0.42, R*0.24, R*0.17, -0.6, 0, Math.PI*2); ctx.fill();
+}
+
+function drawAim(){
+  const a = aimVector();
+  if(!a) return;
+
+  // With assist on, use the exact ghost-ball contact point (if the cue ball
+  // reaches an object ball before a cushion); otherwise the stepped predictor.
+  let hit = G.assist ? firstBallHit(a.dx, a.dy) : null;
+  if(hit && hit.t > railDist(G.cue.x, G.cue.y, a.dx, a.dy)) hit = null;
+  const tgt = hit
+    ? {x:G.cue.x + a.dx*hit.t, y:G.cue.y + a.dy*hit.t}
+    : predict(a.dx, a.dy);
+
+  // guide line
+  ctx.save();
+  ctx.setLineDash([7, 9]);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,248,238,.55)';
+  ctx.beginPath(); ctx.moveTo(G.cue.x, G.cue.y); ctx.lineTo(tgt.x, tgt.y); ctx.stroke();
+  ctx.restore();
+
+  // ghost target
+  ctx.strokeStyle = 'rgba(255,248,238,.65)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(tgt.x, tgt.y, R, 0, Math.PI*2); ctx.stroke();
+
+  // assist: project where the struck ball will go, toward its likely pocket
+  if(hit){
+    const b = hit.ball;
+    let ox = b.x - tgt.x, oy = b.y - tgt.y;
+    const ol = Math.hypot(ox, oy);
+    if(ol > 0.001){
+      ox /= ol; oy /= ol;
+      // Claim a pocket only when the departure ray genuinely enters its
+      // mouth: the ray must pass within the capture radius of the pocket
+      // centre (small margin for restitution/rounding). Nearest one wins.
+      let bestP = null, bestProj = Infinity;
+      for(const p of pockets){
+        const px = p.x - b.x, py = p.y - b.y;
+        const proj = px*ox + py*oy;
+        if(proj <= 0) continue;
+        const perp = Math.abs(px*oy - py*ox);
+        if(perp < POCKET*0.9 && proj < bestProj){ bestProj = proj; bestP = p; }
+      }
+      const onTarget = !!bestP;
+      const ex = onTarget ? b.x + ox*bestProj : b.x + ox*railDist(b.x, b.y, ox, oy);
+      const ey = onTarget ? b.y + oy*bestProj : b.y + oy*railDist(b.x, b.y, ox, oy);
+
+      ctx.save();
+      ctx.setLineDash([5, 7]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = onTarget ? 'rgba(255,209,102,.9)' : 'rgba(255,209,102,.5)';
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.restore();
+
+      // ring the targeted ball
+      ctx.strokeStyle = 'rgba(255,209,102,.85)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(b.x, b.y, R+4, 0, Math.PI*2); ctx.stroke();
+
+      // ring the pocket it's heading to
+      if(onTarget){
+        ctx.strokeStyle = 'rgba(255,209,102,.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(bestP.x, bestP.y, POCKET+3, 0, Math.PI*2); ctx.stroke();
+      }
+    }
+  }
+
+  // cue stick behind the ball
+  const back = R + 8 + a.pull*0.55;
+  const sx = G.cue.x - a.dx*back, sy = G.cue.y - a.dy*back;
+  const ex = G.cue.x - a.dx*(back + Math.max(70, (PB-PT)*0.22));
+  const ey = G.cue.y - a.dy*(back + Math.max(70, (PB-PT)*0.22));
+  ctx.lineCap = 'round';
+  ctx.lineWidth = R*0.42;
+  ctx.strokeStyle = '#D9A45B';
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+  ctx.lineWidth = R*0.42;
+  ctx.strokeStyle = '#7FD8E8';
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx - a.dx*R*0.7, sy - a.dy*R*0.7); ctx.stroke();
+
+  // power ring
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(255,255,255,.18)';
+  ctx.beginPath(); ctx.arc(G.cue.x, G.cue.y, R+10, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = a.power > 0.75 ? '#FF6B6B' : (a.power > 0.4 ? '#FFD166' : '#7CE7C7');
+  ctx.beginPath(); ctx.arc(G.cue.x, G.cue.y, R+10, -Math.PI/2, -Math.PI/2 + a.power*Math.PI*2); ctx.stroke();
+}
+
+function drawConfetti(dt){
+  for(let i=G.confetti.length-1;i>=0;i--){
+    const p = G.confetti[i];
+    p.vy += 620*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.life -= dt*0.9;
+    if(p.life <= 0){ G.confetti.splice(i,1); continue; }
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawToast(){
+  if(!G.toast || G.toastT <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, G.toastT*1.6);
+  ctx.font = '800 ' + Math.round(R*1.5) + 'px "Baloo 2", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const y = PT + (PB-PT)*0.5 - (1.1-G.toastT)*26;
+  ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(9,20,32,.55)';
+  ctx.strokeText(G.toast, (PL+PR)/2, y);
+  ctx.fillStyle = '#FFF8EE';
+  ctx.fillText(G.toast, (PL+PR)/2, y);
+  ctx.restore();
+}
+
+/* ============================================================
+   Main loop
+============================================================ */
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(!G.last) G.last = ts;
+  let dt = (ts - G.last)/1000;
+  G.last = ts;
+  if(dt > 0.05) dt = 0.05;
+
+  if(G.phase === 'rolling'){
+    step(dt);
+    if(!anyMoving()) settle();
+  }
+
+  if(G.phase === 'ready' || G.phase === 'aiming' || G.phase === 'rolling'){
+    G.time -= dt;
+    if(G.time <= 0){ G.time = 0; syncHUD(); gameOver(); }
+    else syncHUD();
+  }
+
+  if(G.phase === 'levelup'){
+    G.bannerT -= dt;
+    if(G.bannerT <= 0){
+      banner.hidden = true;
+      G.level++;
+      buildLevel();
+      elHint.textContent = 'Drag back from the white ball to aim';
+    }
+  }
+
+  if(G.toastT > 0) G.toastT -= dt;
+
+  drawTable();
+  if(G.balls.length){
+    for(const b of G.balls) if(!b.potted && !b.cue) drawBall(b);
+    if(!G.cue.potted) drawBall(G.cue);
+    if(G.phase === 'aiming') drawAim();
+  }
+  drawConfetti(dt);
+  drawToast();
+}
+
+/* ============================================================
+   Boot
+============================================================ */
+function onResize(){
+  const oldPL=PL, oldPT=PT, oldW=(PR-PL), oldH=(PB-PT), oldR=R;
+  layout();
+  if(G.balls.length && oldW>0 && oldH>0){
+    const sx=(PR-PL)/oldW, sy=(PB-PT)/oldH, sr=R/oldR;
+    for(const b of G.balls){
+      b.x = PL + (b.x-oldPL)*sx;
+      b.y = PT + (b.y-oldPT)*sy;
+      b.vx *= sr; b.vy *= sr;
+    }
+  }
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', ()=> setTimeout(onResize, 150));
+document.addEventListener('gesturestart', e=>e.preventDefault());
+
+layout();
+drawTable();
+syncHUD();
+syncTitleBest();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

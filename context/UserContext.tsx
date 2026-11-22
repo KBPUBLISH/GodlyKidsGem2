@@ -1,7 +1,10 @@
+import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
 import { profileService, CloudProfile } from '../services/profileService';
+import { profileScopeKeyFor, removeProfileScopedKeys } from '../utils/profileScope';
+import { islandStoryProgressService } from '../services/islandStoryProgressService';
 // Removed import of KidProfile due to missing export in ../types
 
 export interface ShopItem {
@@ -52,14 +55,15 @@ const generateReferralCode = (): string => {
 
 interface UserContextType {
   coins: number;
+  getCoinBalance: () => number;
+  importFriendsCoins: (key: string, amount: number) => void;
   addCoins: (amount: number, reason?: string, source?: CoinTransaction['source']) => void;
   spendCoins: (amount: number, reason?: string) => boolean;
   coinTransactions: CoinTransaction[];
-  
   // Reading Settings
   skipPuzzles: boolean;
   setSkipPuzzles: (skip: boolean) => void;
-  
+
   // Referral System
   referralCode: string;
   redeemedCodes: string[];
@@ -157,7 +161,9 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType>({
-  coins: 500,
+  coins: STARTING_GOLD_COINS,
+  getCoinBalance: () => STARTING_GOLD_COINS,
+  importFriendsCoins: () => {},
   addCoins: () => {},
   spendCoins: () => false,
   coinTransactions: [],
@@ -229,7 +235,7 @@ const UserContext = createContext<UserContextType>({
 export const useUser = () => useContext(UserContext);
 
 const STORAGE_KEY = 'godly_kids_data_v6'; // Version bump for saves
-const FREE_KID_LIMIT = 1; // Free users can only have 1 kid profile
+const MAX_KID_PROFILES = 5;
 const DEFAULT_OWNED_ITEMS = ['f1', 'anim1', 'bg1'];
 
 /** Merge sparse cloud kid rows into local profiles without wiping shop/avatar progress. */
@@ -284,7 +290,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saved = loadState();
 
-  const [coins, setCoins] = useState(saved?.coins ?? 500); // Default 500 coins for new users
+  const [coins, setCoinsState] = useState<number>(saved?.coins ?? STARTING_GOLD_COINS);
+  // Wallet events can arrive several times before React renders again.
+  const coinsRef = useRef(coins);
+  const setCoins = useCallback((next: React.SetStateAction<number>) => {
+    const value = typeof next === 'function' ? next(coinsRef.current) : next;
+    coinsRef.current = value;
+    setCoinsState(value);
+  }, []);
+  const getCoinBalance = useCallback(() => coinsRef.current, []);
+  const [friendsWalletImports, setFriendsWalletImports] = useState<string[]>(saved?.friendsWalletImports ?? []);
+  const friendsImportsRef = useRef(new Set(friendsWalletImports));
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(saved?.coinTransactions ?? []);
   const [skipPuzzles, setSkipPuzzles] = useState<boolean>(saved?.skipPuzzles ?? false); // Default: puzzles enabled
   const [referralCode] = useState<string>(saved?.referralCode ?? generateReferralCode());
@@ -299,6 +315,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     age?: number;
     avatarSeed?: string; // Initial head selection
+    worldAvatarId?: string; // 3D adventurer; avatarSeed also preserves this choice through cloud sync.
     
     // Per-profile economy data
     coins?: number;
@@ -435,6 +452,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // IMPORTANT: Read subscription status from godlykids_premium which is set by RevenueCat
   // This is the SOURCE OF TRUTH for subscription status
   const [isSubscribed, setIsSubscribed] = useState(() => {
+    if (localStorage.getItem('godlykids_dev_force_free') === 'true') return false;
     const premiumFlag = localStorage.getItem('godlykids_premium');
     return premiumFlag === 'true';
   });
@@ -473,7 +491,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ownedItems: string[];
     unlockedVoices: string[];
     redeemedCodes: string[];
-  } | null>(saved?.parentEconomyData ?? null);
+  } | null>(saved?.parentEconomyData ?? {
+    // Older saves may not have a parent wallet yet. Never inherit the child's
+    // currently displayed coins when switching to the parent for the first time.
+    coins: saved?.currentProfileId ? STARTING_GOLD_COINS : (saved?.coins ?? STARTING_GOLD_COINS),
+    coinTransactions: saved?.currentProfileId ? [] : (saved?.coinTransactions ?? []),
+    ownedItems: saved?.currentProfileId ? ['f1', 'anim1', 'bg1'] : (saved?.ownedItems ?? ['f1', 'anim1', 'bg1']),
+    unlockedVoices: saved?.currentProfileId ? [] : (saved?.unlockedVoices ?? []),
+    redeemedCodes: saved?.currentProfileId ? [] : (saved?.redeemedCodes ?? []),
+  });
 
   // --- SYNC FULL PROFILE FROM CLOUD ON APP LOAD AND SIGN IN ---
   // This loads profile data from backend when signing in on a new device
@@ -508,7 +534,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const cloudHasData = cloudProfile.parentName || 
                             (cloudProfile.kids && cloudProfile.kids.length > 0) ||
-                            cloudProfile.coins > 500;
+                            cloudProfile.coins > STARTING_GOLD_COINS;
         
         // If this is a sign-in event (forceLoad=true) or cloud has meaningful data,
         // ALWAYS prioritize cloud data over local anonymous data
@@ -555,8 +581,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (cloudProfile.defaultVoiceId) {
             localStorage.setItem('godlykids_default_voice', cloudProfile.defaultVoiceId);
           }
-          
+
           console.log('☁️ Profile loaded from cloud successfully!');
+        }
+
+        if (cloudProfile.islandStoryProgress) {
+          islandStoryProgressService.hydrateFromCloud(
+            cloudProfile.islandStoryProgress as Parameters<
+              typeof islandStoryProgressService.hydrateFromCloud
+            >[0],
+          );
         }
         
         // Only overwrite local coins on forced sign-in sync (new device).
@@ -738,6 +772,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const stateToSave = {
       coins,
+      friendsWalletImports,
       coinTransactions,
       referralCode,
       redeemedCodes,
@@ -778,7 +813,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isSubscribed,
       skipPuzzles,
       parentAvatarData,
-      parentEconomyData
+      parentEconomyData: currentProfileId === null ? { coins, coinTransactions, ownedItems, unlockedVoices, redeemedCodes } : parentEconomyData
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     
@@ -801,6 +836,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unlockedAvatarItems: ownedItems,
         unlockedVoices,
         defaultVoiceId: defaultVoice || null,
+        islandStoryProgress: islandStoryProgressService.exportForCloud(),
       };
       if (kids.length > 0) {
         cloudPayload.kids = kids.map(k => ({
@@ -814,7 +850,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       profileService.saveToCloud(userId, cloudPayload);
     }
   }, [
-    coins, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
+    coins, friendsWalletImports, coinTransactions, referralCode, redeemedCodes, ownedItems, unlockedVoices, parentName, kids, currentProfileId, parentEconomyData,
       equippedAvatar, equippedFrame, equippedHat, equippedBody,
     equippedLeftArm, equippedRightArm, equippedLegs, equippedAnimation,
     equippedLeftArmRotation, equippedRightArmRotation, equippedLegsRotation, equippedHatRotation,
@@ -834,6 +870,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync subscription status from godlykids_premium (RevenueCat source of truth)
   useEffect(() => {
     const syncSubscription = () => {
+      if (localStorage.getItem('godlykids_dev_force_free') === 'true') {
+        if (isSubscribed) setIsSubscribed(false);
+        return;
+      }
       const premiumFlag = localStorage.getItem('godlykids_premium');
       const isPremium = premiumFlag === 'true';
       if (isPremium !== isSubscribed) {
@@ -880,36 +920,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isSubscribed]);
 
-  const addCoins = (amount: number, reason: string = 'Coins earned', source: CoinTransaction['source'] = 'other') => {
+  const addCoins = useCallback((amount: number, reason: string = 'Coins earned', source: CoinTransaction['source'] = 'other') => {
+    if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isSafeInteger(coinsRef.current + amount)) return;
     setCoins(prev => prev + amount);
-    
-    // Record transaction
-    const transaction: CoinTransaction = {
-      id: Date.now().toString(),
-      amount,
-      reason,
-      source,
-      timestamp: Date.now(),
-    };
-    setCoinTransactions(prev => [transaction, ...prev].slice(0, 100)); // Keep last 100 transactions
-  };
+    setCoinTransactions(prev => [{ id: crypto.randomUUID(), amount, reason, source, timestamp: Date.now() }, ...prev].slice(0, 100));
+  }, [setCoins]);
 
-  const spendCoins = (amount: number, reason: string = 'Purchase'): boolean => {
-    if (coins < amount) return false;
-    
+  const spendCoins = useCallback((amount: number, reason: string = 'Purchase'): boolean => {
+    if (!Number.isSafeInteger(amount) || amount < 0 || coinsRef.current < amount) return false;
+    if (amount === 0) return true;
     setCoins(prev => prev - amount);
-    
-    // Record transaction (negative amount)
-    const transaction: CoinTransaction = {
-      id: Date.now().toString(),
-      amount: -amount,
-      reason,
-      source: 'purchase',
-      timestamp: Date.now(),
-    };
-    setCoinTransactions(prev => [transaction, ...prev].slice(0, 100));
+    setCoinTransactions(prev => [{ id: crypto.randomUUID(), amount: -amount, reason, source: 'purchase' as const, timestamp: Date.now() }, ...prev].slice(0, 100));
     return true;
-  };
+  }, [setCoins]);
+
+  const importFriendsCoins = useCallback((key: string, amount: number) => {
+    if (friendsImportsRef.current.has(key) || !Number.isSafeInteger(amount) || amount < 0) return;
+    friendsImportsRef.current.add(key);
+    // Persist the receipt alongside the wallet, so reopening cannot award it twice.
+    setFriendsWalletImports([...friendsImportsRef.current]);
+    addCoins(amount, 'Existing Friends World earnings', 'game');
+  }, [addCoins]);
 
   const redeemCode = (code: string): { success: boolean; message: string } => {
     const normalizedCode = code.trim().toUpperCase();
@@ -939,10 +970,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addKid = (kid: KidProfile) => {
-    // Check subscription limit - free users can only have 1 kid
-    if (!isSubscribed && kids.length >= FREE_KID_LIMIT) {
-      console.warn('🚫 Free users limited to', FREE_KID_LIMIT, 'kid profile(s). Upgrade to premium for unlimited profiles.');
-      return; // Don't add the kid
+    if (kids.length >= MAX_KID_PROFILES) {
+      console.warn('Maximum of', MAX_KID_PROFILES, 'kid profiles.');
+      return;
     }
     
     // Kids inherit parent's unlocked voices when created
@@ -957,10 +987,51 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const removeKid = (id: string) => {
+    const removingActive = currentProfileId === id;
     setKids(prev => prev.filter(k => k.id !== id));
-    // If we're removing the currently active profile, switch back to parent
-    if (currentProfileId === id) {
+    // The deleted kid's island (save, residents, crew, onboarding) goes with them.
+    // Scoped keys only — auth, coins, and every other kid stay put.
+    try {
+      removeProfileScopedKeys(profileScopeKeyFor(id));
+    } catch {
+      /* storage unavailable */
+    }
+    // Leave the deleted kid before the debounced wallet save runs, or their
+    // coins would be written onto the parent. Other kids are not switched to.
+    if (removingActive) {
       setCurrentProfileId(null);
+      if (parentEconomyData) {
+        setCoins(parentEconomyData.coins);
+        setCoinTransactions(parentEconomyData.coinTransactions);
+        setOwnedItems(parentEconomyData.ownedItems);
+        setUnlockedVoices(parentEconomyData.unlockedVoices);
+        setRedeemedCodes(parentEconomyData.redeemedCodes);
+      }
+      if (parentAvatarData) {
+        setEquippedAvatar(parentAvatarData.avatar);
+        setEquippedFrame(parentAvatarData.frame);
+        setEquippedHat(parentAvatarData.hat);
+        setEquippedBody(parentAvatarData.body);
+        setEquippedLeftArm(parentAvatarData.leftArm);
+        setEquippedRightArm(parentAvatarData.rightArm);
+        setEquippedLegs(parentAvatarData.legs);
+        setEquippedAnimation(parentAvatarData.animation);
+        setEquippedLeftArmRotation(parentAvatarData.leftArmRotation);
+        setEquippedRightArmRotation(parentAvatarData.rightArmRotation);
+        setEquippedLegsRotation(parentAvatarData.legsRotation);
+        setLeftArmOffset(parentAvatarData.leftArmOffset);
+        setRightArmOffset(parentAvatarData.rightArmOffset);
+        setLegsOffset(parentAvatarData.legsOffset);
+        setHeadOffset(parentAvatarData.headOffset);
+        setBodyOffset(parentAvatarData.bodyOffset);
+        setHatOffset(parentAvatarData.hatOffset);
+        setLeftArmScale(parentAvatarData.leftArmScale);
+        setRightArmScale(parentAvatarData.rightArmScale);
+        setLegsScale(parentAvatarData.legsScale);
+        setHeadScale(parentAvatarData.headScale);
+        setBodyScale(parentAvatarData.bodyScale);
+        setHatScale(parentAvatarData.hatScale);
+      }
     }
   };
 
@@ -1088,7 +1159,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Helper to get current economy state
   const getCurrentEconomyState = () => ({
-    coins,
+    coins: getCoinBalance(),
     coinTransactions: [...coinTransactions],
     ownedItems: [...ownedItems],
     unlockedVoices: [...unlockedVoices],
@@ -1254,6 +1325,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveCurrentProfileEconomy,
   ]);
 
+  // profileService is what the per-profile storage scopes (island, crew, story
+  // progress) read; keep it mirroring the active profile however it changed
+  // (boot default, switch, delete of the active kid, reset).
+  useEffect(() => {
+    if (profileService.getCurrentProfileId() !== currentProfileId) {
+      profileService.setCurrentProfile(currentProfileId);
+    }
+  }, [currentProfileId]);
+
   const switchProfile = (profileId: string | null) => {
     // Save current profile's data before switching
     saveCurrentProfileAvatar();
@@ -1275,7 +1355,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (kid) {
         // Restore kid's economy data (or defaults for new profiles)
         applyEconomyState({
-          coins: kid.coins ?? 500, // New kids start with 500 coins
+          coins: kid.coins ?? STARTING_GOLD_COINS, // New kids start with 10 coins
           coinTransactions: kid.coinTransactions ?? [],
           ownedItems: kid.ownedItems ?? ['f1', 'anim1', 'bg1'],
           unlockedVoices: kid.unlockedVoices ?? [],
@@ -1546,6 +1626,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const subscribe = () => {
     // Update both localStorage (source of truth) and React state
+    localStorage.removeItem('godlykids_dev_force_free');
     localStorage.setItem('godlykids_premium', 'true');
     setIsSubscribed(true);
     // Dispatch event so other components can react
@@ -1591,7 +1672,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('gk_last_hidden_ts');
     
     // Reset all in-memory state to defaults
-    setCoins(500); // New users start with 500 gold coins
+    setCoins(STARTING_GOLD_COINS); // New users start with 10 gold coins
     setCoinTransactions([]);
     setRedeemedCodes([]);
     setOwnedItems(['f1', 'anim1', 'bg1']);
@@ -1646,6 +1727,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coins,
       addCoins,
       spendCoins,
+      getCoinBalance,
+      importFriendsCoins,
       coinTransactions,
       skipPuzzles,
       setSkipPuzzles,

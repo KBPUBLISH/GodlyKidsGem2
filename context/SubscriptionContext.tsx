@@ -26,7 +26,7 @@ interface SubscriptionContextType {
   getPremiumStatus: () => Promise<boolean>;
   /** Check premium via backend only (no localStorage). Use for Create Your Story gate so stale cache cannot bypass paywall. */
   getPremiumStatusStrict: () => Promise<boolean>;
-  purchase: (plan: 'annual' | 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
+  purchase: (plan: 'annual' | 'monthly') => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; error?: string }>;
   startReverseTrial: (options?: { trialDurationHours?: number }) => Promise<{ success: boolean; error?: string }>;
   checkReverseTrialStatus: () => Promise<ReverseTrialStatus>;
@@ -115,6 +115,11 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   // Check subscription status from localStorage and backend (NO automatic restore - that shows UI)
   const checkSubscriptionFromAllSources = useCallback(async (options?: { skipLocalCache?: boolean }): Promise<boolean> => {
     console.log('🔍 Checking subscription status...');
+
+    if (localStorage.getItem('godlykids_dev_force_free') === 'true') {
+      console.log('🧪 Dev force-free — skipping premium checks');
+      return false;
+    }
     
     // 1. Check localStorage first (fastest) — skipped after login so web Stripe subs are re-fetched by email
     if (!options?.skipLocalCache) {
@@ -199,6 +204,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
     // When auth token changes (login/logout), re-check subscription automatically.
     const handleAuthChange = async () => {
+      if (RevenueCatService.isPurchaseInProgress()) return; // purchase() owns confirmation
       try {
         const hasPremium = await checkSubscriptionFromAllSources({ skipLocalCache: true });
         setIsPremium(hasPremium);
@@ -236,6 +242,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   // Check reverse trial status on mount and when localStorage indicates we have one
   useEffect(() => {
     const checkTrialOnMount = async () => {
+      if (localStorage.getItem('godlykids_dev_force_free') === 'true') return;
+
       // Check if we might have a reverse trial
       const hasLocalTrial = localStorage.getItem('godlykids_reverse_trial') === 'true';
       const localTrialEndDate = localStorage.getItem('godlykids_reverse_trial_end');
@@ -285,7 +293,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
                 };
                 setReverseTrial(status);
                 
-                if (status.isActive) {
+                if (status.isActive && localStorage.getItem('godlykids_dev_force_free') !== 'true') {
                   localStorage.setItem('godlykids_reverse_trial', 'true');
                   localStorage.setItem('godlykids_premium', 'true');
                   if (trialEndDate) {
@@ -313,6 +321,13 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isInitialized) {
+        // The Play/App Store payment sheet hides the webview; when it comes back we
+        // must not read a stale "premium" record as a completed purchase. purchase()
+        // polls with ?since= and resolves on its own.
+        if (RevenueCatService.isPurchaseInProgress()) {
+          console.log('📱 App became visible during purchase - skipping subscription re-check');
+          return;
+        }
         console.log('📱 App became visible - checking subscription status...');
         const hasPremium = await checkSubscriptionFromAllSources();
         if (hasPremium !== isPremium) {
@@ -373,7 +388,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   }, []);
 
   // Purchase a subscription
-  const purchase = useCallback(async (plan: 'annual' | 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
+  const purchase = useCallback(async (plan: 'annual' | 'monthly'): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     
     try {
@@ -440,7 +455,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
               setReverseTrial(status);
               
               // If reverse trial is active, grant premium access locally
-              if (status.isActive) {
+              if (status.isActive && localStorage.getItem('godlykids_dev_force_free') !== 'true') {
                 localStorage.setItem('godlykids_reverse_trial', 'true');
                 localStorage.setItem('godlykids_premium', 'true');
                 setIsPremium(true);

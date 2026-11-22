@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, Mail, AlertCircle, Sparkles } from 'lucide-react';
 
 const Login: React.FC = () => {
+  const location = useLocation();
+  const sessionExpired = (location.state as { sessionExpired?: boolean } | null)?.sessionExpired;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(sessionExpired ? 'Your session expired. Please sign in again.' : '');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();

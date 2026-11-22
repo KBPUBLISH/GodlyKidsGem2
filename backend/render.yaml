@@ -12,6 +12,10 @@ services:
         value: production
       - key: MONGO_URI
         sync: false  # Set this in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set this in Render dashboard (openssl rand -hex 32); server won't boot without it
+      - key: ADMIN_EMAILS
+        sync: false  # Set this in Render dashboard (comma-separated admin addresses); no default, unset = no admins
       - key: PORT
         value: 5001
       - key: ELEVENLABS_API_KEY
@@ -20,6 +24,8 @@ services:
         sync: false  # Set this in Render dashboard
       - key: GOOGLE_APPLICATION_CREDENTIALS
         sync: false  # Set this in Render dashboard or use service account JSON
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Set this in Render dashboard
 
 
 

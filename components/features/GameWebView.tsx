@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { X, ArrowLeft, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAudio } from '../../context/AudioContext';
 import { usePreventPullToRefresh } from '../../hooks/usePreventPullToRefresh';
+import {
+  ensureFamobiCdnSrc,
+  installParentWindowOpenGuard,
+  isFamobiCdnUrl,
+  isFamobiGameUrl,
+  kidSafeIframeProps,
+  resolveFamobiEmbedUrl,
+  toKidSafeGameUrl,
+} from '../../utils/kidSafeGameIframe';
 
 interface GameWebViewProps {
   url: string;
@@ -15,11 +23,32 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [embedUrl, setEmbedUrl] = useState(() => toKidSafeGameUrl(url));
+  const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const { currentPlaylist } = useAudio();
-  
+  const isFamobi = isFamobiGameUrl(url);
+
   // Check if MiniPlayer is visible (playlist is playing)
   const hasMiniPlayer = !!currentPlaylist;
+
+  useEffect(() => {
+    if (!isFamobi) return;
+    return installParentWindowOpenGuard();
+  }, [isFamobi]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setEmbedUrl(ensureFamobiCdnSrc(toKidSafeGameUrl(url)));
+    if (isFamobiGameUrl(url)) {
+      resolveFamobiEmbedUrl(url, ac.signal).then((resolved) => {
+        if (!ac.signal.aborted && resolved) {
+          setEmbedUrl(ensureFamobiCdnSrc(resolved));
+        }
+      });
+    }
+    return () => ac.abort();
+  }, [url, iframeKey]);
 
   // Unlock audio session before game loads - helps iframe inherit unlocked state
   useEffect(() => {
@@ -30,7 +59,7 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
         if (AudioCtx) {
           const ctx = new AudioCtx();
           await ctx.resume();
-          
+
           // Play a brief silent tone to fully unlock
           const oscillator = ctx.createOscillator();
           const gainNode = ctx.createGain();
@@ -39,7 +68,7 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
           gainNode.connect(ctx.destination);
           oscillator.start();
           oscillator.stop(ctx.currentTime + 0.1);
-          
+
           console.log('🎮 Game audio context unlocked');
         }
         setAudioUnlocked(true);
@@ -48,7 +77,7 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
         setAudioUnlocked(true);
       }
     };
-    
+
     unlockAudio();
   }, []);
 
@@ -56,7 +85,7 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
     // Reset loading state when URL changes
     setLoading(true);
     setError(null);
-  }, [url]);
+  }, [url, iframeKey]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -69,12 +98,15 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
   };
 
   const handleRefresh = () => {
-    if (iframeRef.current) {
-      setLoading(true);
-      setError(null);
-      iframeRef.current.src = iframeRef.current.src;
-    }
+    setLoading(true);
+    setError(null);
+    setEmbedUrl(toKidSafeGameUrl(url));
+    setIframeKey((k) => k + 1);
   };
+
+  const iframeProps = kidSafeIframeProps(title, {
+    famobiCdn: isFamobi && isFamobiCdnUrl(embedUrl),
+  });
 
   return (
     <div
@@ -139,15 +171,14 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
       {/* WebView iframe - only load after audio is unlocked */}
       {audioUnlocked && (
         <iframe
+          key={iframeKey}
           ref={iframeRef}
-          src={url}
+          src={embedUrl}
           className="flex-1 w-full min-h-0 border-0 overscroll-none"
           style={{ overscrollBehavior: 'none' }}
           onLoad={handleLoad}
           onError={handleError}
-          allow="fullscreen; autoplay; encrypted-media; picture-in-picture; speaker; microphone; web-share"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-presentation"
-          title={title}
+          {...iframeProps}
         />
       )}
     </div>
@@ -155,7 +186,3 @@ const GameWebView: React.FC<GameWebViewProps> = ({ url, title, onClose }) => {
 };
 
 export default GameWebView;
-
-
-
-

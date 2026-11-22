@@ -418,6 +418,10 @@ const generateFilePath = (bookId, type, filename, pageNumber = null) => {
         return `karaoke/${songId}/${type}/${finalFilename}`;
     }
 
+    if (type === 'creator-post' || bookId === 'creator-posts') {
+        return `creators/posts/${finalFilename}`;
+    }
+
     return `books/${bookId}/${type}/${finalFilename}`;
 };
 
@@ -447,8 +451,8 @@ router.post('/image', upload.single('file'), async (req, res) => {
         // Check if using organized structure
         if (bookId && type) {
             // Validate type
-            if (!['cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence'].includes(type)) {
-                return res.status(400).json({ message: 'type must be one of: cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence' });
+            if (!['cover', 'episode-cover', 'pages', 'scroll', 'audio', 'game-cover', 'game-logo', 'thumbnail', 'character', 'image-sequence', 'map-art', 'sail-art', 'puzzle-image', 'profile', 'creator-post'].includes(type)) {
+                return res.status(400).json({ message: 'type must be one of: cover, episode-cover, pages, scroll, audio, game-cover, game-logo, thumbnail, character, image-sequence, map-art, sail-art, puzzle-image, profile, creator-post' });
             }
             
             // Special handling for lessons
@@ -458,6 +462,12 @@ router.post('/image', upload.single('file'), async (req, res) => {
             } else if (bookId === 'karaoke' || bookId.startsWith('karaoke/')) {
                 const songId = req.query.songId || bookId.replace('karaoke/', '').replace('karaoke', '') || 'temp';
                 filePath = generateFilePath(`karaoke/${songId}`, type, req.file.originalname);
+            } else if (bookId === 'bible-map' || String(bookId).startsWith('bible-map/')) {
+                const islandKey =
+                    req.query.islandId ||
+                    String(bookId).replace(/^bible-map\/?/, '') ||
+                    'temp';
+                filePath = generateFilePath(`bible-map/${islandKey}`, type, req.file.originalname);
             } else {
                 // Generate organized file path for books
                 filePath = generateFilePath(bookId, type, req.file.originalname, pageNumber);
@@ -475,8 +485,10 @@ router.post('/image', upload.single('file'), async (req, res) => {
         }
 
         // Optimize cover art: convert to WebP and generate a small thumbnail
-        // variant. Both book covers and playlist/audiobook covers use type=cover.
-        if (type === 'cover' && req.file.mimetype?.startsWith('image/')) {
+        // variant. Both book covers and playlist/audiobook covers use type=cover;
+        // per-episode art in a Godly Hub series uses type=episode-cover, and is
+        // cover art by every other measure.
+        if ((type === 'cover' || type === 'episode-cover' || type === 'creator-post') && req.file.mimetype?.startsWith('image/')) {
             try {
                 const variants = await processCoverImage(req.file.buffer, filePath);
                 const fullVariant = variants.find((v) => v.variant === 'full');
@@ -713,6 +725,18 @@ router.post('/video', (req, res, next) => {
                     console.error('Error generating file path:', pathError);
                     throw pathError;
                 }
+            } else if (bookId === 'bible-map' || String(bookId).startsWith('bible-map/')) {
+                const islandKey =
+                    req.query.islandId ||
+                    String(bookId).replace(/^bible-map\/?/, '') ||
+                    'temp';
+                if (!['intro', 'scene-bg'].includes(type)) {
+                    return res.status(400).json({
+                        message: 'For bible-map, type must be one of: intro, scene-bg',
+                    });
+                }
+                filePath = generateFilePath(`bible-map/${islandKey}`, type, req.file.originalname);
+                console.log('Generated file path for bible-map island video:', filePath);
             } else {
                 // Validate type for books
                 if (!['pages', 'scroll', 'video', 'sequence', 'intro'].includes(type)) {
@@ -735,7 +759,8 @@ router.post('/video', (req, res, next) => {
 
         // Determine if we should compress this video
         // Compress sequence videos and page background videos (not lesson videos which may need full quality)
-        const shouldCompress = type === 'sequence' || type === 'pages' || type === 'video';
+        // Compress looping scene backgrounds; leave island/book intros at source quality
+        const shouldCompress = type === 'sequence' || type === 'pages' || type === 'video' || type === 'scene-bg';
         let videoBuffer = req.file.buffer;
         let compressionInfo = null;
         

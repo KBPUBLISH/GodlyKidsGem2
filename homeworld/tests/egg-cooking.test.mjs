@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {initialState,applyAction,GameStore} from '../src/core.mjs';
+import {workPoint} from '../src/building.mjs';
+import {canCook,hungerFor} from '../src/nutrition.mjs';
+import {farmFresh,farmUse} from '../src/living-farm-rules.mjs';
+const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
+function setup(){const s=initialState(world);s.clock.paused=true;s.activeCharacter='you';s.characters.you={name:'Explorer',energy:20,hunger:20,hungerAt:480};const fire={id:'egg-fire',kind:'campfire',key:'67:73',rotation:0,status:'complete',baseHeight:0,startedAt:0,paidMaterials:{pine_wood:5,stone:3},fuelUntil:1000};s.buildings=[fire];s.player=workPoint(world,fire);s.livingFarm=farmFresh();s.livingFarm.bag.egg=2;return s;}
+const cook={type:'cook',recipe:'fry_egg',fireId:'egg-fire',actionId:'egg-once'};
+test('coop eggs cook once into an edible snack, then restore energy and hunger',()=>{const s=setup();assert.equal(canCook(s,'fry_egg'),true);assert.equal(farmUse(s.livingFarm,'egg','eat'),s.livingFarm);const n=applyAction(s,cook,world,480);assert.equal(n.livingFarm.bag.egg,1);assert.equal(s.livingFarm.bag.egg,2);assert.equal(n.inventory.cooked_egg,1);assert.equal(applyAction(n,cook,world,480),n);const eaten=applyAction(n,{type:'eat',item:'cooked_egg',actionId:'eat-egg'},world,480);assert.equal(eaten.inventory.cooked_egg,0);assert.equal(eaten.characters.you.energy,45);assert.equal(hungerFor(eaten,480),58);assert.equal(applyAction(eaten,{type:'eat',item:'egg',source:'farm',actionId:'raw'},world,480),eaten);});
+test('cold fires, distance, and missing eggs do not consume ingredients',()=>{for(const change of [s=>s.buildings[0].fuelUntil=0,s=>s.player={x:0,y:0},s=>s.livingFarm.bag.egg=0]){const s=setup();change(s);assert.equal(applyAction(s,cook,world,480),s);}});
+test('legacy inventory eggs are used before coop stock and cannot be duplicated on save retry',()=>{const s=setup();s.inventory.egg=1;const n=applyAction(s,cook,world,480);assert.equal(n.inventory.egg,0);assert.equal(n.livingFarm.bag.egg,2);const data=new Map();let fail=false;const storage={getItem:k=>data.get(k)||null,setItem:(k,v)=>{if(fail)throw Error('Full');data.set(k,v);},removeItem:k=>data.delete(k)};const store=new GameStore(world,storage);store.save(s);fail=true;assert.throws(()=>store.commit(cook));assert.equal(store.state.inventory.egg,1);fail=false;store.commit(cook);const restored=new GameStore(world,storage);assert.equal(restored.state.inventory.cooked_egg,1);assert.equal(restored.state.livingFarm.bag.egg,2);});

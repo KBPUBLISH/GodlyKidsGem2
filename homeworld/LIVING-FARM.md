@@ -1,0 +1,50 @@
+# Small animal loop in the living-island test
+
+Branch: `codex/living-world-player-test`. Open `/#/my-home?livingTest=1` after `npm run living-test:build`. The island, character assets and illustrated UI stay in the existing world.
+
+A fresh island starts alone, with zero private farm coins and a small fenced garden. The Tasks list opens once on arrival and stays available in the vertical side buttons. The child plants four free carrot seeds in highlighted, tilled squares, then picks one carrot, one pumpkin and one lettuce. The pumpkin and lettuce begin ripe; starter carrots grow in eight seconds. The fourth planting saves the 10-coin reward atomically, and each vegetable adds 2 coins. All three crop types must be picked to unlock the tent goal. Saved task counts and checkmarks survive reload. Next, gather wood for the prayer tent. After the tent, the Market menu offers optional animals; buying a chicken is never an onboarding requirement.
+
+Ripe vegetables can be tapped, or reached with Pick vegetables in the farm panel. Picking sells one for 2 coins and replants it; it grows again after 45 seconds in this prototype. This gives a child with too few coins a reachable way to earn more. Purchases display and charge the same saved farm balance. Animal names are validated before buying, and failed saves leave both coins and ownership unchanged for retry.
+
+Existing animal names, purchases, camp/story/home progress, and coins are preserved. Older adventures that have already collected supplies or bought animals skip the new introductory garden task. Only untouched demo planting is replaced by the small garden; gardens the child has worked on retain their cells.
+
+The first chicken produces an egg after about 20 seconds. Later production repeats every three minutes in this prototype (wall-clock time, including time away). Up to three items wait per animal; there is no starvation or missed-day penalty. Timing is centralized in `living-farm-rules.mjs` so this can be tuned after playtesting. This is a short test cadence, not three real calendar days.
+
+Walk near an animal's nest/collection spot to pick up its produce. The Market drawer offers a Collect button that walks there using the original navigation. Eggs and milk go into My bag, with separate Eat/Drink and Sell choices. Eating celebrates a snack; it does not introduce a hunger meter. Selling changes the private farm coin balance.
+
+| Choice | Cost or reward |
+| --- | --- |
+| Plant all four starter carrot seeds | +10 coins once |
+| Pick and sell one vegetable | +2 coins |
+| Chicken | 10 coins |
+| Sell one egg | +5 coins |
+| First coop (room for four chickens) | 20 coins |
+| Bigger coop (room for six chickens) | 40 coins |
+| Cow, after first coop | 40 coins |
+| Sell one milk | +10 coins |
+
+The small test supports up to six chickens and two cows. Additional story friends still come from reading; farm purchases do not bypass that unlock. Coops are simple visual upgrades at a fixed island spot. Chickens and cows reuse the island's original animated GLB models.
+
+Major decisions are confirmed: animal purchase and name, coop upgrades, and using logs to build the prayer tent or home. Planting the four free starter seeds stays a direct tap. Delivering build supplies waits for confirmation. Ordinary pickup and individual eat/sell actions stay direct.
+
+Tapping Adam or choosing Say hello walks the child over. Approaching him produces a greeting using the profile's player name (for example, Sarah), with a wave pose and the CMS-configured ElevenLabs voice when sound is on. Friendly proximity greetings do not interrupt walks to other tasks. Friends remain autonomous and cannot be possessed.
+
+Watch island life rotates the camera among Adam and owned animals. It can be selected from Friends, and begins automatically after 30 seconds without activity once the prayer tent is complete. Dialogs, walking, building confirmations and interiors prevent automatic entry. Back to me resumes the player's camera. Watching never changes the controlled character or moves the player.
+
+The private market wallet and farm receipts live inside the scoped world save (`livingFarm`). Older `gk_living_farm_v1:<private-test-profile>` receipts migrate once and remain untouched as a backup. Seed buys and inventory sales persist coins and items atomically; they never spend the main app's account coins. Purchases persist before animals are reconciled into the original island renderer. Existing test-world and normal-world progress is preserved.
+
+Checks:
+
+```sh
+node --test homeworld/tests/*.test.mjs tests/*.test.mjs
+npm run living-test:build
+npm run preview -- --port 3000
+# In another terminal (requires Chromium, Python Playwright and ffmpeg):
+python homeworld/tests/living-test-browser.py
+```
+
+The browser suite first earns the garden and tent using visible controls, creates `/tmp/garden-tested.json`, then checks the original world tools and story flow in disposable contexts. CMS fixtures verify routing and configured voice requests; live content, live ElevenLabs audio and phone performance still require device testing.
+
+The garden regression checks first-visit Tasks, four carrot seeds, each of the three vegetable types, sequential task unlocking, partial reloads, reward persistence, skipping the chicken, a saved low balance, harvesting to afford a chicken, rejected invalid names, failed-save recovery, and named-purchase reloads.
+
+Market seeds: three carrot, wheat or sunflower seeds cost 2 coins; three pumpkin seeds cost 3. Selling uses the original crop/fish/gem prices, plus 1 coin per wood or stone. Starter tutorial logs remain reserved for the tent and cannot be sold. Buy and Sell are separate tabs in the original drawer; Build retains the original catalogue, previews, material costs and placement controls.

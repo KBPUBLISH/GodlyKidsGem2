@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Play, Pause, RotateCcw, Volume2, VolumeX, Check, ChevronRight, Star, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, X, Lock, Loader2, Mic, ChevronLeft, Home, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RotateCcw, Volume2, VolumeX, Check, ChevronRight, Star, Book, FlaskConical, Calculator, Hourglass, Languages, Palette, Cpu, Video, X, Loader2, Mic, ChevronLeft, Home, ShoppingBag } from 'lucide-react';
 import { ApiService } from '../services/apiService';
 import { markCompleted, getCompletion } from '../services/lessonService';
 import { useUser } from '../context/UserContext';
@@ -12,6 +12,7 @@ import { voiceCloningService, ClonedVoice } from '../services/voiceCloningServic
 import DrawingCanvas from '../components/features/DrawingCanvas';
 import { filterVisibleVoices } from '../services/voiceManagementService';
 import { activityTrackingService } from '../services/activityTrackingService';
+import WoodBackButton from '../components/WoodBackButton';
 
 interface Episode {
     episodeNumber: number;
@@ -784,6 +785,24 @@ const LessonPlayerPage: React.FC = () => {
         }
     };
 
+    const stopLessonVideo = () => {
+        if (videoRef.current) {
+            try {
+                videoRef.current.pause();
+                videoRef.current.removeAttribute('src');
+                // @ts-expect-error - load exists on HTMLMediaElement
+                videoRef.current.load?.();
+            } catch { /* ignore */ }
+        }
+    };
+
+    const leaveLesson = () => {
+        stopLessonVideo();
+        const from = (location.state as { from?: string } | null)?.from;
+        // Explicit route — HashRouter history.back() is unreliable in native wrappers.
+        navigate(from || '/world');
+    };
+
     const handleBack = () => {
         if (currentScreen === 'devotional') {
             // Stop audio when leaving devotional screen
@@ -793,6 +812,8 @@ const LessonPlayerPage: React.FC = () => {
             setCurrentScreen('video');
         } else if (currentScreen === 'activity') {
             setCurrentScreen('devotional');
+        } else {
+            leaveLesson();
         }
     };
 
@@ -885,7 +906,16 @@ const LessonPlayerPage: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="h-full flex items-center justify-center">
+            <div className="h-full flex items-center justify-center relative">
+                <WoodBackButton
+                    onClick={leaveLesson}
+                    className="fixed z-[60] w-12 h-12"
+                    style={{
+                        top: 'max(10px, calc(var(--safe-area-top, 0px) + 8px))',
+                        left: 'max(10px, env(safe-area-inset-left, 0px))',
+                    }}
+                    aria-label="Back to Explore"
+                />
                 <div className="text-white text-lg">Loading lesson...</div>
             </div>
         );
@@ -893,7 +923,16 @@ const LessonPlayerPage: React.FC = () => {
 
     if (!lesson) {
         return (
-            <div className="h-full flex items-center justify-center">
+            <div className="h-full flex items-center justify-center relative">
+                <WoodBackButton
+                    onClick={leaveLesson}
+                    className="fixed z-[60] w-12 h-12"
+                    style={{
+                        top: 'max(10px, calc(var(--safe-area-top, 0px) + 8px))',
+                        left: 'max(10px, env(safe-area-inset-left, 0px))',
+                    }}
+                    aria-label="Back to Explore"
+                />
                 <div className="text-white text-lg">Lesson not found</div>
             </div>
         );
@@ -965,10 +1004,18 @@ const LessonPlayerPage: React.FC = () => {
                         />
                     </div>
 
-                    {/* Header Bar - Episode selector on left, X button on right */}
-                    <div className="absolute top-2 left-2 right-2 z-50 flex items-center justify-between">
-                        {/* Episode Indicator - Left side */}
-                        {hasEpisodes ? (
+                    {/* Header Bar - Episode selector on left, close on right */}
+                    <div
+                        className="absolute left-2 right-2 z-[80] flex items-center justify-between pointer-events-none"
+                        style={{ top: 'max(8px, calc(var(--safe-area-top, 0px) + 6px))' }}
+                    >
+                        <div className="flex items-center gap-2 pointer-events-auto">
+                            <WoodBackButton
+                                onClick={leaveLesson}
+                                className="w-12 h-12"
+                                aria-label="Back to Explore"
+                            />
+                            {hasEpisodes ? (
                             <div className="relative">
                                 <button
                                     onClick={(e) => {
@@ -1022,25 +1069,14 @@ const LessonPlayerPage: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                        ) : (
-                            <div /> 
-                        )}
+                            ) : null}
+                        </div>
 
-                        {/* Close Button - Right side */}
                         <button
-                            onClick={() => {
-                                // Defensive: stop video immediately before leaving (iOS can keep audio alive otherwise)
-                                if (videoRef.current) {
-                                    try {
-                                        videoRef.current.pause();
-                                        videoRef.current.removeAttribute('src');
-                                        // @ts-expect-error - load exists on HTMLMediaElement
-                                        videoRef.current.load?.();
-                                    } catch { }
-                                }
-                                navigate(-1);
-                            }}
-                            className="text-white p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
+                            type="button"
+                            onClick={leaveLesson}
+                            className="pointer-events-auto text-white p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
+                            aria-label="Close"
                         >
                             <X className="w-6 h-6" />
                         </button>
@@ -1434,35 +1470,9 @@ const LessonPlayerPage: React.FC = () => {
                                                         </>
                                                     )}
 
-                                                    {/* Locked Voices Section (only show if not premium) */}
-                                                    {!isSubscribed && voices.filter(v => !isVoiceUnlocked(v.voice_id)).length > 0 && (
-                                                        <>
-                                                            <div className="border-t border-[#3E2723] my-1"></div>
-                                                            <div className="px-4 py-1 text-xs text-white/40 uppercase tracking-wider font-display">Locked</div>
-                                                            {voices.filter(v => !isVoiceUnlocked(v.voice_id)).map(v => (
-                                                                <div key={v.voice_id} className="flex items-center gap-2 px-2 py-1">
-                                                                    <div className="flex-1 flex items-center gap-2 px-2 py-1 text-sm text-white/50">
-                                                                        <Lock className="w-4 h-4 text-white/30" />
-                                                                        <span className="font-display tracking-wide">{v.name}</span>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setShowVoiceDropdown(false);
-                                                                            navigate('/profile', { state: { openShop: true, shopTab: 'voices' } });
-                                                                        }}
-                                                                        className="px-2 py-1 text-xs bg-[#FFD700] text-[#3E2723] rounded hover:bg-[#FFC107] transition-colors font-bold font-display"
-                                                                    >
-                                                                        Unlock
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                        </>
-                                                    )}
-
-                                                    {voices.length === 0 && clonedVoices.length === 0 && (
+                                                    {voices.filter(v => isVoiceUnlocked(v.voice_id)).length === 0 && clonedVoices.length === 0 && (
                                                         <div className="px-4 py-2 text-sm text-white/50 text-center">
-                                                            No voices available
+                                                            No voices unlocked yet
                                                         </div>
                                                     )}
                                                 </div>

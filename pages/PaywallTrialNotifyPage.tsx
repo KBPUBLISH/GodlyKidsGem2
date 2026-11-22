@@ -10,7 +10,7 @@ const isDespiaNative = (): boolean => {
 };
 
 export type PaywallReminderLocationState = {
-  selectedPlan: 'annual' | 'monthly' | 'lifetime';
+  selectedPlan: 'annual' | 'monthly';
   from?: string;
   fromOnboarding?: boolean;
   hideCloseButton?: boolean;
@@ -55,7 +55,7 @@ const PaywallTrialNotifyPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!selectedPlan || !['annual', 'monthly', 'lifetime'].includes(selectedPlan)) {
+    if (!selectedPlan || !['annual', 'monthly'].includes(selectedPlan)) {
       navigate('/paywall', { replace: true });
       return;
     }

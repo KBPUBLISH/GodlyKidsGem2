@@ -20,6 +20,22 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Only the admin portal uses this client: creator pages call axios directly with
+ * the token from useAuth. AuthContext also clears the slot of whichever role is
+ * not signed in, so a creator session finds nothing here to send. An explicit
+ * header from the caller still wins.
+ */
+const ADMIN_TOKEN_KEY = 'portal_admin_token';
+
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Helper to get full URL for uploads (useful for form submissions)
 export const getApiUrl = (path: string): string => {
   // Ensure path starts with /

@@ -31,6 +31,12 @@ const getAgeGroupLabel = (age: number): string => {
     return '9-12 years';
 };
 
+/** Story quizzes stop at this many questions, even when a saved quiz is longer. */
+const QUIZ_LENGTH = 5;
+
+const capQuizQuestions = (questions: QuizQuestion[] | undefined | null): QuizQuestion[] =>
+    Array.isArray(questions) ? questions.slice(0, QUIZ_LENGTH) : [];
+
 const BookQuizModal: React.FC<BookQuizModalProps> = ({
     isOpen,
     onClose,
@@ -87,10 +93,11 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
             console.log('📝 getBookQuiz response:', quizData);
             
             // If full quiz exists, use it
-            if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length >= 6) {
-                setQuestions(quizData.quiz.questions);
+            if (quizData && quizData.quiz && quizData.quiz.questions && quizData.quiz.questions.length >= QUIZ_LENGTH) {
+                const capped = capQuizQuestions(quizData.quiz.questions);
+                setQuestions(capped);
                 setAgeGroup(quizData.quiz.ageGroup || getAgeGroupLabel(kidAge));
-                console.log(`✅ Quiz loaded with ${quizData.quiz.questions.length} questions (attempt ${currentAttemptNumber})`);
+                console.log(`✅ Quiz loaded with ${capped.length} questions (attempt ${currentAttemptNumber})`);
                 setLoading(false);
                 return;
             }
@@ -110,11 +117,11 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                 setLoading(false);
                 
                 // If this was from cache, we already have all questions
-                if (firstResult.cached && firstResult.totalQuestions >= 6) {
+                if (firstResult.cached && firstResult.totalQuestions >= QUIZ_LENGTH) {
                     // Fetch the full quiz
                     const fullQuiz = await ApiService.getBookQuiz(bookId, getUserId(), kidAge, currentAttemptNumber);
                     if (fullQuiz?.quiz?.questions) {
-                        setQuestions(fullQuiz.quiz.questions);
+                        setQuestions(capQuizQuestions(fullQuiz.quiz.questions));
                     }
                     return;
                 }
@@ -132,7 +139,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                     );
                     
                     if (remainingResult && remainingResult.questions) {
-                        setQuestions(remainingResult.questions);
+                        setQuestions(capQuizQuestions(remainingResult.questions));
                         console.log(`✅ All ${remainingResult.questions.length} questions loaded (attempt ${currentAttemptNumber})`);
                     }
                     setLoadingRemainingQuestions(false);
@@ -143,7 +150,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                 setLoadingMessage('Generating all questions...');
                 const generated = await ApiService.generateBookQuiz(bookId, kidAge, currentAttemptNumber);
                 if (generated && generated.quiz && generated.quiz.questions) {
-                    setQuestions(generated.quiz.questions);
+                    setQuestions(capQuizQuestions(generated.quiz.questions));
                     setAgeGroup(generated.quiz.ageGroup || getAgeGroupLabel(kidAge));
                 } else {
                     throw new Error('Quiz generation returned empty result');
@@ -232,9 +239,8 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
     if (!isOpen) return null;
 
     const currentQuestion = questions[currentQuestionIndex];
-    const totalExpectedQuestions = Math.max(6, questions.length);
-    const allAnswered = selectedAnswers.size >= totalExpectedQuestions && !loadingRemainingQuestions;
-    const isLastQuestion = currentQuestionIndex === questions.length - 1 && questions.length >= 6 && !loadingRemainingQuestions;
+    const allAnswered = selectedAnswers.size >= QUIZ_LENGTH && questions.length >= QUIZ_LENGTH && !loadingRemainingQuestions;
+    const isLastQuestion = currentQuestionIndex === questions.length - 1 && questions.length >= QUIZ_LENGTH && !loadingRemainingQuestions;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-[fadeIn_0.3s_ease-out]">
@@ -295,13 +301,13 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                         // Results screen
                         <div className="flex flex-col items-center text-center py-6">
                             <div className="text-6xl mb-4">
-                                {results.score === 6 ? '🏆' : results.score >= 4 ? '⭐' : '👍'}
+                                {results.score >= QUIZ_LENGTH ? '🏆' : results.score >= 4 ? '⭐' : '👍'}
                             </div>
                             <h3 className="text-[#3E2723] text-2xl font-black font-display mb-2">
-                                {results.score === 6 ? 'Perfect Score!' : results.score >= 4 ? 'Great Job!' : 'Good Try!'}
+                                {results.score >= QUIZ_LENGTH ? 'Perfect Score!' : results.score >= 4 ? 'Great Job!' : 'Good Try!'}
                             </h3>
                             <p className="text-[#5D4037] text-lg mb-4">
-                                You got <span className="font-bold text-[#8B4513]">{results.score}</span> out of <span className="font-bold text-[#8B4513]">6</span> correct!
+                                You got <span className="font-bold text-[#8B4513]">{Math.min(results.score, QUIZ_LENGTH)}</span> out of <span className="font-bold text-[#8B4513]">{QUIZ_LENGTH}</span> correct!
                             </p>
                             
                             {results.coinsEarned > 0 && (
@@ -422,7 +428,7 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                             {/* Progress */}
                             <div className="mb-6">
                                 <div className="flex justify-between text-[#8B4513] text-sm font-bold mb-2">
-                                    <span>Question {currentQuestionIndex + 1} of {questions.length < 6 ? '6' : questions.length}</span>
+                                    <span>Question {currentQuestionIndex + 1} of {QUIZ_LENGTH}</span>
                                     <div className="flex items-center gap-2">
                                         {loadingRemainingQuestions && (
                                             <span className="flex items-center gap-1 text-xs text-[#A0522D]">
@@ -430,13 +436,13 @@ const BookQuizModal: React.FC<BookQuizModalProps> = ({
                                                 Loading more...
                                             </span>
                                         )}
-                                        <span>{selectedAnswers.size}/{questions.length < 6 ? 6 : questions.length} answered</span>
+                                        <span>{selectedAnswers.size}/{QUIZ_LENGTH} answered</span>
                                     </div>
                                 </div>
                                 <div className="w-full h-3 bg-[#d4c59a] rounded-full overflow-hidden">
                                     <div
                                         className="h-full bg-[#8B4513] transition-all duration-300"
-                                        style={{ width: `${((currentQuestionIndex + 1) / (questions.length < 6 ? 6 : questions.length)) * 100}%` }}
+                                        style={{ width: `${((currentQuestionIndex + 1) / QUIZ_LENGTH) * 100}%` }}
                                     />
                                 </div>
                             </div>

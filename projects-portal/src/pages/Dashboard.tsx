@@ -7,7 +7,9 @@ import {
     BookOpen, Clock, Headphones, Music, Gamepad2, FileText, Mail, BookMarked,
     Download, Trash2
 } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../services/apiClient';
 
 interface UserData {
     id: string;
@@ -210,24 +212,27 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         try {
             // Fetch user analytics and game analytics in parallel
+            // (apiClient attaches the admin token these endpoints require)
             const [userResponse, gameResponse] = await Promise.all([
-                fetch(`${API_BASE}/analytics/users?timeRange=${timeRange}`),
-                fetch(`${API_BASE}/analytics/games?timeRange=${timeRange === '1d' ? 'day' : timeRange === '1w' ? 'week' : timeRange === '1m' ? 'month' : 'all'}`),
+                apiClient.get(`/api/analytics/users?timeRange=${timeRange}`),
+                apiClient.get(`/api/analytics/games?timeRange=${timeRange === '1d' ? 'day' : timeRange === '1w' ? 'week' : timeRange === '1m' ? 'month' : 'all'}`),
             ]);
             
-            const userResult = await userResponse.json();
+            const userResult = userResponse.data;
             if (userResult.success) {
                 setData(userResult);
             } else {
                 setError(userResult.message || 'Failed to fetch data');
             }
             
-            const gameResult = await gameResponse.json();
+            const gameResult = gameResponse.data;
             if (gameResult.success) {
                 setGameAnalytics(gameResult);
             }
         } catch (err) {
-            setError('Failed to connect to server');
+            // A 401/403 from the admin-only analytics endpoints explains itself.
+            const serverError = axios.isAxiosError(err) ? err.response?.data?.error : null;
+            setError(serverError || 'Failed to connect to server');
             console.error(err);
         } finally {
             setLoading(false);

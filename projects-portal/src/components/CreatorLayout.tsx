@@ -17,7 +17,7 @@ const CreatorLayout: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/creator/login');
   };
 
   const navItems = [

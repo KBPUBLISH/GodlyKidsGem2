@@ -2,6 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+/** True when a returning family (language chosen, at least one kid) should reopen on the island. */
+function openFriendsWorldOnColdStart() {
+  try {
+    if (localStorage.getItem('godlykids_language_selected') !== 'true') return false;
+    const raw = localStorage.getItem('godly_kids_data_v6');
+    if (!raw) return false;
+    const userData = JSON.parse(raw);
+    return Array.isArray(userData.kids) && userData.kids.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================
 // URL NORMALIZATION & DEEP LINK HANDLING - MUST RUN BEFORE REACT MOUNTS
 // ============================================================
@@ -17,13 +30,49 @@ import App from './App';
     const ua = navigator.userAgent || '';
     const isDespia = /despia/i.test(ua);
     const url = new URL(window.location.href);
+
+    // Dev: /#/listen?resetPremium=1 turns off the 1-day gift / local premium flags
+    if ((window.location.hash || '').includes('resetPremium=1')) {
+      try {
+        localStorage.setItem('godlykids_dev_force_free', 'true');
+        localStorage.setItem('godlykids_premium', 'false');
+        localStorage.removeItem('godlykids_reverse_trial');
+        localStorage.removeItem('godlykids_reverse_trial_end');
+        localStorage.removeItem('godlykids_ships_library_paywall_seen');
+        sessionStorage.removeItem('godlykids_ships_library_paywall_seen');
+        localStorage.removeItem('godlykids_library_hs_guide');
+        sessionStorage.removeItem('godlykids_library_hs_guide');
+      } catch (e) {}
+      const cleaned = (window.location.hash || '')
+        .replace(/([?&])resetPremium=1&?/g, '$1')
+        .replace(/[?&]$/, '')
+        .replace(/\?$/, '');
+      url.hash = cleaned;
+      window.history.replaceState(null, '', url.toString());
+      window.location.reload();
+      return;
+    }
     
     // Check for logout flag - if present, force landing page and clean state
     if (url.searchParams.has('logout')) {
       console.log('🔒 Logout detected - forcing complete fresh state');
       
-      // Clear any remaining storage (belt and suspenders)
-      try { localStorage.clear(); } catch (e) {}
+      // Clear session storage but keep Bible Map completions (same account
+      // logging back in should still see finished stories unlocked).
+      try {
+        const snap: Record<string, string> = {};
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = localStorage.key(i);
+          if (key && (key === 'godlykids_island_story_progress' || key.startsWith('godlykids_island_story_progress:'))) {
+            const value = localStorage.getItem(key);
+            if (value != null) snap[key] = value;
+          }
+        }
+        localStorage.clear();
+        Object.entries(snap).forEach(([key, value]) => {
+          try { localStorage.setItem(key, value); } catch (e) {}
+        });
+      } catch (e) {}
       try { sessionStorage.clear(); } catch (e) {}
       
       // Remove logout param and set to landing page
@@ -91,6 +140,7 @@ import App from './App';
       /^\/paywall\/reminder$/,
       /^\/library$/,
       /^\/games$/,
+      /^\/games\/library$/,
       /^\/settings$/,
       /^\/profile$/,
     ];
@@ -137,6 +187,15 @@ import App from './App';
         if ((!url.hash || url.hash === '#' || url.hash === '#/') && lastRoute && !isDeepLinkPath) {
           targetHash = lastRoute;
           console.log('📱 Despia: Restoring to saved route:', targetHash);
+        }
+      } else if (!isDeepLinkPath && openFriendsWorldOnColdStart()) {
+        // App was closed (not a quick switch back). Land on the island.
+        const hashPath = (targetHash || '').replace(/^#/, '').split('?')[0];
+        const keepSetup = ['/onboarding', '/signin', '/sign-in', '/paywall', '/create-profile', '/edit-profile', '/reset-password', '/language']
+          .some((path) => hashPath === path || hashPath.startsWith(`${path}/`));
+        if (!keepSetup && hashPath !== '/my-home') {
+          targetHash = '#/my-home';
+          console.log('📱 Despia: Cold start opens Friends World');
         }
       }
       

@@ -7,7 +7,7 @@
  * It preserves the original _id so RevenueCat webhooks can still find them.
  * 
  * Usage:
- *   node migrate-legacy-users.js [--dry-run]
+ *   LEGACY_MONGO_URI=... MONGO_URI=... node migrate-legacy-users.js [--dry-run]
  * 
  * Options:
  *   --dry-run    Preview what would be migrated without making changes
@@ -16,14 +16,21 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-// Configuration
 // Legacy DB (where Android users currently live)
-const LEGACY_MONGO_URI = process.env.LEGACY_MONGO_URI || 
-  'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+const LEGACY_MONGO_URI = process.env.LEGACY_MONGO_URI;
 
-// New DB (where new backend stores AppUsers)  
-const NEW_MONGO_URI = process.env.MONGO_URI ||
-  'mongodb+srv://admingodlykids:6duHzeJOpuP0JUIO@cluster1.kgoqec.mongodb.net/Production?retryWrites=true&w=majority';
+// New DB (where new backend stores AppUsers)
+const NEW_MONGO_URI = process.env.MONGO_URI;
+
+const missing = [
+  !LEGACY_MONGO_URI && 'LEGACY_MONGO_URI',
+  !NEW_MONGO_URI && 'MONGO_URI',
+].filter(Boolean);
+
+if (missing.length) {
+  console.error(`❌ Missing required env var(s): ${missing.join(', ')}. Export them or add them to backend/.env.`);
+  process.exit(1);
+}
 
 const isDryRun = process.argv.includes('--dry-run');
 

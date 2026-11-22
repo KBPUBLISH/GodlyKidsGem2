@@ -4,6 +4,7 @@ import { Book } from '../../types';
 import { BookOpen, Music, ShoppingCart } from 'lucide-react';
 import { ApiService } from '../../services/apiService';
 import OptimizedImage from './OptimizedImage';
+import { getCoverThumb } from '../../utils/coverImage';
 
 // Simple localStorage cache for page images (survives app restarts - 24hr TTL)
 const getPageFromCache = (bookId: string): string | null => {
@@ -189,7 +190,10 @@ const FeaturedCarousel: React.FC<FeaturedCarouselProps> = ({ books, onBookClick 
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const getImageSrc = (item: FeaturedItem) => {
-    return item.coverUrl || item.coverImage || (item as any).files?.coverImage || '';
+    const full = item.coverUrl || item.coverImage || (item as any).files?.coverImage || '';
+    // Carousel tiles are ~screen-width but displayed in a square frame —
+    // the 400px thumb is sharp enough and much cheaper than the 1000px full.
+    return getCoverThumb(full) || full;
   };
 
   const isPlaylist = (item: FeaturedItem) => item._itemType === 'playlist';

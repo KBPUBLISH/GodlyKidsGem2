@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Clock, Crown, Sparkles, ShoppingBag, Coins, FileText, X, ChevronRight, Check, BookOpen, Music, Mic, Users } from 'lucide-react';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../../utils/pricing';
 
 /**
  * DemoTimer Component
@@ -580,13 +581,13 @@ const DemoTimer: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[#5c2e0b] font-bold">Annual Plan</span>
                   <div className="text-right">
-                    <span className="text-[#3E1F07] font-extrabold text-xl">$39.99</span>
+                    <span className="text-[#3E1F07] font-extrabold text-xl">${ANNUAL_PRICE_USD}</span>
                     <span className="text-[#5c2e0b] text-xs">/year</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-green-600 font-semibold">Save 44%</span>
-                  <span className="text-[#5c2e0b]">Only $0.77/week</span>
+                  <span className="text-green-600 font-semibold">Save {Math.round((1 - ANNUAL_PRICE_USD / (MONTHLY_PRICE_USD * 12)) * 100)}%</span>
+                  <span className="text-[#5c2e0b]">Only ${(ANNUAL_PRICE_USD / 52).toFixed(2)}/week</span>
                 </div>
               </div>
               

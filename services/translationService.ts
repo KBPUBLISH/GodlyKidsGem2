@@ -3,19 +3,29 @@ import { getApiBaseUrl } from './apiService';
 // Supported languages with their display names and flag emojis
 export const SUPPORTED_LANGUAGES: Record<string, { name: string; flag: string; nativeName: string }> = {
     'en': { name: 'English', flag: '🇺🇸', nativeName: 'English' },
-    'es': { name: 'Spanish', flag: '🇪🇸', nativeName: 'Español' },
-    'pt': { name: 'Portuguese', flag: '🇧🇷', nativeName: 'Português' },
+    'es': { name: 'Latin American Spanish', flag: '🌎', nativeName: 'Español (Latinoamérica)' },
+    'pt': { name: 'Brazilian Portuguese', flag: '🇧🇷', nativeName: 'Português (Brasil)' },
     'fr': { name: 'French', flag: '🇫🇷', nativeName: 'Français' },
     'de': { name: 'German', flag: '🇩🇪', nativeName: 'Deutsch' },
     'it': { name: 'Italian', flag: '🇮🇹', nativeName: 'Italiano' },
     'nl': { name: 'Dutch', flag: '🇳🇱', nativeName: 'Nederlands' },
     'pl': { name: 'Polish', flag: '🇵🇱', nativeName: 'Polski' },
     'ru': { name: 'Russian', flag: '🇷🇺', nativeName: 'Русский' },
-    'zh': { name: 'Chinese', flag: '🇨🇳', nativeName: '中文' },
+    'zh': { name: 'Chinese (Simplified)', flag: '🇨🇳', nativeName: '简体中文' },
     'ja': { name: 'Japanese', flag: '🇯🇵', nativeName: '日本語' },
     'ko': { name: 'Korean', flag: '🇰🇷', nativeName: '한국어' },
     'tl': { name: 'Filipino', flag: '🇵🇭', nativeName: 'Filipino' },
+    'id': { name: 'Indonesian', flag: '🇮🇩', nativeName: 'Bahasa Indonesia' },
+    'hi': { name: 'Hindi', flag: '🇮🇳', nativeName: 'हिन्दी' },
+    'ta': { name: 'Tamil', flag: '🇮🇳', nativeName: 'தமிழ்' },
+    'ml': { name: 'Malayalam', flag: '🇮🇳', nativeName: 'മലയാളം' },
+    'ar': { name: 'Arabic', flag: '🌍', nativeName: 'العربية' },
+    'sw': { name: 'Swahili', flag: '🌍', nativeName: 'Kiswahili' },
+    'zh-TW': { name: 'Chinese (Traditional)', flag: '🌏', nativeName: '繁體中文' },
 };
+
+// Keep onboarding and Settings on the same language list.
+export const LAUNCH_LANGUAGES = ['en', 'tl', 'pt', 'fr', 'de', 'it', 'ko', 'es', 'pl', 'id', 'hi', 'ta', 'ml', 'ar', 'sw', 'zh-TW'];
 
 // ElevenLabs multilingual voice IDs for different languages
 export const LANGUAGE_VOICES: Record<string, string> = {
@@ -32,6 +42,13 @@ export const LANGUAGE_VOICES: Record<string, string> = {
     'ja': 'ThT5KcBeYPX3keUQqHPh', // Japanese
     'ko': 'ThT5KcBeYPX3keUQqHPh', // Korean
     'tl': 'ThT5KcBeYPX3keUQqHPh', // Filipino (use multilingual)
+    'id': 'ThT5KcBeYPX3keUQqHPh', // Indonesian (use multilingual)
+    'hi': 'ThT5KcBeYPX3keUQqHPh', // Hindi (multilingual)
+    'ta': 'ThT5KcBeYPX3keUQqHPh', // Tamil (multilingual)
+    'ml': 'ThT5KcBeYPX3keUQqHPh', // Malayalam (multilingual)
+    'ar': 'ThT5KcBeYPX3keUQqHPh', // Arabic (multilingual)
+    'sw': 'ThT5KcBeYPX3keUQqHPh', // Swahili (multilingual)
+    'zh-TW': 'ThT5KcBeYPX3keUQqHPh', // Chinese (Traditional) (multilingual)
 };
 
 interface TranslatedTextBox {

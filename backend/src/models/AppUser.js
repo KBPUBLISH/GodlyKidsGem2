@@ -168,7 +168,7 @@ const appUserSchema = new mongoose.Schema({
     // Economy
     coins: {
         type: Number,
-        default: 500,
+        default: 10,
     },
     
     // Token balance for Godly Hub purchases
@@ -190,6 +190,12 @@ const appUserSchema = new mongoose.Schema({
         tokensPaid: {
             type: Number,
         },
+    }],
+
+    // Creators this family follows from the kids app
+    followedCreatorIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Creator',
     }],
     
     // Referral system

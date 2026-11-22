@@ -1,22 +1,19 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Book } from '../../types';
-import { BookOpen, Headphones, Heart, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import PremiumBadge from './PremiumBadge';
+import CoverImage from './CoverImage';
+import HardcoverCover from './HardcoverCover';
 import { useUser } from '../../context/UserContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { DEFAULT_BOOK_COVER } from '../../utils/placeholderImage';
-import { getCoverThumb } from '../../utils/coverImage';
 
 interface BookCardProps {
   book: Book;
-  onClick: (id: string) => void;
+  onClick: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
-// Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
-const DEFAULT_COVER = DEFAULT_BOOK_COVER;
-
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
-  const [imageError, setImageError] = useState(false);
   const { isSubscribed } = useUser();
   const { currentLanguage, translateText } = useLanguage();
   const [translatedTitle, setTranslatedTitle] = useState(book.title);
@@ -37,40 +34,22 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
   const isMembersOnly = book.isMembersOnly === true;
   const isLocked = isMembersOnly && !isSubscribed;
 
-  // Reset error state when book cover URL changes
-  useEffect(() => {
-    setImageError(false);
-  }, [book.coverUrl]);
-
-  // Determine the image source - use direct URL, no blob conversion needed
-  const getImageSrc = useCallback(() => {
-    if (imageError) return DEFAULT_COVER;
-    if (!book.coverUrl || book.coverUrl.trim() === '') return DEFAULT_COVER;
-    // Grid cards are small — use the lightweight thumbnail variant when available.
-    return getCoverThumb(book.coverUrl);
-  }, [book.coverUrl, imageError]);
-
-  const handleImageError = () => {
-    if (!imageError) {
-      console.error(`❌ Image failed to load for "${book.title}":`, book.coverUrl);
-      setImageError(true);
-    }
-  };
-
   return (
     <button
       type="button"
-      onClick={() => onClick(book.id)}
+      onClick={(event) => onClick(book.id, event)}
       className="w-full cursor-pointer select-none focus:outline-none group text-left"
     >
-      <div className={`relative aspect-square rounded-xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:border-white/40 group-hover:scale-105 transition-all ${isLocked ? 'opacity-80' : ''}`}>
-        <img
-          src={getImageSrc()}
+      <HardcoverCover
+        aspectClassName="aspect-square"
+        className={isLocked ? 'opacity-80' : ''}
+      >
+        <CoverImage
+          src={book.coverUrl}
           alt={book.title}
+          variant="thumb"
+          fallback={DEFAULT_BOOK_COVER}
           className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
-          loading="lazy"
-          decoding="async"
-          onError={handleImageError}
         />
         {isLocked && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
@@ -82,7 +61,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         {isMembersOnly && !isSubscribed && (
           <PremiumBadge className="absolute top-1.5 right-1.5 z-20" />
         )}
-      </div>
+      </HardcoverCover>
       <p className="text-white text-[11px] font-display font-bold mt-1.5 truncate text-center">
         {translatedTitle}
       </p>

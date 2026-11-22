@@ -7,6 +7,7 @@ import { getKaraokeShareUrl } from '../constants';
 import { authService } from '../services/authService';
 import { Mic, Lock, ArrowLeft, Library, Play, Share2 } from 'lucide-react';
 import StormySeaError from '../components/ui/StormySeaError';
+import CoverImage from '../components/ui/CoverImage';
 
 interface KaraokeRecording {
   _id: string;
@@ -155,11 +156,10 @@ const KaraokePage: React.FC = () => {
                       className={`relative aspect-square rounded-xl overflow-hidden border-2 border-white/30 shadow-lg group-hover:border-white/50 group-hover:scale-[1.02] transition-all ${isLocked ? 'opacity-85' : ''}`}
                     >
                       {song.coverImage ? (
-                        <img
+                        <CoverImage
                           src={song.coverImage}
                           alt={song.title}
                           className={`w-full h-full object-cover ${isLocked ? 'brightness-75' : ''}`}
-                          loading="lazy"
                         />
                       ) : (
                         <div
@@ -216,7 +216,7 @@ const KaraokePage: React.FC = () => {
                       >
                         <div className="aspect-square relative bg-gradient-to-br from-violet-700 to-purple-800">
                           {(rec.customCoverImageUrl || rec.karaokeSongId?.coverImage) ? (
-                            <img
+                            <CoverImage
                               src={rec.customCoverImageUrl || rec.karaokeSongId!.coverImage}
                               alt={rec.karaokeSongId?.title || 'Recording'}
                               className="w-full h-full object-cover"

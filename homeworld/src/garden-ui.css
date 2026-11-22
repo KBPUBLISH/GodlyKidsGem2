@@ -1,0 +1,30 @@
+/* Garden card (garden-ui.jsx): fence meter, Abel's requests, the shape picker. */
+.garden-status.calm{background:#eaf5dc;border-color:#b9d88f}
+.garden-status.warm{background:#fff1dd;border-color:#efc994}
+.garden-status.hot{background:#ffe1dc;border-color:#e89a8c}
+.garden-status>div{flex:1;min-width:0}
+.garden-meter{height:8px;border-radius:6px;background:#dce6cd;overflow:hidden;margin-top:7px}
+.garden-meter i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#9fcf6a,#5f9a53);transition:width .3s}
+.garden-gaps{display:block;margin-top:5px;color:#7a5a2c;font-weight:800;font-size:12px}
+.garden-requests{display:grid;gap:10px}
+.garden-request{position:relative}
+.garden-request.next{border-color:#9fcf6a;box-shadow:0 0 0 3px #9fcf6a33}
+.garden-request-icon{font-size:30px;line-height:1;width:44px;justify-content:center}
+.garden-request p{margin:4px 0 0;font-size:13px;color:#4b5a3f}
+.garden-next{position:absolute;top:-9px;right:12px;padding:2px 9px;border-radius:999px;background:#5f9a53;color:#fff;font-size:11px;letter-spacing:.04em}
+.garden-shapes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.garden-shape{display:grid;justify-items:center;gap:6px;padding:12px 8px 10px;border-radius:18px;border:2px solid #e8d7ae;background:#fffaee;color:#3a4b32;font:inherit;cursor:pointer;text-align:center}
+.garden-shape strong{font-size:14px}.garden-shape small{font-size:11px;color:#6b7a57;font-weight:800}
+.garden-shape.active{border-color:#5f9a53;background:#eef7e2;box-shadow:0 0 0 3px #9fcf6a33}
+.garden-shape.locked{opacity:.6}
+.garden-shape-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;width:70px}
+.garden-shape-grid i{display:block;aspect-ratio:1;border-radius:2px;background:transparent}
+.garden-shape-grid i.fill{background:#d98a3a}.garden-shape-grid.rect i.fill{background:#7f5a36}
+.garden-shape-grid i.feature{background:#e9c85a}
+.garden-blocked{color:#99672f}
+.garden-upgrades{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.garden-upgrades li{padding:10px 12px;border-radius:14px;background:#fffaee;border:2px solid #e8d7ae}
+.garden-upgrades strong{display:block;font-size:14px}.garden-upgrades small{font-size:12px;color:#6b7a57}
+.garden-rules{margin-top:16px;font-size:13px;color:#4b5a3f}
+.garden-rules summary{cursor:pointer;font-weight:800}
+.garden-rules ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}

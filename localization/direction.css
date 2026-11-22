@@ -1,0 +1,10 @@
+/* Follow the nearest content direction, including independently selected book languages. */
+.text-left:dir(rtl) { text-align: right; }
+.text-right:dir(rtl) { text-align: left; }
+.language-screen:lang(ar) h1,
+.language-screen:lang(hi) h1,
+.language-screen:lang(ta) h1,
+.language-screen:lang(ml) h1 { line-height: 1.45; letter-spacing: normal; }
+.reader-story-text:lang(ar), .reader-caption:lang(ar) { line-height: 1.65; }
+.reader-story-text { overflow-wrap: anywhere; }
+.reader-caption-word { max-width: 100%; overflow-wrap: anywhere; }

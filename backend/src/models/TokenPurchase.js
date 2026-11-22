@@ -1,11 +1,17 @@
 const mongoose = require('mongoose');
 
-// Token bundle definitions
+// Three credit packs parents can buy. $1 per 10 credits on the starter pack,
+// with a modest bundle discount on the larger two.
+const TOKEN_SALE_BUNDLES = {
+    'godlykids_tokens_10': { tokens: 10, priceCents: 1000, name: 'Starter Pack' },
+    'godlykids_tokens_25': { tokens: 25, priceCents: 2000, name: 'Family Pack' },
+    'godlykids_tokens_50': { tokens: 50, priceCents: 4000, name: 'Voyage Pack' },
+};
+
+// Historic Super Saver receipts must still validate on this schema.
 const TOKEN_BUNDLES = {
-    'godlykids_tokens_10': { tokens: 10, priceCents: 999, name: 'Starter Pack' },
-    'godlykids_tokens_25': { tokens: 25, priceCents: 1999, name: 'Popular Pack' },
-    'godlykids_tokens_50': { tokens: 50, priceCents: 3999, name: 'Best Value' },
-    'godlykids_tokens_100': { tokens: 100, priceCents: 6999, name: 'Super Saver' },
+    ...TOKEN_SALE_BUNDLES,
+    'godlykids_tokens_100': { tokens: 100, priceCents: 6999, name: 'Super Saver', legacy: true },
 };
 
 const tokenPurchaseSchema = new mongoose.Schema({
@@ -74,20 +80,23 @@ tokenPurchaseSchema.index({ userId: 1, createdAt: -1 });
 tokenPurchaseSchema.index({ status: 1, createdAt: -1 });
 tokenPurchaseSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
 
-// Static method to get bundle info
 tokenPurchaseSchema.statics.getBundleInfo = function(bundleId) {
     return TOKEN_BUNDLES[bundleId] || null;
 };
 
-// Static method to get all bundles
 tokenPurchaseSchema.statics.getAllBundles = function() {
-    return Object.entries(TOKEN_BUNDLES).map(([id, info]) => ({
+    return Object.entries(TOKEN_SALE_BUNDLES).map(([id, info]) => ({
         bundleId: id,
         ...info,
         priceFormatted: `$${(info.priceCents / 100).toFixed(2)}`,
-        effectiveRate: `$${(info.priceCents / info.tokens / 100).toFixed(2)}/token`,
+        effectiveRate: `$${(info.priceCents / info.tokens / 100).toFixed(2)}/credit`,
     }));
+};
+
+tokenPurchaseSchema.statics.isForSale = function(bundleId) {
+    return Boolean(TOKEN_SALE_BUNDLES[bundleId]);
 };
 
 module.exports = mongoose.model('TokenPurchase', tokenPurchaseSchema);
 module.exports.TOKEN_BUNDLES = TOKEN_BUNDLES;
+module.exports.TOKEN_SALE_BUNDLES = TOKEN_SALE_BUNDLES;

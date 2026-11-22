@@ -1,4 +1,5 @@
 import React from 'react';
+import {livingAvatarPortraitUrl} from '../../shared/livingAvatars.mjs';
 import { getAvatarWebpUrl, getShopThumbUrl, isAvatarPngPath } from '../../utils/avatarImageUrl';
 
 interface AvatarPartImageProps {
@@ -27,7 +28,7 @@ const AvatarPartImage: React.FC<AvatarPartImageProps> = ({
   if (!isAvatarPngPath(src)) {
     return (
       <img
-        src={src}
+        src={livingAvatarPortraitUrl(src)}
         alt={alt}
         className={className}
         style={style}
@@ -41,9 +42,9 @@ const AvatarPartImage: React.FC<AvatarPartImageProps> = ({
 
   return (
     <picture>
-      <source srcSet={webpSrc} type="image/webp" />
+      <source srcSet={livingAvatarPortraitUrl(webpSrc)} type="image/webp" />
       <img
-        src={src}
+        src={livingAvatarPortraitUrl(src)}
         alt={alt}
         className={className}
         style={style}

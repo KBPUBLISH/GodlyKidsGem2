@@ -16,6 +16,7 @@ import {
 import { useSubscription } from '../context/SubscriptionContext';
 import { activityTrackingService, ActivityStats } from '../services/activityTrackingService';
 import ParentGateModal from '../components/features/ParentGateModal';
+import { ANNUAL_PRICE_USD, MONTHLY_PRICE_USD } from '../utils/pricing';
 
 const TrialStatsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,8 +28,8 @@ const TrialStatsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Pricing
-  const monthlyPrice = 5.99;
-  const annualPrice = 39.99;
+  const monthlyPrice = MONTHLY_PRICE_USD;
+  const annualPrice = ANNUAL_PRICE_USD;
   const annualMonthly = (annualPrice / 12).toFixed(2);
   const savings = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
   

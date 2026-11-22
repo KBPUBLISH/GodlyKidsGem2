@@ -65,7 +65,7 @@ const CreatorProfile: React.FC = () => {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('file', file); // Backend expects 'file' field name
 
       const res = await axios.post(
         `${API_URL}/api/upload/image?bookId=creators&type=profile`,

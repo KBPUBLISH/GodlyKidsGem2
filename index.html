@@ -38,12 +38,13 @@
         }
       }
       
-      html, body {
-        width: 100%;
-        max-width: 100vw;
-        overflow-x: hidden;
+      html, body, #root {
         margin: 0;
         padding: 0;
+        width: 100%;
+        max-width: 100vw;
+        height: 100%;
+        overflow-x: hidden;
       }
       body {
         font-family: 'Nunito', sans-serif;
@@ -51,6 +52,19 @@
       }
       h1, h2, h3, h4, h5, h6, button {
         font-family: 'Fredoka', sans-serif;
+      }
+      /*
+       * My Home (Players World island): the page is a fixed full-screen iframe,
+       * so the top document must never scroll or rubber-band — otherwise a
+       * downward drag on a phone fires the browser's pull-to-refresh.
+       * MyHomePage toggles this class on <html> and <body> while mounted.
+       */
+      html.gk-no-pull-refresh,
+      body.gk-no-pull-refresh {
+        overscroll-behavior: none;
+        overscroll-behavior-y: none;
+        overflow: hidden;
+        height: 100%;
       }
       /* Custom scrollbar hiding */
       .no-scrollbar::-webkit-scrollbar {
@@ -98,6 +112,31 @@
       /* Ensure text is visible in inputs on dark backgrounds */
       input::placeholder {
         opacity: 0.6;
+      }
+
+      /*
+       * Library tab switch (Listen / Read / Creators) — the pane slides in from
+       * the side the new tab sits on, so the toggle feels like a carousel.
+       */
+      @keyframes gk-library-pane-in {
+        from {
+          opacity: 0;
+          transform: translateX(var(--gk-pane-from, 24px));
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .gk-library-pane {
+        animation: gk-library-pane-in 300ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .gk-library-pane {
+          animation-duration: 1ms;
+        }
       }
 
       /*
@@ -157,6 +196,52 @@
   }
 }
 </script>
+  <script>
+    // Recover open sessions that still reference a hashed Vite chunk removed by
+    // a newer Netlify deploy. Reload at most once so a real outage cannot loop.
+    (() => {
+      const reloadKey = 'gk_stale_chunk_reload';
+      const staleChunkPattern =
+        /failed to fetch dynamically imported module|chunkloaderror|loading chunk|importing a module script failed|not a valid javascript mime type|expected a javascript-or-wasm module script/i;
+
+      const errorText = (value) => {
+        if (!value) return '';
+        if (typeof value === 'string') return value;
+        return [value.message, value.reason?.message, value.error?.message, value.filename]
+          .filter(Boolean)
+          .join(' ');
+      };
+
+      const reloadForFreshDeploy = (event) => {
+        if (event?.preventDefault) event.preventDefault();
+
+        try {
+          if (sessionStorage.getItem(reloadKey)) return;
+          sessionStorage.setItem(reloadKey, String(Date.now()));
+        } catch (_) {
+          // Storage can be unavailable in a locked-down WebView; reload still helps.
+        }
+
+        window.location.reload();
+      };
+
+      window.addEventListener('vite:preloadError', reloadForFreshDeploy);
+      window.addEventListener('unhandledrejection', (event) => {
+        if (staleChunkPattern.test(errorText(event))) reloadForFreshDeploy(event);
+      });
+      window.addEventListener('error', (event) => {
+        const text = errorText(event);
+        const missingBuiltAsset = /\/assets\/[^?#]+\.(?:js|css)(?:[?#]|$)/i.test(text);
+        if (missingBuiltAsset || staleChunkPattern.test(text)) reloadForFreshDeploy(event);
+      }, true);
+
+      window.setTimeout(() => {
+        try {
+          sessionStorage.removeItem(reloadKey);
+        } catch (_) {}
+      }, 10000);
+    })();
+  </script>
 </head>
   <body>
     <div id="root"></div>

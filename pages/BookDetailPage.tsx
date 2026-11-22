@@ -22,8 +22,11 @@ import StrengthGameModal from '../components/features/StrengthGameModal';
 import PrayerGameModal from '../components/features/PrayerGameModal';
 import CommentSection from '../components/features/CommentSection';
 import { CHARACTER_STYLES } from '../components/features/CharacterStyleSelector';
+import { getLibraryMode, setLibraryMode as persistLibraryMode, type LibraryMode } from '../utils/libraryMode';
+import { isLibraryFromBasement } from '../utils/libraryFromBasement';
 
 import { DEFAULT_BOOK_COVER } from '../utils/placeholderImage';
+import HardcoverCover from '../components/ui/HardcoverCover';
 
 // Local SVG data-URI placeholder (the old via.placeholder.com service is dead).
 const DEFAULT_COVER = DEFAULT_BOOK_COVER;
@@ -619,9 +622,19 @@ const BookDetailPage: React.FC = () => {
   };
 
   const handleBack = () => {
-    // Navigate back to the previous main tab (passed via state) or default to Home
-    const backPath = (location.state as any)?.from || '/home';
-    navigate(backPath);
+    const incoming = (location.state as { from?: string; libraryMode?: LibraryMode } | null) || {};
+    if (incoming.libraryMode === 'read' || incoming.libraryMode === 'listen') {
+      persistLibraryMode(incoming.libraryMode);
+    }
+    const fromShipLibrary = isLibraryFromBasement();
+    const backPath = fromShipLibrary
+      ? incoming.from && incoming.from !== '/home'
+        ? incoming.from
+        : '/listen'
+      : incoming.from || '/home';
+    navigate(backPath, {
+      state: { libraryMode: incoming.libraryMode || getLibraryMode() },
+    });
   };
 
   return (
@@ -724,17 +737,18 @@ const BookDetailPage: React.FC = () => {
         {/* Main Content Area - Swaps based on type */}
         <div className="relative z-20 px-6 pt-2 flex flex-col items-center space-y-5">
 
-          {/* Book Cover - Aspect Square 1:1 - Increased max-width by another 7% */}
-          <div className="w-full aspect-square max-w-[20.6rem] md:max-w-[28rem] lg:max-w-[32rem] rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.6)] border-[3px] border-[#5c2e0b] relative bg-gray-800">
-            <img
-              src={imageError || !book.coverUrl ? DEFAULT_COVER : book.coverUrl}
-              alt={book.title}
-              className="w-full h-full object-cover"
-              onError={() => setImageError(true)}
-            />
-            {/* Decorative Sparkles */}
-            <div className="absolute top-3 right-4 text-white/90 text-2xl animate-pulse filter drop-shadow-md">✦</div>
-            <div className="absolute bottom-3 left-4 text-white/80 text-xl animate-pulse delay-700 filter drop-shadow-md">✨</div>
+          {/* Book Cover — hardcover 3D, same chrome as the library shelves */}
+          <div className="w-full max-w-[20.6rem] md:max-w-[28rem] lg:max-w-[32rem]">
+            <HardcoverCover aspectClassName="aspect-square">
+              <img
+                src={imageError || !book.coverUrl ? DEFAULT_COVER : book.coverUrl}
+                alt={book.title}
+                className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
+              />
+              <div className="absolute top-3 right-4 text-white/90 text-2xl animate-pulse filter drop-shadow-md z-20">✦</div>
+              <div className="absolute bottom-3 left-4 text-white/80 text-xl animate-pulse delay-700 filter drop-shadow-md z-20">✨</div>
+            </HardcoverCover>
           </div>
 
           {/* Featuring [childname] or "X & Y" with avatar(s) (Kids Monthly) — click to expand character images */}

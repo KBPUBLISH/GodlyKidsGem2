@@ -1,0 +1,59 @@
+const mongoose = require('mongoose');
+
+const hubSeriesReviewSchema = new mongoose.Schema({
+    playlistId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'HubPlaylist',
+        required: true,
+        index: true,
+    },
+    userId: {
+        type: String,
+        required: true,
+        index: true,
+    },
+    userEmail: {
+        type: String,
+        index: true,
+    },
+    displayName: {
+        type: String,
+        default: 'A family',
+        maxlength: 24,
+    },
+    // Public attribution only. Auth uniqueness stays on userId / userEmail.
+    anonymous: {
+        type: Boolean,
+        default: true,
+    },
+    rating: {
+        type: Number,
+        required: true,
+        min: 1,
+        max: 5,
+    },
+    comment: {
+        type: String,
+        default: '',
+        maxlength: 280,
+    },
+    // Only published reviews are listed and rolled into playlist averages.
+    status: {
+        type: String,
+        enum: ['published', 'pending'],
+        default: 'published',
+        index: true,
+    },
+    holdReason: {
+        type: String,
+        default: '',
+    },
+}, {
+    timestamps: true,
+});
+
+hubSeriesReviewSchema.index({ playlistId: 1, userId: 1 }, { unique: true });
+hubSeriesReviewSchema.index({ playlistId: 1, createdAt: -1 });
+hubSeriesReviewSchema.index({ status: 1, createdAt: 1 });
+
+module.exports = mongoose.model('HubSeriesReview', hubSeriesReviewSchema);

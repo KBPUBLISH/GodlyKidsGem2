@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
 const { checkPremiumAccess, linkDeviceToEmail, syncUserPremiumFromAppUser } = require('../utils/premiumAccess');
+const { getJwtSecret, JWT_EXPIRY } = require('../config/jwt');
 
 // Old backend configuration
 const OLD_BACKEND_URL = process.env.OLD_BACKEND_URL || 'https://api.godlykids.kbpublish.org';
@@ -86,14 +87,14 @@ router.post('/sign-up', async (req, res) => {
 
         const accessToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '1h' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.access }
         );
 
         const refreshToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.refresh }
         );
 
         res.status(201).json({
@@ -172,14 +173,14 @@ router.post('/sign-in', async (req, res) => {
 
         const accessToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '1h' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.access }
         );
 
         const refreshToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.refresh }
         );
 
         res.json({
@@ -215,14 +216,14 @@ router.post('/sign-in/skip', async (req, res) => {
 
         const accessToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '1h' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.access }
         );
 
         const refreshToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.refresh }
         );
 
         res.json({
@@ -291,14 +292,14 @@ router.post('/migrate-legacy', async (req, res) => {
 
         const accessToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '1h' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.access }
         );
 
         const refreshToken = jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.refresh }
         );
 
         res.status(201).json({ 

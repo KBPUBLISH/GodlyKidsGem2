@@ -1,0 +1,7 @@
+import React from 'react';
+import {Icon} from './ui.jsx';
+import {woodStorage} from './wood-storage.mjs';
+export function WoodStorageCard({state,onBuild}){
+ const wood=woodStorage(state),drops=(state.woodDrops||[]).reduce((n,d)=>n+d.quantity,0);
+ return <section className="wood-storage-card" aria-label="Wood storage"><div className="wood-storage-title"><Icon type="wood" size={42}/><div><h2>Your wood</h2><strong>{wood.total} <small>/ {wood.capacity} spaces</small></strong></div></div><progress value={Math.min(wood.total,wood.capacity)} max={wood.capacity} aria-label={`${wood.total} wood, ${wood.capacity} total wood spaces`}/><p>{wood.overflow?`Your ${wood.total} saved wood is safe. Add storage or use some wood before gathering more.`:wood.free?`${wood.free} spaces free. Wood from every tree shares this space.`:'Your wood space is full! Build a store or use some wood.'}</p><div className="wood-container-list">{wood.containers.map((box,i)=><div key={box.id}>{box.kind==='bag'?<Icon type="bag" size={30}/>:<img src={`/assets/build_${box.kind}.png`} alt=""/>}<span>{box.name}{box.kind!=='bag'?` ${i}`:''}</span><b>{box.used} / {box.capacity}</b></div>)}</div>{drops>0&&<p className="waiting-wood">{drops} extra {drops===1?'log is':'logs are'} waiting on the ground. Walk nearby when you have space.</p>}<button onClick={onBuild}><Icon type="build" size={28}/> Build wood storage</button><small className="wood-storage-note">Finished stores add 20, 50, 100 or 200 spaces each. Gathered wood fills them automatically.</small></section>;
+}

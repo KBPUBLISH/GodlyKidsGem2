@@ -4,18 +4,30 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
 const AppUser = require('../models/AppUser');
-const { authenticateUser } = require('../middleware/auth');
+const { authenticateUser, isAdminEmail } = require('../middleware/auth');
+const { getJwtSecret, JWT_EXPIRY } = require('../config/jwt');
+
+/**
+ * Token payload for an app-user login. The isAdmin claim exists so the admin
+ * portal can refuse a non-admin at the login screen: this endpoint serves every
+ * app user, so without it a parent's credentials open a portal whose every
+ * request then fails with 403. It is a hint for the client only - admin
+ * endpoints still re-check the allowlist against the account on each request.
+ */
+function buildUserTokenPayload(user) {
+    const payload = {
+        user: {
+            id: user.id,
+        },
+    };
+    if (isAdminEmail(user.email)) {
+        payload.isAdmin = true;
+    }
+    return payload;
+}
 
 function escapeRegexEmail(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getProtectedAccountEmails() {
-    const envEmails = process.env.ADMIN_EMAILS;
-    if (envEmails) {
-        return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-    }
-    return ['admin@godlykids.com', 'support@godlykids.com', 'hello@kbpublish.org'];
 }
 
 // Old backend configuration
@@ -70,16 +82,12 @@ router.post('/register', async (req, res) => {
 
         await user.save();
 
-        const payload = {
-            user: {
-                id: user.id,
-            },
-        };
+        const payload = buildUserTokenPayload(user);
 
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret', // Use environment variable in production
-            { expiresIn: 360000 },
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.legacy },
             (err, token) => {
                 if (err) throw err;
                 res.status(201).json({ token, user: { id: user.id, username: user.username, email: user.email } });
@@ -95,12 +103,17 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).json({ msg: 'Email and password are required' });
+    }
+
     try {
-        let user = await User.findOne({ email: email.toLowerCase().trim() });
+        const normalizedEmail = String(email).toLowerCase().trim();
+        let user = await User.findOne({ email: normalizedEmail });
         
         if (!user) {
             // User not found in new backend - check if they exist in old backend
-            const oldBackendCheck = await checkOldBackendEmail(email);
+            const oldBackendCheck = await checkOldBackendEmail(normalizedEmail);
             
             if (oldBackendCheck.exists) {
                 // They have an account in the old system!
@@ -120,16 +133,12 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ msg: 'Invalid Credentials' });
         }
 
-        const payload = {
-            user: {
-                id: user.id,
-            },
-        };
+        const payload = buildUserTokenPayload(user);
 
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: 360000 },
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.legacy },
             (err, token) => {
                 if (err) throw err;
                 res.json({ 
@@ -185,16 +194,12 @@ router.post('/migrate-legacy', async (req, res) => {
         await user.save();
         console.log('✅ Migrated legacy user:', email, 'isPremium:', oldBackendCheck.hasSubscription);
 
-        const payload = {
-            user: {
-                id: user.id,
-            },
-        };
+        const payload = buildUserTokenPayload(user);
 
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: 360000 },
+            getJwtSecret(),
+            { expiresIn: JWT_EXPIRY.legacy },
             (err, token) => {
                 if (err) throw err;
                 res.status(201).json({ 
@@ -230,7 +235,7 @@ router.delete('/account', authenticateUser, async (req, res) => {
         if (!emailLower) {
             return res.status(400).json({ success: false, message: 'No email on account; cannot delete.' });
         }
-        if (getProtectedAccountEmails().includes(emailLower)) {
+        if (isAdminEmail(emailLower)) {
             return res.status(403).json({ success: false, message: 'This account cannot be deleted.' });
         }
         await AppUser.deleteMany({

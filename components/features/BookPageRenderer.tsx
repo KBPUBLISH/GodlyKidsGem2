@@ -1,8 +1,12 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { languageDirection } from '../../localization/languageDirection';
+import {useLocalizedString} from '../../localization/LocalizedText';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { removeEmotionalCues } from '../../utils/textProcessing';
 import { attachPlaybackTrim } from '../../utils/playbackTrim';
 import TrimmedPlaybackVideo from '../media/TrimmedPlaybackVideo';
-import { Music } from 'lucide-react';
+import { wordForSpeech } from '../../utils/bibleMapReader';
+import ReaderCaptions from './ReaderCaptions';
+import { ChevronLeft, ChevronRight, Music } from 'lucide-react';
 
 interface TextBox {
     id: string;
@@ -17,6 +21,9 @@ interface TextBox {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     startTime?: number;
     endTime?: number;
+    showBackground?: boolean;
+    backgroundColor?: string;
+    shadowColor?: string;
 }
 
 /** First playback position inside authored trim (defaults to start of file). */
@@ -99,13 +106,21 @@ interface PageData {
 export type ScrollState = 'hidden' | 'mid' | 'max';
 
 /** Resolve scroll band heights; legacy pages may only have scrollHeight. */
-function resolveScrollHeights(page: PageData): { max: number; mid: number } {
-    const max = page.scrollMaxHeight ?? page.scrollHeight ?? 85;
-    const mid = page.scrollMidHeight ?? Math.max(50, max - 25);
+function resolveScrollHeights(
+    page: PageData,
+    opts?: { ensureVisibleResize?: boolean },
+): { max: number; mid: number } {
+    let max = page.scrollMaxHeight ?? page.scrollHeight ?? 85;
+    let mid = page.scrollMidHeight ?? Math.max(50, max - 25);
+    // Story books often save mid≈max, so raising the tab would not move the art.
+    if (opts?.ensureVisibleResize && max - mid < 18) {
+        max = Math.min(72, mid + 22);
+    }
     return { max, mid };
 }
 
 interface BookPageRendererProps {
+    language?: string;
     page: PageData;
     activeTextBoxIndex: number | null;
     scrollState: ScrollState;
@@ -119,6 +134,8 @@ interface BookPageRendererProps {
     isTTSPlaying?: boolean; // When true, duck layered page video / ambient audio for TTS
     /** Separate from TTS mute: layered background-video audio (extracted URL). Defaults on. */
     ambientVideoSoundEnabled?: boolean;
+    /** Loudness of that layered soundtrack. Story packs use half. */
+    ambientVolume?: number;
     /** When true and page has 2+ text boxes: show only the box being read (sequential page / auto TTS). */
     sequentialMultiBoxTts?: boolean;
     /** When true, skip interactive puzzles and show all text immediately */
@@ -126,10 +143,28 @@ interface BookPageRendererProps {
     // Character overlay props
     characterPoses?: CharacterPoses; // User's generated character poses
     showCharacterOverlay?: boolean; // Book-level setting to show character
+    /** Speak a single visible word (parchment word taps). */
+    onSpeakWord?: (word: string) => void;
+    /**
+     * Bible Map extras (page-nav chrome, green art fallback).
+     * Art still crops above the parchment for every book that has a scroll.
+     */
+    bibleMapLayout?: boolean;
+    /** Page Back/Next chrome — rendered above the parchment. Parent owns gating. */
+    pageNav?: {
+        onPrev: (e: React.MouseEvent) => void;
+        onNext: (e: React.MouseEvent) => void;
+        canGoPrev: boolean;
+        canGoNext: boolean;
+        /** When true, Next stays visible but disabled. */
+        nextLocked?: boolean;
+        disabled?: boolean;
+    };
 }
 
 export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     page,
+    language = 'en',
     activeTextBoxIndex,
     scrollState,
     onScrollStateChange,
@@ -140,15 +175,40 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
     onVideoTransition,
     isTTSPlaying = false,
     ambientVideoSoundEnabled,
+    ambientVolume = 0.7,
     sequentialMultiBoxTts = false,
     skipPuzzles = false,
     characterPoses,
-    showCharacterOverlay = false
+    showCharacterOverlay = false,
+    onSpeakWord,
+    bibleMapLayout = false,
+    pageNav,
 }) => {
-    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page);
+    const sayLabel = useLocalizedString('Say');
+    const { max: scrollMaxH, mid: scrollMidH } = resolveScrollHeights(page, {
+        ensureVisibleResize: !bibleMapLayout,
+    });
     const currentScrollHeightNum = scrollState === 'max' ? scrollMaxH : scrollMidH;
     const scrollOffset = page.scrollOffsetY || 0;
     const motionEnabled = scrollState !== 'hidden';
+    const [viewportW, setViewportW] = useState(
+        () => (typeof window === 'undefined' ? 1024 : window.innerWidth),
+    );
+    useEffect(() => {
+        const onResize = () => setViewportW(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+    /** Phone parchment: fill the scroll and shrink type so the page isn't clipped. */
+    const bibleMapMobile = bibleMapLayout && viewportW < 640;
+
+    /** Art fills the band above the parchment; expands fullscreen when the scroll is hidden. */
+    const cropArtToScroll = Boolean(page.scrollUrl);
+    const artHeightPct = useMemo(() => {
+        if (!cropArtToScroll) return 100;
+        if (scrollState === 'hidden') return 100;
+        return Math.max(32, 100 - currentScrollHeightNum - scrollOffset);
+    }, [cropArtToScroll, scrollState, currentScrollHeightNum, scrollOffset]);
 
     // For backward compatibility
     const showScroll = scrollState !== 'hidden';
@@ -238,6 +298,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const audio = backgroundAudioRef.current;
         if (!audio) return;
 
+        let cancelled = false;
         let detachTrim: (() => void) | undefined;
 
         let audioUrl: string | undefined;
@@ -273,19 +334,21 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         if (audioUrl) {
             if (audio.src !== audioUrl) {
                 audio.src = audioUrl;
-                audio.volume = 0.7;
                 audio.load();
             }
+            audio.volume = ambientVolume;
 
             detachTrim?.();
             detachTrim = attachPlaybackTrim(audio, {
                 trimStartSec,
                 trimEndSec,
-                segmentLoop: () => !!shouldSegmentLoopNative,
+                segmentLoop: () => !cancelled && !!shouldSegmentLoopNative,
             });
 
             const playAudio = () => {
+                if (cancelled) return;
                 audio.play().catch(err => {
+                    if (cancelled) return;
                     console.warn('🔊 Background audio autoplay prevented:', err);
                 });
             };
@@ -302,6 +365,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
 
         return () => {
+            cancelled = true;
             detachTrim?.();
             audio.pause();
             audio.currentTime = 0;
@@ -314,6 +378,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         page.useVideoSequence,
         sortedVideoSequence,
         currentVideoIndex,
+        ambientVolume,
     ]);
 
     // Duck or silence layered page video audio when narration plays or viewer turns it off.
@@ -323,8 +388,8 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         const enabled = ambientVideoSoundEnabled !== false;
         const audible = enabled && !isTTSPlaying;
         audio.muted = !audible;
-        audio.volume = audible ? 0.7 : 0;
-    }, [ambientVideoSoundEnabled, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
+        audio.volume = audible ? ambientVolume : 0;
+    }, [ambientVideoSoundEnabled, ambientVolume, isTTSPlaying, page.id, page.backgroundAudioUrl, page.useVideoSequence, sortedVideoSequence, currentVideoIndex]);
 
     // iOS/iPad: percentage clip-path and top can mis-measure until the container has a stable size.
     useLayoutEffect(() => {
@@ -351,12 +416,12 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         };
     }, [page.id, scrollMaxH, scrollMidH]);
 
-    // Swipe detection for scroll height changes (handle + pull-tab only — not whole page)
-    const touchStartY = useRef<number>(0);
-    const touchEndY = useRef<number>(0);
+    // Raise/lower the parchment from the tab (tap or swipe). Pointer covers mouse + touch.
+    const pointerStartY = useRef<number | null>(null);
+    const pointerMoved = useRef(false);
 
     const applyScrollPanelGesture = (deltaY: number) => {
-        const minSwipeDistance = 50;
+        const minSwipeDistance = 36;
         if (Math.abs(deltaY) <= minSwipeDistance || !onScrollStateChange) return;
         if (deltaY > 0) {
             const newState: ScrollState =
@@ -369,17 +434,44 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
         }
     };
 
-    const handleScrollTouchStart = (e: React.TouchEvent) => {
-        e.stopPropagation();
-        touchStartY.current = e.touches[0].clientY;
+    const cycleScrollFromTab = () => {
+        if (!onScrollStateChange) return;
+        if (scrollState === 'hidden') {
+            onScrollStateChange('mid');
+            return;
+        }
+        if (scrollState === 'mid') {
+            onScrollStateChange('max');
+            return;
+        }
+        onScrollStateChange('mid');
     };
 
-    const handleScrollTouchEnd = (e: React.TouchEvent) => {
+    const handleScrollTabPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         e.stopPropagation();
-        touchEndY.current = e.changedTouches[0].clientY;
-        applyScrollPanelGesture(touchStartY.current - touchEndY.current);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pointerStartY.current = e.clientY;
+        pointerMoved.current = false;
     };
-    
+
+    const handleScrollTabPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (pointerStartY.current == null) return;
+        if (Math.abs(pointerStartY.current - e.clientY) > 8) pointerMoved.current = true;
+    };
+
+    const handleScrollTabPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        const start = pointerStartY.current;
+        pointerStartY.current = null;
+        if (start == null) return;
+        const deltaY = start - e.clientY;
+        if (Math.abs(deltaY) > 36) {
+            applyScrollPanelGesture(deltaY);
+            return;
+        }
+        if (!pointerMoved.current) cycleScrollFromTab();
+    };
+
     const handleScrollClick = (e: React.MouseEvent) => {
         // Tap on scroll to toggle visibility (restore pre-hide state via parent when available)
         e.stopPropagation();
@@ -599,11 +691,27 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
             {/* Background Layer - warm parchment gradient as fallback instead of black */}
             {/* Fixed position prevents movement during touch/swipe gestures */}
             <div 
-                className="absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden"
+                className={
+                    cropArtToScroll
+                        ? `absolute top-0 left-0 right-0 overflow-hidden ${
+                              bibleMapLayout
+                                  ? 'bg-gradient-to-b from-[#2d5a3d] to-[#1e3d28]'
+                                  : 'bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7]'
+                          }`
+                        : 'absolute inset-0 bg-gradient-to-b from-[#fdf6e3] to-[#e8d5b7] overflow-hidden'
+                }
                 style={{
                     // Ensure background stays locked in place
                     touchAction: 'none',
                     pointerEvents: 'none',
+                    ...(cropArtToScroll
+                        ? {
+                              height: `${artHeightPct}%`,
+                              transition: layoutReady
+                                  ? 'height 0.5s ease-in-out'
+                                  : 'none',
+                          }
+                        : {}),
                 }}
             >
                 {/* Video Sequence Mode - double buffered for seamless transitions */}
@@ -613,7 +721,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <TrimmedPlaybackVideo
                             ref={videoRefA}
                             src={bufferAVideoUrl || ''}
-                            className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
+                            className={`absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300 ${
+                                cropArtToScroll ? 'object-top' : ''
+                            }`}
                             autoPlay={activeBuffer === 'A'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
                             muted // Always muted - use separate sound effects MP3 instead
@@ -650,7 +760,9 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                         <TrimmedPlaybackVideo
                             ref={videoRefB}
                             src={bufferBVideoUrl || ''}
-                            className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300"
+                            className={`absolute inset-0 w-full h-full object-cover min-w-full min-h-full transition-opacity duration-300 ${
+                                cropArtToScroll ? 'object-top' : ''
+                            }`}
                             autoPlay={activeBuffer === 'B'}
                             loop={sortedVideoSequence.length === 1} // Loop only if single video in sequence
                             muted // Always muted - use separate sound effects MP3 instead
@@ -741,7 +853,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     key={`${img.url}-${currentImageIndex}`}
                                     src={img.url}
                                     alt={`Background ${index + 1}`}
-                                    className="absolute w-full h-full object-cover"
+                                    className={`absolute w-full h-full object-cover ${cropArtToScroll ? 'object-top' : ''}`}
                                     style={{
                                         // Scale up slightly to allow room for pan/zoom effects
                                         minWidth: '110%',
@@ -807,10 +919,19 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     <TrimmedPlaybackVideo
                         ref={videoRef}
                         src={page.backgroundUrl}
-                        className="absolute inset-0 w-full h-full object-cover min-w-full min-h-full"
+                        className={
+                            cropArtToScroll
+                                ? 'absolute inset-0 w-full h-full object-cover object-top min-w-full min-h-full'
+                                : 'absolute inset-0 w-full h-full object-cover min-w-full min-h-full'
+                        }
                         autoPlay
                         loop
-                        muted // Always muted - use separate sound effects MP3 instead
+                        muted={
+                            // Prefer separate extracted audio when present; otherwise allow native video audio
+                            !!page.backgroundAudioUrl ||
+                            ambientVideoSoundEnabled === false ||
+                            !!isTTSPlaying
+                        }
                         playsInline
                         preload="auto"
                         trimStartSec={page.backgroundTrimStartSec}
@@ -864,7 +985,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 <img
                                     src={page.backgroundUrl}
                                     alt={`Page ${page.pageNumber}`}
-                                    className="w-full h-full object-cover"
+                                    className={cropArtToScroll ? 'w-full h-full object-cover object-top' : 'w-full h-full object-cover'}
                                     loading="eager"
                                     style={{
                                         position: 'absolute',
@@ -986,61 +1107,178 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 </div>
             )}
             
-            {/* Swipe Indicator - Inside the scroll, at the top */}
-            {page.scrollUrl && scrollState !== 'hidden' && (
-                <div 
-                    className="absolute left-1/2 transform -translate-x-1/2 z-20 pointer-events-none ease-in-out"
+            {/* Page nav — just above parchment top edge */}
+            {bibleMapLayout &&
+                pageNav &&
+                (() => {
+                    const navDisabled = !!pageNav?.disabled;
+                    const prevDisabled = navDisabled || !pageNav?.canGoPrev;
+                    const nextDisabled =
+                        navDisabled || !pageNav?.canGoNext || !!pageNav?.nextLocked;
+                    const chromeBottom =
+                        scrollState !== 'hidden'
+                            ? `calc(${currentScrollHeightNum}% + ${scrollOffset}% + 6px)`
+                            : '12%';
+
+                    return (
+                        <div
+                            className="absolute inset-x-0 z-[28] pointer-events-none flex items-center gap-2 px-2 sm:px-3"
+                            style={{
+                                bottom: chromeBottom,
+                                transition: layoutReady && motionEnabled ? 'bottom 0.5s ease-in-out' : 'none',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {pageNav ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (prevDisabled) return;
+                                        pageNav.onPrev(e);
+                                    }}
+                                    disabled={prevDisabled}
+                                    className={`pointer-events-auto shrink-0 min-w-[52px] h-12 sm:min-w-[56px] sm:h-14 px-2 rounded-full flex flex-col items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
+                                        prevDisabled
+                                            ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
+                                            : 'opacity-100 border-white/30 bg-black/40 text-white hover:bg-black/55'
+                                    }`}
+                                    data-testid="story-previous-page"
+                                    aria-label="Previous page"
+                                    title="Previous page"
+                                >
+                                    <ChevronLeft className="w-7 h-7 sm:w-8 sm:h-8 -mb-0.5" strokeWidth={2.5} />
+                                    <span className="text-[10px] sm:text-[11px] font-bold leading-none tracking-wide">
+                                        Back
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="shrink-0 min-w-[52px] sm:min-w-[56px]" aria-hidden />
+                            )}
+
+                            <div className="flex-1 min-w-0" />
+
+                            {pageNav ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (nextDisabled) return;
+                                        pageNav.onNext(e);
+                                    }}
+                                    data-testid="story-next-page"
+                                    disabled={nextDisabled}
+                                    className={`pointer-events-auto shrink-0 min-w-[52px] h-12 sm:min-w-[56px] sm:h-14 px-2 rounded-full flex flex-col items-center justify-center shadow-lg backdrop-blur-sm border-2 transition active:scale-95 ${
+                                        navDisabled || !pageNav.canGoNext
+                                            ? 'opacity-0 pointer-events-none border-white/30 bg-black/35 text-white'
+                                            : pageNav.nextLocked
+                                              ? 'opacity-45 cursor-not-allowed border-white/20 bg-black/30 text-white'
+                                              : 'opacity-100 border-emerald-300/50 bg-emerald-600/90 text-white hover:bg-emerald-500'
+                                    }`}
+                                    aria-label={
+                                        pageNav.nextLocked
+                                            ? 'Find all missing words to continue'
+                                            : 'Next page'
+                                    }
+                                    title={
+                                        pageNav.nextLocked
+                                            ? 'Find all missing words to continue'
+                                            : 'Next page'
+                                    }
+                                >
+                                    <ChevronRight className="w-7 h-7 sm:w-8 sm:h-8 -mb-0.5" strokeWidth={2.5} />
+                                    <span className="text-[10px] sm:text-[11px] font-bold leading-none tracking-wide">
+                                        Next
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="shrink-0 min-w-[52px] sm:min-w-[56px]" aria-hidden />
+                            )}
+                        </div>
+                    );
+                })()}
+
+            {/* Scroll tab — tap or swipe to raise/lower the parchment and resize art */}
+            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
+                <div
+                    className="absolute left-1/2 z-[22] pointer-events-auto flex flex-col items-center justify-end"
                     style={{
-                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 24px)`,
-                        transition: layoutReady && motionEnabled ? 'all 0.5s ease-in-out' : 'none',
+                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 2px)`,
+                        width: 'min(78%, 300px)',
+                        height: '52px',
+                        transform: 'translateX(-50%)',
+                        touchAction: 'none',
+                        transition: layoutReady && motionEnabled ? 'bottom 0.5s ease-in-out' : 'none',
                     }}
+                    onPointerDown={handleScrollTabPointerDown}
+                    onPointerMove={handleScrollTabPointerMove}
+                    onPointerUp={handleScrollTabPointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    role="slider"
+                    aria-valuemin={0}
+                    aria-valuemax={2}
+                    aria-valuenow={scrollState === 'max' ? 2 : 1}
+                    aria-label="Raise or lower the reading scroll"
                 >
-                    <div className="flex flex-col items-center gap-0.5 opacity-50">
-                        <div className="w-10 h-1 bg-white rounded-full shadow"></div>
+                    <div className="flex flex-col items-center gap-1 pb-1">
+                        <span
+                            className="rounded-full shadow-md"
+                            style={{
+                                width: 44,
+                                height: 6,
+                                background: 'rgba(255,255,255,0.92)',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                            }}
+                        />
                         <span className="text-white/90 text-[9px] font-medium drop-shadow">
-                            {scrollState === 'mid' ? '↑ Swipe for more' : '↓ Swipe to shrink'}
+                            {scrollState === 'mid' ? '↑ Tap for more' : '↓ Tap to shrink'}
                         </span>
                     </div>
                 </div>
             )}
 
-            {/* Resize handle — swipe here to expand/shrink panel (not on story text) */}
-            {page.scrollUrl && scrollState !== 'hidden' && onScrollStateChange && (
-                <div
-                    className="absolute left-1/2 z-[22] pointer-events-auto"
-                    style={{
-                        bottom: `calc(${currentScrollHeightNum}% + ${scrollOffset}% - 6px)`,
-                        width: 'min(72%, 280px)',
-                        height: '44px',
-                        transform: 'translateX(-50%)',
-                        touchAction: 'none',
-                    }}
-                    onTouchStart={handleScrollTouchStart}
-                    onTouchEnd={handleScrollTouchEnd}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Swipe to resize reading panel"
-                />
-            )}
-
             {/* Pull tab when panel is hidden */}
             {page.scrollUrl && scrollState === 'hidden' && onScrollStateChange && (
                 <div
-                    className="absolute bottom-0 left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
-                    style={{ touchAction: 'none' }}
-                    onTouchStart={handleScrollTouchStart}
-                    onTouchEnd={handleScrollTouchEnd}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleScrollVisibility?.();
-                    }}
-                    aria-label="Swipe up to show reading panel"
+                    className="absolute left-0 right-0 z-[22] h-14 pointer-events-auto flex items-center justify-center"
+                    style={{ touchAction: 'none', bottom: 'var(--safe-area-bottom, 0px)' }}
+                    onPointerDown={handleScrollTabPointerDown}
+                    onPointerMove={handleScrollTabPointerMove}
+                    onPointerUp={handleScrollTabPointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Show reading scroll"
                 >
-                    <div className="flex flex-col items-center gap-1 opacity-60">
-                        <div className="w-10 h-1 bg-white rounded-full shadow" />
+                    <div className="flex flex-col items-center gap-1 opacity-70">
+                        <div className="w-11 h-1.5 rounded-full bg-white shadow" />
                         <span className="text-white/90 text-[9px] font-medium drop-shadow">↑ Show text</span>
                     </div>
                 </div>
             )}
+
+            {/* Full-screen captions — Bible Map with the parchment hidden: the page
+                text rides over the art a phrase at a time, spoken word lit up. */}
+            {bibleMapLayout &&
+                page.scrollUrl &&
+                scrollState === 'hidden' &&
+                (() => {
+                    const boxIdx = activeTextBoxIndex ?? 0;
+                    const box = page.textBoxes?.[boxIdx];
+                    if (!box?.text) return null;
+                    return (
+                        <ReaderCaptions
+                            language={language}
+                            text={box.text}
+                            highlightedWordIndex={
+                                activeTextBoxIndex === boxIdx && wordAlignment
+                                    ? (highlightedWordIndex ?? -1)
+                                    : -1
+                            }
+                            fontSize={bibleMapMobile ? 30 : 38}
+                            fontFamily={box.fontFamily || 'Patrick Hand'}
+                            bottom={bibleMapMobile ? '21%' : '16%'}
+                        />
+                    );
+                })()}
 
             {/* Text Boxes Layer - Below swipe zone */}
             {/* Text boxes layer - z-50 to appear above play button (z-40) */}
@@ -1050,7 +1288,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                 style={page.scrollUrl ? {
                     clipPath: scrollState === 'hidden' 
                         ? 'inset(100% 0 0 0)' // Hide all when scroll is hidden
-                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + 5}% 0)`,
+                        : `inset(${100 - currentScrollHeightNum - scrollOffset}% 0 ${scrollOffset + (bibleMapMobile ? 0 : 5)}% 0)`,
                     transition: layoutReady && motionEnabled ? 'clip-path 0.5s ease-in-out' : 'none',
                 } : {}}
             >
@@ -1072,7 +1310,13 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     let textTopStyle: string;
                     let textMaxHeightStyle: string;
                     
-                    if (page.scrollUrl) {
+                    if (page.scrollUrl && bibleMapMobile) {
+                        // Keep words on the paper, clear of the wooden rollers.
+                        const rollerPct = Math.max(4, currentScrollHeightNum * 0.13);
+                        const innerTop = 100 - currentScrollHeightNum - scrollOffset + rollerPct;
+                        textTopStyle = `${innerTop}%`;
+                        textMaxHeightStyle = `${Math.max(14, currentScrollHeightNum - rollerPct * 2)}%`;
+                    } else if (page.scrollUrl) {
                         const scrollTopPosition = `calc(100% - ${currentScrollHeightNum}% - ${scrollOffset}% + 12px)`;
                         textTopStyle = `max(${boxY}%, ${scrollTopPosition})`;
                         const scrollStartPercent = 100 - currentScrollHeightNum - scrollOffset + 3;
@@ -1085,21 +1329,37 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                     }
 
                     const showBg = box.showBackground === true;
-                    
+                    const boxWordCount = (box.text || '').trim().split(/\s+/).filter(Boolean).length;
+                    const authoredPx = (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
+                        ? Math.round((box.fontSize || 24) * 1.2)
+                        : (box.fontSize || 24);
+                    const mobileFontCap =
+                        boxWordCount > 55 ? 16
+                        : boxWordCount > 40 ? 18
+                        : boxWordCount > 28 ? 20
+                        : boxWordCount > 16 ? 22
+                        : 24;
+
                     return (
                         <div
                             key={idx}
                             ref={(el) => { textBoxRefs.current[idx] = el; }}
                             data-scroll-container="true"
+                            lang={language}
+                            dir={languageDirection(language)}
                             className="absolute pointer-events-auto overflow-y-auto p-2 group"
                             aria-hidden={hideThisBoxSequential}
                             style={{
                                 // Add safe area padding for landscape mode (notch/Dynamic Island)
                                 // Use calc to ensure minimum 3% from edge + safe area
-                                left: `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
+                                left: bibleMapMobile
+                                    ? 'calc(8% + env(safe-area-inset-left, 0px))'
+                                    : `calc(max(${boxX}%, 3%) + env(safe-area-inset-left, 0px))`,
                                 top: textTopStyle,
-                                width: `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
-                                textAlign: box.alignment || 'left',
+                                width: bibleMapMobile
+                                    ? 'calc(84% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))'
+                                    : `min(${box.width || 30}%, calc(100% - max(${boxX}%, 3%) - 3% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))`,
+                                textAlign: bibleMapMobile ? 'center' : (languageDirection(language) === 'rtl' && (!box.alignment || box.alignment === 'left') ? 'start' : (box.alignment || 'start')),
                                 color: box.color || '#4a3b2a',
                                 // Use Google Font with fallbacks for iOS compatibility
                                 // Comic Sans MS may not be available on iOS
@@ -1108,9 +1368,7 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                     ? "'Patrick Hand', 'Comic Sans MS', 'Bubblegum Sans', cursive" 
                                     : (box.fontFamily || "'Patrick Hand', 'Comic Sans MS', cursive"),
                                 // Increase font size by 20% when using Patrick Hand fallback (it renders smaller)
-                                fontSize: (box.fontFamily === 'Comic Sans MS' || !box.fontFamily)
-                                    ? `${Math.round((box.fontSize || 24) * 1.2)}px`
-                                    : `${box.fontSize || 24}px`,
+                                fontSize: `${bibleMapMobile ? Math.min(authoredPx, mobileFontCap) : authoredPx}px`,
                                 maxHeight: textMaxHeightStyle,
                                 overflowY: 'auto',
                                 overscrollBehavior: 'contain',
@@ -1133,26 +1391,72 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                 // Show background box if user explicitly enabled it
                                 backgroundColor: showBg ? (box.backgroundColor || 'rgba(255,255,255,0.85)') : 'transparent',
                                 borderRadius: showBg ? '12px' : '0',
-                                padding: showBg ? '12px 16px' : '8px',
+                                padding: bibleMapMobile ? '2px 0' : showBg ? '12px 16px' : '8px',
                             }}
                             onClick={(e) => {
                                 e.stopPropagation(); // Prevent scroll toggle when tapping text
+                                // Don't start page TTS when tapping a single speakable word
+                                if ((e.target as HTMLElement)?.closest?.('[data-speak-word]')) {
+                                    return;
+                                }
                                 onPlayText && onPlayText(box.text, idx, e);
                             }}
                         >
                             <div className={`
                                 relative rounded-xl transition-all duration-300
-                                ${isActive
-                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)] scale-105'
-                                    : 'hover:scale-102 cursor-pointer'
+                                ${isActive && !bibleMapMobile
+                                    ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)]'
+                                    : isActive
+                                      ? 'shadow-[0_0_15px_rgba(255,215,0,0.4)]'
+                                      : 'cursor-pointer'
                                 }
                             `}>
-                                <p className="leading-relaxed relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" style={{ whiteSpace: 'pre-wrap' }}>
+                                <p className={`reader-story-text ${bibleMapMobile ? 'leading-snug' : 'leading-relaxed'} relative drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]`} style={{ whiteSpace: 'pre-wrap' }}>
                                     {(() => {
                                         // Always use the cleaned text from the original
                                         const cleanedText = removeEmotionalCues(box.text);
                                         const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
-                                        
+                                        const canSpeakWords = !!onSpeakWord;
+
+                                        const speakWordClick = (
+                                            e: React.MouseEvent,
+                                            word: string,
+                                        ) => {
+                                            if (!onSpeakWord) return;
+                                            e.stopPropagation();
+                                            onSpeakWord(word);
+                                        };
+
+                                        const renderSpeakableWord = (
+                                            word: string,
+                                            wIdx: number,
+                                            extraClass = '',
+                                        ) => (
+                                            <span
+                                                key={wIdx}
+                                                data-no-localize="true"
+                                                data-word-index={wIdx}
+                                                data-speak-word={canSpeakWords ? '1' : undefined}
+                                                role={canSpeakWords ? 'button' : undefined}
+                                                tabIndex={canSpeakWords ? 0 : undefined}
+                                                className={`rounded px-0.5 ${
+                                                    canSpeakWords
+                                                        ? 'cursor-pointer active:bg-amber-200/70 hover:bg-amber-100/50'
+                                                        : ''
+                                                } ${extraClass}`}
+                                                onClick={
+                                                    canSpeakWords
+                                                        ? (e) => speakWordClick(e, word)
+                                                        : undefined
+                                                }
+                                                aria-label={
+                                                    canSpeakWords ? `${sayLabel} ${wordForSpeech(word) || word}` : undefined
+                                                }
+                                            >
+                                                {word}{' '}
+                                            </span>
+                                        );
+
                                         // If active with word alignment, show with highlighting
                                         if (isActive && wordAlignment && highlightedWordIndex >= 0) {
                                             return words.map((word, wIdx) => {
@@ -1161,12 +1465,11 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                     highlightedWordIndex >= 0 && wIdx > highlightedWordIndex;
                                                 const isPast =
                                                     highlightedWordIndex >= 0 && wIdx < highlightedWordIndex;
-                                                return (
-                                                    <span
-                                                        key={wIdx}
-                                                        data-word-index={wIdx}
-                                                        className={`
-                                                            gk-readalong-word rounded px-0.5
+                                                return renderSpeakableWord(
+                                                    word,
+                                                    wIdx,
+                                                    `
+                                                            gk-readalong-word
                                                             ${isHighlighted
                                                                 ? 'gk-readalong-word--current opacity-100 bg-[#FFD700] text-black font-bold shadow-[0_0_22px_rgba(255,215,0,0.55),0_3px_8px_rgba(0,0,0,0.15)] ring-2 ring-amber-200/80'
                                                                 : isUpcoming
@@ -1175,12 +1478,16 @@ export const BookPageRenderer: React.FC<BookPageRendererProps> = ({
                                                                         ? 'opacity-78'
                                                                         : ''
                                                             }
-                                                        `}
-                                                    >
-                                                        {word}{' '}
-                                                    </span>
+                                                        `,
                                                 );
                                             });
+                                        }
+
+                                        // Bible Map: split into tappable word spans for practice
+                                        if (canSpeakWords && words.length > 0) {
+                                            return words.map((word, wIdx) =>
+                                                renderSpeakableWord(word, wIdx),
+                                            );
                                         }
                                         
                                         // Standard rendering - preserve line breaks

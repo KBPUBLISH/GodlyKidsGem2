@@ -4,6 +4,8 @@ import Header from '../components/layout/Header';
 import WoodButton from '../components/ui/WoodButton';
 import ShippingAddressModal, { ShippingAddress } from '../components/modals/ShippingAddressModal';
 import { Gift, Book, CheckCircle } from 'lucide-react';
+import { getApiBaseUrl } from '../services/apiService';
+import { authService } from '../services/authService';
 
 /**
  * Free Book Claim Page
@@ -25,18 +27,25 @@ const FreeBookClaimPage: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // TODO: Replace this with your actual API endpoint
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.godlykids.com';
-      
-      const response = await fetch(`${API_BASE_URL}/api/free-book-claims`, {
+      const user = authService.getUser();
+      const response = await fetch(`${getApiBaseUrl()}offer-claims`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...address,
-          userId: localStorage.getItem('godlykids_device_id'),
-          claimedAt: new Date().toISOString(),
+          email: address.email,
+          userId: user?._id || user?.id || undefined,
+          shipping: {
+            fullName: address.fullName,
+            line1: address.streetAddress,
+            line2: address.apt || '',
+            city: address.city,
+            region: address.state,
+            postalCode: address.postalCode,
+            country: address.country,
+            phone: address.phone || '',
+          },
         }),
       });
 

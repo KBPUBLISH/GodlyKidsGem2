@@ -6,6 +6,7 @@ import { getApiBaseUrl } from '../services/apiService';
 import { favoritesService } from '../services/favoritesService';
 import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
+import HardcoverCover from '../components/ui/HardcoverCover';
 
 // Predefined color palettes for fallback (warm, cool, vibrant variations)
 const FALLBACK_PALETTES = [
@@ -393,18 +394,14 @@ const BookSeriesDetailPage: React.FC = () => {
                 <div className="relative z-20 px-6 pt-16 pb-8">
                     {/* Cover Image */}
                     {series.coverImage && (
-                        <div 
-                            className="w-56 h-56 mx-auto mb-6 rounded-3xl overflow-hidden shadow-2xl"
-                            style={{
-                                border: '4px solid rgba(255,255,255,0.3)',
-                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-                            }}
-                        >
-                            <img
-                                src={series.coverImage}
-                                alt={series.title}
-                                className="w-full h-full object-cover"
-                            />
+                        <div className="w-56 mx-auto mb-6">
+                            <HardcoverCover aspectClassName="aspect-square">
+                                <img
+                                    src={series.coverImage}
+                                    alt={series.title}
+                                    className="w-full h-full object-cover"
+                                />
+                            </HardcoverCover>
                         </div>
                     )}
 

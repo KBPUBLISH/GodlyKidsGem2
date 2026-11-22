@@ -1,0 +1,13 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {initialState} from '../../homeworld/src/core.mjs';
+import {freshState} from '../../homeworld/src/living-test-rules.mjs';
+import {farmFresh} from '../../homeworld/src/living-farm-rules.mjs';
+const world=JSON.parse(readFileSync(new URL('../../public/homeworld/assets/world.json',import.meta.url)));
+const s=initialState(world);s.livingTasksSeen=true;s.livingArrivalSeen=true;s.livingGardenLayout='existing';s.livingTentAwarded=true;s.stats.plowed=5;
+s.inventory={...s.inventory,carrot:3,pine_wood:0,stone:0};
+s.livingFarm=farmFresh();s.livingFarm.coins=100;s.livingFarm.garden={...s.livingFarm.garden,planted:4,plantedSpots:[0,3,4,5],rewarded:true,picked:{carrot:1,pumpkin:1,lettuce:1},completed:true};
+const t={...freshState(),stage:1,gathered:['log-1','log-2','log-3'],deposits:{'first-camp':3,'garden-carrots':0,'home-wood':0},approvedBuildings:{'first-camp':true},inviteDismissed:true};
+const suffix=':living-test-solo:goals-local';
+const entries={[`godlykids_homeworld_playtest_v1${suffix}`]:s,[`gk_living_island_requests_v2${suffix}`]:t};
+const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Island · Goals playtest</title><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8bd1df}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><script>const entries=${JSON.stringify(entries)};for(const [key,value]of Object.entries(entries)){if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(value));}</script><iframe title="Goals island playtest" src="/homeworld/index.html?livingTest=1&profile=goals-local&player=Explorer&avatar=boy-1"></iframe></body></html>`;
+writeFileSync('/private/tmp/godly-kids-goal-playtest.html',html);

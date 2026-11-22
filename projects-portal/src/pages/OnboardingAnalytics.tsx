@@ -6,6 +6,7 @@ import {
     BookOpen, AlertTriangle, CheckCircle, Target, Sparkles, MessageSquare,
     ThumbsUp, ThumbsDown, Star, Gamepad2, Headphones, Music, PlayCircle, PauseCircle
 } from 'lucide-react';
+import apiClient from '../services/apiClient';
 
 interface FunnelStep {
     step: string;
@@ -318,16 +319,20 @@ interface LessonRetentionData {
     retentionDays: number[];
 }
 
-// API Base URL
-const getApiBase = () => {
-    let base = import.meta.env.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-    base = base.replace(/\/$/, '');
-    if (!base.endsWith('/api')) {
-        base = `${base}/api`;
+/**
+ * These endpoints are admin-only, so apiClient attaches the admin token. One
+ * panel failing should not blank the rest of the page, so a failure reads as an
+ * unsuccessful payload — the same shape the checks below already handle.
+ */
+const safeGet = async (path: string) => {
+    try {
+        const res = await apiClient.get(path);
+        return res.data;
+    } catch (err) {
+        console.warn(`[OnboardingAnalytics] Failed to load ${path}`, err);
+        return { success: false };
     }
-    return base;
 };
-const API_BASE = getApiBase();
 
 const OnboardingAnalytics: React.FC = () => {
     const navigate = useNavigate();
@@ -349,25 +354,16 @@ const OnboardingAnalytics: React.FC = () => {
         setError(null);
         try {
             // Fetch onboarding, tutorial, preferences, retention, survey, and book-building data in parallel
-            const [onboardingRes, tutorialRes, preferencesRes, retentionRes, surveyRes, bookBuildingRes, paywallRes, lessonRetRes] = await Promise.all([
-                fetch(`${API_BASE}/analytics/onboarding?days=${days}`),
-                fetch(`${API_BASE}/analytics/tutorial?days=${days}`),
-                fetch(`${API_BASE}/analytics/onboarding/preferences?days=${days}`),
-                fetch(`${API_BASE}/analytics/retention?days=${Math.max(days, 30)}`),
-                fetch(`${API_BASE}/survey/analytics?days=${days}`),
-                fetch(`${API_BASE}/analytics/onboarding/book-building?days=${days}`),
-                fetch(`${API_BASE}/analytics/paywall?days=${days}`),
-                fetch(`${API_BASE}/analytics/lesson-retention?days=${days}`),
+            const [onboardingResult, tutorialResult, preferencesResult, retentionResult, surveyResult, bookBuildingResult, paywallResult, lessonRetResult] = await Promise.all([
+                safeGet(`/api/analytics/onboarding?days=${days}`),
+                safeGet(`/api/analytics/tutorial?days=${days}`),
+                safeGet(`/api/analytics/onboarding/preferences?days=${days}`),
+                safeGet(`/api/analytics/retention?days=${Math.max(days, 30)}`),
+                safeGet(`/api/survey/analytics?days=${days}`),
+                safeGet(`/api/analytics/onboarding/book-building?days=${days}`),
+                safeGet(`/api/analytics/paywall?days=${days}`),
+                safeGet(`/api/analytics/lesson-retention?days=${days}`),
             ]);
-            
-            const onboardingResult = await onboardingRes.json();
-            const tutorialResult = await tutorialRes.json();
-            const preferencesResult = await preferencesRes.json();
-            const retentionResult = await retentionRes.json();
-            const surveyResult = await surveyRes.json();
-            const bookBuildingResult = await bookBuildingRes.json();
-            const paywallResult = await paywallRes.json();
-            const lessonRetResult = await lessonRetRes.json();
             
             if (onboardingResult.success) {
                 setData(onboardingResult);

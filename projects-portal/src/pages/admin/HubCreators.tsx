@@ -23,6 +23,8 @@ interface Creator {
   totalSalesCount: number;
   invitedAt: string;
   activatedAt?: string;
+  /** Negotiated cents per token; null means the platform rate. */
+  centsPerToken?: number | null;
 }
 
 const HubCreators: React.FC = () => {
@@ -32,6 +34,7 @@ const HubCreators: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
+  const [inviteEmailSent, setInviteEmailSent] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -72,6 +75,7 @@ const HubCreators: React.FC = () => {
       );
       
       setInviteUrl(res.data.inviteUrl);
+      setInviteEmailSent(!!res.data.emailSent);
       fetchCreators();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to invite creator');
@@ -91,6 +95,34 @@ const HubCreators: React.FC = () => {
       fetchCreators();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to update status');
+    }
+  };
+
+  /** Put one creator on a negotiated rate, or blank to use the platform rate. */
+  const handleRateChange = async (creator: Creator) => {
+    const answer = window.prompt(
+      `Cents this creator earns per token spent on their content.\nLeave blank to use the platform default.`,
+      creator.centsPerToken ? String(creator.centsPerToken) : ''
+    );
+    if (answer === null) return;
+
+    const trimmed = answer.trim();
+    const centsPerToken = trimmed === '' ? null : Number(trimmed);
+    if (centsPerToken !== null && (!Number.isFinite(centsPerToken) || centsPerToken <= 0)) {
+      alert('Enter a positive number of cents, or leave blank for the default');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('portal_admin_token');
+      await axios.put(
+        `${API_URL}/api/hub/admin/creators/${creator._id}/rate`,
+        { centsPerToken },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchCreators();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to update rate');
     }
   };
 
@@ -197,6 +229,7 @@ const HubCreators: React.FC = () => {
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Content</th>
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Sales</th>
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Earnings</th>
+              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Rate</th>
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Pending</th>
               <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Actions</th>
             </tr>
@@ -228,6 +261,17 @@ const HubCreators: React.FC = () => {
                 <td className="px-6 py-4 text-gray-900">{creator.totalSalesCount || 0}</td>
                 <td className="px-6 py-4 text-gray-900">
                   {formatCurrency(creator.totalEarningsCents || 0)}
+                </td>
+                <td className="px-6 py-4">
+                  <button
+                    onClick={() => handleRateChange(creator)}
+                    className="text-sm text-gray-700 hover:text-indigo-600 underline decoration-dotted"
+                    title="Cents earned per token spent on this creator's content"
+                  >
+                    {creator.centsPerToken
+                      ? `${creator.centsPerToken}¢/token`
+                      : 'Default'}
+                  </button>
                 </td>
                 <td className="px-6 py-4">
                   <span className="font-medium text-purple-600">
@@ -319,12 +363,25 @@ const HubCreators: React.FC = () => {
               </>
             ) : (
               <>
-                <div className="bg-green-50 rounded-lg p-4 mb-4">
-                  <p className="text-green-700 font-medium">Invite created successfully!</p>
-                  <p className="text-sm text-green-600 mt-1">
-                    Share this link with {inviteName}:
-                  </p>
-                </div>
+                {inviteEmailSent ? (
+                  <div className="bg-green-50 rounded-lg p-4 mb-4">
+                    <p className="text-green-700 font-medium">
+                      Invite emailed to {inviteEmail}
+                    </p>
+                    <p className="text-sm text-green-600 mt-1">
+                      Here's the same link, in case {inviteName} needs it again:
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 rounded-lg p-4 mb-4">
+                    <p className="text-amber-800 font-medium">
+                      Invite created, but the email didn't send
+                    </p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Share this link with {inviteName} yourself:
+                    </p>
+                  </div>
+                )}
                 
                 <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg">
                   <input

@@ -1,0 +1,12 @@
+/* Island notices: small top-left pop-ups on the Crew page telling the kid what
+   their island friends did (explorer look: cream card, Fredoka, teal accent). */
+.island-notices{position:fixed;z-index:50;top:calc(var(--safe-area-top,env(safe-area-inset-top,0px)) + 10px);left:max(10px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:min(78vw,340px);pointer-events:none}
+.island-notice{display:flex;align-items:center;gap:10px;max-width:100%;padding:8px 14px 8px 9px;border-radius:16px;background:#fffaf0;border:1px solid #fff8;box-shadow:0 8px 22px #002a4440,0 0 0 1px #24475014;color:#244750;font-family:Nunito,sans-serif;font-size:13px;line-height:1.3;text-align:left;cursor:pointer;pointer-events:auto;opacity:0;transform:translateX(-18px);animation:island-notice-in .38s cubic-bezier(.22,1,.36,1) forwards;-webkit-tap-highlight-color:transparent}
+.island-notice.is-leaving{animation:island-notice-out .4s ease forwards}
+.island-notice-icon{flex-shrink:0;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#e7f0e7;color:#287b68;border:1px solid #d2e0d2}
+.island-notice-text{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.island-notice-text b{font-family:Fredoka,Nunito,sans-serif;font-weight:500;font-size:14px;color:#287b68;margin-right:.3em}
+@keyframes island-notice-in{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes island-notice-out{from{opacity:1;transform:none}to{opacity:0;transform:translateX(-12px)}}
+@media(min-width:768px){.island-notices{top:calc(var(--safe-area-top,env(safe-area-inset-top,0px)) + 14px);left:max(14px,env(safe-area-inset-left,0px));width:min(46vw,360px)}.island-notice{font-size:14px;padding:9px 16px 9px 10px}.island-notice-text b{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.island-notice{transform:none;animation:island-notice-fade-in .25s linear forwards}.island-notice.is-leaving{animation:island-notice-fade-out .25s linear forwards}@keyframes island-notice-fade-in{from{opacity:0}to{opacity:1}}@keyframes island-notice-fade-out{from{opacity:1}to{opacity:0}}}

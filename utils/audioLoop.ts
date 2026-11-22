@@ -11,7 +11,7 @@ export function attachReliableLoop(
 
     const restart = (): void => {
         if (!loopEnabled()) return;
-        // Don't restart if already playing - prevents multiple simultaneous playbacks
+        // Don't restart if already playing - prevents overlapping jukebox loops.
         if (!media.paused && media.currentTime > 0 && media.currentTime < media.duration - 0.1) {
             return;
         }

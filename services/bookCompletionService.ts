@@ -1,6 +1,8 @@
 // Book Completion Service - Tracks which books have been completed (permanently)
 // Once a book is completed, games remain unlocked forever regardless of re-reading progress
 
+import { progressSyncService } from './progressSyncService';
+
 const COMPLETED_BOOKS_KEY = 'godlykids_completed_books';
 
 interface CompletedBook {
@@ -44,12 +46,14 @@ class BookCompletionService {
     }
 
     const completedBooks = this.getAllCompletedBooks();
+    const completedAt = Date.now();
     completedBooks.push({
       bookId,
-      completedAt: Date.now()
+      completedAt
     });
     
     this.saveAllCompletedBooks(completedBooks);
+    progressSyncService.reportBookCompleted(bookId, completedAt);
     console.log(`📚 Book ${bookId} marked as completed - games permanently unlocked!`);
   }
 
@@ -58,6 +62,11 @@ class BookCompletionService {
     const completedBooks = this.getAllCompletedBooks();
     const book = completedBooks.find(b => b.bookId === bookId);
     return book ? book.completedAt : null;
+  }
+
+  // Upload completions recorded before progress sync existed (runs once per device)
+  backfillProgressSync(): void {
+    progressSyncService.backfillOnce(this.getAllCompletedBooks());
   }
 
   // Get all completed book IDs

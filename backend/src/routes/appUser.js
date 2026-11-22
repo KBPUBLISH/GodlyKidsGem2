@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AppUser = require('../models/AppUser');
 const ReverseTrialDevice = require('../models/ReverseTrialDevice');
+const { sanitizeProgressReport, mergeProgress } = require('../services/smartNotifications/state');
 
 /**
  * POST /api/app-user/register-device
@@ -682,6 +683,45 @@ router.get('/stats/:identifier', async (req, res) => {
 });
 
 /**
+ * POST /api/app-user/progress
+ * Merge content progress reported by the app (completed books, current page, completed games,
+ * island buildings). Drives behaviour-based notifications. Reports are additive: send only what changed.
+ * Body: { userId, completedBooks?, inProgressBooks?, completedGames?, island? }
+ */
+router.post('/progress', async (req, res) => {
+    try {
+        const { userId } = req.body || {};
+        if (!userId || typeof userId !== 'string') {
+            return res.status(400).json({ success: false, error: 'userId is required' });
+        }
+
+        const query = userId.includes('@')
+            ? { email: userId.toLowerCase() }
+            : /^[0-9a-fA-F]{24}$/.test(userId)
+                ? { $or: [{ _id: userId }, { deviceId: userId }] }
+                : { deviceId: userId };
+        const user = await AppUser.findOne(query).select('learningProgress');
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        const now = new Date();
+        const report = sanitizeProgressReport(req.body, now);
+        user.learningProgress = mergeProgress(user.toObject().learningProgress || {}, report, now);
+        await user.save();
+
+        res.json({
+            success: true,
+            completedBooks: user.learningProgress.completedBooks.length,
+            completedGames: user.learningProgress.completedGames.length,
+        });
+    } catch (error) {
+        console.error('Error saving progress:', error);
+        res.status(500).json({ success: false, error: 'Failed to save progress' });
+    }
+});
+
+/**
  * PUT /api/app-user/timezone/:userId
  * Update user's timezone for daily notifications
  */
@@ -727,11 +767,14 @@ router.put('/timezone/:userId', async (req, res) => {
 router.put('/notifications/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        const { enabled, notificationTime } = req.body;
+        const { enabled, notificationTime, smartEnabled } = req.body;
         
         const updateFields = {};
         if (typeof enabled === 'boolean') {
             updateFields.dailyNotificationDisabled = !enabled;
+        }
+        if (typeof smartEnabled === 'boolean') {
+            updateFields.smartNotificationsDisabled = !smartEnabled;
         }
         if (typeof notificationTime === 'number' && notificationTime >= 0 && notificationTime <= 23) {
             updateFields.dailyNotificationTime = notificationTime;
@@ -751,6 +794,7 @@ router.put('/notifications/:userId', async (req, res) => {
         res.json({ 
             success: true, 
             enabled: !user.dailyNotificationDisabled,
+            smartEnabled: !user.smartNotificationsDisabled,
             notificationTime: user.dailyNotificationTime
         });
         
@@ -770,7 +814,7 @@ router.get('/notification-settings/:userId', async (req, res) => {
         
         const user = await AppUser.findOne(
             { $or: [{ _id: userId }, { deviceId: userId }, { email: userId }] }
-        ).select('timezone dailyNotificationDisabled dailyNotificationTime oneSignalPlayerId');
+        ).select('timezone dailyNotificationDisabled dailyNotificationTime oneSignalPlayerId smartNotificationsDisabled');
         
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found' });
@@ -781,6 +825,7 @@ router.get('/notification-settings/:userId', async (req, res) => {
             settings: {
                 timezone: user.timezone || 'America/New_York',
                 enabled: !user.dailyNotificationDisabled,
+                smartEnabled: !user.smartNotificationsDisabled,
                 notificationTime: user.dailyNotificationTime || 8,
                 hasOneSignal: !!user.oneSignalPlayerId,
             }

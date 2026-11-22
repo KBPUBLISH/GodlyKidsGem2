@@ -252,6 +252,26 @@ const appUserSchema = new mongoose.Schema({
         type: Number, // Hour in 24h format (default 8 for 8am)
         default: 8,
     },
+    // Opt out of behaviour-based notifications only (generic daily messages still follow dailyNotificationDisabled)
+    smartNotificationsDisabled: {
+        type: Boolean,
+        default: false,
+    },
+
+    // Content progress reported by the app (POST /api/app-user/progress); drives smart notifications.
+    // Only content/game/building ids and timestamps - no free text about the child.
+    learningProgress: {
+        completedBooks: [{ _id: false, bookId: String, completedAt: Date }],
+        inProgressBooks: [{ _id: false, bookId: String, pageIndex: Number, lastReadAt: Date }],
+        completedGames: [{ _id: false, gameId: String, completedAt: Date }],
+        island: {
+            buildings: { type: [String], default: undefined },
+            harvestCount: Number,
+            cookedRecipeCount: Number,
+            updatedAt: Date,
+        },
+        updatedAt: Date,
+    },
     
     // Usage statistics (aggregate counters for quick access)
     stats: {

@@ -5,6 +5,7 @@ const { runSubscriptionCheck } = require('../jobs/subscriptionChecker');
 const { runReverseTrialNotifications, expireEndedTrials, getReverseTrialAnalytics } = require('../jobs/reverseTrialNotifier');
 const { runDailyEngagementNotifications } = require('../jobs/dailyEngagementNotifier');
 const AppUser = require('../models/AppUser');
+const { createDefaultSmartNotifier, SMART_USER_FIELDS } = require('../services/smartNotifications');
 
 // Admin API key for protected job endpoints
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || process.env.MIGRATION_API_KEY;
@@ -469,6 +470,36 @@ router.post('/daily-engagement-notifications', verifyAdminKey, async (req, res) 
 });
 
 /**
+ * GET /api/jobs/smart-notifications/preview/:userId
+ * Dry run: which personalised notification this user would get now, every candidate, and why.
+ * :userId is an AppUser _id, deviceId or email. Sends nothing.
+ * Requires X-Admin-API-Key header
+ */
+router.get('/smart-notifications/preview/:userId', verifyAdminKey, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const query = /^[0-9a-fA-F]{24}$/.test(userId)
+            ? { $or: [{ _id: userId }, { deviceId: userId }] }
+            : { $or: [{ deviceId: userId }, { email: userId.toLowerCase() }] };
+        const user = await AppUser.findOne(query).select(SMART_USER_FIELDS);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const notifier = await createDefaultSmartNotifier();
+        const decision = await notifier.preview(user);
+        res.json({
+            success: true,
+            optedOut: !!user.smartNotificationsDisabled,
+            ...decision,
+            learningProgress: user.learningProgress,
+        });
+    } catch (error) {
+        console.error('Error previewing smart notifications:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/jobs/status
  * Check if job routes are working
  */
@@ -517,6 +548,13 @@ router.get('/status', (req, res) => {
                 method: 'GET',
                 path: '/api/jobs/reverse-trial-stats',
                 description: 'Get reverse trial analytics and conversion stats',
+                requiresAuth: true,
+            },
+            {
+                name: 'smart-notifications-preview',
+                method: 'GET',
+                path: '/api/jobs/smart-notifications/preview/:userId',
+                description: 'Dry run of behaviour-based notifications for one user (sends nothing)',
                 requiresAuth: true,
             }
         ],

@@ -16,6 +16,7 @@ import { rewardsService, type UnlockedCharacter } from '../services/rewardsServi
 import { fetchTtsAudioUrl } from '../services/characterChatService';
 import { fetchIslandCharacterProfile } from '../services/islandCharacterService';
 import CrewChatPopup from '../components/crew/CrewChatPopup';
+import { placeCollectedCharacterOnIsland, readPendingIslandIds } from '../utils/islandArrival';
 import { readPlayersWorldResidents, type PlayersWorldResident } from '../utils/playersWorld';
 import type { WorldBrief } from '../utils/islandIntents';
 import HomeOnboarding, { writeHomeOnboarding } from '../components/home/HomeOnboarding';
@@ -669,6 +670,24 @@ const MyHomePage: React.FC = () => {
     if (!ready) return;
     post({ type: 'gk-coins', balance: coins });
   }, [post, ready, coins]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancel = false;
+    void (async () => {
+      const unlocked = rewardsService.getUnlockedCharacters();
+      let placed = false;
+      for (const id of readPendingIslandIds()) {
+        const character = unlocked.find((item) => item.id === id);
+        if (!character) continue;
+        if ((await placeCollectedCharacterOnIsland(character)) === 'home') placed = true;
+      }
+      if (!cancel && placed) post({ type: 'gk-residents-sync' });
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [post, ready, beds?.beds, beds?.canDrop]);
 
   const visitRef = useRef<{ id: string; started: number; ended: boolean } | null>(null);
   useEffect(() => {

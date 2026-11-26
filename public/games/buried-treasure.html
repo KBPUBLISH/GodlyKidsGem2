@@ -404,11 +404,14 @@ body{font-family:var(--display);color:var(--ink);touch-action:none;user-select:n
     const box=document.getElementById('rw');
     box.innerHTML='';
     if(!rewards||!rewards.length) return;
-    shelfBtn.classList.toggle('show',!hideShelf&&!friends.length);
-    document.getElementById('friendDestinations').hidden=!friends.length;
-    if(friends.length){document.getElementById('friendInvite').textContent=friends.length===1?`${friends[0].name} is ready for an island adventure!`:'Your new friends are ready for an island adventure!';document.getElementById('islandBtn').textContent=friends.length===1?`Bring ${friends[0].name} to my island`:'Bring friends to my island';}
+    document.getElementById('friendDestinations').hidden=true;
+    shelfBtn.classList.toggle('show',!hideShelf);
     document.getElementById('wtitle').textContent='Treasure found!';
     wsub.textContent='Look what you got!';
+    if(friends.length){
+      wsub.textContent=friends.length===1?`${friends[0].name} is standing on your island!`:'Your new friends are standing on your island!';
+      shelfBtn.textContent=friends.length===1?`See ${friends[0].name} on the island`:'See them on the island';
+    }
     const cue=document.querySelector('#card .cue');
     if(cue) cue.style.display=hideShelf||friends.length?'none':'';
     rewards.forEach((r,i)=>{

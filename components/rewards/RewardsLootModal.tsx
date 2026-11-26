@@ -82,7 +82,12 @@ const RewardsLootModal: React.FC<Props> = ({
 
   const handleCollect = (def: RewardDefinition) => {
     if (collectedIds.includes(def.id)) return;
-    const result = rewardsService.collectReward(storyId, def);
+    const result = rewardsService.collectReward(
+      storyId,
+      def,
+      def.type === 'character' ? { place: 'island' } : undefined,
+    );
+    if (result.islandHome) void result.islandHome;
     if (result.alreadyClaimed) {
       setCollectedIds((prev) =>
         prev.includes(def.id) ? prev : [...prev, def.id],

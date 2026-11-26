@@ -10,6 +10,11 @@ import {ADAM_MODEL_URL,currentAdamCharacter} from '../shared/adamModel.mjs';
 import { getApiBaseUrl } from './apiService';
 import { islandStoryProgressService } from './islandStoryProgressService';
 import {
+  placeCollectedCharacterOnIsland,
+  readPendingIslandIds,
+  type IslandStandResult,
+} from '../utils/islandArrival';
+import {
   applyCharacterAppearanceToResidents,
   readPlayersWorldResidents,
 } from '../utils/playersWorld';
@@ -512,12 +517,17 @@ class RewardsService {
           summary.skippedAlreadyClaimed += 1;
           if (def.type === 'character') {
             const store = readStore();
-            seatOnCrew(store, def.id);
+            const ashore = new Set([
+              ...readPlayersWorldResidents().map((resident) => resident.id),
+              ...readPendingIslandIds(),
+            ]);
+            if (!ashore.has(def.id)) seatOnCrew(store, def.id);
             writeStore(store);
           }
           continue;
         }
-        const result = this.collectReward(storyId, def);
+        const result = this.collectReward(storyId, def, { place: 'island' });
+        if (result.islandHome) await result.islandHome;
         if (result.ok) summary.granted.push(def);
       }
     }
@@ -839,11 +849,13 @@ class RewardsService {
   /**
    * Collect a reward from a story pack loot box.
    * Returns coin amount when type is coins; otherwise null.
+   * `place: 'island'` stands a new character on the island instead of the ship.
    */
   collectReward(
     storyId: string,
     def: RewardDefinition,
-  ): { ok: boolean; coinsGranted?: number; error?: string; alreadyClaimed?: boolean } {
+    options?: { place?: 'island' | 'ship' },
+  ): { ok: boolean; coinsGranted?: number; error?: string; alreadyClaimed?: boolean; islandHome?: Promise<IslandStandResult> } {
     if (!storyId?.trim() || !def?.id) {
       return { ok: false, error: 'Missing story or reward' };
     }
@@ -864,25 +876,27 @@ class RewardsService {
 
     if (def.type === 'character') {
       const charId = def.id;
+      const character = {
+        id: charId,
+        name: def.characterName || def.title || 'Crew Friend',
+        imageUrl: def.imageUrl || '',
+        modelUrl: def.modelUrl,
+        voiceId: def.voiceId,
+        persona: def.persona,
+        sourceStoryId: storyId,
+        unlockedAt: now,
+      };
       if (!store.characters.some((c) => c.id === charId)) {
-        store.characters = [
-          ...store.characters,
-          {
-            id: charId,
-            name: def.characterName || def.title || 'Crew Friend',
-            imageUrl: def.imageUrl || '',
-            modelUrl: def.modelUrl,
-            voiceId: def.voiceId,
-            persona: def.persona,
-            sourceStoryId: storyId,
-            unlockedAt: now,
-          },
-        ];
+        store.characters = [...store.characters, character];
       }
       store.claimedKeys = [...store.claimedKeys, key];
-      seatOnCrew(store, charId);
+      const standOnIsland = options?.place === 'island';
+      if (!standOnIsland) seatOnCrew(store, charId);
       writeStore(store);
-      return { ok: true };
+      const saved = store.characters.find((c) => c.id === charId) || character;
+      return standOnIsland
+        ? { ok: true, islandHome: placeCollectedCharacterOnIsland(saved) }
+        : { ok: true };
     }
 
     if (def.type === 'game') {
@@ -989,12 +1003,15 @@ const crewIdentityKey = (c: UnlockedCharacter) =>
 
 /**
  * Crew currently standing on the ship (selected roster, or everyone when
- * none is picked). Friends already dropped off on the My Home island live
- * there now, so they are not aboard.
+ * none is picked). Friends standing on the My Home island, and friends still
+ * waiting for a bed there, are not aboard.
  */
 export function getOnDeckCrew(): UnlockedCharacter[] {
   purgeShipParrot();
-  const ashore = new Set(readPlayersWorldResidents().map((r) => r.id));
+  const ashore = new Set([
+    ...readPlayersWorldResidents().map((r) => r.id),
+    ...readPendingIslandIds(),
+  ]);
   const seenIds = new Set<string>();
   const seenIdentity = new Set<string>();
   const characters = rewardsService

@@ -15,6 +15,7 @@ import OnboardingGuideCard from '../components/onboarding/OnboardingGuideCard';
 import { completeOnboardingJourney, isOnboardingJourneyActive } from '../utils/onboardingJourney';
 import { noteJourneyStep } from '../utils/journeyStudy';
 import { collectedStoryFriends } from '../shared/storyFriends.mjs';
+import { preloadIslandMap } from '../utils/islandArrival';
 import { safeAppReturnPath } from '../utils/treasureNav';
 
 const WHITE_FADE_MS = 480;
@@ -92,6 +93,10 @@ const BuriedTreasurePage: React.FC = () => {
 
   usePreventPullToRefresh(true);
 
+  useEffect(() => {
+    void preloadIslandMap();
+  }, []);
+
   // Hard lock: overscroll-behavior alone doesn't stop iOS WebKit's pull-down
   // (Despia reload / rubber-band). Cancel every touch move that reaches the
   // shell — the back button and overlays don't scroll, so nothing is lost.
@@ -120,7 +125,7 @@ const BuriedTreasurePage: React.FC = () => {
   }, [clearTimers, reduceMotion]);
 
   /** Collect the story pack rewards once and build display cards. */
-  const collectCards = useCallback((): RewardCard[] => {
+  const collectCards = useCallback(async (): Promise<RewardCard[]> => {
     if (cardsRef.current) return cardsRef.current;
     const { storyId, storyTitle, pool } = navStateRef.current;
     const cards: RewardCard[] = [];
@@ -128,7 +133,12 @@ const BuriedTreasurePage: React.FC = () => {
     if (storyId && Array.isArray(pool)) {
       for (const def of pool) {
         if (!def?.id) continue;
-        const result = rewardsService.collectReward(storyId, def);
+        const result = rewardsService.collectReward(
+          storyId,
+          def,
+          def.type === 'character' && !livingFriend && !onboardingJourney ? { place: 'island' } : undefined,
+        );
+        if (result.islandHome) await result.islandHome;
         let name = def.title || 'Reward';
         if (def.type === 'coins') {
           if (result.coinsGranted && result.coinsGranted > 0) {
@@ -192,21 +202,25 @@ const BuriedTreasurePage: React.FC = () => {
   // The win card's "Continue" button posts gk-continue (older cached builds
   // of the game still post gk-go-game-shelf — treat it the same).
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
+    const onMessage = async (event: MessageEvent) => {
       const frame = iframeRef.current;
       if (!frame || event.source !== frame.contentWindow || event.origin !== window.location.origin) return;
       const type = event.data?.type;
       if (type === 'gk-friend-destination' && cardsRef.current && !livingFriend && !onboardingJourney) {
         const friends = collectedStoryFriends(navStateRef.current.pool, rewardsService.getUnlockedCharacters());
         if (!friends.length) return;
-        if (event.data.destination === 'island') leaveWithFade(() => navigate('/my-home', { replace: true, state: { welcomeFriendId: friends[0].id } }));
-        else if (event.data.destination === 'ship') leaveWithFade(() => navigate('/crew', { replace: true }));
+        leaveWithFade(() => navigate('/my-home', { replace: true }));
         return;
       }
       if (type === 'gk-continue' || type === 'gk-go-game-shelf') {
         if(livingFriend){if(livingFriendRecord()?.phase==='aboard')leaveWithFade(()=>navigate('/crew',{replace:true}));return;}
         if (onboardingJourney) {
           setMeetCrewGuide(true);
+          return;
+        }
+        const friends = collectedStoryFriends(navStateRef.current.pool, rewardsService.getUnlockedCharacters());
+        if (friends.length) {
+          leaveWithFade(() => navigate('/my-home', { replace: true }));
           return;
         }
         // Back to the story pack. Replace so the completed dig is not left
@@ -216,7 +230,7 @@ const BuriedTreasurePage: React.FC = () => {
         return;
       }
       if (event.data?.type !== 'gk-chest-opened') return;
-      const cards = collectCards();
+      const cards = await collectCards();
       if(cards.some(c=>c.character))setCharacterRewardShown(true);
       if (cards.length > 0) {
         frame.contentWindow?.postMessage(

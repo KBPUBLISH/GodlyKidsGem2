@@ -1,5 +1,6 @@
 // Profile Service - Helps other services use per-profile localStorage keys
 // Also handles cloud sync of profile data
+import { apiOrigin } from '../utils/apiEndpoint.mjs';
 
 const CURRENT_PROFILE_KEY = 'godly_kids_current_profile';
 
@@ -131,9 +132,7 @@ class ProfileService {
    * Get API base URL
    */
   private getApiBase(): string {
-    return window.location.hostname === 'localhost' 
-      ? 'http://localhost:5001' 
-      : 'https://backendgk2-0.onrender.com';
+    return apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
   }
 
   /**

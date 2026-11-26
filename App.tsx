@@ -1,9 +1,12 @@
 import LanguagePage from './components/language/LanguagePage';
+import { apiOrigin } from './utils/apiEndpoint.mjs';
 
 import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
+import { ChurchSignInPage, ChurchSignUpPage } from './pages/ChurchAccountPage';
+import ChurchDashboardPage from './pages/ChurchDashboardPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PerryMeetPage from './pages/PerryMeetPage';
 import ChallengeIntroPage from './pages/ChallengeIntroPage';
@@ -92,9 +95,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
         platform = 'android';
       }
       
-      const apiBase = window.location.hostname === 'localhost' 
-        ? 'http://localhost:5001' 
-        : 'https://backendgk2-0.onrender.com';
+      const apiBase = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
       
       const response = await fetch(`${apiBase}/api/app-user/register-device`, {
         method: 'POST',
@@ -862,8 +863,7 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
         const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
         if (!deviceId) return;
         
-        const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
-          (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+        const apiBaseUrl = apiOrigin(localStorage.getItem('godlykids_api_url') || import.meta.env.VITE_API_BASE_URL, window.location.hostname);
         
         const response = await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-status/${encodeURIComponent(deviceId)}`);
         if (response.ok) {
@@ -1318,7 +1318,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMyHome || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro;
+  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMyHome || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro || location.pathname === '/church' || location.pathname.startsWith('/church/');
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
@@ -1571,6 +1571,9 @@ const App: React.FC = () => {
                   <Route path="/playlist/:playlistId" element={<SharePlaylistPage />} /> {/* Legacy share URL format */}
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
+                  <Route path="/church/sign-up" element={<ChurchSignUpPage />} />
+                  <Route path="/church/sign-in" element={<ChurchSignInPage />} />
+                  <Route path="/church" element={<ChurchDashboardPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding/welcome" element={<ChallengeIntroPage />} />
                   <Route path="/onboarding" element={<PerryMeetPage />} />

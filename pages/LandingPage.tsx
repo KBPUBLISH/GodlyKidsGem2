@@ -372,6 +372,21 @@ const LandingPage: React.FC = () => {
         >
           Already have an account? Sign in
         </button>
+        <button
+          type="button"
+          onClick={() => navigate('/church/sign-up')}
+          className="mt-2 min-h-[44px] rounded-full border-2 px-6 py-2 font-extrabold text-sm active:scale-[0.97] transition-transform"
+          style={{
+            fontFamily: BUBBLE,
+            color: '#12264A',
+            background: '#FFC43D',
+            borderColor: 'rgba(255, 231, 145, 0.9)',
+            boxShadow: '0 3px 0 #8a6a12, 0 7px 14px rgba(0,0,0,0.25)',
+          }}
+          aria-label="Church plan, one thousand dollars a year for fifty seats"
+        >
+          For churches · $1,000 a year
+        </button>
       </div>
     </div>
   );

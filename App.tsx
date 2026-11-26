@@ -4,6 +4,8 @@ import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallba
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import SignInPage from './pages/SignInPage';
+import { ChurchSignInPage, ChurchSignUpPage } from './pages/ChurchAccountPage';
+import ChurchDashboardPage from './pages/ChurchDashboardPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PerryMeetPage from './pages/PerryMeetPage';
 import ChallengeIntroPage from './pages/ChallengeIntroPage';
@@ -1571,6 +1573,9 @@ const App: React.FC = () => {
                   <Route path="/playlist/:playlistId" element={<SharePlaylistPage />} /> {/* Legacy share URL format */}
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/sign-in" element={<SignInPage />} />
+                  <Route path="/church/sign-up" element={<ChurchSignUpPage />} />
+                  <Route path="/church/sign-in" element={<ChurchSignInPage />} />
+                  <Route path="/church" element={<ChurchDashboardPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/onboarding/welcome" element={<ChallengeIntroPage />} />
                   <Route path="/onboarding" element={<PerryMeetPage />} />

@@ -1,4 +1,5 @@
 import LanguagePage from './components/language/LanguagePage';
+import { apiOrigin } from './utils/apiEndpoint.mjs';
 
 import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
@@ -94,9 +95,7 @@ if (!(window as any).__GK_APP_BOOTED__) {
         platform = 'android';
       }
       
-      const apiBase = window.location.hostname === 'localhost' 
-        ? 'http://localhost:5001' 
-        : 'https://backendgk2-0.onrender.com';
+      const apiBase = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
       
       const response = await fetch(`${apiBase}/api/app-user/register-device`, {
         method: 'POST',
@@ -864,8 +863,7 @@ const WorldPageWithWelcomeCheck: React.FC = () => {
         const deviceId = localStorage.getItem('godlykids_device_id') || localStorage.getItem('device_id');
         if (!deviceId) return;
         
-        const apiBaseUrl = localStorage.getItem('godlykids_api_url') || 
-          (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+        const apiBaseUrl = apiOrigin(localStorage.getItem('godlykids_api_url') || import.meta.env.VITE_API_BASE_URL, window.location.hostname);
         
         const response = await fetch(`${apiBaseUrl}/api/app-user/reverse-trial-status/${encodeURIComponent(deviceId)}`);
         if (response.ok) {

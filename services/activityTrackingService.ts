@@ -1,6 +1,7 @@
 // Activity Tracking Service - Tracks user activities for Report Card
 import { profileService } from './profileService';
 import { authService } from './authService';
+import { apiOrigin } from '../utils/apiEndpoint.mjs';
 
 export interface ActivityStats {
   booksRead: number;
@@ -261,9 +262,7 @@ class ActivityTrackingService {
         } catch {}
       }
       
-      const apiBase = window.location.hostname === 'localhost' 
-        ? 'http://localhost:5001/api/' 
-        : 'https://backendgk2-0.onrender.com/api/';
+      const apiBase = `${apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname)}/api/`;
       
       const response = await fetch(`${apiBase}games/play-event`, {
         method: 'POST',
@@ -500,9 +499,7 @@ class ActivityTrackingService {
       console.log('  - Books read:', allTimeStats.booksRead);
       console.log('  - Songs listened:', allTimeStats.songsListened);
       
-      const apiBase = window.location.hostname === 'localhost' 
-        ? 'http://localhost:5001' 
-        : 'https://backendgk2-0.onrender.com';
+      const apiBase = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
 
       const response = await fetch(`${apiBase}/api/analytics/sync-stats`, {
         method: 'POST',
@@ -644,7 +641,7 @@ class ActivityTrackingService {
       const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
       
       // Normalize API URL - remove trailing slash and /api to avoid double /api//api
-      let API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      let API_BASE = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
       API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
       const apiUrl = `${API_BASE}/api`;
       
@@ -736,7 +733,7 @@ class ActivityTrackingService {
       const userId = user?.email || user?._id || localStorage.getItem('godlykids_device_id') || `anon_${Date.now()}`;
       
       // Normalize API URL - remove trailing slash and /api to avoid double /api//api
-      let API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
+      let API_BASE = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
       API_BASE = API_BASE.replace(/\/+$/, '').replace(/\/api$/, '');
       const apiUrl = `${API_BASE}/api`;
       

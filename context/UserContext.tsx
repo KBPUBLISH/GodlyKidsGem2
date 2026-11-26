@@ -1,4 +1,5 @@
 import { STARTING_GOLD_COINS } from '../shared/economy.mjs';
+import { apiOrigin } from '../utils/apiEndpoint.mjs';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services/authService';
@@ -660,9 +661,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return; // Not ready to sync yet
       }
       
-      const apiBase = window.location.hostname === 'localhost' 
-        ? 'http://localhost:5001' 
-        : 'https://backendgk2-0.onrender.com';
+      const apiBase = apiOrigin(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
       
       // Detect platform
       const ua = navigator.userAgent.toLowerCase();

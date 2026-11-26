@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import RevenueCatService, { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
 import { authService } from '../services/authService';
+import { apiOrigin } from '../utils/apiEndpoint.mjs';
 
 interface ReverseTrialStatus {
   hasReverseTrial: boolean;
@@ -44,8 +45,7 @@ interface SubscriptionProviderProps {
 
 // Helper to get API base URL
 const getApiBaseUrl = (): string => {
-  return localStorage.getItem('godlykids_api_url') || 
-    (window.location.hostname === 'localhost' ? 'http://localhost:5001' : 'https://backendgk2-0.onrender.com');
+  return apiOrigin(localStorage.getItem('godlykids_api_url') || import.meta.env.VITE_API_BASE_URL, window.location.hostname);
 };
 
 // Helper to get ALL possible user identifiers for subscription check

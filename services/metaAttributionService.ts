@@ -11,9 +11,10 @@
  * - Tracks purchases server-side for better ROAS reporting
  */
 
+import { apiOrigin } from '../utils/apiEndpoint.mjs';
+
 // Normalize API base URL - remove trailing /api or slashes to prevent double /api//api/
-const rawApiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'https://backendgk2-0.onrender.com';
-const API_BASE_URL = rawApiBase.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+const API_BASE_URL = apiOrigin((import.meta as any).env?.VITE_API_BASE_URL, typeof window === 'undefined' ? 'localhost' : window.location.hostname);
 
 // Storage keys
 const STORAGE_KEYS = {

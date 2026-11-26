@@ -135,7 +135,7 @@
 .church-code {
   font-family: ui-monospace, monospace;
   font-size: clamp(1.4rem, 5vw, 2rem);
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: #ffd700;
   word-break: break-all;
 }

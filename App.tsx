@@ -1320,7 +1320,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isKaraokePage = location.pathname === '/karaoke' || location.pathname.startsWith('/karaoke/');
 
   // Standalone pages that don't need the app chrome (background, navigation, etc.)
-  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMyHome || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro;
+  const isStandalonePage = isLanding || isParentQuiz || isSharePage || isReadyToJumpIn || isDailySession || isSailScene || isCrewDeck || isMyHome || isMainMapScene || isPremiumOnboarding || isTrialStats || isChallengeIntro || location.pathname === '/church' || location.pathname.startsWith('/church/');
 
   // For standalone pages, render just the children without app styling
   if (isStandalonePage) {
